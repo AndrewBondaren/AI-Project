@@ -18,7 +18,7 @@ from app.dataModel.placement.common import PlacementMode
 from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
 from app.dataModel.terrain.designedWater.coverage.budget import BodyCoverageAllocation
 from app.dataModel.terrain.designedWater.fields.field import NoiseRecipe, PlateRecipe, PlateNoiseRecipe, WaterFieldRecipe
-from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometryRequest
+from app.dataModel.terrain.designedWater.geometry.authoredGeometry import LegacyAuthoredWaterGeometryRequest
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind as Strategy
 from app.dataModel.terrain.designedWater.settings.continentalNoisePolicy import ContinentalNoisePolicy
 from app.dataModel.terrain.designedWater.settings.plateGenerationPolicy import PlateGenerationPolicy
@@ -38,7 +38,7 @@ from tests.geo1.placement_policy.fixtures import bind, execute
 @dataclass(frozen=True)
 class Capture:
     source: DeclaredCoastline
-    geometry_request: AuthoredWaterGeometryRequest
+    geometry_request: LegacyAuthoredWaterGeometryRequest
     context: ResolvedWaterGenerationContext
     generation: HydrologyGenerationDecision
     region: TerrainRegionExtent

@@ -17,7 +17,7 @@ from app.dataModel.policy.policyDecision import ObjectAdmissionDecision, ValueSe
 from app.dataModel.policy.policyEnums import PolicyState
 from app.dataModel.terrain.designedWater.coverage.budget import BodyCoverageAllocation
 from app.dataModel.terrain.designedWater.fields.field import NoiseRecipe, PlateRecipe, PlateNoiseRecipe, WaterFieldRecipe
-from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometryRequest
+from app.dataModel.terrain.designedWater.geometry.authoredGeometry import LegacyAuthoredWaterGeometryRequest
 from app.dataModel.terrain.designedWater.input import (
     AuthoredWaterDesignInput, CoastlineWaterDesignInput, NoiseWaterDesignInput, PlateWaterDesignInput,
     PlateNoiseWaterDesignInput, WaterDesignInput,
@@ -40,12 +40,12 @@ class CoastlineWaterSourceAdapter:
     """
 
     def prepare_source(
-        self, source: DeclaredCoastline, *, geometry_request: AuthoredWaterGeometryRequest,
+        self, source: DeclaredCoastline, *, geometry_request: LegacyAuthoredWaterGeometryRequest,
         context: ResolvedWaterGenerationContext, generation: HydrologyGenerationDecision,
         region: TerrainRegionExtent, budget: BodyCoverageAllocation, region_coverage: RegionCoverage,
         metadata: WaterSourceMetadata, admission: PlacementAdmissionInput, field_policy: WaterFieldRecipe | None,
     ) -> CoastlineWaterDesignInput:
-        if not isinstance(source, DeclaredCoastline) or not isinstance(geometry_request, AuthoredWaterGeometryRequest):
+        if not isinstance(source, DeclaredCoastline) or not isinstance(geometry_request, LegacyAuthoredWaterGeometryRequest):
             raise TypeError("coastline source join requires typed source and geometry request")
         if not isinstance(context, ResolvedWaterGenerationContext) or not isinstance(admission, PlacementAdmissionInput):
             raise TypeError("coastline source join requires resolved context and admission")
@@ -60,7 +60,7 @@ class CoastlineWaterSourceAdapter:
         uid = source.location_uid
         try:
             wrapped = CoastlineWaterSource(value=source)
-            request = AuthoredWaterGeometryRequest.model_validate(geometry_request, strict=True)
+            request = LegacyAuthoredWaterGeometryRequest.model_validate(geometry_request, strict=True)
             context = ResolvedWaterGenerationContext.model_validate(context, strict=True)
             admission = PlacementAdmissionInput.model_validate(admission, strict=True)
             decision = ObjectAdmissionDecision[Strategy, WaterPolicyReason].model_validate(admission.decision, strict=True)

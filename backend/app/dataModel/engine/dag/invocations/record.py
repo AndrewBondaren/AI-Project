@@ -88,3 +88,10 @@ class InvocationGraph(BaseModel):
     pass_number: int = Field(default=0, ge=0)
     registry: tuple[RegisteredContract, ...]
     records: dict[InvocationId, InvocationRecord]
+
+    def join_complete(self, caller: InvocationRecord) -> bool:
+        return caller.status == InvocationStatus.WAITING_CALLS and all(
+            child.status in (InvocationStatus.SUCCEEDED, InvocationStatus.FAILED, InvocationStatus.CANCELLED)
+            for child in self.records.values()
+            if child.caller_invocation_id == caller.invocation_id and child.caller_step == caller.step_index
+        )

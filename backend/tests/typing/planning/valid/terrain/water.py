@@ -32,7 +32,10 @@ from app.application.worldData.generators.terrain.designedWater.preparation.plac
 from app.dataModel.terrain.designedWater.preparation.result import WaterDesignPreparation
 from app.dataModel.terrain.designedWater.settings.fieldSelectionPolicy import WaterFieldSelectionPolicy
 from app.dataModel.placement.prepared import PlacementCandidate
-from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometry, AuthoredWaterGeometryRequest
+from app.application.worldData.placement.adapters.waterGeometry.nativeGeometry import prepare_native_water_geometry
+from app.dataModel.terrain.designedWater.geometry.authoredGeometry import (
+    AuthoredWaterGeometry, AuthoredWaterGeometryRequest, LegacyAuthoredWaterGeometryRequest,
+)
 from app.application.worldData.placement.adapters.water import prepare_authored_water_geometry
 from app.application.worldData.generators.terrain.designedWater.strategies.authoredRegionStrategy import AuthoredRegionStrategy
 from app.application.worldData.generators.hydrology.placement.projectDeclaredHydrology import project_water_source
@@ -108,9 +111,11 @@ def valid_geometry_boundary(preparer: DesignedWaterPlacementPreparer, input: Wat
     return result
 
 
-def valid_authored_boundary(request: AuthoredWaterGeometryRequest, input: AuthoredWaterDesignInput,
+def valid_authored_boundary(request: LegacyAuthoredWaterGeometryRequest, native: AuthoredWaterGeometryRequest,
+                            input: AuthoredWaterDesignInput,
                             basin: DeclaredBasin) -> AuthoredWaterDesignDraft:
     assert_type(prepare_authored_water_geometry(request), AuthoredWaterGeometry)
+    assert_type(prepare_native_water_geometry(native), AuthoredWaterGeometry)
     assert_type(input.geometry, AuthoredWaterGeometry)
     assert_type(project_water_source(basin, 2), DeclaredBasin)
     implementation: DesignedWaterStrategy = AuthoredRegionStrategy()
@@ -153,7 +158,7 @@ from app.dataModel.terrain.designedWater.geometry.waterDesignConstraints import 
 from app.application.worldData.generators.terrain.designedWater.preparation.coastlineConstraintPreparer import CoastlineConstraintPreparer
 
 
-def valid_coastline_constraints(request: AuthoredWaterGeometryRequest,
+def valid_coastline_constraints(request: LegacyAuthoredWaterGeometryRequest,
                                input: NoiseWaterDesignInput[CoastlineWaterSource]) -> None:
     captured = CoastlineConstraintPreparer().prepare(request)
     assert_type(captured, WaterDesignConstraints)
@@ -174,7 +179,7 @@ from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyPlan
 from app.dataModel.terrain.designedWater.fields.field import WaterFieldRecipe
 
 
-def valid_coastline_source_join(source: DeclaredCoastline, request: AuthoredWaterGeometryRequest,
+def valid_coastline_source_join(source: DeclaredCoastline, request: LegacyAuthoredWaterGeometryRequest,
                                context: ResolvedWaterGenerationContext, generation: HydrologyGenerationDecision,
                                region: TerrainRegionExtent, budget: BodyCoverageAllocation, coverage: RegionCoverage,
                                metadata: WaterSourceMetadata, admission: PlacementAdmissionInput,

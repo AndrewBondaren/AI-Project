@@ -5,7 +5,7 @@ from app.application.worldData.generators.hydrology.geom.polylineRasterize impor
 from app.application.worldData.placement.adapters.coastlineShape import coastline_segments
 from app.application.worldData.placement.adapters.water import prepare_authored_water_geometry
 from app.dataModel.hydrology.sources.waterDesignSource import CoastlineWaterSource
-from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometryRequest
+from app.dataModel.terrain.designedWater.geometry.authoredGeometry import LegacyAuthoredWaterGeometryRequest
 from app.dataModel.terrain.designedWater.geometry.waterDesignConstraints import WaterDesignConstraints
 from app.dataModel.terrain.designedWater.strategyKind import WaterDesignIssueCode
 from app.dataModel.topology.worldTopology import Coord
@@ -15,10 +15,10 @@ from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 class CoastlineConstraintPreparer:
     """Geometry only: no policy, budget allocation, hydro presence or relief writes."""
 
-    def prepare(self, request: AuthoredWaterGeometryRequest) -> WaterDesignConstraints:
-        if not isinstance(request, AuthoredWaterGeometryRequest):
+    def prepare(self, request: LegacyAuthoredWaterGeometryRequest) -> WaterDesignConstraints:
+        if not isinstance(request, LegacyAuthoredWaterGeometryRequest):
             raise TypeError("coastline constraints require a typed geometry request")
-        request = AuthoredWaterGeometryRequest.model_validate(request, strict=True)
+        request = LegacyAuthoredWaterGeometryRequest.model_validate(request, strict=True)
         if not isinstance(request.source, CoastlineWaterSource):
             raise ValueError("coastline constraints require a water-source line")
         # Reuse the existing owner for water-side selection, topology and caps.

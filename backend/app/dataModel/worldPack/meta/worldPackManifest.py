@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
 from app.core.constants import FINE_CELL_SIZE
 from app.dataModel.worldPack.wire.climateFieldWire import ClimateBakeStatusMixin
@@ -15,8 +15,10 @@ from app.dataModel.worldPack.wire.territoryVolume import TerritoryVolume
 from app.dataModel.worldPack.wire.worldMapCellsPerTile import WORLD_MAP_CELLS_PER_TILE
 
 from app.dataModel.worldPack.meta.wildernessRegionEntry import WildernessRegionEntry, require_region_index
+from app.dataModel.worldPack.meta.spatial.domainRoot import SpatialDomainRootRef
 
 PACK_WIRE_VERSION = "1.0.0"
+SPATIAL_PACK_WIRE_VERSION = "2.0.0"
 BakeMode = PackBakeMode  # manifest last L0 mode — not "detailed"
 WildernessRefineStatus = Literal["absent", "partial", "complete"]
 SettlementStructureStatus = Literal["absent", "partial", "complete"]
@@ -65,12 +67,13 @@ class LocationTerrainEntry(ClimateBakeStatusMixin):
     bytes: int | None = None
 
 
-class WorldPackManifest(BaseModel):
+class _ManifestFields(BaseModel):
     SCHEMA_ID: ClassVar[str] = "SCH-WORLD-PACK-MANIFEST"
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
-    pack_version: str = PACK_WIRE_VERSION
+    pack_version: str
+    spatial_roots: tuple[SpatialDomainRootRef, ...]
     world_uid: str
     content_hash: str | None = None
     codec_version: int = PACK_CODEC_VERSION
@@ -89,16 +92,20 @@ class WorldPackManifest(BaseModel):
     wilderness_tiles_total: int = 0
     wilderness_chunks_baked: int = 0
 
-    @model_validator(mode="before")
-    @classmethod
-    def _reject_removed_size_keys(cls, data):
-        """Removed wire keys read as an error, not a silent default."""
-        if isinstance(data, dict):
-            for old in ("map_cell_size_m", "cell_size_m"):
-                if old in data:
-                    raise ValueError(
-                        f"{old} was removed; use fine_cells_per_map_cell/fine_cell_size")
+    @model_serializer(mode="wrap")
+    def serialize_version(self, handler):
+        data = handler(self)
+        if self.pack_version == PACK_WIRE_VERSION and self.spatial_roots == ():
+            data.pop("spatial_roots", None)
         return data
+
+    @field_validator("spatial_roots")
+    @classmethod
+    def ordered_roots(cls, roots: tuple[SpatialDomainRootRef, ...]) -> tuple[SpatialDomainRootRef, ...]:
+        domains = [row.domain.value for row in roots]
+        if domains != sorted(set(domains)):
+            raise ValueError("spatial roots must be sorted by unique domain")
+        return roots
 
     @field_validator("wilderness_region_entries")
     @classmethod
@@ -135,3 +142,36 @@ class WorldPackManifest(BaseModel):
             if loc.location_uid == location_uid:
                 return loc
         return None
+
+
+class WorldPackManifest(_ManifestFields):
+    pack_version: str = PACK_WIRE_VERSION
+    spatial_roots: tuple[SpatialDomainRootRef, ...] = Field(default=(), strict=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_removed_size_keys(cls, data):
+        """Removed wire keys read as an error, not a silent default."""
+        if isinstance(data, dict):
+            version = data.get("pack_version", PACK_WIRE_VERSION)
+            if version == PACK_WIRE_VERSION:
+                if "spatial_roots" in data and data["spatial_roots"] != ():
+                    raise ValueError("unexpected V1 spatial_roots")
+            elif version == SPATIAL_PACK_WIRE_VERSION:
+                if "spatial_roots" not in data:
+                    raise ValueError("V2 requires spatial_roots")
+            else:
+                raise ValueError("unsupported World Pack version")
+            for old in ("map_cell_size_m", "cell_size_m"):
+                if old in data:
+                    raise ValueError(
+                        f"{old} was removed; use fine_cells_per_map_cell/fine_cell_size")
+        return data
+
+
+class WorldPackManifestV2(_ManifestFields):
+    """Strict JSON admission using the shared manifest field declarations."""
+
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+    pack_version: Literal["2.0.0"]

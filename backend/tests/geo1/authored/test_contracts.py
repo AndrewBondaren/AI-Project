@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from app.application.planning.service.planningService import PlanBuildFailure
 from app.application.worldData.placement.adapters.water import prepare_authored_water_geometry
 from app.dataModel.hydrology.seas import HydrologySeasPolicy
-from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometry, AuthoredWaterGeometryRequest
+from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometry, LegacyAuthoredWaterGeometryRequest
 from app.dataModel.validation.immutableValue import validate_immutable
 from tests.geo1.authored.fixtures import request
 
@@ -27,14 +27,14 @@ class AuthoredGeometryContractTests(TestCase):
         for update in ({"z_min": 11}, {"z_min": True},
                        {"topology": req.topology.model_copy(update={"bounds": req.topology.bounds.model_copy(update={"x_max": 10})})}):
             with self.subTest(update=update), self.assertRaises(ValidationError):
-                AuthoredWaterGeometryRequest.model_validate(req.model_copy(update=update))
+                LegacyAuthoredWaterGeometryRequest.model_validate(req.model_copy(update=update))
 
     def test_copied_seas_limits_are_revalidated_without_fallback_defaults(self):
         req = request()
         for value in (0.0, -1.0, 1.1, float("nan"), True, "bad"):
             seas = req.seas.model_copy(update={"max_area_fraction": value})
             with self.subTest(value=value), self.assertRaises((ValidationError, ValueError)):
-                AuthoredWaterGeometryRequest.model_validate(req.model_copy(update={"seas": seas}))
+                LegacyAuthoredWaterGeometryRequest.model_validate(req.model_copy(update={"seas": seas}))
         with self.assertRaises(PlanBuildFailure):
             prepare_authored_water_geometry(req.model_copy(update={"seas": HydrologySeasPolicy().model_copy(update={"max_area_fraction": 0.0})}))
 

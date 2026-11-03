@@ -17,6 +17,7 @@ from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
 from app.dataModel.planning.identity.planRef import PlanRef
 from app.dataModel.policy.policyEnums import PolicyState
 from app.dataModel.terrain.sampling.fineSurfaceWindow import FineSurfaceWindow
+from app.dataModel.validation.immutableValue import validate_immutable
 
 
 def _require_frame(batch: PlacementBatchV2, before: PlanEnvelope[FineSurfaceWindow], expected_before: PlanRef) -> None:
@@ -52,12 +53,15 @@ def start_native_placement_session(*, batch: PlacementBatchV2, before: PlanEnvel
     water = water_intents_by_region(water_intents, admissions)
     required = {uid for uid, item in admissions.items() if uid not in water
                 and item.decision.state in (PolicyState.READY, PolicyState.WAITING_SUPPORT)}
-    if not isinstance(competitor_geometry, tuple):
+    if type(competitor_geometry) is not tuple:
         raise ValueError("competitor geometry must be an immutable tuple")
     by_region = {}
     previous = None
     for record in competitor_geometry:
         control.raise_if_shutdown()
+        if type(record) is not CapturedPlacementGeometry:
+            raise ValueError("competitor geometry requires typed capture records")
+        validate_immutable(record)
         record = CapturedPlacementGeometry.model_validate(record, strict=True)
         uid = record.intent.identity.region_uid
         if previous is not None and uid <= previous:

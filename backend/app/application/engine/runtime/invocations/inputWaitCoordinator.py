@@ -116,7 +116,12 @@ class InputWaitCoordinator:
             elif record.status != InvocationStatus.CANCELLED or graph.cancellation is None:
                 if wait.step_index != record.step_index or record.continuation is None:
                     raise ValueError("invalid pending continuation")
-                pending.add(record.invocation_id)
+                if record.status == InvocationStatus.CANCELLED and record.caller_invocation_id is not None:
+                    caller = graph.records[record.caller_invocation_id]
+                    if record.caller_step == caller.step_index and graph.join_complete(caller):
+                        graph.waiting_for_input = False
+                else:
+                    pending.add(record.invocation_id)
         if pending != {r.invocation_id for r in graph.records.values() if r.status == InvocationStatus.WAITING_INPUT}:
             raise ValueError("input wait differs from invocation state")
         if graph.waiting_for_input and (not pending or any(

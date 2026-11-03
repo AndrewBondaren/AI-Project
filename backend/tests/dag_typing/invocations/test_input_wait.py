@@ -9,6 +9,7 @@ from unittest.mock import patch
 import httpx
 from fastapi import FastAPI, Header, HTTPException
 from app.application.engine.contracts.invocation.executionStore import OwnershipConflict, RestoreFailure
+from app.application.engine.runtime.invocations.checkpointCodec import CheckpointCodec
 
 from app.application.engine.contracts.invocation.inputWait import (
     Failed, InputConflict, InputReceived, InputWaitContract, ResumeInput, Waiting, WaitInput, WaitSpec,
@@ -40,6 +41,9 @@ class AskAndFormat(f.Pipeline):
     async def resume(self, state, event):
         count = event.get(f.CallKey("ask"), f.COUNT)
         formatted = event.get(f.CallKey("format"), f.FORMAT)
+        if isinstance(count, f.CallCancelled):
+            assert isinstance(formatted, f.CallSuccess)
+            return f.Complete(f.Text(text=f"cancelled/{formatted.output.text}"))
         return f.Complete(f.Text(text=f"{count.output.value}/{formatted.output.text}"))
 
 
@@ -129,6 +133,48 @@ class InputWaitTests(unittest.IsolatedAsyncioTestCase):
             delivery = await engine.resume_input(KEY, request, max_passes=1, options=OPTIONS)
             self.assertEqual(delivery.result.data, f.Text(text="7/count=4"))
 
+    async def test_cancel_waiting_child_then_restart_and_join(self):
+        def engine(db, session="a"):
+            return f.runtime(entry=AskAndFormat, store=f.SQLiteExecutionStore(db), counter=Ask,
+                             counter_wait=CHOICE, interaction=Session(session))
+
+        wait_id = WaitId("pick")
+        with closing(sqlite3.connect(self.path)) as first:
+            waiting = await engine(first).run(KEY, f.TaskType.INTENT_DETECTION, max_passes=1, options=OPTIONS)
+            self.assertEqual(waiting.pending[0].wait_id, wait_id)
+            before = await f.SQLiteExecutionStore(first).load(KEY)
+        with closing(sqlite3.connect(self.path)) as second:
+            with self.assertRaises(PermissionError):
+                await engine(second, "foreign").cancel_waiting_child(KEY, wait_id, expected_revision=3)
+            with self.assertRaises(InputConflict):
+                await engine(second).cancel_waiting_child(KEY, wait_id, expected_revision=2)
+            store = f.SQLiteExecutionStore(second)
+            self.assertEqual(await store.load(KEY), before)
+            await engine(second).cancel_waiting_child(KEY, wait_id, expected_revision=3)
+            after = await store.load(KEY)
+            graph = f.InvocationGraph.model_validate_json(after.blob)
+            self.assertIsNone(graph.cancellation)
+            self.assertEqual(graph.records[graph.root].status, "WAITING_CALLS")
+            child_id = graph.waits[wait_id].invocation_id
+            self.assertEqual(graph.records[child_id].status, "CANCELLED")
+            original = f.InvocationGraph.model_validate_json(before.blob)
+            self.assertEqual({k: r for k, r in original.records.items() if k != child_id},
+                             {k: r for k, r in graph.records.items() if k != child_id})
+            await engine(second).cancel_waiting_child(KEY, wait_id, expected_revision=3)
+            with self.assertRaises(InputConflict):
+                await engine(second).accept_input(KEY, ResumeInput[f.Count](wait_id=wait_id, request_id="late",
+                                                  expected_revision=3, payload=f.Count(value=9)))
+            self.assertEqual(await store.load(KEY), after)
+            # The review probe changes only the child status in a quiescent checkpoint.
+            original.records[child_id].status = graph.records[child_id].status
+            _, plan = f.runtime(entry=AskAndFormat, counter=Ask, counter_wait=CHOICE)
+            decoded = CheckpointCodec.decode(CheckpointCodec.encode(original), plan)
+            self.assertFalse(decoded.waiting_for_input)
+        with closing(sqlite3.connect(self.path)) as third:
+            result = await engine(third).resume(KEY, max_passes=1, options=OPTIONS)
+            self.assertEqual(result.data, f.Text(text="cancelled/count=4"))
+            self.assertEqual((await f.SQLiteExecutionStore(third).load(KEY)).status, "COMPLETED")
+
     async def test_restart_after_accept_before_continuation(self):
         request = ResumeInput[f.Count](wait_id=WaitId("pick"), request_id="first", expected_revision=3, payload=f.Count(value=7))
         with closing(sqlite3.connect(self.path)) as db:
@@ -138,6 +184,25 @@ class InputWaitTests(unittest.IsolatedAsyncioTestCase):
             delivery = await self.engine(db).resume_input(KEY, request, max_passes=1, options=OPTIONS)
             self.assertEqual(delivery.receipt, receipt)
             self.assertIn("count=7", str(delivery.result))
+
+    async def test_accepted_child_wait_keeps_running_cancellation_path(self):
+        async def cancel_on_resume(node, state, event):
+            self.assertIsInstance(event, InputReceived)
+            raise asyncio.CancelledError
+
+        with closing(sqlite3.connect(self.path)) as db:
+            store = f.SQLiteExecutionStore(db)
+            engine = f.runtime(entry=AskAndFormat, store=store, counter=Ask, counter_wait=CHOICE, interaction=Session("a"))
+            await engine.run(KEY, f.TaskType.INTENT_DETECTION, max_passes=1, options=OPTIONS)
+            request = ResumeInput[f.Count](wait_id=WaitId("pick"), request_id="first", expected_revision=3, payload=f.Count(value=7))
+            await engine.accept_input(KEY, request)
+            before = await store.load(KEY)
+            with self.assertRaises(InputConflict):
+                await engine.cancel_waiting_child(KEY, request.wait_id, expected_revision=3)
+            self.assertEqual(await store.load(KEY), before)
+            with patch.object(Ask, "resume", cancel_on_resume):
+                result = await engine.resume(KEY, max_passes=1, options=OPTIONS)
+            self.assertEqual(result.data, f.Text(text="cancelled/count=4"))
 
     async def test_cancel_waiting_execution_and_reject_late_reply(self):
         with closing(sqlite3.connect(self.path)) as db:

@@ -4289,3 +4289,68 @@ node_modules/.bin/pyright.cmd -p pyrightconfig.cascade.json backend/tests/typing
 4. Минимальная замена в допустимом root — `decode_root(raw_root(records()[0], shards=(42,)), 1)`. Размер tuple равен одному, TLV элемента имеет tag int. При перехвате _Reader.run с запретом build=True зарегистрирован единственный вызов build=False и получен CanonicalEncodingError «wrong canonical field type or tag». Конструкторы доменных записей доступны только из ветви build=True на boundedCanonicalDecode.py:176–177. Тесты отдельно воспроизвели повреждения roster, enum, позднего scalar и cap+1.
 
 Граница ревью — контракты данных и целые in-memory артефакты P1-C. Время и heap нагрузочных профилей §15.43 в данном прогоне не измерялись. Transport/IO, publication, bindings узлов, cutover, P1-D, Time и API-1 вне проверки.
+
+### 15.47. Пользовательская приёмка SP-P1-C (2026-11-03)
+
+**SP-P1-C принят пользователем** после независимого ревью §15.46. Объём приёмки — контракты данных и кодирование и декодирование целых root/shard TLV V1 в памяти по §§15.43–15.45. Следующий шаг плана — SP-P1-D, по отдельной команде пользователя.
+
+### 15.48. SP-P1-D — manifest dispatch и защита legacy writer (2026-11-03)
+
+**Реализация предъявлена на независимое ревью полного guard diff.** В `meta/spatial/domainRoot.py` объявлены SpatialDatasetKind и SpatialDomainRootRef. Допустим один domain hydrology_open_water с BLOB корня, его ключом, версией и диапазоном nbytes из ROOT_V1. `meta/worldPackManifest.py` оставляет default 1.0.0 и прежний V1 JSON без spatial_roots. Для V2 модель требует tuple с уникальными domain в порядке их wire-значений.
+
+`pack/encoding/packManifestCodec.py` выполняет dispatch до legacy model_validate. Отсутствующая версия означает V1. Присутствие spatial_roots в V1, неизвестная версия, duplicate key на любой глубине и неверная форма V2 получают отказ. JSON-массив V2 связывается с типизированными POJO на границе. Encode candidate выдаёт bytes в памяти. `PackManifestStore.load` обслуживает текущий WorldPackReader через новый decoder. Legacy save проверяет переданный manifest и существующий head перед mkdir/temp/replace.
+
+WorldPackWriter проверяет on-disk и injected manifest до ensure_dirs, включая случай injected V1 поверх V2 и принадлежность world_uid. Detailed materialization вызывает recalc_manifest_counters отдельно перед save_manifest. Поэтому проверка версии и world стоит в начале самого пересчёта и выполняется также при save до изменения counters/hash. Проверка текущего файла не обеспечивает эксклюзивного владения namespace между проверкой и записью. Этот lifetime proof остаётся за P2W/P3W.
+
+Адресный прогон из backend — **91 тест OK**. Первый запуск с Windows sandbox temp получил WinError 5 при создании вложенных тестовых каталогов. Повтор с разрешённым доступом к temp прошёл. Команда финального прогона:
+
+```powershell
+../.venv/Scripts/python.exe -B -m unittest tests.spatial_pack.test_manifest_versions tests.spatial_pack.test_bounded_decode tests.spatial_pack.test_pack_codec tests.spatial_pack.test_source_schema tests.spatial_pack.test_storage_schema tests.test_world_pack_writer_reader tests.test_region_coverage_contract tests.geo1.canonical_source.test_source_models tests.planning.encoding.test_canonical_codec
+```
+
+Новая регрессия проверяет отказ до ensure_dirs, создания temp, изменения counters/hash и замены manifest, включая writer, получивший V1 до появления V2 на диске. Проверены пустой и непустой V2, типы descriptor, ошибочные версии/ключи/формы, повтор domain, чтение V2 через WorldPackReader и прежняя формула V1 content_hash. Различные валидные domain в обратном порядке проверить на действующем roster невозможно (один domain). Direct counts Python-файлов с markers — meta/spatial 2, pack/encoding 2, pack/io 11, tests/spatial_pack 6. Следующий gate — независимое ревью P1-D и отдельная пользовательская приёмка.
+
+### 15.49. Отдельная проверка P1-D — обязательная типизация V2
+
+Критерий ревью: проследить V2 от входных JSON bytes до вызывающего кода и обратно. После декодирования ожидаются WorldPackManifest, tuple пространственных корней, SpatialDomainRootRef и ArtifactRef. Доменные компоненты получают POJO. На входе candidate encoder словарь вместо записи на любой глубине должен дать отказ до сериализации, даже если содержит все правильные типизированные значения. В ревью отдельно проверить оставшуюся обработку raw в JSON-dispatcher и отсутствие переноса правил модели в код, работающий со словарём.
+
+Контрпример: у корректного descriptor заменить root через model_copy на root.model_dump(mode="python"). До исправления повторная валидация восстанавливала ArtifactRef из словаря, и encoder выдавал bytes. Теперь проверяется исходное дерево POJO до повторной валидации. Регрессия test_v2_requires_typed_objects_before_candidate_encoding проверяет типы результата decode и отказ для list вместо tuple, dict вместо descriptor, ArtifactRef и tile. До исправления воспроизведён FAIL на вложенном ArtifactRef. После исправления новая регрессия и два смежных теста JSON-контракта прошли (3 OK). Этот прогон проверяет границу представления в памяти.
+
+### 15.50. SP-P-V1-REMOVE — учёт и удаление legacy-путей World Pack V1
+
+**OPEN. Владелец — Pack/Spatial.** Реестр ведётся с P1-D. Совместимость V1 действует на переходном этапе. При каждом изменении Pack read/write/import обновлять затронутые строки в том же шаге. Для нового обходного пути добавлять отдельную запись. Граница удаления — формат manifest World Pack 1.0.0. Версия 1 формата hydrology TLV имеет собственный жизненный цикл. Для legacy-источников воды действует существующий реестр HSP-01–10.
+
+| ID / статус | Путь и вызывающая сторона | Что предъявить при удалении |
+|---|---|---|
+| V1-01 OPEN | WorldPackManifest, default pack_version, V1-сериализация, публичный PACK_WIRE_VERSION в dataModel/worldPack | Проверить импорты и прямое создание/валидацию POJO. Убрать implicit V1 и V1-проекцию JSON. Тесты создания нового пака и отказа на missing version |
+| V1-02 OPEN | packManifestCodec.decode_manifest, require_legacy_manifest, encode_legacy_manifest → PackManifestStore.load/save/legacy_head → WorldPackReader/Writer, публичные re-exports | Удалить ветку 1.0.0 и encoder после перехода callers. Проверить публичные read/save на V1, missing version и повреждённом V2, без fallback и изменения файлов |
+| V1-03 OPEN | core/container/packs → WorldPackWriter, injected/on-disk manifest, NEW_V1, WorldPackPaths.ensure_dirs; все методы записи и sidecar helpers перечислены построчно в §15.15 | Для каждого sink из таблицы §15.15 указать новый вызов или удаление. Проверить, что ни фабрика, ни прямой вызов не создают V1 и не изменяют старый namespace |
+| V1-04 OPEN | L0 publisher/finalize_pack_on_world, detailed materialization, FineRectDrain, queued fine/chunk/grade и climate jobs, settlement tmp/publish, SettlementOutdoorPackingJob и debug_settlement_persist.py (§0.13 и §15.15) | Для каждого caller проследить запись до manifest/blob/world-row, включая retry и фоновые задачи. Приложить тест заменяющего пути и evidence остановки старых workers |
+| V1-05 OPEN | PackImportService.import_zip и HTTP import, экспорт/копирование архива, upload и server-path входы (§15.15) | Проверить версию входного и целевого пака до первой мутации. Зафиксировать политику экспорта сохранённых V1 и тесты архива. Учесть пути копирования, минующие codec |
+| V1-06 OPEN | Pack presence/paths, CLI detailed_bake.py, light_and_full_bake.py, entry_bg_refine.py, render_maps.py, read cache и потребители WorldPackReader | Отдельно проверить прямой JSON-read и проверки существования manifest.json. Для сохраняемого общего helper предъявить caller и тест, показывающий, где проверяется версия перед использованием пака |
+| V1-07 OPEN | Уже сохранённые V1-паки, отдельный rollback namespace, старые бинарники/процессы с доступом на запись (§15.10.4, §15.15) | До удаления согласовать disposition данных и rollback с владельцем эксплуатации. Предъявить перечень затронутых хранилищ, подтверждение прекращения V1-записи и проверку поведения на старом паке |
+
+**Порядок закрытия.** Для каждой строки фиксировать конкретные файл/символ, всех найденных callers, владельца замены, шаг перехода, итог «удалён / переведён / сохранён как общий» с основанием, ссылку на diff и проверку. Перед реализацией удаления повторить поиск от manifest.json, pack_version, version constants, codec/store/reader/writer, ZIP и DI по app, scripts и tests; пройти импорты и вызовы до публичных точек входа. Сверить результат с полным инвентарём §15.15 и добавить новые пути. Поиск по исходникам не закрывает строку про запущенные процессы.
+
+**Приёмка удаления.** Для поддерживаемых операций должен быть предъявлен действующий путь V2, включая публикацию и повторное чтение. Все строки реестра закрыты evidence, решение по существующим данным принято, V1 и отсутствующая версия получают явный отказ на действующих входах. Удаление выполняется отдельным шагом после этих переходов и принимается пользователем. P1-D сохраняет ранее согласованный объём.
+
+### 15.51. Ревью реализации SP-P1-D
+
+**CHANGES REQUIRED.** Проверено рабочее дерево поверх `09fd51ee`, включая новые codec, spatial POJO и tests/spatial_pack/test_manifest_versions.py. Повторный прогон девяти модулей командой §15.48 после добавления теста §15.49 — **92 теста OK**. Дополнительные пробы выполнены через публичные decode_manifest / encode_candidate_manifest.
+
+| Finding | Вход и наблюдаемый результат | Критерий закрытия |
+|---|---|---|
+| P1-D-REV-1 · P1 · packManifestCodec.py:76–77 | У валидного пустого V2 заменить tiles на список с `TileManifestEntry(gx=1, gy=0).model_copy(update={"gx": "bad"})`. В дереве все записи остаются POJO. Внешняя strict-валидация доверяет вложенному экземпляру. Encoder выдаёт 731 байт (world_uid="w"), затем decode этих же bytes отказывает на tiles.0.gx. | Encoder отвергает нарушенный тип до выдачи bytes. Проверить изменённый вложенный экземпляр, допустимый непустой tile и round-trip через публичные функции. Проверка только отсутствия dict недостаточна. |
+| P1-D-REV-2 · P2 · packManifestCodec.py:26–40 | В JSON V2 с world_uid="w" и spatial_roots=[] передать world_map_cells="12" либо tiles=[{"gx":true,"gy":0}]. Decode успешен, результаты соответственно int 12 и int 1. Только spatial_roots проходят strict JSON admission. | V2 отвергает оба несовместимых типа на входе, корректные JSON-числа проходят. Правила полей должны принадлежать POJO; отдельно подтвердить прежнее поведение V1. |
+
+Независимый агент подтвердил REV-1 также без model_copy: декодировать корректный V2 с одним tile и выполнить `m.tiles[0].chunks.append(42)`. Повторная проба дала предупреждение сериализатора вместо отказа и 745 байт, которые decoder отвергает на tiles.0.chunks.0. Этот вход включить в регрессию.
+
+Граница вывода — типизация, manifest dispatch и legacy construction/save в P1-D. Проверка не закрывает namespace lifetime, publication или миграцию существующих паков. SP-P-V1-REMOVE остаётся OPEN. Пользовательская приёмка P1-D отдельна.
+
+### 15.52. Повторное предъявление P1-D по REV-1 и REV-2
+
+**REV-1.** Перед выдачей candidate bytes encoder проверяет исходное дерево POJO снизу вверх. Каждый вложенный экземпляр проходит строгую проверку по своим полям до проверки родителя. Регрессия воспроизводит `chunks.append(42)`, подмену tile.gx на строку и chunk.cx на bool. Все три входа дают отказ. Для допустимого tile с chunk и пространственным корнем проверен публичный round-trip.
+
+**REV-2.** Dispatcher проверяет JSON-синтаксис, дубликаты ключей и версию. Ветка V2 передаёт исходные bytes строгой схеме WorldPackManifestV2 с общими декларациями полей; декодер возвращает прежний внутренний WorldPackManifest. Ручная замена raw["spatial_roots"] убрана. Неизвестный ключ верхнего уровня V2 отклоняется; V1 сохраняет прежнюю политику extra=ignore. Парные пробы проверяют world_map_cells="12", tile.gx=true и строковую координату вложенного TerritoryVolume. V2 отказывает во всех трёх случаях, V1 читает прежние представления. Для V2 дополнительно проверены числовые значения и JSON → типизированные вложенные записи wilderness/spatial → JSON → POJO.
+
+До исправления две регрессии дали шесть FAIL. Финальный прогон команды §15.48 с добавлением `tests.test_location_territory_volumes` — **97 тестов OK**. Адресный Pyright с `pyrightconfig.cascade.json` по packManifestCodec.py, worldPackManifest.py и territoryVolume.py — **0 ошибок и предупреждений**. Следующий gate — повторное независимое ревью P1-D.

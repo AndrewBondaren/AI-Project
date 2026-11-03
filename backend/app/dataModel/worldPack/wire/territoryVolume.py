@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, ValidationInfo, model_validator
 
 from app.dataModel.worldPack.wire.territoryVolumePolicy import TerritoryVolumePolicy
 
@@ -13,6 +13,7 @@ class TerritoryVolume(BaseModel):
     """Axis-aligned volume in fine grid coordinates (inclusive bounds)."""
 
     SCHEMA_ID: ClassVar[str] = "SCH-TERRITORY-VOLUME"
+    STRICT_BOUNDS: ClassVar[object] = object()
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
@@ -25,9 +26,11 @@ class TerritoryVolume(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _normalize_bounds(cls, data: object) -> object:
+    def _normalize_bounds(cls, data: object, info: ValidationInfo) -> object:
         if not isinstance(data, dict):
             return data
+        if info.context is cls.STRICT_BOUNDS and any(type(data.get(key)) is not int for key in cls.model_fields):
+            raise ValueError("territory bounds require integer coordinates")
         x0, x1 = int(data["x0"]), int(data["x1"])
         y0, y1 = int(data["y0"]), int(data["y1"])
         z0, z1 = int(data["z0"]), int(data["z1"])

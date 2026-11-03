@@ -17,7 +17,7 @@ from app.dataModel.spatial.grid.gridBBox import GridBBox
 from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
 from app.dataModel.spatial.regionShape import BboxShape
 from app.dataModel.terrain.designedWater.coverage.budget import BodyCoverageAllocation
-from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometryRequest
+from app.dataModel.terrain.designedWater.geometry.authoredGeometry import LegacyAuthoredWaterGeometryRequest
 from app.dataModel.terrain.designedWater.input import AuthoredWaterDesignInput
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind as Strategy
 from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
@@ -37,7 +37,7 @@ def request(source=None, *, seas=None, anchors=(), z_min=-20, seed="authored-see
         schema_version=1, algorithm_version=1, input_fingerprint=b"i" * 32), output_fingerprint=b"o" * 32)
     terrain = TerrainPlan(bbox=GridBBox(0, 9, 0, 8), surface_z=tuple((SurfaceGridCoord(x, y),
         12 if (x, y) == (2, 3) else 10) for y in range(9) for x in range(10)))
-    return AuthoredWaterGeometryRequest(source=source,
+    return LegacyAuthoredWaterGeometryRequest(source=source,
         pre_hydrology=PlanEnvelope[TerrainPlan](ref=ref, payload=terrain, dependencies=(), diagnostics=()),
         topology=topology, grid=SurfaceGridSettings(fine_span=2, light_side=3), seed_root=seed,
         anchors=anchors, seas=seas if seas is not None else HydrologySeasPolicy(), z_min=z_min)

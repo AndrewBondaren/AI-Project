@@ -8,7 +8,7 @@ from typing import Annotated, Generic, TypeVar
 
 from pydantic import BaseModel, Field, TypeAdapter
 
-from app.application.engine.contracts.invocation.inputWait import Failed, ResumeInput
+from app.application.engine.contracts.invocation.inputWait import Failed, InputConflict, ResumeInput
 from app.application.engine.runtime.invocations.inputWaitCoordinator import InputWaitCoordinator
 from app.dataModel.engine.dag.invocations.inputWait import InputReceipt
 from app.dataModel.engine.dag.invocations.record import InvocationStatus
@@ -36,7 +36,7 @@ from app.application.engine.runtime.responseResolver import ResponseResolver
 from app.application.engine.taskType import TaskType
 from app.dataModel.engine.dag.diagnostics import CancellationRequest, ExecutionEventCode, ExecutionSeverity
 from app.dataModel.engine.dag.executionPhase import ExecutionPhase
-from app.dataModel.engine.dag.identity import DomainRevision, ExecutionId, ExecutionIdValue, PlanInstanceId
+from app.dataModel.engine.dag.identity import DomainRevision, ExecutionId, ExecutionIdValue, Ordinal, PlanInstanceId, WaitId
 from app.dataModel.engine.dag.nodeStatus import NodeStatus
 
 O = TypeVar("O", bound=BaseModel)
@@ -174,6 +174,32 @@ class DAGEngine(Generic[O, S]):
         receipt = await self.accept_input(execution_id, request)
         result = await self.resume(execution_id, max_passes=max_passes, options=options)
         return InputDelivery(receipt, result)
+
+    async def cancel_waiting_child(self, execution_id: ExecutionId, wait_id: WaitId, *, expected_revision: int) -> None:
+        """Cancel the child bound to this wait. Resume drives the caller's join."""
+        TypeAdapter[int](Ordinal).validate_python(expected_revision)
+        settings = self._interaction_settings()
+        claim = await settings.store.claim(execution_id, str(uuid4()), settings.lease_seconds)
+        try:
+            saved = await settings.store.load(execution_id)
+            graph, _ = self._interaction_graph(execution_id, settings, saved)
+            wait = graph.waits.get(wait_id)
+            if (graph.cancellation is not None or wait is None or wait.accepted is not None
+                    or wait.binding.revision != expected_revision):
+                raise InputConflict("unknown, consumed or stale child wait")
+            child = graph.records[wait.invocation_id]
+            if child.caller_invocation_id is None or child.step_index != wait.step_index:
+                raise InputConflict("wait does not belong to a child at this step")
+            if child.status == InvocationStatus.CANCELLED:
+                return
+            if child.status != InvocationStatus.WAITING_INPUT:
+                raise InputConflict("child is not waiting for input")
+            child.status = InvocationStatus.CANCELLED
+            if graph.join_complete(graph.records[child.caller_invocation_id]):
+                graph.waiting_for_input = False
+            await OwnedExecution(settings.store, claim, saved.revision, graph, settings.lease_seconds).save()
+        finally:
+            await settings.store.release(claim)
 
     async def cancel_execution(self, execution_id: ExecutionId) -> None:
         settings = self._interaction_settings()

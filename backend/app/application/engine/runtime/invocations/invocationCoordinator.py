@@ -224,14 +224,11 @@ class InvocationCoordinator:
 
     def ready(self):
         records = self.graph.records
-        terminal = {Status.SUCCEEDED, Status.FAILED, Status.CANCELLED}
         changed = True
         while changed:
             changed = False
             for record in records.values():
-                if record.status == Status.WAITING_CALLS and all(
-                    child.status in terminal for child in self.children(record, record.step_index)
-                ):
+                if self.graph.join_complete(record):
                     changed = True
                     record.step_index += 1
                     record.step_attempts = 0

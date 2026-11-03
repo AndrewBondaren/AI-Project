@@ -813,14 +813,14 @@ flowchart TD
 
 | Трек | Последнее решение и evidence | Следующая работа |
 |---|---|---|
-| [GEO](./geo-1-designed-water.md) | I6.1 принят. I7.1 исправлен (§I7.2). I8.1 реализован: полный набор конкурентов проверяется до старта сессии. | Далее fine geometry воды, production caller и совместная миграция контрактов placement V2. |
+| [GEO](./geo-1-designed-water.md) | I7.1 принят (§I7.3), закрыт P2 потери точности площади, 175/175 integration по независимому отчёту. I8.1 реализован и предъявлен. | Следом подготовка fine geometry воды, production caller и согласованная миграция placement V2. |
 | [Snapshot](./world-domain-patches-snapshots.md) | A/B/C приняты. После CHANGES REQUIRED исправлен тест GC/reserve (`cd6746a7`). По отчёту 5 focused OK, suite 162 (1 skip). | Повторное ревью исправления, затем решение пользователя по D. Concrete 4C3 / полный 4D1 остаются на предъявлении. |
-| [Spatial](./spatial-distribution-domain.md) | P1-B принят (§15.42). P1-C повторно предъявлен (§15.45), 74 теста по отчёту. | P1-D после P1-C и отдельной проверки полного guard diff (§15.20). |
+| [Spatial](./spatial-distribution-domain.md) | P1-B принят. Независимый PASS P1-C (§15.46) для целой V1-записи в памяти: 74 теста, воспроизведены golden bytes и отказ до создания моделей. | P1-D после пользовательского решения по P1-C и отдельной проверки полного guard diff (§15.20). |
 | [Time](./time-domain.md) | Изолированные T3-A/T3-C, подготовка T4 и World settings проверены: 25 тестов, Pyright без ошибок по отчёту. | Политика STANDARD для суток в 1–3 часа открыта. Production T4 требует SN-TIME-READ и Time reader, T5 — SN-TIME-APPLY и handler, создание ветки — SN-TIME-BRANCH. |
 | [Physics](./physics-spatial-dynamics.md) | P3.9–11 приняты F1–F3, typed group output и карта/порядок P3.5/P3.7. P3.15 приняты S1–S4 для settings. P3.16 добавляет PH-LOG | Проработать внешний контракт B и затем closure C. Для PH-LOG согласовать event matrix, correlation и регистрацию маршрута. После общей архитектуры возможен water kernel proposal |
 | [API-1](./api-1-transport-boundary.md) | Пользователь выбрал путь API → engine DAG → пользовательская нода → public domain operation. По Climate C1 предъявлена карточка с открытыми schema/revision/security и writer boundaries | Согласовать C1-schema и guarded update/acceptance. Domain contracts можно проектировать до пользовательских нод |
 | [GEN-BAKE-READ](./generator-public-bake-reads.md) | Исправленный пакет D1–D7 предъявлен в §17.10.4 | Получить решение пользователя, затем R1/R2 отдельно по операциям. Handoff light, full L0+C23, named terrain и coordinate terrain описан в §17.10.3 |
-| [DAG invocation и bake admission](./dag-invocations-bake-admission.md) | R1–R4: повторное ревью PASS. В реализации R5 выявлены REV-7 (отмена при активной lease) и REV-8 (accepted input без continuation). | Исправления R5 с повторной проверкой обоих сценариев. |
+| [DAG invocation и bake admission](./dag-invocations-bake-admission.md) | R1–R4: повторное ревью PASS. После замечаний REV-7/8 по R5 в `09fd51ee` внесены изменения в cancellation, input wait и тесты. | Проверить исправления по обоим контрпримерам. Повторный verdict в owning-плане пока отсутствует. |
 | [LOD](./lod-simulation-handoff.md) | §11 учитывает draft и открытые вопросы coherent capture, continuation и неизменности мира | Продолжать согласование с владельцами первого consumer. Конкретные зависимости runtime уточняются по сценарию |
 
 Предложения новых bindings в этих планах не меняют hard-edge реестр автоматически. Исторические команды §9.3 для приёмки I1/B, preflight P1-A и проектирования уже принятой карты Physics заменены этой очередью.
@@ -830,7 +830,8 @@ flowchart TD
 | План | Номер трека | О чём трек | Следующий трек или внешняя зависимость |
 |---|---|---|---|
 | GEO | I8.1, реализован | До запуска placement session сверяется полный набор геометрии конкурентов. | GEO: подготовка fine geometry воды и подключение production caller. Для изменения V2 согласованно перевести оба placement entry и consumers. |
-| Spatial | P1-C, реализован | Ограниченное декодирование TLV и V1 codecs для root/shard. | P1-D: dispatch manifest V1/V2 и запреты legacy-записи. Вход — P1-C и отдельная проверка полного guard diff. Активация V2 позже. |
+| Spatial | P1-C, реализация проверена (§15.46) | Декодирование TLV и V1 codecs для root/shard в памяти. | P1-D: выбор V1/V2 в manifest и защита legacy-записи. Вход — решение по P1-C и отдельная проверка guard diff. |
 | Time | T3-A / T3-C, подготовка T4 проверена | Арифметика, календарь, World settings, чтение через закреплённые тестовые источники. | Внутри Time открыта политика STANDARD для 1–3 часов. Production T4 ждёт SN-TIME-READ, T5 — SN-TIME-APPLY, ветвление — SN-TIME-BRANCH. |
+| Snapshot | SN-TIME-READ, доступно проектирование | Определить получение точного принятого состояния по закреплённой публикации или историческому snapshot в одном read scope. | Передача в Time T4 после реализации и проверки, что публикация P читается после появления Q. |
 
-У трёх срезов раздельные рабочие файлы. Snapshot D остаётся на повторном ревью. API-1 ведёт пользователь. В очереди проектирования GEN-BAKE-READ после решения по D1–D7 идут R1 (согласование owners) и R2 (точные slots/projections) по операциям.
+Snapshot D остаётся на повторном ревью. API-1 ведёт пользователь. GEN-BAKE-READ после решения по D1–D7 переходит к проектированию R1/R2 по операциям.

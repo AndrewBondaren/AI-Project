@@ -14,6 +14,7 @@ from app.application.worldData.pack.io.packBlobWire import (
     write_settlement_structure_blob,
 )
 from app.application.worldData.pack.io.packManifestStore import PackManifestStore
+from app.application.worldData.pack.encoding.packManifestCodec import require_legacy_manifest
 from app.application.worldData.pack.bake.packBakeLog import log_pack_manifest_saved, log_pack_write_blob
 from app.application.worldData.pack.io.tileCodec import (
     PAYLOAD_KIND_CLIMATE,
@@ -69,12 +70,9 @@ class WorldPackWriter:
         self._store = store or PackManifestStore()
         self._bake_defaults = defaults
         self._parent_light_cache = parent_light_cache or ParentLightCache()
-        if manifest is not None:
-            self._manifest = manifest
-        elif self._store.exists(paths.manifest_path()):
-            self._manifest = self._store.load(paths.manifest_path())
-        else:
-            self._manifest = WorldPackManifest(world_uid=paths.world_uid)
+        head = self._store.legacy_head(paths.manifest_path(), paths.world_uid)
+        self._manifest = manifest if manifest is not None else head or WorldPackManifest(world_uid=paths.world_uid)
+        require_legacy_manifest(self._manifest, world_uid=paths.world_uid)
         self._paths.ensure_dirs()
 
     @property
@@ -428,6 +426,8 @@ class WorldPackWriter:
         return status
 
     def recalc_manifest_counters(self) -> None:
+        require_legacy_manifest(self._manifest, world_uid=self._paths.world_uid)
+        self._store.legacy_head(self._paths.manifest_path(), self._paths.world_uid)
         side = self._manifest.world_map_cells_per_tile
         world_map_cells = 0
         for tile in self._manifest.tiles:

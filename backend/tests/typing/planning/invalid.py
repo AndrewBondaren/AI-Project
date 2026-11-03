@@ -541,14 +541,14 @@ def invalid_geometry_boundary(preparer: DesignedWaterPlacementPreparer, input: N
     input.field_policy.noise_policy.score_bits  # EXPECT: reportAttributeAccessIssue
 
 
-from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometry, AuthoredWaterGeometryRequest
+from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometry, LegacyAuthoredWaterGeometryRequest
 from app.application.worldData.placement.adapters.water import prepare_authored_water_geometry
 from app.application.worldData.placement.adapters.waterShape import shape_cells
 from app.application.worldData.placement.adapters.waterTypes import WaterPlacementContext
 from app.application.worldData.generators.hydrology.placement.projectDeclaredHydrology import project_water_source
 
 
-def invalid_authored_boundary(request: AuthoredWaterGeometryRequest, geometry: AuthoredWaterGeometry,
+def invalid_authored_boundary(request: LegacyAuthoredWaterGeometryRequest, geometry: AuthoredWaterGeometry,
                              context: WaterPlacementContext, basin: DeclaredBasin) -> None:
     prepare_authored_water_geometry({"source": "source"})  # EXPECT: reportArgumentType
     prepare_authored_water_geometry(geometry)  # EXPECT: reportArgumentType

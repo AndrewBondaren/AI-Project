@@ -2,30 +2,35 @@
 
 from __future__ import annotations
 
-import json
 import os
 import tempfile
 from pathlib import Path
 
 from app.dataModel.worldPack.meta.worldPackManifest import WorldPackManifest
+from app.application.worldData.pack.encoding.packManifestCodec import decode_manifest, encode_legacy_manifest, require_legacy_manifest
 
 
 class PackManifestStore:
     def load(self, path: Path) -> WorldPackManifest:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        return WorldPackManifest.model_validate(raw)
+        return decode_manifest(path.read_bytes())
+
+    def legacy_head(self, path: Path, world_uid: str) -> WorldPackManifest | None:
+        if not self.exists(path):
+            return None
+        head = self.load(path)
+        require_legacy_manifest(head, world_uid=world_uid)
+        return head
 
     def save(self, path: Path, manifest: WorldPackManifest) -> None:
-        # Revalidate mutable lists before touching the published manifest.
-        manifest = WorldPackManifest.model_validate(manifest.model_dump(mode="json"))
+        payload = encode_legacy_manifest(manifest)
+        self.legacy_head(path, manifest.world_uid)
         path.parent.mkdir(parents=True, exist_ok=True)
-        payload = manifest.model_dump_json(indent=2)
         staged = None
         try:
             with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
                                              prefix=path.name + ".", suffix=".tmp", delete=False) as handle:
                 staged = Path(handle.name)
-                handle.write(payload)
+                handle.write(payload.decode("utf-8"))
             os.replace(staged, path)
         finally:
             if staged is not None:

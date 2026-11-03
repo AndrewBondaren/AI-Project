@@ -635,7 +635,7 @@ Legacy dict-секции не адаптируются в новый API. Сущ
 
 ### Проверенные actual contracts и существенные findings
 
-- `WorldClimateScalars` содержит десять scalar/nested полей; будущий одиннадцатый — elevation_lapse_rate из Terrain. `SeasonTempOffsets` содержит winter/spring/summer/autumn. DefaultWhenMissing и nullable типы уже заданы owning POJO. `canonical_defaults()` даёт peak -40/45 и offsets -12/0/8/-4, тогда как missing при обычном создании модели даёт peak None и offsets 0. **Reset не может произвольно выбирать между этими источниками.**
+- `WorldClimateScalars` содержит девять scalar/nested полей; будущий десятый — elevation_lapse_rate из Terrain. `SeasonTempOffsets` содержит winter/spring/summer/autumn. DefaultWhenMissing и nullable типы уже заданы owning POJO. `canonical_defaults()` даёт peak -40/45 и offsets -12/0/8/-4, тогда как missing при обычном создании модели даёт peak None и offsets 0. **Reset не может произвольно выбирать между этими источниками.**
 - `ClimateZoneEntry`: system_climate и пять optional int полей base_temperature, typical_elevation_z, base_rainfall, temperature_variance, rainfall_variance. `WorldClimateZoneRegistry` — RootModel списка, canonical_defaults и canonical_engine различаются. Existing `registry.profile_for` дополняет nullable entry полями enum/fallback profile; неизвестный ключ может привести к temperate fallback. Это отдельная effective-profile semantics, не повод «исправлять» неверную ссылку на write.
 - `WeatherTypeEntry`: system_weather, display_weather, temp_min/max, rainfall_min, priority, travel_modifier, need_modifiers, glossary_ref. WorldWeatherTypeRegistry.sorted_by_priority лишь сортирует; наличие entry_for не доказывает unique keys или обязательность clear. Требования unique/reference/fallback должны быть явно закреплены owner validation.
 - Scalar/entry модели имеют extra="ignore"; resolve._patch_fields наследует это. Запрет неизвестных полей нового settings API **не обеспечен** текущими POJO. Требуется общий shape guard по существующей model schema (включая nested fields/aliases), без ручного второго каталога полей. Открытые maps вроде need_modifiers нельзя принимать за неизвестные POJO attributes.
@@ -658,7 +658,7 @@ Legacy dict-секции не адаптируются в новый API. Сущ
 
 | Variant | Concrete payload / semantics |
 |---|---|
-| PatchClimateScalars | typed присутствующие поля одиннадцати scalar settings; отсутствующие остаются неизменными; SeasonTempOffsets patch сохраняет отсутствующие seasons |
+| PatchClimateScalars | typed присутствующие поля десяти scalar settings; отсутствующие остаются неизменными; SeasonTempOffsets patch сохраняет отсутствующие seasons |
 | ReplaceClimateZoneRegistry | WorldClimateZoneRegistry; полная замена authored списка |
 | UpsertClimateZone | ClimateZoneEntry; полная запись по system_climate, не неявный entry patch |
 | RemoveClimateZone | RegistryKey[WorldClimateZoneRegistry]; отсутствие ключа → structured not-found, не silent success |
@@ -738,3 +738,420 @@ Domain public interface не импортирует app/api или engine nodes.
 **Conformance scenarios:** omitted scalar не меняется; explicit null сохраняет/отклоняет owning policy; unsupported reset отказ; unknown nested season отказ; malformed registry не canonical fallback; defaults при initial и patch различаются намеренно; duplicate commands отказ; zone add + default switch валидируются вместе; удаление используемой зоны отказ; concurrent material ref change конфликт; preview не repair; stale race/perk row не затирает Climate; forged prepared result не acceptance authority; no-op не создаёт ненужный publication (точная receipt policy foreign); failure до commit сохраняет старую publication, unknown outcome после commit разрешается по operation identity.
 
 **Verdict:** исследованный owner-specific proposal готов к обсуждению, не CODE-READY. Найдены blockers к «необходящемуся» контракту: ignored unknown fields, неоднозначный reset default, missing settings-wide revision/authority, full-row writers чужих доменов и незамкнутый weather/reference lifecycle. Следующий допустимый шаг — принять конкретные C1-schema решения и закрыть exact foreign seams документально. Межплановые предложения: World storage guarded updates; Climate owning validation/default migration; Snapshot applicable acceptance. Другие планы/rules, production POJO/ports, nodes/bindings, URLs и код не изменены.
+
+## API-1-A2 — передача настроек в DAG по полям (2026-11-03)
+
+Сверка по работающим объявлениям моделей: 110 полей dataclass World, 36 WorldSlice, 51 совпадающих колонок. 59 полей строки не входят в WorldSlice. Ключи срезов вне World: `district_template_registry`, `location_mood_registry`, `road_settings`. Для последних требуется подтвердить источник конкретного мира и обратное сохранение до подключения записи. Наличие canonical defaults само по себе не доказывает сохранение авторской настройки.
+
+Для всех редактируемых строк предлагается единое правило передачи. Нода вызывает публичный read владельца для конкретного world_uid и согласованной публикации. Вход следующей операции явно принимает нужную часть типизированного результата и его версию. Если потребителю нужен вычисленный профиль, владелец отдельно определяет преобразование authored → effective. Потребитель не перечитывает latest World. Чтения из разных публикаций отвергаются до выполнения. Это требование к будущей связи Output → Input. Указанный accessor или вызов Python подтверждает лишь существующую зависимость, а не готовый DAG binding. Имена нод и их компоновку определяет пользователь.
+
+### Типизированные источники и потребители
+
+| Область существующей модели | Поля World или bundle | Output владельца для DAG | Существующее чтение и пример места вызова |
+|---|---|---|---|
+| worldPack | `terrain_pack_hash`, `terrain_pack_path` | `WorldPackMetadata` | WorldSlice, отдельный вызов accessor не установлен |
+| worldPack | `world_map_cells_per_tile` | `WorldMapResolutionSettings` | WorldSlice, отдельный вызов accessor не установлен |
+| worldPack | `fine_cells_per_map_cell` | `WorldGridSettings` | grid_settings() |
+| climate | `climate_local_influence_fraction`, `climate_parallel_workers`, `climate_pole_mode`, `climate_pole_preset`, `climate_temperature_peak_max`, `climate_temperature_peak_min`, `default_climate_zone`, `precipitation_liquid`, `season_temp_offsets` | `WorldClimateScalars` | climate_scalars() → climateRuntimeAssembler:33 |
+| terrain | `closed_planet_grid`, `elevation_lapse_rate`, `g`, `magma_band_thickness`, `map_subsurface_depth`, `terrain_chunk_columns`, `terrain_parallel_workers`, `world_topology_mode`, `z_max`, `z_min` | `WorldTerrainScalars` | terrain_scalars() → climateGeneratorService:163 |
+| terrain | `relief_grade_obstacle_policy` | `WorldReliefGradeObstacleScalars` | relief_obstacle_scalars() |
+| economy | `economic_tier_registry` | `WorldEconomyTierRegistry` | economic_tiers() → locationScope:54 |
+| materials | `material_registry` | `WorldMaterialRegistry` | materials() → precipitation:37 |
+| resources | `resource_type_registry` | `WorldResourceTypeRegistry` | resource_types() → subjects:177 |
+| flora | `crops_registry` | `WorldCropsRegistry` | crops() → subjects:192 |
+| livestock | `livestock_registry` | `WorldLivestockRegistry` | livestock() → subjects:75 |
+| terrain | `terrain_registry` | `WorldTerrainRegistry` | terrain() → heightmapPass:23 |
+| climate | `climate_zone_registry` | `WorldClimateZoneRegistry` | climate_zones() → registry:45 |
+| worldEnvironment | `world_environment` | `WorldEnvironmentSettings` | world_environment() |
+| hydrology | `hydrology` | `WorldHydrology` | hydrology() → seaLevelPolicy:12 |
+| terrainMasks | `terrain_masks` | `WorldTerrainMasks` | terrain_masks() → heightmapPass:22 |
+| locations | `barrier_template_registry` | `WorldBarrierTemplateRegistry` | barrier_templates() → reliefWorldRefValidation:24 |
+| locations | `city_size_registry` | `WorldSettlementSizeRegistry` | city_sizes() → footprint:68, settlement_sizes() |
+| locations | `settlement_specialization_registry` | `WorldSettlementSpecializationRegistry` | settlement_specializations() → districts:369 |
+| locations | `district_template_registry` | `WorldDistrictTemplateRegistry` | district_templates() → footprint:206 |
+| locations | `district_zone_preference` | `WorldDistrictZonePreference` | district_zone_preference() → placement:179 |
+| roads | `road_settings` | `WorldRoadSettings` | road_settings() → connectionPolicy:38 |
+| connections | `connection_type_registry` | `WorldConnectionTypeRegistry` | connection_types() → districtAssembler:192 |
+| locations | `transition_type_registry` | `WorldTransitionTypeRegistry` | transition_types() → settlementOutdoorPackingJob:261 |
+| locations | `location_type_registry` | `WorldLocationTypeRegistry` | location_types() → locationScope:42 |
+| lore | `lore_registry` | `WorldLoreRegistry` | lore() |
+| climate | `weather_type_registry` | `WorldWeatherTypeRegistry` | weather_types() |
+| terrain | `terrain_category_registry` | `WorldTerrainCategoryRegistry` | terrain_categories() |
+| locations | `room_type_registry` | `WorldRoomTypeRegistry` | room_types() |
+| locations | `location_mood_registry` | `WorldLocationMoodRegistry` | location_moods() |
+| races | `race_template_registry` | `WorldRaceTemplateRegistry` | WorldSlice, отдельный вызов accessor не установлен |
+| perks | `perk_template_registry` | `WorldPerkTemplateRegistry` | WorldSlice, отдельный вызов accessor не установлен |
+| locations | `purpose_pack_registry` | `WorldPurposePackRegistry` | purpose_pack_registry() |
+| locations | `purpose_packs` | `WorldPurposePacks` | purpose_packs() |
+| terrain | `canal_template_registry` | `WorldCanalTemplateRegistry` | canal_templates() → reliefWorldRefValidation:50 |
+| terrain | `relief_pick_policy` | `WorldReliefPickPolicy` | relief_pick_policy() → refFields:118 |
+
+Служебный WorldPackMetadata передаётся только как metadata. У WorldTerrainScalars текущий путь хранения расходится с принятым ownership: g → Physics, elevation_lapse_rate → Climate, magma_band_thickness → Terrain до выделения геологии. Совместная выдача сырой строки World не закрывает эти три доменных контракта. Для World-owned времени закреплена отдельная связь WorldTimeSettings и calendar bindings → Time input в [Time §28](./time-domain.md). Historical и current read должны сохранять привязку к запрошенной версии.
+
+### Остаток строки World — disposition каждого поля
+
+Группы владельцев и назначение приведены в R4. Здесь зафиксировано решение именно о передаче через DAG. Для scalar без owning schema нужен самостоятельный контракт и проверенный consumer. Raw dict-секции исключены до переработки.
+
+| Статус передачи | Поля |
+|---|---|
+| Legacy dict, исключено | `action_formulas`, `body_schema_registry`, `caves`, `cell_state_registry`, `character_trait_registry`, `colour_registry`, `combat_settings`, `constitution_tables`, `danger_level_registry`, `derived_formulas`, `faction_relation_type_registry`, `intensity_level_registry`, `location_state_registry`, `material_category_registry`, `material_use_type_registry`, `muscle_tables`, `narrative_type_registry`, `npc_fields`, `npc_goal_type_registry`, `npc_needs_registry`, `npc_target_type_registry`, `player_fields`, `registry_migrations`, `resist_schema`, `respawn_type_registry`, `road_type_registry`, `skill_schema`, `slots`, `stat_migrations`, `stat_schema`, `tag_registry`, `texture_registry`, `world_bounds`, `wound_type_registry` |
+| Legacy list, требуется owner contract | `action_registry` |
+| World → Time по новому контракту §28 | `calendar` |
+| Metadata / lifecycle | `created_at`, `current_tick`, `schema_version`, `terrain_pack_version`, `world_map_version`, `world_uid` |
+| Scalar, typed public operation OPEN | `default_passage_height`, `faint_check_formula`, `faint_threshold`, `grid_bbox_padding`, `hp_enabled`, `measurement_system`, `name`, `narrative_language`, `overload_penalty_formula`, `sleep_penalty_formula`, `stat_conflict_mode`, `trait_change_log_threshold`, `volume_enabled`, `weight_enabled`, `wound_death_formula`, `wounds_enabled` |
+| Library attachment operation | `library_pins` |
+
+### Поля вложенных контрактов
+
+Ниже — снимок validation schema из тех же 36 POJO с wire aliases. Именованные типы раскрыты один раз для всех мест использования. Тип элемента списка и варианты union задают дальнейший путь внутри настройки. Словари со свободными ключами остаются картами. Условия допустимости, defaults и ограничения остаются у POJO. Для всех полей строки действует правило передачи родительского результата выше. Отдельный вход ноды нужен только при наличии операции, использующей это поле.
+
+| Контракт данных | Wire-поля и типы либо элементы корня |
+|---|---|
+| `AnchorRadiusShape` | `edge_noise: EdgeNoise / null`, `kind: string`, `anchor_uid: string`, `radius: integer` |
+| `AtmosphereGasComponent` | `system_material: WorldEnvironmentSettings.StrictOnWire_MaterialKey_`, `fraction: WorldEnvironmentSettings.StrictOnWire_Annotated_float__FieldInfo_annotation_NoneType__required_True__metadata__0__0____PydanticGeneralMetadata_allow_inf_nan_False_____` |
+| `BarrierTemplateEntry` | `system_type: WorldBarrierTemplateRegistry.StrictOnWire_RegistryKey_WorldBarrierTemplateRegistry__`, `glossary_ref: WorldBarrierTemplateRegistry.DefaultWhenMissing_Union_str__NoneType__`, `wall_material: WorldBarrierTemplateRegistry.DefaultWhenMissing_Union_MaterialPick__NoneType__`, `height_levels: WorldBarrierTemplateRegistry.DefaultWhenMissing_Union_IntMinMax__NoneType__`, `gates: WorldBarrierTemplateRegistry.DefaultWhenMissing_Union_IntMinMax__NoneType__`, `towers: WorldBarrierTemplateRegistry.DefaultWhenMissing_Union_IntMinMax__NoneType__`, `width_cells: WorldBarrierTemplateRegistry.DefaultWhenMissing_int__Ge_ge_1_` |
+| `BboxShape` | `edge_noise: EdgeNoise / null`, `kind: string`, `x_min: integer`, `y_min: integer`, `x_max: integer`, `y_max: integer` |
+| `CanalObstaclePolicyRule` | `to_canal_cut_enable: WorldReliefPickPolicy.StrictOnWire_bool_`, `entities: WorldReliefPickPolicy.StrictOnWire_list_CanalObstacleEntity___MinLen_min_length_1_`, `canal_ref: WorldReliefPickPolicy.DefaultWhenMissing_Union_str__NoneType__` |
+| `CanalStructureSpec` | `structure_refs: WorldCanalTemplateRegistry.DefaultWhenMissing_list_str__` |
+| `CanalTemplateEntry` | `system_type: WorldCanalTemplateRegistry.StrictOnWire_str_`, `earthen_canal: WorldCanalTemplateRegistry.DefaultWhenMissing_Union_bool__NoneType__`, `structure: WorldCanalTemplateRegistry.DefaultWhenMissing_Union_CanalStructureSpec__NoneType__` |
+| `ClimateZoneEntry` | `system_climate: WorldClimateZoneRegistry.StrictOnWire_str_`, `base_temperature: WorldClimateZoneRegistry.DefaultWhenMissing_Union_int__NoneType__`, `typical_elevation_z: WorldClimateZoneRegistry.DefaultWhenMissing_Union_int__NoneType__`, `base_rainfall: WorldClimateZoneRegistry.DefaultWhenMissing_Union_int__NoneType__`, `temperature_variance: WorldClimateZoneRegistry.DefaultWhenMissing_Union_int__NoneType__`, `rainfall_variance: WorldClimateZoneRegistry.DefaultWhenMissing_Union_int__NoneType__` |
+| `ConnectionTypeEntry` | `system_connection_type: WorldConnectionTypeRegistry.StrictOnWire_RegistryKey_WorldConnectionTypeRegistry__`, `display_name: WorldConnectionTypeRegistry.StrictOnWire_str_` |
+| `ConnectionTypeKey` | `string` |
+| `CorridorShape` | `edge_noise: EdgeNoise / null`, `kind: string`, `path: list[tuple[integer, integer]]`, `width: integer` |
+| `CropsTypeEntry` | `system_crop: WorldCropsRegistry.StrictOnWire_str_`, `crop_kind: WorldCropsRegistry.StrictEnumOnWire_CropKind_`, `display_name: WorldCropsRegistry.DefaultWhenMissing_Union_str__NoneType__`, `glossary_ref: WorldCropsRegistry.DefaultWhenMissing_Union_str__NoneType__` |
+| `DeclaredBasin` | `placement_specificity: WorldHydrology.DefaultWhenMissing_Union_Specificity__NoneType__`, `location_uid: WorldHydrology.StrictOnWire_str_`, `footprint: WorldHydrology.StrictOnWire_Annotated_Union_BboxShape__EllipseShape__PolygonShape__AnchorRadiusShape__CorridorShape___FieldInfo_annotation_NoneType__required_True__discriminator__kind____`, `kind: WorldHydrology.StrictOnWire_BasinKind_`, `liquid: WorldHydrology.DefaultWhenMissing_StrictOnWire_MaterialKey__`, `floor_z: WorldHydrology.StrictOnWire_int_`, `z_water_level: WorldHydrology.DefaultWhenMissing_Union_int__NoneType__`, `rim: WorldHydrology.DefaultWhenMissing_Union_HydrologyBands__NoneType__` |
+| `DeclaredCoastline` | `placement_specificity: WorldHydrology.DefaultWhenMissing_Union_Specificity__NoneType__`, `location_uid: WorldHydrology.StrictOnWire_str_`, `purpose: WorldHydrology.DefaultEnumWhenMissing_CoastlinePurpose_`, `target_source_uid: WorldHydrology.DefaultWhenMissing_Union_EntityUid__NoneType__`, `kind: WorldHydrology.StrictOnWire_BasinKind_`, `liquid: WorldHydrology.DefaultWhenMissing_StrictOnWire_MaterialKey__`, `closed: WorldHydrology.DefaultWhenMissing_bool_`, `water_side: WorldHydrology.DefaultWhenMissing_Union_WaterSide__NoneType__`, `path: WorldHydrology.DefaultWhenMissing_tuple_HydrologyWaypoint__________` |
+| `DeclaredLake` | `placement_specificity: WorldHydrology.DefaultWhenMissing_Union_Specificity__NoneType__`, `location_uid: WorldHydrology.StrictOnWire_str_`, `liquid: WorldHydrology.DefaultWhenMissing_StrictOnWire_MaterialKey__`, `shoreline: WorldHydrology.DefaultWhenMissing_tuple_HydrologyWaypoint__________` |
+| `DeclaredRiver` | `location_uid: WorldHydrology.StrictOnWire_str_`, `system_role: WorldHydrology.DefaultWhenMissing_RiverSystemRole_`, `river_system_topology: WorldHydrology.DefaultWhenMissing_Union_RiverSystemTopology__NoneType__`, `parent_location_uid: WorldHydrology.DefaultWhenMissing_Union_str__NoneType__`, `declare_mode: WorldHydrology.DefaultWhenMissing_Union_RiverDeclareMode__NoneType__`, `source: WorldHydrology.DefaultWhenMissing_Union_HydrologyWaypoint__NoneType__`, `mouth: WorldHydrology.DefaultWhenMissing_Union_HydrologyMouth__NoneType__`, `route_location_uids: WorldHydrology.DefaultWhenMissing_tuple_str__________`, `segments: WorldHydrology.DefaultWhenMissing_tuple_DeclaredRiverSegment__________` |
+| `DeclaredRiverSegment` | `from: HydrologyWaypoint`, `to: HydrologyWaypoint`, `connection_type: WorldHydrology.StrictOnWire_str_`, `width_cells: WorldHydrology.DefaultWhenMissing_int_` |
+| `DistrictConnection` | `connection_type: WorldDistrictTemplateRegistry.StrictOnWire_ConnectionTypeKey_`, `role: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_str__NoneType__`, `sidewalk: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_bool__NoneType__`, `lanes_per_side: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_int__NoneType__` |
+| `DistrictTemplateEntry` | `system_name: WorldDistrictTemplateRegistry.StrictOnWire_RegistryKey_WorldDistrictTemplateRegistry__`, `display_name: WorldDistrictTemplateRegistry.StrictOnWire_str_`, `district_type: WorldDistrictTemplateRegistry.StrictOnWire_str_`, `district_subtype: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_str__NoneType__`, `placement_conditions: WorldDistrictTemplateRegistry.DefaultWhenMissing_list_PlacementCondition__`, `max_per_city: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_int__NoneType__`, `size_pct: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_SizePct__NoneType__`, `allowed_structure_types: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_list_Union_BuildingPurpose__BuildingPurposeFamily____NoneType__`, `allowed_match: WorldDistrictTemplateRegistry.DefaultWhenMissing_BuildingPurposeMatch_`, `economic_tier_range: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_EconomicTierRange__NoneType__`, `density: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_DistrictDensity__NoneType__`, `street_layout: WorldDistrictTemplateRegistry.DefaultWhenMissing_StreetLayout_`, `connections: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_list_DistrictConnection___NoneType__`, `required_structures: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_list_RequiredStructure___NoneType__`, `frontage_type_order: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_list_ConnectionTypeKey___NoneType__`, `plot_counts: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_dict_DrawingKey__int___NoneType__`, `plot_priority: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_dict_DrawingKey__int___NoneType__`, `perimeter_barrier: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_PerimeterBarrier__NoneType__`, `deck: WorldDistrictTemplateRegistry.DefaultWhenMissing_int_` |
+| `DistrictTemplateKey` | `string` |
+| `DistrictZonePreferenceEntry` | `zone: WorldDistrictZonePreference.StrictEnumOnWire_CellZone_`, `district_types: WorldDistrictZonePreference.DefaultWhenMissing_list_str__` |
+| `DrawingKey` | `string` |
+| `EconomicTierRange` | `min: WorldDistrictTemplateRegistry.StrictOnWire_EconomyTierKey_`, `max: WorldDistrictTemplateRegistry.StrictOnWire_EconomyTierKey_` |
+| `EconomyTierEntry` | `system_tier: WorldEconomyTierRegistry.StrictOnWire_RegistryKey_WorldEconomyTierRegistry__`, `display_tier: WorldEconomyTierRegistry.StrictOnWire_str_`, `base_value: WorldEconomyTierRegistry.StrictOnWire_int__Ge_ge_0_`, `road_tier_bonus: IgnoreOnWire_float_0_`, `road_tier_durability: IgnoreOnWire_float_0_` |
+| `EconomyTierKey` | `string` |
+| `EdgeNoise` | `amplitude: integer`, `scale: integer` |
+| `EligibilityRule` | `fact: string`, `op: WorldTerrainRegistry.StrictEnumOnWire_EligibilityOp_`, `lo: number / null`, `hi: number / null`, `weight: number`, `required: boolean` |
+| `EllipseShape` | `edge_noise: EdgeNoise / null`, `kind: string`, `cx: integer`, `cy: integer`, `rx: integer`, `ry: integer` |
+| `EntityUid` | `string` |
+| `FarmlandSpec` | `name: string / null`, `shape: BboxShape / EllipseShape / PolygonShape / AnchorRadiusShape / CorridorShape`, `density: number`, `placement_specificity: integer / null`, `location_uid: string / null`, `entry_type: string` |
+| `ForestSpec` | `name: string / null`, `shape: BboxShape / EllipseShape / PolygonShape / AnchorRadiusShape / CorridorShape`, `density: number`, `placement_specificity: integer / null`, `location_uid: string / null`, `entry_type: string` |
+| `HillPolicy` | `min_spacing: WorldTerrainRegistry.DefaultWhenMissing_int__Ge_ge_1_`, `radius: WorldTerrainRegistry.DefaultWhenMissing_int__Ge_ge_1_`, `height: WorldTerrainRegistry.DefaultWhenMissing_int__Ge_ge_1_`, `shapes: WorldTerrainRegistry.DefaultWhenMissing_tuple_HillShape__________` |
+| `HydrologyBands` | `min: WorldHydrology.StrictOnWire_int__Ge_ge_1__Le_le_99_`, `max: WorldHydrology.StrictOnWire_int__Ge_ge_1__Le_le_99_` |
+| `HydrologyMouth` | `location_uid: WorldHydrology.DefaultWhenMissing_Union_str__NoneType__`, `x: WorldHydrology.DefaultWhenMissing_Union_int__NoneType__`, `y: WorldHydrology.DefaultWhenMissing_Union_int__NoneType__`, `z: WorldHydrology.DefaultWhenMissing_Union_int__NoneType__` |
+| `HydrologyWaypoint` | `x: WorldHydrology.StrictOnWire_int_`, `y: WorldHydrology.StrictOnWire_int_`, `z: WorldHydrology.StrictOnWire_int_` |
+| `IgnoreOnWire_Union_bool__NoneType__` | `boolean / null` |
+| `IgnoreOnWire_bool_` | `boolean` |
+| `IgnoreOnWire_float_0_` | `number` |
+| `IntMinMax` | `min: WorldBarrierTemplateRegistry.StrictOnWire_int_`, `max: WorldBarrierTemplateRegistry.StrictOnWire_int_` |
+| `LandcoverTerrainPolicy` | `enabled: WorldTerrainMasks.DefaultWhenMissing_bool_`, `autoresolve: WorldTerrainMasks.DefaultWhenMissing_bool_`, `system_terrain: TerrainKey`, `min_rainfall: integer / null`, `hills: WorldTerrainMasks.HillPolicy / null` |
+| `LivestockTypeEntry` | `system_livestock: WorldLivestockRegistry.StrictOnWire_str_`, `livestock_kind: WorldLivestockRegistry.StrictEnumOnWire_LivestockKind_`, `display_name: WorldLivestockRegistry.DefaultWhenMissing_Union_str__NoneType__`, `glossary_ref: WorldLivestockRegistry.DefaultWhenMissing_Union_str__NoneType__` |
+| `LocationMoodEntry` | `system_mood: WorldLocationMoodRegistry.StrictOnWire_RegistryKey_WorldLocationMoodRegistry__`, `display_mood: WorldLocationMoodRegistry.DefaultWhenMissing_Union_str__NoneType__` |
+| `LocationTypeEntry` | `system_type: WorldLocationTypeRegistry.StrictOnWire_RegistryKey_WorldLocationTypeRegistry__`, `display_type: WorldLocationTypeRegistry.StrictOnWire_str_`, `parent_types: WorldLocationTypeRegistry.DefaultWhenMissing_list_Union_RegistryKey_WorldLocationTypeRegistry___NoneType___`, `is_outdoor: WorldLocationTypeRegistry.DefaultWhenMissing_Union_bool__NoneType__`, `payload_kind: WorldLocationTypeRegistry.DefaultWhenMissing_Union_PayloadKind__NoneType__`, `is_inhabited: IgnoreOnWire_bool_`, `subtypes: WorldLocationTypeRegistry.DefaultWhenMissing_list_LocationTypeSubtypeEntry__` |
+| `LocationTypeSubtypeEntry` | `system_subtype: WorldLocationTypeRegistry.StrictOnWire_str_`, `display_subtype: WorldLocationTypeRegistry.DefaultWhenMissing_Union_str__NoneType__`, `border_category: WorldLocationTypeRegistry.DefaultWhenMissing_Union_str__NoneType__`, `l0_map_symbol: WorldLocationTypeRegistry.DefaultWhenMissing_Union_Annotated_str__FieldInfo_annotation_NoneType__required_True__metadata__MinLen_min_length_1___MaxLen_max_length_1______NoneType__`, `typical_district_types: WorldLocationTypeRegistry.DefaultWhenMissing_list_str__`, `required_structure_types: WorldLocationTypeRegistry.DefaultWhenMissing_list_str__`, `footprint_by_size: WorldLocationTypeRegistry.DefaultWhenMissing_dict_str__float__`, `is_inhabited: IgnoreOnWire_Union_bool__NoneType__` |
+| `LoreRegistryEntry` | `display_name: WorldLoreRegistry.StrictOnWire_str_`, `description: WorldLoreRegistry.DefaultWhenMissing_Union_str__NoneType__` |
+| `MaterialPick` | `pick_from: WorldBarrierTemplateRegistry.StrictOnWire_list_str___MinLen_min_length_1_` |
+| `MaterialRegistryEntry` | `system_material: WorldMaterialRegistry.StrictOnWire_RegistryKey_WorldMaterialRegistry__`, `display_name: WorldMaterialRegistry.StrictOnWire_str_`, `glossary_ref: WorldMaterialRegistry.DefaultWhenMissing_Union_str__NoneType__`, `material_category: WorldMaterialRegistry.StrictEnumOnWire_MaterialCategory_`, `substrate_kind: WorldMaterialRegistry.DefaultWhenMissing_Union_StrictEnumOnWire_MaterialSubstrateKind___NoneType__`, `tags: WorldMaterialRegistry.DefaultWhenMissing_list_str__`, `use_type: WorldMaterialRegistry.DefaultWhenMissing_list_str__`, `economic_tier: WorldMaterialRegistry.DefaultWhenMissing_Union_EconomyTierKey__NoneType__`, `hardness: WorldMaterialRegistry.DefaultWhenMissing_Union_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_1___Le_le_5______NoneType__`, `density: WorldMaterialRegistry.DefaultWhenMissing_Union_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_1______NoneType__`, `heat_conductivity: WorldMaterialRegistry.DefaultWhenMissing_float_0_`, `viscosity: WorldMaterialRegistry.DefaultWhenMissing_Union_Annotated_float__FieldInfo_annotation_NoneType__required_True__metadata__0__0______NoneType__`, `heat_into: WorldMaterialRegistry.DefaultWhenMissing_Union_str__NoneType__`, `heat_temp: WorldMaterialRegistry.DefaultWhenMissing_Union_int__NoneType__`, `cool_into: WorldMaterialRegistry.DefaultWhenMissing_Union_str__NoneType__`, `cool_temp: WorldMaterialRegistry.DefaultWhenMissing_Union_int__NoneType__`, `structural_strength: WorldMaterialRegistry.DefaultWhenMissing_Union_Annotated_float__FieldInfo_annotation_NoneType__required_True__metadata__0__0______NoneType__`, `flammable: WorldMaterialRegistry.DefaultWhenMissing_bool_`, `freezable: WorldMaterialRegistry.DefaultWhenMissing_bool_`, `corrodible: WorldMaterialRegistry.DefaultWhenMissing_bool_`, `meltable: WorldMaterialRegistry.DefaultWhenMissing_bool_`, `mineable: WorldMaterialRegistry.DefaultWhenMissing_bool_`, `transparent: WorldMaterialRegistry.DefaultWhenMissing_float_0___PydanticGeneralMetadata_allow_inf_nan_False_`, `breakable: WorldMaterialRegistry.DefaultWhenMissing_bool_`, `temp_damage: WorldMaterialRegistry.DefaultWhenMissing_bool_`, `vision_block: WorldMaterialRegistry.DefaultWhenMissing_bool_`, `components: WorldMaterialRegistry.DefaultWhenMissing_Union_list_str___NoneType__` |
+| `MountainFormBySides` | `form_type: string`, `side_count: WorldTerrainMasks.DefaultWhenMissing_int__Ge_ge_3_` |
+| `MountainRangeSpec` | `entry_type: string`, `spine: list[tuple[integer, integer]]`, `width_m: WorldTerrainMasks.DefaultWhenMissing_int__Ge_ge_1_`, `kind: WorldTerrainMasks.DefaultEnumWhenMissing_MountainKind_`, `sides: WorldTerrainMasks.DefaultWhenMissing_MountainRangeSides_`, `peaks: WorldTerrainMasks.DefaultWhenMissing_tuple_MountainSpec__________`, `style: WorldTerrainMasks.DefaultEnumWhenMissing_MountainRangeStyle_`, `peak_spacing_m: integer / null`, `peak_spacings_m: WorldTerrainMasks.DefaultWhenMissing_tuple_int__________`, `saddle_rise_fraction: number / null`, `saddles: WorldTerrainMasks.DefaultWhenMissing_tuple_MountainSaddleSpec__________`, `location_uid: string / null` |
+| `MountainSaddleSpec` | `peak_a_index: integer`, `peak_b_index: integer`, `t: app__dataModel__annotationPolicy__DefaultWhenMissing_float__Ge_ge_0__0__Le_le_1__0_`, `rise_fraction: number / null` |
+| `MountainSpec` | `entry_type: string`, `origin_x_m: integer`, `origin_y_m: integer`, `radius_m: WorldTerrainMasks.DefaultWhenMissing_int__Ge_ge_1_`, `kind: WorldTerrainMasks.DefaultEnumWhenMissing_MountainKind_`, `form: MountainFormBySides / StarForm / PeakForm / PlateauForm`, `sides: WorldTerrainMasks.DefaultWhenMissing_tuple_ReliefSideSpec__________`, `relief_pick_policy: WorldTerrainMasks.DefaultWhenMissing_Union_ObjectReliefPickPolicy__NoneType__`, `location_uid: string / null` |
+| `ObjectReliefPickPolicy` | `mountain: WorldTerrainMasks.DefaultWhenMissing_Union_ReliefContextPickPolicy__NoneType__`, `open_land: WorldTerrainMasks.DefaultWhenMissing_Union_ReliefContextPickPolicy__NoneType__`, `shore: WorldTerrainMasks.DefaultWhenMissing_Union_ReliefContextPickPolicy__NoneType__`, `road_shoulder: WorldTerrainMasks.DefaultWhenMissing_Union_ReliefContextPickPolicy__NoneType__`, `ravine: WorldTerrainMasks.DefaultWhenMissing_Union_ReliefContextPickPolicy__NoneType__` |
+| `PctRange` | `min: WorldDistrictTemplateRegistry.StrictOnWire_float_0_`, `max: WorldDistrictTemplateRegistry.StrictOnWire_float_0_` |
+| `PeakForm` | `form_type: string`, `side_count: WorldTerrainMasks.DefaultWhenMissing_int__Ge_ge_3_` |
+| `PerimeterBarrier` | `template: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_RegistryKey_WorldBarrierTemplateRegistry___NoneType__`, `probability: WorldDistrictTemplateRegistry.DefaultWhenMissing_float_0_`, `sides: WorldDistrictTemplateRegistry.DefaultWhenMissing_CardinalBarrierSides_` |
+| `PerkTemplateRegistryEntry` | `system_template_uid: WorldPerkTemplateRegistry.StrictOnWire_str_`, `display_template_name: WorldPerkTemplateRegistry.DefaultWhenMissing_Union_str__NoneType__`, `imported_at: WorldPerkTemplateRegistry.DefaultWhenMissing_Union_str__NoneType__` |
+| `PlacementCondition` | `type: WorldDistrictTemplateRegistry.StrictEnumOnWire_PlacementConditionType_`, `terrain_types: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_list_TerrainKey___NoneType__`, `min_adjacent_cells: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_int__NoneType__`, `size: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_SettlementSizeKey__NoneType__`, `tier: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_EconomyTierKey__NoneType__`, `district_type: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_str__NoneType__`, `zone: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_CellZone__NoneType__` |
+| `PlainSpec` | `name: string / null`, `shape: BboxShape / EllipseShape / PolygonShape / AnchorRadiusShape / CorridorShape`, `density: number`, `placement_specificity: integer / null`, `location_uid: string / null`, `entry_type: string` |
+| `PlateauForm` | `form_type: string`, `side_count: WorldTerrainMasks.DefaultWhenMissing_int__Ge_ge_3_`, `hat_fraction: app__dataModel__annotationPolicy__DefaultWhenMissing_float__Ge_ge_0__05__Le_le_1__0_` |
+| `PolygonShape` | `edge_noise: EdgeNoise / null`, `kind: string`, `vertices: list[tuple[integer, integer]]` |
+| `PurposePackEntry` | `system_pack: WorldPurposePackRegistry.StrictOnWire_Annotated_RegistryKey_WorldPurposePackRegistry___BeforeValidator__`, `allowed: WorldPurposePackRegistry.DefaultWhenMissing_Annotated_list_Union_BuildingPurpose__BuildingPurposeFamily____BeforeValidator__` |
+| `RaceTemplateRegistryEntry` | `system_template_uid: WorldRaceTemplateRegistry.StrictOnWire_str_`, `display_template_name: WorldRaceTemplateRegistry.DefaultWhenMissing_Union_str__NoneType__`, `imported_at: WorldRaceTemplateRegistry.DefaultWhenMissing_Union_str__NoneType__` |
+| `ReliefContextPickPolicy` | `mode: WorldTerrainMasks.DefaultEnumWhenMissing_ReliefPickMode_`, `default_template_uid: WorldTerrainMasks.DefaultWhenMissing_Union_str__NoneType__` |
+| `ReliefSideSpec` | `kind: WorldTerrainMasks.DefaultEnumWhenMissing_ReliefSideKind_`, `sheer_band_light: WorldTerrainMasks.DefaultWhenMissing_int__Ge_ge_0_` |
+| `RequiredStructure` | `plot_template: WorldDistrictTemplateRegistry.StrictOnWire_DrawingKey_`, `structure_type: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_BuildingPurpose__NoneType__`, `count: WorldDistrictTemplateRegistry.DefaultWhenMissing_int_`, `position: WorldDistrictTemplateRegistry.DefaultWhenMissing_RequiredStructurePosition_` |
+| `ResourceTypeEntry` | `system_resource: WorldResourceTypeRegistry.StrictOnWire_str_`, `resource_kind: WorldResourceTypeRegistry.StrictEnumOnWire_ResourceKind_`, `display_name: WorldResourceTypeRegistry.DefaultWhenMissing_Union_str__NoneType__`, `glossary_ref: WorldResourceTypeRegistry.DefaultWhenMissing_Union_str__NoneType__`, `is_renewable: WorldResourceTypeRegistry.DefaultWhenMissing_bool_`, `base_regen_per_tick: WorldResourceTypeRegistry.DefaultWhenMissing_Union_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_0______NoneType__`, `default_yield: WorldResourceTypeRegistry.DefaultWhenMissing_int__Ge_ge_0_`, `yield_item_uid: WorldResourceTypeRegistry.DefaultWhenMissing_Union_str__NoneType__`, `tag_refs: WorldResourceTypeRegistry.DefaultWhenMissing_list_str__` |
+| `RoadSettingsEntry` | `connection_type: WorldRoadSettings.StrictOnWire_str_`, `curve_radius_factor: WorldRoadSettings.DefaultWhenMissing_int__Ge_ge_1_`, `max_segment_length_m: WorldRoadSettings.DefaultWhenMissing_int__Ge_ge_1_`, `min_segment_length_m: WorldRoadSettings.DefaultWhenMissing_int__Ge_ge_1_`, `default_lanes_per_side: WorldRoadSettings.DefaultWhenMissing_Union_int__NoneType__`, `auto_sidewalk: WorldRoadSettings.DefaultWhenMissing_bool_`, `base_travel_modifier: app__dataModel__annotationPolicy__DefaultWhenMissing_float__Gt_gt_0__0_`, `condition_degradation: app__dataModel__annotationPolicy__DefaultWhenMissing_float__Ge_ge_0__0_` |
+| `RoomTypeEntry` | `system_room: WorldRoomTypeRegistry.StrictOnWire_str_`, `glossary_ref: WorldRoomTypeRegistry.DefaultWhenMissing_Union_str__NoneType__` |
+| `SettlementSizeEntry` | `system_size: WorldSettlementSizeRegistry.StrictOnWire_RegistryKey_WorldSettlementSizeRegistry__`, `display_size: WorldSettlementSizeRegistry.DefaultWhenMissing_Union_str__NoneType__` |
+| `SettlementSizeKey` | `string` |
+| `SettlementSpecializationEntry` | `system_specialization: WorldSettlementSpecializationRegistry.StrictOnWire_RegistryKey_WorldSettlementSpecializationRegistry__`, `display_specialization: WorldSettlementSpecializationRegistry.DefaultWhenMissing_Union_str__NoneType__`, `subject_kind: WorldSettlementSpecializationRegistry.DefaultWhenMissing_Union_str__list_str___NoneType__`, `typical_districts: WorldSettlementSpecializationRegistry.DefaultWhenMissing_list_TypicalDistrictRef__`, `allowed_family: WorldSettlementSpecializationRegistry.StrictEnumOnWire_BuildingPurposeFamily_` |
+| `SizePct` | `width: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_PctRange__NoneType__`, `depth: WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_PctRange__NoneType__` |
+| `Specificity` | `integer` |
+| `StarForm` | `form_type: string`, `rays: WorldTerrainMasks.DefaultWhenMissing_int__Ge_ge_3_`, `inner_ratio: WorldTerrainMasks.DefaultWhenMissing_float_95_` |
+| `TerrainCategoryEntry` | `system_category: WorldTerrainCategoryRegistry.StrictOnWire_str_`, `display_category: WorldTerrainCategoryRegistry.DefaultWhenMissing_Union_str__NoneType__`, `passable: WorldTerrainCategoryRegistry.DefaultWhenMissing_bool_`, `jumpable: WorldTerrainCategoryRegistry.DefaultWhenMissing_bool_`, `climbable: WorldTerrainCategoryRegistry.DefaultWhenMissing_bool_`, `breakable: WorldTerrainCategoryRegistry.DefaultWhenMissing_bool_` |
+| `TerrainKey` | `string` |
+| `TerrainRegistryEntry` | `system_terrain: WorldTerrainRegistry.StrictOnWire_RegistryKey_WorldTerrainRegistry__`, `glossary_ref: WorldTerrainRegistry.DefaultWhenMissing_Union_str__NoneType__`, `terrain_category: WorldTerrainRegistry.StrictOnWire_str_`, `travel_modifier: WorldTerrainRegistry.DefaultWhenMissing_Union_float__NoneType__`, `danger_level: WorldTerrainRegistry.DefaultWhenMissing_str_`, `has_state: WorldTerrainRegistry.DefaultWhenMissing_bool_`, `default_state: WorldTerrainRegistry.DefaultWhenMissing_Union_str__NoneType__`, `default_material: WorldTerrainRegistry.DefaultWhenMissing_Union_str__NoneType__`, `gap_width: WorldTerrainRegistry.DefaultWhenMissing_Union_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_1______NoneType__`, `merge_rank: WorldTerrainRegistry.DefaultWhenMissing_int_`, `eligibility: WorldTerrainRegistry.DefaultWhenMissing_list_EligibilityRule__`, `inertia: WorldTerrainRegistry.DefaultWhenMissing_float__Gt_gt_0___PydanticGeneralMetadata_allow_inf_nan_False_`, `hills: WorldTerrainRegistry.DefaultWhenMissing_Union_HillPolicy__NoneType__`, `fill_roles: WorldTerrainRegistry.DefaultWhenMissing_tuple_StrictEnumOnWire_TerrainFillRole___________`, `fill_priority: WorldTerrainRegistry.DefaultWhenMissing_int_`, `morph_hydrology_role: WorldTerrainRegistry.DefaultEnumWhenMissing_Union_HydrologyCellRole__NoneType__`, `supports_open_land_grade: WorldTerrainRegistry.DefaultWhenMissing_bool_`, `open_land_profile: WorldTerrainRegistry.DefaultWhenMissing_Union_Literal__plains____forest____NoneType__` |
+| `TransitionTypeEntry` | `system_type: WorldTransitionTypeRegistry.StrictOnWire_RegistryKey_WorldTransitionTypeRegistry__`, `display_name: WorldTransitionTypeRegistry.StrictOnWire_str_`, `behaves_as: WorldTransitionTypeRegistry.StrictEnumOnWire_TransitionType_`, `glossary_ref: WorldTransitionTypeRegistry.DefaultWhenMissing_Union_str__NoneType__` |
+| `TypicalDistrictRef` | `district_type: WorldSettlementSpecializationRegistry.StrictOnWire_str_`, `district_subtype: WorldSettlementSpecializationRegistry.DefaultWhenMissing_Union_str__NoneType__`, `system_name: WorldSettlementSpecializationRegistry.DefaultWhenMissing_Union_DistrictTemplateKey__NoneType__` |
+| `WeatherTypeEntry` | `system_weather: WorldWeatherTypeRegistry.StrictOnWire_str_`, `display_weather: WorldWeatherTypeRegistry.DefaultWhenMissing_Union_str__NoneType__`, `temp_max: WorldWeatherTypeRegistry.DefaultWhenMissing_Union_int__NoneType__`, `temp_min: WorldWeatherTypeRegistry.DefaultWhenMissing_Union_int__NoneType__`, `rainfall_min: WorldWeatherTypeRegistry.DefaultWhenMissing_Union_int__NoneType__`, `priority: WorldWeatherTypeRegistry.DefaultWhenMissing_int__Ge_ge_1_`, `travel_modifier: WorldWeatherTypeRegistry.DefaultWhenMissing_float_0_`, `need_modifiers: WorldWeatherTypeRegistry.DefaultWhenMissing_dict_str__int__`, `glossary_ref: WorldWeatherTypeRegistry.DefaultWhenMissing_Union_str__NoneType__` |
+| `WorldAtmosphereSettings` | `mode: WorldEnvironmentSettings.StrictEnumOnWire_AtmosphereMode_`, `composition: WorldEnvironmentSettings.DefaultWhenMissing_list_AtmosphereGasComponent__` |
+| `WorldBarrierTemplateRegistry` | `list[BarrierTemplateEntry]` |
+| `WorldBarrierTemplateRegistry.DefaultWhenMissing_Union_IntMinMax__NoneType__` | `IntMinMax / null` |
+| `WorldBarrierTemplateRegistry.DefaultWhenMissing_Union_MaterialPick__NoneType__` | `MaterialPick / null` |
+| `WorldBarrierTemplateRegistry.DefaultWhenMissing_Union_str__NoneType__` | `string / null` |
+| `WorldBarrierTemplateRegistry.DefaultWhenMissing_int__Ge_ge_1_` | `integer` |
+| `WorldBarrierTemplateRegistry.StrictOnWire_RegistryKey_WorldBarrierTemplateRegistry__` | `string` |
+| `WorldBarrierTemplateRegistry.StrictOnWire_int_` | `integer` |
+| `WorldBarrierTemplateRegistry.StrictOnWire_list_str___MinLen_min_length_1_` | `list[string]` |
+| `WorldCanalTemplateRegistry` | `list[CanalTemplateEntry]` |
+| `WorldCanalTemplateRegistry.DefaultWhenMissing_Union_CanalStructureSpec__NoneType__` | `CanalStructureSpec / null` |
+| `WorldCanalTemplateRegistry.DefaultWhenMissing_Union_bool__NoneType__` | `boolean / null` |
+| `WorldCanalTemplateRegistry.DefaultWhenMissing_list_str__` | `list[string]` |
+| `WorldCanalTemplateRegistry.StrictOnWire_str_` | `string` |
+| `WorldClimateScalars` | `default_climate_zone: WorldClimateScalars.DefaultWhenMissing_str_`, `climate_temperature_peak_min: WorldClimateScalars.DefaultWhenMissing_Union_int__NoneType__`, `climate_temperature_peak_max: WorldClimateScalars.DefaultWhenMissing_Union_int__NoneType__`, `climate_pole_mode: WorldClimateScalars.DefaultWhenMissing_str_`, `climate_pole_preset: WorldClimateScalars.DefaultWhenMissing_str_`, `climate_local_influence_fraction: WorldClimateScalars.DefaultWhenMissing_float_0_`, `precipitation_liquid: WorldClimateScalars.DefaultWhenMissing_str_`, `climate_parallel_workers: WorldClimateScalars.DefaultWhenMissing_Union_int__NoneType__`, `season_temp_offsets: WorldClimateScalars.DefaultWhenMissing_SeasonTempOffsets_` |
+| `WorldClimateScalars.DefaultWhenMissing_SeasonTempOffsets_` | `winter: WorldClimateScalars.DefaultWhenMissing_int_`, `spring: WorldClimateScalars.DefaultWhenMissing_int_`, `summer: WorldClimateScalars.DefaultWhenMissing_int_`, `autumn: WorldClimateScalars.DefaultWhenMissing_int_` |
+| `WorldClimateScalars.DefaultWhenMissing_Union_int__NoneType__` | `integer / null` |
+| `WorldClimateScalars.DefaultWhenMissing_float_0_` | `number` |
+| `WorldClimateScalars.DefaultWhenMissing_int_` | `integer` |
+| `WorldClimateScalars.DefaultWhenMissing_str_` | `string` |
+| `WorldClimateZoneRegistry` | `list[ClimateZoneEntry]` |
+| `WorldClimateZoneRegistry.DefaultWhenMissing_Union_int__NoneType__` | `integer / null` |
+| `WorldClimateZoneRegistry.StrictOnWire_str_` | `string` |
+| `WorldConnectionTypeRegistry` | `list[ConnectionTypeEntry]` |
+| `WorldConnectionTypeRegistry.StrictOnWire_RegistryKey_WorldConnectionTypeRegistry__` | `string` |
+| `WorldConnectionTypeRegistry.StrictOnWire_str_` | `string` |
+| `WorldCropsRegistry` | `list[CropsTypeEntry]` |
+| `WorldCropsRegistry.DefaultWhenMissing_Union_str__NoneType__` | `string / null` |
+| `WorldCropsRegistry.StrictOnWire_str_` | `string` |
+| `WorldDistrictTemplateRegistry` | `list[DistrictTemplateEntry]` |
+| `WorldDistrictTemplateRegistry.DefaultWhenMissing_CardinalBarrierSides_` | `list[Facing] / null` |
+| `WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_BuildingPurpose__NoneType__` | `BuildingPurpose / null` |
+| `WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_CellZone__NoneType__` | `CellZone / null` |
+| `WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_DistrictDensity__NoneType__` | `DistrictDensity / null` |
+| `WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_EconomicTierRange__NoneType__` | `EconomicTierRange / null` |
+| `WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_EconomyTierKey__NoneType__` | `EconomyTierKey / null` |
+| `WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_PctRange__NoneType__` | `PctRange / null` |
+| `WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_PerimeterBarrier__NoneType__` | `PerimeterBarrier / null` |
+| `WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_RegistryKey_WorldBarrierTemplateRegistry___NoneType__` | `string / null` |
+| `WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_SettlementSizeKey__NoneType__` | `SettlementSizeKey / null` |
+| `WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_SizePct__NoneType__` | `SizePct / null` |
+| `WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_bool__NoneType__` | `boolean / null` |
+| `WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_dict_DrawingKey__int___NoneType__` | `map[integer] / null` |
+| `WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_int__NoneType__` | `integer / null` |
+| `WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_list_ConnectionTypeKey___NoneType__` | `list[ConnectionTypeKey] / null` |
+| `WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_list_DistrictConnection___NoneType__` | `list[DistrictConnection] / null` |
+| `WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_list_RequiredStructure___NoneType__` | `list[RequiredStructure] / null` |
+| `WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_list_TerrainKey___NoneType__` | `list[TerrainKey] / null` |
+| `WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_list_Union_BuildingPurpose__BuildingPurposeFamily____NoneType__` | `list[BuildingPurpose / BuildingPurposeFamily] / null` |
+| `WorldDistrictTemplateRegistry.DefaultWhenMissing_Union_str__NoneType__` | `string / null` |
+| `WorldDistrictTemplateRegistry.DefaultWhenMissing_float_0_` | `number` |
+| `WorldDistrictTemplateRegistry.DefaultWhenMissing_int_` | `integer` |
+| `WorldDistrictTemplateRegistry.DefaultWhenMissing_list_PlacementCondition__` | `list[PlacementCondition]` |
+| `WorldDistrictTemplateRegistry.StrictOnWire_ConnectionTypeKey_` | `string` |
+| `WorldDistrictTemplateRegistry.StrictOnWire_DrawingKey_` | `string` |
+| `WorldDistrictTemplateRegistry.StrictOnWire_EconomyTierKey_` | `string` |
+| `WorldDistrictTemplateRegistry.StrictOnWire_RegistryKey_WorldDistrictTemplateRegistry__` | `string` |
+| `WorldDistrictTemplateRegistry.StrictOnWire_float_0_` | `number` |
+| `WorldDistrictTemplateRegistry.StrictOnWire_str_` | `string` |
+| `WorldDistrictZonePreference` | `list[DistrictZonePreferenceEntry]` |
+| `WorldDistrictZonePreference.DefaultWhenMissing_list_str__` | `list[string]` |
+| `WorldEconomyTierRegistry` | `list[EconomyTierEntry]` |
+| `WorldEconomyTierRegistry.StrictOnWire_RegistryKey_WorldEconomyTierRegistry__` | `string` |
+| `WorldEconomyTierRegistry.StrictOnWire_int__Ge_ge_0_` | `integer` |
+| `WorldEconomyTierRegistry.StrictOnWire_str_` | `string` |
+| `WorldEnvironmentSettings` | `atmosphere: WorldEnvironmentSettings.DefaultWhenMissing_Union_WorldAtmosphereSettings__NoneType__` |
+| `WorldEnvironmentSettings.DefaultWhenMissing_Union_WorldAtmosphereSettings__NoneType__` | `WorldAtmosphereSettings / null` |
+| `WorldEnvironmentSettings.DefaultWhenMissing_list_AtmosphereGasComponent__` | `list[AtmosphereGasComponent]` |
+| `WorldEnvironmentSettings.StrictOnWire_Annotated_float__FieldInfo_annotation_NoneType__required_True__metadata__0__0____PydanticGeneralMetadata_allow_inf_nan_False_____` | `number` |
+| `WorldEnvironmentSettings.StrictOnWire_MaterialKey_` | `string` |
+| `WorldGridSettings` | `fine_cells_per_map_cell: WorldGridSettings.DefaultWhenMissing_int__Strict_strict_True__Ge_ge_1000__MultipleOf_multiple_of_1000_` |
+| `WorldGridSettings.DefaultWhenMissing_int__Strict_strict_True__Ge_ge_1000__MultipleOf_multiple_of_1000_` | `integer` |
+| `WorldHydrology` | `enabled: WorldHydrology.DefaultWhenMissing_bool_`, `default_water_level: WorldHydrology.DefaultWhenMissing_int_`, `default_shore: WorldHydrology.DefaultWhenMissing_HydrologyShoreDefaults_`, `default_rivers: WorldHydrology.DefaultWhenMissing_HydrologyRiversPolicy_`, `default_lakes: WorldHydrology.DefaultWhenMissing_HydrologyLakesPolicy_`, `default_seas: WorldHydrology.DefaultWhenMissing_HydrologySeasPolicy_`, `default_landforms: WorldHydrology.DefaultWhenMissing_HydrologyLandformsPolicy_`, `materialize_named_locations: WorldHydrology.DefaultWhenMissing_bool_`, `declared_lakes: WorldHydrology.DefaultWhenMissing_list_DeclaredLake__`, `declared_basins: WorldHydrology.DefaultWhenMissing_list_DeclaredBasin__`, `declared_coastlines: WorldHydrology.DefaultWhenMissing_list_DeclaredCoastline__`, `declared_rivers: WorldHydrology.DefaultWhenMissing_list_DeclaredRiver__` |
+| `WorldHydrology.DefaultWhenMissing_HydrologyBands_` | `min: WorldHydrology.StrictOnWire_int__Ge_ge_1__Le_le_99_`, `max: WorldHydrology.StrictOnWire_int__Ge_ge_1__Le_le_99_` |
+| `WorldHydrology.DefaultWhenMissing_HydrologyLakesPolicy_` | `placement_specificity: WorldHydrology.DefaultWhenMissing_Union_Specificity__NoneType__`, `enabled: WorldHydrology.DefaultWhenMissing_bool_`, `autoresolve: WorldHydrology.DefaultWhenMissing_bool_`, `bands: WorldHydrology.DefaultWhenMissing_HydrologyBands_`, `basin_depth: WorldHydrology.DefaultWhenMissing_int__Gt_gt_0_`, `min_water_cells: WorldHydrology.DefaultWhenMissing_int__Ge_ge_1_`, `shore: WorldHydrology.DefaultWhenMissing_HydrologyShoreDefaults_` |
+| `WorldHydrology.DefaultWhenMissing_HydrologyLandformsPolicy_` | `enabled: WorldHydrology.DefaultWhenMissing_bool_`, `autoresolve: WorldHydrology.DefaultWhenMissing_bool_`, `bands: WorldHydrology.DefaultWhenMissing_Union_HydrologyBands__NoneType__` |
+| `WorldHydrology.DefaultWhenMissing_HydrologyRiversPolicy_` | `enabled: WorldHydrology.DefaultWhenMissing_bool_`, `autoresolve: WorldHydrology.DefaultWhenMissing_bool_`, `bands: WorldHydrology.DefaultWhenMissing_HydrologyBands_`, `placement_specificity: WorldHydrology.DefaultWhenMissing_int__Ge_ge_0_`, `channel_depth_cells: WorldHydrology.DefaultWhenMissing_int__Strict_strict_True__Gt_gt_0_`, `mouth_search_radius_fine: WorldHydrology.DefaultWhenMissing_int__Strict_strict_True__Ge_ge_0_`, `max_path_cells: WorldHydrology.DefaultWhenMissing_int__Strict_strict_True__Ge_ge_2_`, `type_classify: WorldHydrology.DefaultWhenMissing_RiverTypeClassify_`, `shore: WorldHydrology.DefaultWhenMissing_HydrologyShoreDefaults_`, `mountain_shore: WorldHydrology.DefaultWhenMissing_HydrologyShoreDefaults_` |
+| `WorldHydrology.DefaultWhenMissing_HydrologySeasPolicy_` | `placement_specificity: WorldHydrology.DefaultWhenMissing_Union_Specificity__NoneType__`, `enabled: WorldHydrology.DefaultWhenMissing_bool_`, `autoresolve: WorldHydrology.DefaultWhenMissing_bool_`, `autoresolve_coastal_sea: WorldHydrology.DefaultWhenMissing_bool_`, `autoresolve_open_ocean: WorldHydrology.DefaultWhenMissing_bool_`, `basin_depth: WorldHydrology.DefaultWhenMissing_int__Gt_gt_0_`, `max_area_fraction: WorldHydrology.DefaultWhenMissing_float__Gt_gt_0__Le_le_1_`, `max_extent_x_fraction: WorldHydrology.DefaultWhenMissing_float__Gt_gt_0__Le_le_1_`, `max_extent_y_fraction: WorldHydrology.DefaultWhenMissing_float__Gt_gt_0__Le_le_1_`, `min_water_cells: WorldHydrology.DefaultWhenMissing_int__Ge_ge_1_`, `inland_sea_min_area_fraction: WorldHydrology.DefaultWhenMissing_float__Gt_gt_0__Le_le_1_`, `bands: WorldHydrology.DefaultWhenMissing_HydrologyBands_`, `shore: WorldHydrology.DefaultWhenMissing_HydrologyShoreDefaults_` |
+| `WorldHydrology.DefaultWhenMissing_HydrologyShoreDefaults_` | `system_terrain: WorldHydrology.StrictOnWire_str_`, `system_material: WorldHydrology.StrictOnWire_str_` |
+| `WorldHydrology.DefaultWhenMissing_RiverTypeClassify_` | `mountain_min_source_z: WorldHydrology.DefaultWhenMissing_int_`, `path_mountain_fraction: app__dataModel__annotationPolicy__DefaultWhenMissing_float__Ge_ge_0__0__Le_le_1__0_`, `rapid_drop_threshold_m: WorldHydrology.DefaultWhenMissing_int__Ge_ge_0_`, `mountain_bed_steepness_factor: app__dataModel__annotationPolicy__DefaultWhenMissing_float__Gt_gt_0__0_`, `foothill_gradient_threshold: app__dataModel__annotationPolicy__DefaultWhenMissing_float__Ge_ge_0__0_` |
+| `WorldHydrology.DefaultWhenMissing_StrictOnWire_MaterialKey__` | `string` |
+| `WorldHydrology.DefaultWhenMissing_Union_EntityUid__NoneType__` | `EntityUid / null` |
+| `WorldHydrology.DefaultWhenMissing_Union_HydrologyBands__NoneType__` | `HydrologyBands / null` |
+| `WorldHydrology.DefaultWhenMissing_Union_HydrologyMouth__NoneType__` | `HydrologyMouth / null` |
+| `WorldHydrology.DefaultWhenMissing_Union_HydrologyWaypoint__NoneType__` | `HydrologyWaypoint / null` |
+| `WorldHydrology.DefaultWhenMissing_Union_RiverDeclareMode__NoneType__` | `RiverDeclareMode / null` |
+| `WorldHydrology.DefaultWhenMissing_Union_RiverSystemTopology__NoneType__` | `RiverSystemTopology / null` |
+| `WorldHydrology.DefaultWhenMissing_Union_Specificity__NoneType__` | `Specificity / null` |
+| `WorldHydrology.DefaultWhenMissing_Union_WaterSide__NoneType__` | `WaterSide / null` |
+| `WorldHydrology.DefaultWhenMissing_Union_int__NoneType__` | `integer / null` |
+| `WorldHydrology.DefaultWhenMissing_Union_str__NoneType__` | `string / null` |
+| `WorldHydrology.DefaultWhenMissing_bool_` | `boolean` |
+| `WorldHydrology.DefaultWhenMissing_float__Gt_gt_0__Le_le_1_` | `number` |
+| `WorldHydrology.DefaultWhenMissing_int_` | `integer` |
+| `WorldHydrology.DefaultWhenMissing_int__Ge_ge_0_` | `integer` |
+| `WorldHydrology.DefaultWhenMissing_int__Ge_ge_1_` | `integer` |
+| `WorldHydrology.DefaultWhenMissing_int__Gt_gt_0_` | `integer` |
+| `WorldHydrology.DefaultWhenMissing_int__Strict_strict_True__Ge_ge_0_` | `integer` |
+| `WorldHydrology.DefaultWhenMissing_int__Strict_strict_True__Ge_ge_2_` | `integer` |
+| `WorldHydrology.DefaultWhenMissing_int__Strict_strict_True__Gt_gt_0_` | `integer` |
+| `WorldHydrology.DefaultWhenMissing_list_DeclaredBasin__` | `list[DeclaredBasin]` |
+| `WorldHydrology.DefaultWhenMissing_list_DeclaredCoastline__` | `list[DeclaredCoastline]` |
+| `WorldHydrology.DefaultWhenMissing_list_DeclaredLake__` | `list[DeclaredLake]` |
+| `WorldHydrology.DefaultWhenMissing_list_DeclaredRiver__` | `list[DeclaredRiver]` |
+| `WorldHydrology.DefaultWhenMissing_tuple_DeclaredRiverSegment__________` | `list[DeclaredRiverSegment]` |
+| `WorldHydrology.DefaultWhenMissing_tuple_HydrologyWaypoint__________` | `list[HydrologyWaypoint]` |
+| `WorldHydrology.DefaultWhenMissing_tuple_str__________` | `list[string]` |
+| `WorldHydrology.StrictOnWire_Annotated_Union_BboxShape__EllipseShape__PolygonShape__AnchorRadiusShape__CorridorShape___FieldInfo_annotation_NoneType__required_True__discriminator__kind____` | `BboxShape / EllipseShape / PolygonShape / AnchorRadiusShape / CorridorShape` |
+| `WorldHydrology.StrictOnWire_int_` | `integer` |
+| `WorldHydrology.StrictOnWire_int__Ge_ge_1__Le_le_99_` | `integer` |
+| `WorldHydrology.StrictOnWire_str_` | `string` |
+| `WorldLivestockRegistry` | `list[LivestockTypeEntry]` |
+| `WorldLivestockRegistry.DefaultWhenMissing_Union_str__NoneType__` | `string / null` |
+| `WorldLivestockRegistry.StrictOnWire_str_` | `string` |
+| `WorldLocationMoodRegistry` | `list[LocationMoodEntry]` |
+| `WorldLocationMoodRegistry.DefaultWhenMissing_Union_str__NoneType__` | `string / null` |
+| `WorldLocationMoodRegistry.StrictOnWire_RegistryKey_WorldLocationMoodRegistry__` | `string` |
+| `WorldLocationTypeRegistry` | `list[LocationTypeEntry]` |
+| `WorldLocationTypeRegistry.DefaultWhenMissing_Union_Annotated_str__FieldInfo_annotation_NoneType__required_True__metadata__MinLen_min_length_1___MaxLen_max_length_1______NoneType__` | `string / null` |
+| `WorldLocationTypeRegistry.DefaultWhenMissing_Union_PayloadKind__NoneType__` | `PayloadKind / null` |
+| `WorldLocationTypeRegistry.DefaultWhenMissing_Union_bool__NoneType__` | `boolean / null` |
+| `WorldLocationTypeRegistry.DefaultWhenMissing_Union_str__NoneType__` | `string / null` |
+| `WorldLocationTypeRegistry.DefaultWhenMissing_dict_str__float__` | `map[number]` |
+| `WorldLocationTypeRegistry.DefaultWhenMissing_list_LocationTypeSubtypeEntry__` | `list[LocationTypeSubtypeEntry]` |
+| `WorldLocationTypeRegistry.DefaultWhenMissing_list_Union_RegistryKey_WorldLocationTypeRegistry___NoneType___` | `list[string / null]` |
+| `WorldLocationTypeRegistry.DefaultWhenMissing_list_str__` | `list[string]` |
+| `WorldLocationTypeRegistry.StrictOnWire_RegistryKey_WorldLocationTypeRegistry__` | `string` |
+| `WorldLocationTypeRegistry.StrictOnWire_str_` | `string` |
+| `WorldLoreRegistry` | `map[LoreRegistryEntry]` |
+| `WorldLoreRegistry.DefaultWhenMissing_Union_str__NoneType__` | `string / null` |
+| `WorldLoreRegistry.StrictOnWire_str_` | `string` |
+| `WorldMapResolutionSettings` | `world_map_cells_per_tile: WorldMapResolutionSettings.DefaultWhenMissing_Annotated_Union_int__NoneType___BeforeValidator__` |
+| `WorldMapResolutionSettings.DefaultWhenMissing_Annotated_Union_int__NoneType___BeforeValidator__` | `integer / null` |
+| `WorldMaterialRegistry` | `list[MaterialRegistryEntry]` |
+| `WorldMaterialRegistry.DefaultWhenMissing_Union_Annotated_float__FieldInfo_annotation_NoneType__required_True__metadata__0__0______NoneType__` | `number / null` |
+| `WorldMaterialRegistry.DefaultWhenMissing_Union_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_1___Le_le_5______NoneType__` | `integer / null` |
+| `WorldMaterialRegistry.DefaultWhenMissing_Union_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_1______NoneType__` | `integer / null` |
+| `WorldMaterialRegistry.DefaultWhenMissing_Union_EconomyTierKey__NoneType__` | `EconomyTierKey / null` |
+| `WorldMaterialRegistry.DefaultWhenMissing_Union_StrictEnumOnWire_MaterialSubstrateKind___NoneType__` | `WorldMaterialRegistry.StrictEnumOnWire_MaterialSubstrateKind_ / null` |
+| `WorldMaterialRegistry.DefaultWhenMissing_Union_int__NoneType__` | `integer / null` |
+| `WorldMaterialRegistry.DefaultWhenMissing_Union_list_str___NoneType__` | `list[string] / null` |
+| `WorldMaterialRegistry.DefaultWhenMissing_Union_str__NoneType__` | `string / null` |
+| `WorldMaterialRegistry.DefaultWhenMissing_bool_` | `boolean` |
+| `WorldMaterialRegistry.DefaultWhenMissing_float_0_` | `number` |
+| `WorldMaterialRegistry.DefaultWhenMissing_float_0___PydanticGeneralMetadata_allow_inf_nan_False_` | `number` |
+| `WorldMaterialRegistry.DefaultWhenMissing_list_str__` | `list[string]` |
+| `WorldMaterialRegistry.StrictOnWire_RegistryKey_WorldMaterialRegistry__` | `string` |
+| `WorldMaterialRegistry.StrictOnWire_str_` | `string` |
+| `WorldPackMetadata` | `terrain_pack_path: WorldPackMetadata.DefaultWhenMissing_Union_str__NoneType__`, `terrain_pack_hash: WorldPackMetadata.DefaultWhenMissing_Union_str__NoneType__` |
+| `WorldPackMetadata.DefaultWhenMissing_Union_str__NoneType__` | `string / null` |
+| `WorldPerkTemplateRegistry` | `list[PerkTemplateRegistryEntry]` |
+| `WorldPerkTemplateRegistry.DefaultWhenMissing_Union_str__NoneType__` | `string / null` |
+| `WorldPerkTemplateRegistry.StrictOnWire_str_` | `string` |
+| `WorldPurposePackRegistry` | `list[PurposePackEntry]` |
+| `WorldPurposePackRegistry.DefaultWhenMissing_Annotated_list_Union_BuildingPurpose__BuildingPurposeFamily____BeforeValidator__` | `list[BuildingPurpose / BuildingPurposeFamily]` |
+| `WorldPurposePackRegistry.StrictOnWire_Annotated_RegistryKey_WorldPurposePackRegistry___BeforeValidator__` | `string` |
+| `WorldPurposePacks` | `list[string]` |
+| `WorldRaceTemplateRegistry` | `list[RaceTemplateRegistryEntry]` |
+| `WorldRaceTemplateRegistry.DefaultWhenMissing_Union_str__NoneType__` | `string / null` |
+| `WorldRaceTemplateRegistry.StrictOnWire_str_` | `string` |
+| `WorldReliefGradeObstacleScalars` | `relief_grade_obstacle_policy: WorldReliefGradeObstacleScalars.DefaultEnumWhenMissing_ReliefGradeObstaclePolicy_` |
+| `WorldReliefPickPolicy` | `mountain: WorldReliefPickPolicy.DefaultWhenMissing_ReliefContextPickPolicy_`, `open_land: WorldReliefPickPolicy.DefaultWhenMissing_ReliefContextPickPolicy_`, `shore: WorldReliefPickPolicy.DefaultWhenMissing_ReliefContextPickPolicy_`, `road_shoulder: WorldReliefPickPolicy.DefaultWhenMissing_ReliefContextPickPolicy_`, `ravine: WorldReliefPickPolicy.DefaultWhenMissing_ReliefContextPickPolicy_`, `canal_obstacle_policy: WorldReliefPickPolicy.DefaultWhenMissing_list_CanalObstaclePolicyRule__` |
+| `WorldReliefPickPolicy.DefaultWhenMissing_ReliefContextPickPolicy_` | `mode: WorldReliefPickPolicy.DefaultEnumWhenMissing_ReliefPickMode_`, `default_template_uid: WorldReliefPickPolicy.DefaultWhenMissing_Union_str__NoneType__` |
+| `WorldReliefPickPolicy.DefaultWhenMissing_Union_str__NoneType__` | `string / null` |
+| `WorldReliefPickPolicy.DefaultWhenMissing_list_CanalObstaclePolicyRule__` | `list[CanalObstaclePolicyRule]` |
+| `WorldReliefPickPolicy.StrictOnWire_bool_` | `boolean` |
+| `WorldReliefPickPolicy.StrictOnWire_list_CanalObstacleEntity___MinLen_min_length_1_` | `list[CanalObstacleEntity]` |
+| `WorldResourceTypeRegistry` | `list[ResourceTypeEntry]` |
+| `WorldResourceTypeRegistry.DefaultWhenMissing_Union_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_0______NoneType__` | `integer / null` |
+| `WorldResourceTypeRegistry.DefaultWhenMissing_Union_str__NoneType__` | `string / null` |
+| `WorldResourceTypeRegistry.DefaultWhenMissing_bool_` | `boolean` |
+| `WorldResourceTypeRegistry.DefaultWhenMissing_int__Ge_ge_0_` | `integer` |
+| `WorldResourceTypeRegistry.DefaultWhenMissing_list_str__` | `list[string]` |
+| `WorldResourceTypeRegistry.StrictOnWire_str_` | `string` |
+| `WorldRoadSettings` | `list[RoadSettingsEntry]` |
+| `WorldRoadSettings.DefaultWhenMissing_Union_int__NoneType__` | `integer / null` |
+| `WorldRoadSettings.DefaultWhenMissing_bool_` | `boolean` |
+| `WorldRoadSettings.DefaultWhenMissing_int__Ge_ge_1_` | `integer` |
+| `WorldRoadSettings.StrictOnWire_str_` | `string` |
+| `WorldRoomTypeRegistry` | `list[RoomTypeEntry]` |
+| `WorldRoomTypeRegistry.DefaultWhenMissing_Union_str__NoneType__` | `string / null` |
+| `WorldRoomTypeRegistry.StrictOnWire_str_` | `string` |
+| `WorldSettlementSizeRegistry` | `list[SettlementSizeEntry]` |
+| `WorldSettlementSizeRegistry.DefaultWhenMissing_Union_str__NoneType__` | `string / null` |
+| `WorldSettlementSizeRegistry.StrictOnWire_RegistryKey_WorldSettlementSizeRegistry__` | `string` |
+| `WorldSettlementSpecializationRegistry` | `list[SettlementSpecializationEntry]` |
+| `WorldSettlementSpecializationRegistry.DefaultWhenMissing_Union_DistrictTemplateKey__NoneType__` | `DistrictTemplateKey / null` |
+| `WorldSettlementSpecializationRegistry.DefaultWhenMissing_Union_str__NoneType__` | `string / null` |
+| `WorldSettlementSpecializationRegistry.DefaultWhenMissing_Union_str__list_str___NoneType__` | `string / list[string] / null` |
+| `WorldSettlementSpecializationRegistry.DefaultWhenMissing_list_TypicalDistrictRef__` | `list[TypicalDistrictRef]` |
+| `WorldSettlementSpecializationRegistry.StrictOnWire_RegistryKey_WorldSettlementSpecializationRegistry__` | `string` |
+| `WorldSettlementSpecializationRegistry.StrictOnWire_str_` | `string` |
+| `WorldTerrainCategoryRegistry` | `list[TerrainCategoryEntry]` |
+| `WorldTerrainCategoryRegistry.DefaultWhenMissing_Union_str__NoneType__` | `string / null` |
+| `WorldTerrainCategoryRegistry.DefaultWhenMissing_bool_` | `boolean` |
+| `WorldTerrainCategoryRegistry.StrictOnWire_str_` | `string` |
+| `WorldTerrainMasks` | `enabled: WorldTerrainMasks.DefaultWhenMissing_bool_`, `default_mountains: WorldTerrainMasks.DefaultWhenMissing_MountainsCategoryPolicy_`, `declared_mountains: WorldTerrainMasks.DefaultWhenMissing_list_Annotated_Union_MountainSpec__MountainRangeSpec___FieldInfo_annotation_NoneType__required_True__discriminator__entry_type_____`, `declared_regions: WorldTerrainMasks.DefaultWhenMissing_list_Annotated_Union_ForestSpec__PlainSpec__FarmlandSpec___FieldInfo_annotation_NoneType__required_True__discriminator__entry_type_____`, `default_landcover: WorldTerrainMasks.DefaultWhenMissing_LandcoverRegionsCategoryPolicy_`, `default_ravines: WorldTerrainMasks.DefaultWhenMissing_RavinesCategoryPolicy_`, `default_roads: WorldTerrainMasks.DefaultWhenMissing_RoadsCategoryPolicy_` |
+| `WorldTerrainMasks.DefaultWhenMissing_LandcoverClaimNoise_` | `amplitude: WorldTerrainMasks.DefaultWhenMissing_int__Ge_ge_0_`, `scale: WorldTerrainMasks.DefaultWhenMissing_int__Gt_gt_0_` |
+| `WorldTerrainMasks.DefaultWhenMissing_LandcoverRegionsCategoryPolicy_` | `enabled: WorldTerrainMasks.DefaultWhenMissing_bool_`, `autoresolve: WorldTerrainMasks.DefaultWhenMissing_bool_`, `transition_threshold: WorldTerrainMasks.DefaultWhenMissing_float__Gt_gt_0__Le_le_1___PydanticGeneralMetadata_allow_inf_nan_False_`, `seed_spacing: WorldTerrainMasks.StrictOnWire_int__Gt_gt_0_`, `max_radius: WorldTerrainMasks.DefaultWhenMissing_int__Gt_gt_0_`, `claim_noise: WorldTerrainMasks.DefaultWhenMissing_LandcoverClaimNoise_`, `fallback_terrain: WorldTerrainMasks.DefaultWhenMissing_TerrainKey_`, `terrain_policies: map[LandcoverTerrainPolicy]` |
+| `WorldTerrainMasks.DefaultWhenMissing_MountainRangeSides_` | `left: ReliefSideSpec`, `right: ReliefSideSpec`, `start: ReliefSideSpec / null`, `end: ReliefSideSpec / null` |
+| `WorldTerrainMasks.DefaultWhenMissing_MountainsCategoryPolicy_` | `enabled: WorldTerrainMasks.DefaultWhenMissing_bool_`, `autoresolve: WorldTerrainMasks.DefaultWhenMissing_bool_`, `system_terrain: WorldTerrainMasks.DefaultWhenMissing_str_`, `threshold: app__dataModel__annotationPolicy__DefaultWhenMissing_float__Ge_ge_0__0__Le_le_2__0_`, `elevation_bias_weight: app__dataModel__annotationPolicy__DefaultWhenMissing_float__Ge_ge_0__0_`, `relief_weight: app__dataModel__annotationPolicy__DefaultWhenMissing_float__Ge_ge_0__0_`, `ridge_cell_m: WorldTerrainMasks.DefaultWhenMissing_int__Ge_ge_1_`, `default_kind: WorldTerrainMasks.DefaultEnumWhenMissing_MountainKind_`, `default_form: MountainFormBySides / StarForm / PeakForm / PlateauForm`, `default_radius_m: WorldTerrainMasks.DefaultWhenMissing_int__Ge_ge_1_`, `sides: WorldTerrainMasks.DefaultWhenMissing_tuple_ReliefSideSpec__________`, `default_range_style: WorldTerrainMasks.DefaultEnumWhenMissing_MountainRangeStyle_`, `hybrid_smooth_edge_factor: app__dataModel__annotationPolicy__DefaultWhenMissing_float__Ge_ge_0__0_`, `range_gap_length_fraction: app__dataModel__annotationPolicy__DefaultWhenMissing_float__Ge_ge_0__0_`, `range_gap_height_factor: app__dataModel__annotationPolicy__DefaultWhenMissing_float__Ge_ge_0__0_`, `range_gap_spread: app__dataModel__annotationPolicy__DefaultWhenMissing_float__Ge_ge_1__0_`, `range_gap_other_radius_factor: app__dataModel__annotationPolicy__DefaultWhenMissing_float__Ge_ge_0__0_`, `enable_secondary_ridges: WorldTerrainMasks.DefaultWhenMissing_bool_` |
+| `WorldTerrainMasks.DefaultWhenMissing_RavinesCategoryPolicy_` | `enabled: WorldTerrainMasks.DefaultWhenMissing_bool_`, `autoresolve: WorldTerrainMasks.DefaultWhenMissing_bool_`, `system_terrain: WorldTerrainMasks.DefaultWhenMissing_str_`, `min_drop: WorldTerrainMasks.DefaultWhenMissing_int__Ge_ge_1_`, `min_neighbors: WorldTerrainMasks.DefaultWhenMissing_int__Ge_ge_1_`, `drop_z: WorldTerrainMasks.DefaultWhenMissing_int__Ge_ge_1_` |
+| `WorldTerrainMasks.DefaultWhenMissing_RoadsCategoryPolicy_` | `enabled: WorldTerrainMasks.DefaultWhenMissing_bool_`, `autoresolve: WorldTerrainMasks.DefaultWhenMissing_bool_`, `system_terrain: WorldTerrainMasks.DefaultWhenMissing_str_`, `connection_types: WorldTerrainMasks.DefaultWhenMissing_tuple_str__________`, `graph_levels: WorldTerrainMasks.DefaultWhenMissing_tuple_str__________`, `dilate_radius_light: WorldTerrainMasks.DefaultWhenMissing_int__Ge_ge_0_` |
+| `WorldTerrainMasks.DefaultWhenMissing_TerrainKey_` | `string` |
+| `WorldTerrainMasks.DefaultWhenMissing_Union_ObjectReliefPickPolicy__NoneType__` | `ObjectReliefPickPolicy / null` |
+| `WorldTerrainMasks.DefaultWhenMissing_Union_ReliefContextPickPolicy__NoneType__` | `ReliefContextPickPolicy / null` |
+| `WorldTerrainMasks.DefaultWhenMissing_Union_str__NoneType__` | `string / null` |
+| `WorldTerrainMasks.DefaultWhenMissing_bool_` | `boolean` |
+| `WorldTerrainMasks.DefaultWhenMissing_float_95_` | `number` |
+| `WorldTerrainMasks.DefaultWhenMissing_float__Gt_gt_0__Le_le_1___PydanticGeneralMetadata_allow_inf_nan_False_` | `number` |
+| `WorldTerrainMasks.DefaultWhenMissing_int__Ge_ge_0_` | `integer` |
+| `WorldTerrainMasks.DefaultWhenMissing_int__Ge_ge_1_` | `integer` |
+| `WorldTerrainMasks.DefaultWhenMissing_int__Ge_ge_3_` | `integer` |
+| `WorldTerrainMasks.DefaultWhenMissing_int__Gt_gt_0_` | `integer` |
+| `WorldTerrainMasks.DefaultWhenMissing_list_Annotated_Union_ForestSpec__PlainSpec__FarmlandSpec___FieldInfo_annotation_NoneType__required_True__discriminator__entry_type_____` | `list[ForestSpec / PlainSpec / FarmlandSpec]` |
+| `WorldTerrainMasks.DefaultWhenMissing_list_Annotated_Union_MountainSpec__MountainRangeSpec___FieldInfo_annotation_NoneType__required_True__discriminator__entry_type_____` | `list[MountainSpec / MountainRangeSpec]` |
+| `WorldTerrainMasks.DefaultWhenMissing_str_` | `string` |
+| `WorldTerrainMasks.DefaultWhenMissing_tuple_HillShape__________` | `list[HillShape]` |
+| `WorldTerrainMasks.DefaultWhenMissing_tuple_MountainSaddleSpec__________` | `list[MountainSaddleSpec]` |
+| `WorldTerrainMasks.DefaultWhenMissing_tuple_MountainSpec__________` | `list[MountainSpec]` |
+| `WorldTerrainMasks.DefaultWhenMissing_tuple_ReliefSideSpec__________` | `list[ReliefSideSpec]` |
+| `WorldTerrainMasks.DefaultWhenMissing_tuple_int__________` | `list[integer]` |
+| `WorldTerrainMasks.DefaultWhenMissing_tuple_str__________` | `list[string]` |
+| `WorldTerrainMasks.HillPolicy` | `min_spacing: WorldTerrainMasks.DefaultWhenMissing_int__Ge_ge_1_`, `radius: WorldTerrainMasks.DefaultWhenMissing_int__Ge_ge_1_`, `height: WorldTerrainMasks.DefaultWhenMissing_int__Ge_ge_1_`, `shapes: WorldTerrainMasks.DefaultWhenMissing_tuple_HillShape__________` |
+| `WorldTerrainMasks.StrictOnWire_int__Gt_gt_0_` | `integer` |
+| `WorldTerrainRegistry` | `list[TerrainRegistryEntry]` |
+| `WorldTerrainRegistry.DefaultEnumWhenMissing_Union_HydrologyCellRole__NoneType__` | `HydrologyCellRole / null` |
+| `WorldTerrainRegistry.DefaultWhenMissing_Union_Annotated_int__FieldInfo_annotation_NoneType__required_True__metadata__Ge_ge_1______NoneType__` | `integer / null` |
+| `WorldTerrainRegistry.DefaultWhenMissing_Union_HillPolicy__NoneType__` | `HillPolicy / null` |
+| `WorldTerrainRegistry.DefaultWhenMissing_Union_Literal__plains____forest____NoneType__` | `string / null` |
+| `WorldTerrainRegistry.DefaultWhenMissing_Union_float__NoneType__` | `number / null` |
+| `WorldTerrainRegistry.DefaultWhenMissing_Union_str__NoneType__` | `string / null` |
+| `WorldTerrainRegistry.DefaultWhenMissing_bool_` | `boolean` |
+| `WorldTerrainRegistry.DefaultWhenMissing_float__Gt_gt_0___PydanticGeneralMetadata_allow_inf_nan_False_` | `number` |
+| `WorldTerrainRegistry.DefaultWhenMissing_int_` | `integer` |
+| `WorldTerrainRegistry.DefaultWhenMissing_int__Ge_ge_1_` | `integer` |
+| `WorldTerrainRegistry.DefaultWhenMissing_list_EligibilityRule__` | `list[EligibilityRule]` |
+| `WorldTerrainRegistry.DefaultWhenMissing_str_` | `string` |
+| `WorldTerrainRegistry.DefaultWhenMissing_tuple_HillShape__________` | `list[HillShape]` |
+| `WorldTerrainRegistry.DefaultWhenMissing_tuple_StrictEnumOnWire_TerrainFillRole___________` | `list[WorldTerrainRegistry.StrictEnumOnWire_TerrainFillRole_]` |
+| `WorldTerrainRegistry.StrictOnWire_RegistryKey_WorldTerrainRegistry__` | `string` |
+| `WorldTerrainRegistry.StrictOnWire_str_` | `string` |
+| `WorldTerrainScalars` | `terrain_chunk_columns: WorldTerrainScalars.DefaultWhenMissing_int__Ge_ge_1_`, `terrain_parallel_workers: WorldTerrainScalars.DefaultWhenMissing_Union_int__NoneType__`, `map_subsurface_depth: WorldTerrainScalars.DefaultWhenMissing_int__Ge_ge_0_`, `z_min: WorldTerrainScalars.DefaultWhenMissing_Union_int__NoneType__`, `z_max: WorldTerrainScalars.DefaultWhenMissing_Union_int__NoneType__`, `elevation_lapse_rate: WorldTerrainScalars.DefaultWhenMissing_Union_float__NoneType__`, `g: WorldTerrainScalars.DefaultWhenMissing_float_0_`, `closed_planet_grid: WorldTerrainScalars.DefaultWhenMissing_bool_`, `world_topology_mode: WorldTerrainScalars.DefaultEnumWhenMissing_WorldTopologyMode_`, `magma_band_thickness: WorldTerrainScalars.DefaultWhenMissing_Union_int__NoneType__` |
+| `WorldTerrainScalars.DefaultWhenMissing_Union_float__NoneType__` | `number / null` |
+| `WorldTerrainScalars.DefaultWhenMissing_Union_int__NoneType__` | `integer / null` |
+| `WorldTerrainScalars.DefaultWhenMissing_bool_` | `boolean` |
+| `WorldTerrainScalars.DefaultWhenMissing_float_0_` | `number` |
+| `WorldTerrainScalars.DefaultWhenMissing_int__Ge_ge_0_` | `integer` |
+| `WorldTerrainScalars.DefaultWhenMissing_int__Ge_ge_1_` | `integer` |
+| `WorldTransitionTypeRegistry` | `list[TransitionTypeEntry]` |
+| `WorldTransitionTypeRegistry.DefaultWhenMissing_Union_str__NoneType__` | `string / null` |
+| `WorldTransitionTypeRegistry.StrictOnWire_RegistryKey_WorldTransitionTypeRegistry__` | `string` |
+| `WorldTransitionTypeRegistry.StrictOnWire_str_` | `string` |
+| `WorldWeatherTypeRegistry` | `list[WeatherTypeEntry]` |
+| `WorldWeatherTypeRegistry.DefaultWhenMissing_Union_int__NoneType__` | `integer / null` |
+| `WorldWeatherTypeRegistry.DefaultWhenMissing_Union_str__NoneType__` | `string / null` |
+| `WorldWeatherTypeRegistry.DefaultWhenMissing_dict_str__int__` | `map[integer]` |
+| `WorldWeatherTypeRegistry.DefaultWhenMissing_float_0_` | `number` |
+| `WorldWeatherTypeRegistry.DefaultWhenMissing_int__Ge_ge_1_` | `integer` |
+| `WorldWeatherTypeRegistry.StrictOnWire_str_` | `string` |
+| `app__dataModel__annotationPolicy__DefaultWhenMissing_float__Ge_ge_0__05__Le_le_1__0_` | `number` |
+| `app__dataModel__annotationPolicy__DefaultWhenMissing_float__Ge_ge_0__0_` | `number` |
+| `app__dataModel__annotationPolicy__DefaultWhenMissing_float__Ge_ge_0__0__Le_le_1__0_` | `number` |
+| `app__dataModel__annotationPolicy__DefaultWhenMissing_float__Ge_ge_0__0__Le_le_2__0_` | `number` |
+| `app__dataModel__annotationPolicy__DefaultWhenMissing_float__Ge_ge_1__0_` | `number` |
+| `app__dataModel__annotationPolicy__DefaultWhenMissing_float__Gt_gt_0__0_` | `number` |
+
+**Вердикт.** Покрытие полей хранилища и объявленных wire-схем проверено. До приёмки каждой DAG-связи нужно сопоставить фактический вход конкретной операции с выходом владельца, указать сохранённые presence/aliases и версию зависимостей. Для ключей вне строки World сначала доказать источник и round-trip. Для Climate поправка к C1: WorldClimateScalars объявляет девять полей, после переноса lapse их будет десять. Критерий приёмки — нода получает именно указанное значение, включая 0, false и разрешённый null, с выбранной публикации и передаёт его потребителю без подстановки другого default. Настройки процесса и параметры одного вызова остаются в отдельной таблице R4.

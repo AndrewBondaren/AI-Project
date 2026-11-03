@@ -24,7 +24,8 @@ from tests.geo1.contracts.strategies.fixtures import inputs
 
 class AuthoredStrategyTests(TestCase):
     def test_basin_geometry_is_calculated_once_then_reused_through_common_preparer(self):
-        with patch("app.application.worldData.placement.adapters.water.shape_cells", wraps=shape_cells) as geometry:
+        with patch("app.application.worldData.placement.adapters.waterGeometry.nativeGeometry.shape_cells",
+                   wraps=shape_cells) as geometry:
             input = design_input(request())
             draft = AuthoredRegionStrategy().design(input)
             result = DesignedWaterPlacementPreparer().prepare(input, draft, selection_policy=WaterFieldSelectionPolicy())

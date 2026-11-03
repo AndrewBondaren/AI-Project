@@ -103,3 +103,15 @@ class CompetitorRosterTests(TestCase):
     def test_empty_roster_for_water_only(self):
         _, roster = self.start(batch=replace(self.batch, objects=(self.water,)), competitor_geometry=())
         self.assertFalse(roster)
+
+    def test_mutable_last_record_rejected_before_session_start(self):
+        last = self.parent_record
+        cases = (
+            (last.model_dump(), "typed capture records"),
+            (last.model_copy(update={"intent": last.intent.model_dump()}), "mutable cached value"),
+        )
+        with patch.object(PlacementSession, "start") as start:
+            for raw, error in cases:
+                with self.subTest(error=error), self.assertRaisesRegex(ValueError, error):
+                    self.start(competitor_geometry=(self.child_record, raw))
+            start.assert_not_called()

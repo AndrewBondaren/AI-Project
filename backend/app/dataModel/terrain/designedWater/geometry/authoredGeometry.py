@@ -15,6 +15,7 @@ from app.dataModel.spatial.grid.coordinateTypes import FineZ
 from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
 from app.dataModel.terrain.planning.inputs.waterPlacementInput import WaterAnchorInput
 from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
+from app.dataModel.terrain.sampling.fineSurfaceWindow import FineSurfaceWindow
 from app.dataModel.topology.worldTopology import Coord, WorldTopology
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.validation.immutableValue import validate_immutable
@@ -22,18 +23,13 @@ from app.dataModel.validation.immutableValue import validate_immutable
 type AuthoredWaterSource = Annotated[AuthoredBasinSource | AuthoredLakeSource | CoastlineWaterSource, Field(discriminator="kind")]
 
 
-class AuthoredWaterGeometryRequest(BaseModel, frozen=True):
-    """G8 supplies captured source/terrain/anchors/limits after READY admission.
-
-    This is the request for one geometry calculation before metadata exists.
-    Source/anchors use world fine coordinates; the terrain envelope is coarse.
-    No defaults, cascade, admission decision or live World is resolved here.
-    """
+class _GeometryRequest[T](BaseModel, frozen=True):
+    """Captured geometry inputs after READY admission and before metadata."""
 
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True, revalidate_instances="always")
 
     source: AuthoredWaterSource
-    pre_hydrology: PlanEnvelope[TerrainPlan]
+    pre_hydrology: PlanEnvelope[T]
     topology: WorldTopology
     grid: SurfaceGridSettings
     seed_root: EntityUid
@@ -52,11 +48,6 @@ class AuthoredWaterGeometryRequest(BaseModel, frozen=True):
 
     @model_validator(mode="after")
     def coherent_geometry_inputs(self) -> Self:
-        bounds, box = self.topology.bounds, self.pre_hydrology.payload.bbox
-        if (box.x_min, box.x_max, box.y_min, box.y_max) != (bounds.x_min, bounds.x_max, bounds.y_min, bounds.y_max):
-            raise ValueError("authored geometry requires a complete coarse terrain snapshot")
-        if any(z < self.z_min for _, z in self.pre_hydrology.payload.surface_z):
-            raise ValueError("terrain surface lies below world z_min")
         world_uid = self.pre_hydrology.ref.key.world_uid
         if any(d.ref.key.world_uid != world_uid for d in self.pre_hydrology.dependencies):
             raise ValueError("terrain dependencies belong to another world")
@@ -67,6 +58,33 @@ class AuthoredWaterGeometryRequest(BaseModel, frozen=True):
             if isinstance(limit, bool) or not isinstance(limit, (int, float)) or not isfinite(limit) or not 0 < limit <= 1:
                 raise ValueError("coastline geometry limits require finite fractions in (0,1]")
         validate_immutable(self)
+        return self
+
+
+class LegacyAuthoredWaterGeometryRequest(_GeometryRequest[TerrainPlan], frozen=True):
+    @model_validator(mode="after")
+    def coarse_snapshot(self) -> Self:
+        bounds, box = self.topology.bounds, self.pre_hydrology.payload.bbox
+        if (box.x_min, box.x_max, box.y_min, box.y_max) != (bounds.x_min, bounds.x_max, bounds.y_min, bounds.y_max):
+            raise ValueError("authored geometry requires a complete coarse terrain snapshot")
+        if any(z < self.z_min for _, z in self.pre_hydrology.payload.surface_z):
+            raise ValueError("terrain surface lies below world z_min")
+        return self
+
+
+class AuthoredWaterGeometryRequest(_GeometryRequest[FineSurfaceWindow], frozen=True):
+    @model_validator(mode="after")
+    def fine_snapshot(self) -> Self:
+        window = self.pre_hydrology.payload
+        bounds = self.topology.bounds
+        if window.topology != self.topology or len(window.surface_z) != bounds.width * bounds.height:
+            raise ValueError("native authored geometry requires the complete fine window in its captured frame")
+        if any(z < self.z_min for _, z in window.surface_z):
+            raise ValueError("terrain surface lies below world z_min")
+        if any(self.topology.canonicalize(*a.position) is None for a in self.anchors):
+            raise ValueError("authored anchor outside fine world")
+        if any(d.ref.key.scope != self.pre_hydrology.ref.key.scope for d in self.pre_hydrology.dependencies):
+            raise ValueError("fine terrain dependencies must share the window scope")
         return self
 
 
