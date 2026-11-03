@@ -80,6 +80,7 @@ type SurfacePlanningView = Annotated[
 class GeoSurfacePlanningView(BaseModel):
     """Complete authored GEO source closure, before any provider computation."""
 
+    # GEO-LEGACY-101: Own the GEO configuration before removing ReadySurfacePlanningView.
     model_config = ReadySurfacePlanningView.model_config
 
     kind: Literal[SurfacePlanningViewKind.READY] = SurfacePlanningViewKind.READY

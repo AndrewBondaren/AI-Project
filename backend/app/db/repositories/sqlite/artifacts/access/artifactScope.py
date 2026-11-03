@@ -3,6 +3,7 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
+from sqlite3 import OperationalError
 from typing import cast
 
 from app.application.publication.errors import PublicationInfrastructureError
@@ -79,5 +80,8 @@ class SqliteArtifactScope:
         """Hold the database writer coordinator across the caller's physical IO."""
         ArtifactRef.model_validate(ref, strict=True)
         self._require_unbound()
-        async with self.transaction(runtime_uid()):
-            yield
+        try:
+            async with self.transaction(runtime_uid()):
+                yield
+        except OperationalError as exc:
+            raise PublicationInfrastructureError("artifact storage operation unavailable") from exc

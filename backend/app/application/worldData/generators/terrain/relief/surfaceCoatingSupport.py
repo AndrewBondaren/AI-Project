@@ -67,6 +67,7 @@ class SurfaceSupportDependencies[H: HydrologyPlan]:
                     raise ValueError("support dependency revisions are incoherent")
         if not any(d.slot == "river_relief" and d.ref == self.river_relief.ref for d in self.hydrology.dependencies):
             raise ValueError("final hydrology must prove its post-river surface reference")
+        # GEO-LEGACY-97: Replace the direct river-to-relief check with the admitted geometry chain.
         if not any(d.slot == "relief" and d.ref == self.relief.ref for d in self.river_relief.dependencies):
             raise ValueError("post-river surface must bind the supplied pre-river relief")
         if not any(d.slot == "hydrology" and d.ref == self.hydrology.ref for d in self.climate_local.dependencies):

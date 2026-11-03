@@ -126,6 +126,7 @@ class SurfacePlanningAssembler(Generic[P]):
         local = self._build(view, p.climate_local, view.climate_local,
             base_reader.with_plan(PlanSlot(S.HYDROLOGY.value), p.hydrology, final),
             (_ref(S.CLIMATE_BASE, base), _ref(S.HYDROLOGY, final)), wait)
+        # GEO-LEGACY-100: Build and pass the exact canonical source and placement envelopes to boundary.
         boundaries = self._build(view, p.coastline_boundaries, view.boundary_input,
             final_reader.with_plan(PlanSlot(S.WATER_PLACEMENT.value), p.water_placement, water),
             (_ref(S.HYDROLOGY, final), _ref(S.WATER_PLACEMENT, water)), wait)

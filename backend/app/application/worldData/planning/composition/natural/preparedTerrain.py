@@ -25,6 +25,7 @@ from app.dataModel.terrain.planning.natural.preparedTerrain import (
 from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
 
 
+# GEO-LEGACY-98: Retain this registered handle and its exact envelope in GEO assembly.
 def register_natural_terrain(registry: PlanRegistry, *,
     climate: RegisteredPlanContract[ClimateBaseInput, ClimateBasePlan],
     terrain: RegisteredPlanContract[TerrainBaseInput, TerrainPlan],

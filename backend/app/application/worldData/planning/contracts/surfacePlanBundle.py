@@ -61,6 +61,7 @@ class SurfacePlanBundle(BaseModel):
 class GeoSurfacePlanBundle(BaseModel):
     """Exact GEO phases from one captured revision; no baseline envelope overrides."""
 
+    # GEO-LEGACY-102: Own the GEO configuration and verify prepared/source dependency refs.
     model_config = SurfacePlanBundle.model_config
 
     view_revision: StateViewRevision = Field(min_length=32, max_length=32)
