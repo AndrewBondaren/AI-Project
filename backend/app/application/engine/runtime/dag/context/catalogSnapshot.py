@@ -10,7 +10,7 @@ from app.application.engine.runtime.dag.context.resultInvalidation import Result
 from app.dataModel.engine.dag.errors.nodeError import NodeError
 from app.dataModel.engine.dag.identity import (
     Attempt, ContractId, ContractIdValue, ContractVersion, ContractVersionValue,
-    ExecutionId, ExecutionIdValue, ExecutionIdentity, NodeId, NodeIdValue,
+    ExecutionId, ExecutionIdValue, ExecutionIdentity, PlanInstanceId, NodeId, NodeIdValue,
 )
 from app.dataModel.engine.dag.records import OutputRecord
 from app.dataModel.validation.immutableValue import validate_immutable
@@ -19,6 +19,7 @@ from app.dataModel.validation.immutableValue import validate_immutable
 @dataclass(frozen=True, kw_only=True)
 class CatalogSnapshot:
     execution_id: ExecutionId
+    plan_instance_id: PlanInstanceId = PlanInstanceId("root")
     attempt_counters: tuple[tuple[NodeId, int], ...]
     closed_attempts: tuple[ExecutionIdentity, ...]
     contracts: tuple[tuple[NodeId, ContractId, ContractVersion], ...]
@@ -94,6 +95,8 @@ class CatalogSnapshot:
             ExecutionIdentity.model_validate(identity)
             if identity.execution_id != self.execution_id or identity.node_id not in bindings:
                 raise ValueError("closed attempt belongs to a different execution/node")
+            if identity.invocation_id != f"{self.plan_instance_id}/{identity.node_id}":
+                raise ValueError("attempt belongs to a different plan instance")
             latest[identity.node_id] = max(latest.get(identity.node_id, 0), identity.attempt)
         if counters != latest:
             raise ValueError("attempt counters must match quiescent closed history")

@@ -292,6 +292,7 @@ def history_provenance_projection(metadata: SnapshotEnvelope, base: SnapshotEnve
 
 from app.db.repositories.sqlite.artifacts.access.artifactScope import SqliteArtifactScope
 from app.dataModel.identity.uid import EntityUid
+from app.db.repositories.sqlite.artifacts.leaseStore import SqliteArtifactLeases
 from app.db.repositories.sqlite.artifacts.catalogStore import SqliteArtifactCatalog
 from app.db.repositories.sqlite.artifacts.holderStore import SqliteArtifactHolders
 
@@ -315,5 +316,5 @@ async def artifact_scope_capabilities(commits: SqlitePublicationCommitStore,
 
 def artifact_storage_ports(scopes: SqliteArtifactScope, operations: SqliteOperationStore,
                            artifacts: SqliteOperationArtifacts, history: SqliteSnapshotHistoryStore
-                           ) -> tuple[IArtifactCatalog, IArtifactHolders]:
-    return SqliteArtifactCatalog(scopes, operations, artifacts), SqliteArtifactHolders(scopes, operations, artifacts, history)
+                           ) -> tuple[IArtifactCatalog, IArtifactHolders, IArtifactLeases]:
+    return SqliteArtifactCatalog(scopes, operations, artifacts), SqliteArtifactHolders(scopes, operations, artifacts, history), SqliteArtifactLeases(scopes, operations, artifacts)

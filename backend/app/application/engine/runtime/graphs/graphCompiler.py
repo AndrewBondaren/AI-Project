@@ -1,5 +1,6 @@
 """Scheduling and contract checks only. SoT: node context §§6.1–6.2/8."""
 
+from graphlib import CycleError, TopologicalSorter
 from collections.abc import Callable, Sequence
 
 from pydantic import BaseModel
@@ -10,6 +11,7 @@ from app.application.engine.contracts.executionBindings import ExecutionBindings
 from app.application.engine.nodeTypes.baseNode import BaseNode
 from app.application.engine.nodeTypes.compiledNode import CompiledNode
 from app.application.engine.nodeTypes.llmNode import LLMNode
+from app.application.engine.nodeTypes.resumablePythonNode import ResumablePythonNode
 from app.application.engine.nodeTypes.pythonNode import PythonNode
 from app.application.engine.registration.nodeRegistration import NodeRegistration
 from app.application.engine.registration.nodeRegistry import NodeRegistry
@@ -48,7 +50,7 @@ class GraphCompiler:
         self._registrations = registrations
         self._nodes = nodes
 
-    def compile(self, state: BaseModel) -> ExecutionPlan:
+    def compile(self, state: BaseModel, *, invocation_root: NodeId | None = None) -> ExecutionPlan:
         if self._nodes is None:
             raise RuntimeError("GraphCompiler.precompile() must succeed before compile()")
         if tuple(self._registrations) != self._registry.ids():
@@ -57,10 +59,22 @@ class GraphCompiler:
             node_id: compiled for node_id, compiled in self._nodes.items()
             if self._evaluate_rules(compiled, state)
         }
+        roots = selected
+        if invocation_root is not None:
+            closure: set[NodeId] = set()
+            pending = [invocation_root]
+            while pending:
+                current = pending.pop()
+                if current not in selected:
+                    raise ValueError(f"invocation root dependency '{current}' was excluded")
+                if current not in closure:
+                    closure.add(current)
+                    pending.extend(selected[current].node.deps)
+            roots = {key: selected[key] for key in closure}
         pre: dict[NodeId, CompiledNode[BaseModel, BaseModel, NodeError]] = {}
         post: dict[NodeId, CompiledNode[BaseModel, BaseModel, NodeError]] = {}
         buckets: dict[float, dict[NodeId, CompiledNode[BaseModel, BaseModel, NodeError]]] = {}
-        for node_id, compiled in selected.items():
+        for node_id, compiled in roots.items():
             phase = self._phase(compiled.node)
             if phase is ExecutionPhase.PRE_LLM:
                 pre[node_id] = compiled
@@ -68,20 +82,21 @@ class GraphCompiler:
                 post[node_id] = compiled
             elif isinstance(compiled.node, LLMNode):
                 buckets.setdefault(compiled.node.temperature, {})[node_id] = compiled
+        definitions = self._nodes if invocation_root is not None else selected
         return ExecutionPlan(
             pre_llm_levels=self._build_levels(pre),
             llm_groups=tuple(
                 LLMGroup(temperature, self._build_levels(buckets[temperature]))
                 for temperature in sorted(buckets)
             ),
-            post_llm_levels=self._build_levels(post), nodes=selected,
-            registrations={node_id: self._registrations[node_id] for node_id in selected},
-            estimated_cost=sum(compiled.node.cost.cpu for compiled in selected.values()),
+            post_llm_levels=self._build_levels(post), nodes=definitions,
+            registrations={node_id: self._registrations[node_id] for node_id in definitions},
+            estimated_cost=sum(compiled.node.cost.cpu for compiled in roots.values()), invocation_root=invocation_root,
         )
 
     @staticmethod
     def _phase(node: BaseNode[BaseModel, BaseModel, NodeError]) -> ExecutionPhase:
-        if isinstance(node, PythonNode):
+        if isinstance(node, (PythonNode, ResumablePythonNode)):
             return node.phase
         if isinstance(node, LLMNode):
             return ExecutionPhase.LLM
@@ -122,6 +137,41 @@ class GraphCompiler:
                     )
                 if cls._phase(node) is ExecutionPhase.LLM and positions[producer] == positions[node_id]:
                     raise ValueError(f"node '{node_id}' reads producer '{producer}' in the same LLM group")
+        combined = TopologicalSorter[NodeId]()
+        for node_id, registration in registrations.items():
+            node = nodes[node_id].node
+            combined.add(node_id, *node.deps)
+            continuation = registration.contract.continuation
+            if continuation is not None:
+                continuation.state_type.model_json_schema()
+                if not continuation.state_type.model_config.get("frozen"):
+                    raise TypeError("continuation requires an immutable state model")
+            for target in registration.contract.calls:
+                if not isinstance(node, ResumablePythonNode):
+                    raise TypeError("CALL requires a resumable caller")
+                callee = registrations.get(target.node_id)
+                if callee is None or positions[node_id] != positions[target.node_id]:
+                    raise ValueError("unknown or cross-phase CALL")
+                contract = callee.contract
+                if (contract.contract_id, contract.version, contract.input_type, contract.output_type,
+                    contract.error_types) != (target.contract_id, target.version, target.input_type,
+                                              target.output_type, target.error_types):
+                    raise TypeError("CALL target differs from registered contract")
+                pending = [target.node_id]
+                visited: set[NodeId] = set()
+                while pending:
+                    dependency = pending.pop()
+                    if dependency in visited:
+                        continue
+                    visited.add(dependency)
+                    if positions[dependency] != positions[node_id]:
+                        raise ValueError("cross-phase CALL prerequisite")
+                    pending.extend(nodes[dependency].node.deps)
+                combined.add(node_id, target.node_id)
+        try:
+            combined.prepare()
+        except CycleError as exc:
+            raise ValueError("cycle detected in CALL/dependency graph") from exc
         # deps alone define ordering. reads never add another graph edge.
         cls._build_levels(nodes)
 

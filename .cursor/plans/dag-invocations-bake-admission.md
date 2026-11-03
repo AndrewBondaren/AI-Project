@@ -1,6 +1,6 @@
 # DAG invocation runtime и bake admission
 
-Дата: 2026-11-03. Delivery plan к [GEN §§4/18](gen-dag-node-dependency.md). Scope: проектирование; production code этим документом не изменён. Решения о поведении приняты пользователем; ниже фиксируется техническая декомпозиция. Первый срез R1–R4 имеет определённый контракт и может реализовываться на тестовых Python-нодах. Подключение родителей GEN возможно только после R5–R7 и их domain-contract gates. Параллельные самостоятельные full/light bake одного мира отменены.
+Дата: 2026-11-03. Delivery plan к [GEN §§4/18](gen-dag-node-dependency.md). Scope: проектирование; production code этим документом не изменён. Решения о поведении приняты пользователем; ниже фиксируется техническая декомпозиция. Первый срез R1–R4 имеет определённый контракт и может реализовываться на Python-нодах GEN-DAG-1 в тестовом binding. Подключение родителей GEN возможно только после R5–R7 и их domain-contract gates. Параллельные самостоятельные full/light bake одного мира отменены.
 
 ## 1. Проверенные ограничения исходного кода
 
@@ -104,7 +104,7 @@ Worker запускается application service lifecycle независимо
 
 SQL: schema definitions в существующем `db/migrations/0001_initial.sql` синхронизируются с repository policy; если в целевом deployment уже применяется incremental migration, добавляется штатная upgrade migration без reset пользовательской БД. Это deployment check R4/R6, не разрешение удалить данные. DI wiring делается по реально используемому target composition, не legacy import redirect.
 
-Первый срез R1–R4: Python-only test nodes, вызовы в одной фазе; WAIT_INPUT, bake service и production parents не входят в его критерий готовности. Это ограничение scope, не скрытый stub поддерживаемого API. Декларации WAIT outcomes вводятся в R5, хотя их целевая модель определена здесь.
+Первый срез R1–R4: Python-ноды GEN-DAG-1 в тестовом binding, вызовы в одной фазе; WAIT_INPUT, bake service и production parents не входят в его критерий готовности. Это ограничение scope, не скрытый stub поддерживаемого API. Декларации WAIT outcomes вводятся в R5, хотя их целевая модель определена здесь.
 
 ## 8. Проверки и завершение
 

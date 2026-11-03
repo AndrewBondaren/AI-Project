@@ -19,6 +19,7 @@ from app.application.engine.runtime.validation.nodeValidationContext import Node
 from app.application.engine.runtime.execution.pythonNodeError import PythonNodeError
 from app.application.engine.validation.validationStatus import ValidationResult
 
+from app.dataModel.engine.dag.identity import InvocationId
 from app.dataModel.engine.dag.identity import (
     ContractId, ContractVersion, DomainRevision, ExecutionId, ExecutionIdentity, NodeId, PlanRevision,
 )
@@ -247,6 +248,6 @@ class GraphOptionalConsumer(PythonNode[CompositeOutput, LeafOutput, Never]):
 
 def identity(node: str = "producer", attempt: int = 1) -> ExecutionIdentity:
     return ExecutionIdentity(
-        execution_id=ExecutionId("execution-1"), node_id=NodeId(node),
+        execution_id=ExecutionId("execution-1"), node_id=NodeId(node), invocation_id=InvocationId(f"root/{node}"),
         attempt=attempt, plan_revision=PlanRevision("plan-1"),
     )

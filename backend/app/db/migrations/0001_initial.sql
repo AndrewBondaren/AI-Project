@@ -1962,3 +1962,15 @@ BEGIN
         AND NOT EXISTS (SELECT 1 FROM artifact_lease_events n WHERE n.predecessor_id = l.event_id)) THEN RAISE(ABORT, 'seal requires a live admitted fenced writer') END;
 
 END;
+
+CREATE TABLE IF NOT EXISTS dag_executions (
+    execution_id TEXT PRIMARY KEY NOT NULL,
+    schema_version INTEGER NOT NULL,
+    revision INTEGER NOT NULL CHECK (revision >= 0),
+    owner_id TEXT,
+    fence INTEGER NOT NULL CHECK (fence >= 0),
+    lease_until INTEGER,
+    status TEXT NOT NULL,
+    checkpoint_blob BLOB NOT NULL,
+    checksum TEXT NOT NULL
+);

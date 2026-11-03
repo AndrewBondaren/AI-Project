@@ -19,6 +19,7 @@ from app.application.engine.runtime.validation.llmValidator import LLMValidator
 from app.application.engine.runtime.validation.nodeValidator import NodeValidator
 from app.application.engine.validation.nodeValidationError import NodeValidationError, NodeErrorSeverity
 from app.application.engine.validation.validationStatus import ValidationResult, ValidationStatus
+from app.dataModel.engine.dag.identity import InvocationId
 from app.dataModel.engine.dag.identity import ExecutionIdentity, ExecutionId, NodeId, PlanRevision, ContractId, ContractVersion, DomainRevision
 from app.dataModel.engine.dag.records import DependencyRead, DomainReadEvidence
 from tests.dag_typing.fixtures import CompositeOutput, LeafOutput, NodeInput, RecordingValidator
@@ -34,7 +35,7 @@ class RepairTests(unittest.TestCase):
         self.builder = RepairBuilder(self.resolver)
         self.node = replace(self.case.node, dsl_patches={"bad": "patch"})
         self.case.dsl.texts["explicit"] = "Explicit patch"
-        self.identity = ExecutionIdentity(execution_id=ExecutionId("repair-exec"), node_id=self.node.id,
+        self.identity = ExecutionIdentity(execution_id=ExecutionId("repair-exec"), node_id=self.node.id, invocation_id=InvocationId(f"root/{self.node.id}"),
                                           attempt=2, plan_revision=PlanRevision("p1"))
         self.validation = ValidationResult(status=ValidationStatus.RETRY, errors=[
             NodeValidationError(code="bad", message="Invalid field", severity=NodeErrorSeverity.RETRY, field="value"),

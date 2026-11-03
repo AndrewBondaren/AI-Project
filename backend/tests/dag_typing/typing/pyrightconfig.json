@@ -1,6 +1,10 @@
 {
   "include": [
     "valid.py",
+    "../../../../backend/app/application/engine/contracts/invocation",
+    "../../../../backend/app/application/engine/runtime/invocations",
+    "../../../../backend/app/dataModel/engine/dag/invocations",
+    "../../../../backend/app/application/engine/nodeTypes/resumablePythonNode.py",
     "../fixtures.py",
     "../../../../backend/app/dataModel/engine/dag/identity.py",
     "../../../../backend/app/dataModel/engine/dag/records.py",
@@ -70,6 +74,10 @@
   "typeCheckingMode": "basic",
   "strict": [
     "valid.py",
+    "../../../../backend/app/application/engine/contracts/invocation",
+    "../../../../backend/app/application/engine/runtime/invocations",
+    "../../../../backend/app/dataModel/engine/dag/invocations",
+    "../../../../backend/app/application/engine/nodeTypes/resumablePythonNode.py",
     "../fixtures.py",
     "../../../../backend/app/dataModel/engine/dag/identity.py",
     "../../../../backend/app/dataModel/engine/dag/diagnostics.py",

@@ -10,6 +10,10 @@ from pydantic import BaseModel, TypeAdapter
 
 from app.dataModel.engine.dag.errors.nodeError import NodeError
 
+from app.application.engine.contracts.invocation.nodeStep import Complete
+from app.application.engine.contracts.invocation.resumeEvent import ResumeEvent
+from app.application.engine.nodeTypes.resumablePythonNode import ResumablePythonNode
+from app.application.engine.runtime.invocations.stepEffect import StepEffect
 from app.application.engine.contracts.pythonExecutor import PythonExecutor
 from app.application.engine.nodeTypes.pythonNode import PythonNode
 from app.application.engine.nodeTypes.support.nodeKind import NodeKind
@@ -38,9 +42,57 @@ class NodeRunner:
         self._semantic = semantic
         self._clock = clock
 
+    async def run_resumable(
+        self, node: ResumablePythonNode[BaseModel, BaseModel, NodeError, BaseModel], view: PublishedDAGReadView,
+        identity: ExecutionIdentity, registration: NodeRegistration[BaseModel, BaseModel, NodeError],
+        prepared: BaseModel | None, state: BaseModel | None, event: ResumeEvent | None,
+        pass_number: int, apply_error_policy: bool,
+    ) -> StepEffect:
+        contract = registration.contract
+        try:
+            if state is None:
+                raw_input = prepared if prepared is not None else await node.prepare_input(view)
+                admitted, validation = self._structural.validate(raw_input, contract.input_type)
+                if admitted is None or not validation.ok:
+                    raise TypeError("invalid resumable input")
+                prepared = admitted
+                step = await node.start(admitted)
+            elif event is not None:
+                step = await node.resume(state, event)
+            else:
+                raise ValueError("continuation has no resume event")
+            if isinstance(step, Complete):
+                output, validation = self._structural.validate(step.output, contract.output_type)
+                if output is None or not validation.ok:
+                    raise TypeError("invalid resumable output")
+                if not self._semantic.validate(NodeValidationContext(output, identity, pass_number), contract).ok:
+                    raise ValueError("resumable output failed semantic validation")
+                step = Complete(output)
+            return StepEffect(step=step, prepared=prepared, reads=view.dependency_reads, domain_reads=view.domain_reads)
+        except asyncio.CancelledError:
+            return StepEffect(cancelled=True, reads=view.dependency_reads, domain_reads=view.domain_reads)
+        except Exception as exc:
+            failure_type = type(exc).__name__
+            if isinstance(exc, PythonNodeError):
+                raw_error = cast(PythonNodeError[NodeError], exc).error
+                error, validation = self._structural.validate_error(raw_error, contract.error_types)
+                if error is not None and validation.ok:
+                    policy = contract.error_policy if apply_error_policy else None
+                    return StepEffect(error=error, gate=policy(error) if policy else None,
+                                      reads=view.dependency_reads, domain_reads=view.domain_reads)
+            now = self._clock()
+            diagnostic = ExecutionDiagnostic(
+                identity=identity, phase=node.phase, pass_number=pass_number, level=0, timestamp=now,
+                completed_at=now, status=NodeStatus.FAILED, code=ExecutionEventCode.NODE_FINISHED,
+                severity=ExecutionSeverity.ERROR, message=failure_type, reads=view.dependency_reads,
+            )
+            return StepEffect(diagnostics=(diagnostic,), reads=view.dependency_reads, domain_reads=view.domain_reads)
+
     async def run[I: BaseModel, O: BaseModel, E: NodeError](
         self, node: PythonNode[I, O, E], view: PublishedDAGReadView, identity: ExecutionIdentity,
         registration: NodeRegistration[I, O, E], executor: PythonExecutor, *, pass_number: Index = 0, level: Index = 0,
+        explicit_input: I | None = None, apply_error_policy: bool = True,
+        on_prepared: Callable[[I], None] | None = None,
     ) -> NodeOutcome[O, E]:
         ExecutionIdentity.model_validate(identity)
         TypeAdapter[int](Index).validate_python(pass_number)
@@ -100,13 +152,15 @@ class NodeRunner:
             if task is not None and task.cancelling():
                 raise asyncio.CancelledError
             stage = NodeStage.PREPARE
-            prepared = await node.prepare_input(view)
+            prepared = explicit_input if explicit_input is not None else await node.prepare_input(view)
             if task is not None and task.cancelling():
                 raise asyncio.CancelledError
             stage = NodeStage.INPUT_VALIDATION
             input, validation = self._structural.validate(prepared, registration.contract.input_type)
             if input is None or not validation.ok:
                 return finish(NodeStatus.FAILED, stage.value, validation=validation)
+            if on_prepared is not None:
+                on_prepared(input)
             stage = NodeStage.EXECUTE
             produced = await executor.execute(node, input)
             if task is not None and task.cancelling():
@@ -137,7 +191,7 @@ class NodeRunner:
                     return finish(NodeStatus.FAILED, "undeclared or malformed operation error", validation=validation)
                 if task is not None and task.cancelling():
                     raise asyncio.CancelledError
-                policy = registration.contract.error_policy
+                policy = registration.contract.error_policy if apply_error_policy else None
                 gate = policy(admitted) if policy is not None else None
                 if task is not None and task.cancelling():
                     raise asyncio.CancelledError

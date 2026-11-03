@@ -31,11 +31,17 @@ class ExecutionPlan:
     nodes: Mapping[NodeId, CompiledNode[BaseModel, BaseModel, NodeError]]
     registrations: Mapping[NodeId, NodeRegistration[BaseModel, BaseModel, NodeError]]
     estimated_cost: float
+    invocation_root: NodeId | None = None
 
     def __post_init__(self) -> None:
         # Own the index, sharing the immutable declarations and node instances.
         object.__setattr__(self, "nodes", MappingProxyType(dict(self.nodes)))
         object.__setattr__(self, "registrations", MappingProxyType(dict(self.registrations)))
+
+    @property
+    def root_members(self) -> frozenset[NodeId]:
+        levels = self.pre_llm_levels + tuple(level for group in self.llm_groups for level in group.levels) + self.post_llm_levels
+        return frozenset(node for level in levels for node in level)
 
     def get[I: BaseModel, O: BaseModel, E: NodeError](
         self, node_id: NodeId, contract: NodeContract[I, O, E],

@@ -3,10 +3,18 @@
 import asyncio
 from collections.abc import Callable, Mapping
 from time import time
+from uuid import uuid4
 from typing import Annotated, Generic, TypeVar
 
 from pydantic import BaseModel, Field, TypeAdapter
 
+from app.application.engine.contracts.invocation.executionOptions import InvocationOptions
+from app.application.engine.contracts.invocation.executionStore import RestoreFailure
+from app.application.engine.runtime.invocations.checkpointCodec import CheckpointCodec
+from app.application.engine.runtime.invocations.invocationCoordinator import InvocationCoordinator
+from app.application.engine.runtime.invocations.ownedExecution import OwnedExecution
+from app.application.engine.runtime.invocations.sessionFrame import SessionFrame
+from app.dataModel.engine.dag.invocations.record import InvocationGraph
 from app.application.cancellation.typed.snapshotStore import SnapshotStore
 from app.application.engine.contracts.executionBindings import ExecutionCursor, LifecycleBinding, PassStage, ResolveResult
 from app.application.engine.diagnostics.dagLog import emit as emit_diagnostic
@@ -24,7 +32,7 @@ from app.application.engine.runtime.responseResolver import ResponseResolver
 from app.application.engine.taskType import TaskType
 from app.dataModel.engine.dag.diagnostics import CancellationRequest, ExecutionEventCode, ExecutionSeverity
 from app.dataModel.engine.dag.executionPhase import ExecutionPhase
-from app.dataModel.engine.dag.identity import DomainRevision, ExecutionId, ExecutionIdValue
+from app.dataModel.engine.dag.identity import DomainRevision, ExecutionId, ExecutionIdValue, PlanInstanceId
 from app.dataModel.engine.dag.nodeStatus import NodeStatus
 
 O = TypeVar("O", bound=BaseModel)
@@ -63,6 +71,15 @@ class DAGEngine(Generic[O, S]):
             revision, plan = self._binding.compile(task_type, 0)
             state = ExecutionState(execution_id, self._registry, plan_revision=revision)
             state.set_cursor(ExecutionCursor(task_type, PassStage.PRE_LLM))
+            invocation_options = self._executor.invocation_options
+            if invocation_options is not None and plan.invocation_root is not None:
+                graph = InvocationCoordinator.create(plan, execution_id, revision, plan.invocation_root,
+                                                     invocation_options.invocation_limit, None).graph
+                graph.session = self._snapshots.encode(state, self._registry)
+                await invocation_options.store.create(execution_id, CheckpointCodec.encode(graph))
+                state.release()
+                return await self._restore_durable(execution_id, invocation_options, max_passes, options,
+                                                   confirmed_domain_revisions, cancellation, task_type)
             return await self._drive(state, plan, max_passes, options, confirmed_domain_revisions, cancellation)
         finally:
             self._active.discard(execution_id)
@@ -75,6 +92,15 @@ class DAGEngine(Generic[O, S]):
         state: ExecutionState | None = None
         try:
             options.__post_init__()
+            invocation_options = self._executor.invocation_options
+            if invocation_options is not None:
+                try:
+                    await invocation_options.store.load(execution_id)
+                except KeyError:
+                    pass
+                else:
+                    return await self._restore_durable(execution_id, invocation_options, max_passes, options,
+                                                       confirmed_domain_revisions, cancellation)
             snapshot = self._store.load(execution_id)
             if snapshot is None:
                 raise LookupError("execution snapshot is unavailable")
@@ -98,13 +124,48 @@ class DAGEngine(Generic[O, S]):
                 state.release()
             self._active.discard(execution_id)
 
+    async def _restore_durable(
+        self, execution_id: ExecutionId, settings: InvocationOptions, max_passes: int, options: LLMExecutionOptions,
+        confirmed: Mapping[str, DomainRevision] | None, cancellation: CancellationRequest | None,
+        requested_task: TaskType | None = None,
+    ) -> ResolveResult[O]:
+        claim = await settings.store.claim(execution_id, str(uuid4()), settings.lease_seconds)
+        try:
+            saved = await settings.store.load(execution_id)
+            try:
+                header = InvocationGraph.model_validate_json(saved.blob)
+                if header.session is None or header.execution_id != execution_id:
+                    raise ValueError("execution has no lifecycle checkpoint")
+                frame = SessionFrame.model_validate_json(header.session)
+                if frame.cursor is None or frame.metadata.pass_number >= max_passes:
+                    raise ValueError("invalid durable lifecycle cursor")
+                if requested_task is not None and frame.metadata.pass_number == 0 and frame.cursor.task_type != requested_task:
+                    raise ValueError("duplicate execution request differs")
+                revision, plan = self._binding.compile(frame.cursor.task_type, frame.metadata.pass_number)
+                graph = await CheckpointCodec.restore(saved.blob, plan)
+                if revision != graph.revision or plan.invocation_root != graph.records[graph.root].node_id:
+                    raise ValueError("durable plan changed")
+                if graph.response is not None:
+                    return TypeAdapter[ResolveResult[O]](ResolveResult[self._binding.response_type]).validate_json(graph.response)
+                state = await self._snapshots.decode(header.session, self._registry)
+            except (ValueError, KeyError, TypeError) as exc:
+                raise RestoreFailure("incompatible durable execution") from exc
+            owned = OwnedExecution(settings.store, claim, saved.revision, graph, settings.lease_seconds)
+            return await self._drive(state, plan, max_passes, options, confirmed, cancellation, owned)
+        finally:
+            await settings.store.release(claim)
+
     async def _drive(
         self, state: ExecutionState, plan: ExecutionPlan, max_passes: int, options: LLMExecutionOptions,
         confirmed: Mapping[str, DomainRevision] | None, cancellation: CancellationRequest | None,
+        durable: OwnedExecution | None = None,
     ) -> ResolveResult[O]:
         try:
             self._prepare_reuse(state, confirmed)
             while True:
+                if durable is not None:
+                    durable.graph.session = self._snapshots.encode(state, self._registry)
+                    await durable.save()
                 cancellation_checkpoint()
                 cursor, revision = state.cursor, state.plan_revision
                 if cursor is None or revision is None:
@@ -119,7 +180,7 @@ class DAGEngine(Generic[O, S]):
                     else:
                         phase = ExecutionPhase.PRE_LLM if stage == PassStage.PRE_LLM else ExecutionPhase.POST_LLM
                         decision = await self._executor.run_python_phase(
-                            plan, state, phase, revision, pass_number=state.pass_number,
+                            plan, state, phase, revision, pass_number=state.pass_number, durable=durable,
                             confirmed_domain_revisions=confirmed, cancellation=cancellation, invalidate_reuse=False,
                         )
                     if decision == LevelDecision.CANCEL:
@@ -141,10 +202,20 @@ class DAGEngine(Generic[O, S]):
                         if next_pass >= max_passes:
                             raise RuntimeError("DAG pass limit exhausted")
                         next_revision, next_plan = self._binding.compile(target, next_pass)
+                        if next_plan.root_members != plan.root_members:
+                            state.replace_plan_instance(self._registry, PlanInstanceId(f"pass-{next_pass}"))
                         state.set_plan_context(next_revision, next_pass)
                         state.set_cursor(ExecutionCursor(target, PassStage.PRE_LLM))
                         plan = next_plan
                         self._prepare_reuse(state, confirmed)
+                        if durable is not None:
+                            settings = self._executor.invocation_options
+                            if settings is None or plan.invocation_root is None:
+                                raise ValueError("durable pass requires an invocation root")
+                            reusable = {item.invocation_id for item in state.catalog.current_outputs
+                                        if getattr(plan.nodes[item.node_id].node, "skip_on_replan", True)}
+                            coordinator = InvocationCoordinator(plan, durable.graph, settings.invocation_limit)
+                            coordinator.next_pass(plan.invocation_root, next_revision, reusable, state.catalog.instance.id)
                 elif stage == PassStage.EFFECTS:
                     await self._binding.apply_effects(state.catalog.callback_view(self._binding.consumer, self._binding.reads))
                     cancellation_checkpoint()
@@ -154,7 +225,13 @@ class DAGEngine(Generic[O, S]):
                         self._binding, state.catalog.callback_view(self._binding.consumer, self._binding.reads),
                     )
                     cancellation_checkpoint()
-                    self._store.delete(state.catalog.execution_id)
+                    if durable is not None:
+                        durable.graph.response = TypeAdapter[ResolveResult[O]](
+                            ResolveResult[self._binding.response_type],
+                        ).dump_json(result).decode()
+                        await durable.save()
+                    else:
+                        self._store.delete(state.catalog.execution_id)
                     return result
         except asyncio.CancelledError:
             try:
@@ -162,8 +239,12 @@ class DAGEngine(Generic[O, S]):
             except asyncio.CancelledError:
                 pass
             try:
-                snapshot = self._snapshots.capture(state)
-                self._store.save(snapshot)
+                if durable is not None:
+                    durable.graph.session = self._snapshots.encode(state, self._registry)
+                    await durable.save()
+                else:
+                    snapshot = self._snapshots.capture(state)
+                    self._store.save(snapshot)
             except Exception:
                 self._lifecycle_event(state, ExecutionEventCode.SNAPSHOT_FAILED, NodeStatus.FAILED, ExecutionSeverity.ERROR)
                 raise

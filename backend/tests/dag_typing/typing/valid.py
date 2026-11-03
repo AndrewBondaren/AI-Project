@@ -1,5 +1,9 @@
 """Positive static API probes, including request-local factories and ports."""
 
+from app.application.engine.contracts.invocation.nodeStep import Call, CallGroup, NodeStep
+from app.application.engine.contracts.invocation.callTarget import CallTarget
+from app.application.engine.contracts.invocation.resumeEvent import CallFailure, CallResults, CallSuccess
+from app.dataModel.engine.dag.identity import CallKey
 from typing import Never
 from typing import assert_type
 
@@ -297,3 +301,21 @@ async def verify_engine(
     assert_type(ResponseResolver(LeafOutput).resolve(hooks, view), ResolveResult[LeafOutput])
     assert_type(state.set_cursor(ExecutionCursor(TaskType.SCENE_INIT, PassStage.LLM)), None)
     assert_type(state.cursor, ExecutionCursor | None)
+
+
+def single_step(target: CallTarget[NodeInput, LeafOutput, TestNodeError], state: NodeInput) -> NodeStep[LeafOutput, NodeInput]:
+    return Call(CallKey("test"), target, state, state)
+
+
+def joined_step(target: CallTarget[NodeInput, LeafOutput, TestNodeError], state: NodeInput) -> CallGroup[NodeInput]:
+    return CallGroup((target.request(CallKey("test"), state),), state)
+
+
+def typed_return(results: CallResults, target: CallTarget[NodeInput, LeafOutput, TestNodeError]) -> None:
+    request = target.request(CallKey("world"), NodeInput(value=1))
+    assert_type(request.input, NodeInput)
+    result = results.get(CallKey("test"), target)
+    if isinstance(result, CallFailure):
+        assert_type(result.error, TestNodeError)
+    if isinstance(result, CallSuccess):
+        assert_type(result.output, LeafOutput)

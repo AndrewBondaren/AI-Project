@@ -123,3 +123,156 @@ class ArtifactAdmissionReadTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     await holders.acquire(ref, OperationHolder(lease=lease))
         run_async(check())
+
+
+class ConcreteLeaseTests(unittest.TestCase):
+    def stores(self, bundle):
+        from app.db.repositories.sqlite.artifacts.leaseStore import SqliteArtifactLeases
+        catalog, holders = adapters(bundle)
+        return SqliteArtifactLeases(catalog._scopes, bundle[-1], bundle[-1]._artifacts), catalog, holders
+
+    def test_finish_and_recovery(self):
+        async def check():
+            from app.application.publication.errors import OperationBusyError
+            async with live_database() as bundle:
+                leases, catalog, _ = self.stores(bundle)
+                args = ("prepare", "w1", OperationKind.SNAPSHOT_APPLY, "a" * 64)
+                lease = await leases.open_operation(*args)
+                self.assertEqual(await leases.open_operation(*args), lease)
+                with self.assertRaises(ValueError):
+                    await leases.open_operation(*args[:3], "b" * 64)
+                ref = descriptor()
+                reservation = await catalog.reserve(lease, ref)
+                for refs in ((), (ref, ref), (ref,)):
+                    with self.assertRaises(ValueError):
+                        await leases.finish_preparation(lease, refs)
+                    await leases.assert_writable(lease)
+                async with catalog.guard(ref):
+                    with self.assertRaises(PublicationInfrastructureError):
+                        async with leases.writer(reservation):
+                            self.fail("borrowed writer transaction")
+                async with leases.writer(reservation):
+                    with self.assertRaises(OperationBusyError):
+                        await leases.finish_preparation(lease, (ref,))
+                    await catalog.seal(reservation)
+                ready = await leases.finish_preparation(lease, (ref,))
+                self.assertEqual(await leases.open_operation(*args), lease)
+                self.assertEqual(await leases.recover("prepare"), ready)
+                with self.assertRaises(ValueError):
+                    await leases.assert_writable(lease)
+                await bundle[-1].claim_publication(args[2], args[0], args[1], args[3], "b" * 64)
+                with self.assertRaises(OperationBusyError):
+                    await leases.recover("prepare")
+                self.assertEqual((await bundle[-1].read("prepare")).leased_artifacts, (ref,))
+        run_async(check())
+
+    def test_two_connections_cancel_while_owner_writes(self):
+        async def check():
+            import asyncio
+            from app.application.publication.errors import OperationBusyError
+            from app.dataModel.artifacts.lifecycle.operation.record import OperationCancelled
+            async with live_database() as first, live_database(first[0].path, seed=False) as second:
+                owner, catalog, _ = self.stores(first)
+                peer, _, holders = self.stores(second)
+                lease = await owner.open_operation("prepare", "w1", OperationKind.SNAPSHOT_APPLY, "a" * 64)
+                reservation = await catalog.reserve(lease, descriptor())
+                with self.assertRaises(ValueError):
+                    await peer.cancel("prepare", 2)
+                async with owner.writer(reservation):
+                    with self.assertRaises(OperationBusyError):
+                        async with peer.writer(reservation):
+                            self.fail("duplicate claim entered")
+                    cancel = asyncio.create_task(peer.cancel("prepare", 1))
+                    async with asyncio.timeout(5):
+                        while True:
+                            try:
+                                await owner.assert_writable(lease)
+                            except ValueError:
+                                break
+                            await asyncio.sleep(.01)
+                    cancel.cancel()
+                    with self.assertRaises(asyncio.CancelledError):
+                        await cancel
+                    self.assertEqual((await peer.recover("prepare")).leased_artifacts, (reservation.ref,))
+                    self.assertTrue(await holders.holders(reservation.ref))
+                    with self.assertRaises(ValueError):
+                        await catalog.seal(reservation)
+                    retry = asyncio.create_task(peer.cancel("prepare", 1))
+                result, concurrent = await asyncio.wait_for(asyncio.gather(retry, owner.cancel("prepare", 1)), 5)
+                self.assertIsInstance(result.terminal, OperationCancelled)
+                self.assertEqual(result, concurrent)
+                self.assertEqual(result.leased_artifacts, ())
+                self.assertEqual(await peer.recover("prepare"), result)
+                with self.assertRaises(ValueError):
+                    await peer.cancel("prepare", 2)
+        run_async(check())
+
+    def test_cancelled_acquire_commit_waits_for_exact_release(self):
+        import asyncio
+        from unittest.mock import patch
+
+        async def check():
+            async with live_database() as first, live_database(first[0].path, seed=False) as second:
+                owner, catalog, _ = self.stores(first)
+                peer, _, _ = self.stores(second)
+                lease = await owner.open_operation("prepare", "w1", OperationKind.SNAPSHOT_APPLY, "a" * 64)
+                reservation = await catalog.reserve(lease, descriptor())
+                driver = first[1].driver
+                commit = driver.commit
+                releasing = asyncio.Event()
+                resume = asyncio.Event()
+
+                async def acquire_then_delayed_release(conn):
+                    if releasing.is_set():
+                        self.fail("unexpected extra transaction")
+                    if asyncio.current_task() is writer:
+                        await commit(conn)
+                        return True  # Driver confirmed COMMIT while receiving cancellation.
+                    releasing.set()
+                    await resume.wait()
+                    return await commit(conn)
+
+                async def enter():
+                    async with owner.writer(reservation):
+                        self.fail("cancelled acquire entered writer body")
+
+                with patch.object(driver, "commit", acquire_then_delayed_release):
+                    writer = asyncio.create_task(enter())
+                    await asyncio.wait_for(releasing.wait(), 5)
+                    writer.cancel()
+                    await asyncio.sleep(0)
+                    writer.cancel()
+                    self.assertFalse(writer.done())
+                    resume.set()
+                    with self.assertRaises(asyncio.CancelledError):
+                        await asyncio.wait_for(writer, 5)
+                async with peer.writer(reservation):
+                    self.assertEqual((await peer.recover("prepare")).leased_artifacts, (reservation.ref,))
+        run_async(check())
+
+    def test_terminal_write_refusal_rolls_back_hold_release(self):
+        from unittest.mock import patch
+
+        async def check():
+            async with live_database() as first, live_database(first[0].path, seed=False) as second:
+                owner, catalog, _ = self.stores(first)
+                peer, _, holders = self.stores(second)
+                lease = await owner.open_operation("prepare", "w1", OperationKind.SNAPSHOT_APPLY, "a" * 64)
+                reservation = await catalog.reserve(lease, descriptor())
+                write_terminal = first[-1].record_terminal
+
+                async def fail_after_write(scope, outcome):
+                    await write_terminal(scope, outcome)
+                    raise PublicationInfrastructureError("injected after terminal append")
+
+                with patch.object(first[-1], "record_terminal", fail_after_write):
+                    with self.assertRaisesRegex(PublicationInfrastructureError, "after terminal append"):
+                        await owner.cancel("prepare", 1)
+                record = await peer.recover("prepare")
+                self.assertIsNone(record.terminal)
+                self.assertEqual(record.leased_artifacts, (reservation.ref,))
+                self.assertEqual(await holders.holders(reservation.ref), (OperationHolder(lease=lease),))
+                with self.assertRaises(ValueError):
+                    await peer.assert_writable(lease)
+                self.assertEqual((await peer.cancel("prepare", 1)).leased_artifacts, ())
+        run_async(check())

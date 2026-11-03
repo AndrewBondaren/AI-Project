@@ -11,6 +11,7 @@ from app.application.engine.contracts.nodeContract import NodeContract
 from app.application.engine.contracts.pythonExecutor import PythonExecutor
 from app.application.engine.nodeTypes.baseNode import BaseNode
 from app.application.engine.nodeTypes.llmNode import LLMNode
+from app.application.engine.nodeTypes.resumablePythonNode import ResumablePythonNode
 from app.application.engine.nodeTypes.pythonNode import PythonNode
 from app.application.engine.nodeTypes.support.nodeKind import NodeKind
 from app.application.engine.registration.nodeRegistration import NodeRegistration
@@ -18,6 +19,8 @@ from app.dataModel.engine.dag.identity import NodeId, NodeIdValue
 
 
 def _check_node_class(value: object, kind: NodeKind) -> None:
+    if kind is NodeKind.PYTHON and isinstance(value, type) and issubclass(value, ResumablePythonNode):
+        return
     expected = PythonNode if kind is NodeKind.PYTHON else LLMNode
     if not isinstance(value, type) or not issubclass(value, expected):
         raise TypeError(f"{kind.value} registration requires a {expected.__name__} class")
@@ -41,6 +44,14 @@ class NodeRegistry:
     ) -> type[PythonNode[I, O, E]]:
         self._register(node_cls, NodeKind.PYTHON, contract, executor_cls)
         return node_cls
+
+    def register_resumable[I: BaseModel, O: BaseModel, E: NodeError, S: BaseModel](
+        self, node_cls: type[ResumablePythonNode[I, O, E, S]], executor_cls: type[PythonExecutor],
+        contract: NodeContract[I, O, E],
+    ) -> None:
+        if contract.continuation is None:
+            raise TypeError("resumable node requires a continuation contract")
+        self._register(node_cls, NodeKind.PYTHON, contract, executor_cls)
 
     def register_llm[I: BaseModel, O: BaseModel, E: NodeError](
         self, node_cls: type[LLMNode[I, O, E]], contract: NodeContract[I, O, E],

@@ -12,7 +12,7 @@ from app.application.engine.runtime.dag.context.dagContext import DAGContext
 from app.application.engine.runtime.dag.executionLevelSnapshot import ExecutionLevelSnapshot
 from app.application.engine.runtime.dag.executionTrace import ExecutionTrace
 from app.application.engine.runtime.execution.nodeOutcome import GateSignal, LevelDecision
-from app.dataModel.engine.dag.identity import ExecutionId, ExecutionIdentity, NodeId, PlanRevision, PlanRevisionValue
+from app.dataModel.engine.dag.identity import ExecutionId, ExecutionIdentity, InvocationId, PlanInstanceId, NodeId, PlanRevision, PlanRevisionValue
 from app.dataModel.engine.dag.diagnostics import Index
 from app.dataModel.engine.dag.nodeStatus import NodeStatus
 
@@ -27,10 +27,10 @@ class ExecutionState:
         plan_revision: PlanRevision | None = None, pass_number: Index = 0,
     ) -> None:
         self.catalog = DAGContext(execution_id, registry)
-        self._statuses = {node_id: NodeStatus.IDLE for node_id in registry.ids()}
+        self._statuses = {key: NodeStatus.IDLE for key in self.catalog.instance.bindings.values()}
         self._traces: list[ExecutionTrace] = []
         self._levels: list[ExecutionLevelSnapshot] = []
-        self._attempt_passes: dict[NodeId, int] = {}
+        self._attempt_passes: dict[InvocationId, int] = {}
         self._decision = LevelDecision.CONTINUE
         self._active = False
         self._released = False
@@ -65,8 +65,8 @@ class ExecutionState:
         state = cls(snapshot.metadata.execution_id, registry,
                     plan_revision=snapshot.metadata.plan_revision, pass_number=snapshot.metadata.pass_number)
         state.catalog = DAGContext.from_snapshot(snapshot.catalog, registry)
-        state._statuses = dict(snapshot.statuses)
-        state._attempt_passes = dict(snapshot.attempt_passes)
+        state._statuses = {state.catalog.instance.bindings[node]: status for node, status in snapshot.statuses}
+        state._attempt_passes = {state.catalog.instance.bindings[node]: number for node, number in snapshot.attempt_passes}
         state._traces = list(snapshot.traces)
         state._levels = list(snapshot.levels)
         state._decision = snapshot.decision
@@ -91,6 +91,15 @@ class ExecutionState:
         cursor.__post_init__()
         self._cursor = cursor
 
+    def replace_plan_instance(self, registry: NodeRegistry, instance: PlanInstanceId) -> None:
+        if self._active or not self.catalog.is_quiescent:
+            raise RuntimeError("cannot replace an active plan instance")
+        execution_id = self.catalog.execution_id
+        self.catalog.release()
+        self.catalog = DAGContext(execution_id, registry, plan_instance_id=instance)
+        self._statuses = {key: NodeStatus.IDLE for key in self.catalog.instance.bindings.values()}
+        self._attempt_passes.clear()
+
     def set_plan_context(self, revision: PlanRevision, pass_number: Index) -> None:
         if self._active or self._released or not self.catalog.is_quiescent:
             raise RuntimeError("plan context requires a live quiescent execution")
@@ -99,11 +108,12 @@ class ExecutionState:
 
     @property
     def attempt_passes(self) -> tuple[tuple[NodeId, int], ...]:
-        return tuple(sorted(self._attempt_passes.items()))
+        return tuple(sorted((node, self._attempt_passes[key]) for node, key in self.catalog.instance.bindings.items()
+                            if key in self._attempt_passes))
 
     @property
     def statuses(self) -> Mapping[NodeId, NodeStatus]:
-        return MappingProxyType(self._statuses)
+        return MappingProxyType({node: self._statuses[key] for node, key in self.catalog.instance.bindings.items()})
 
     @property
     def traces(self) -> tuple[ExecutionTrace, ...]:
@@ -135,25 +145,25 @@ class ExecutionState:
         self._decision = LevelDecision.CONTINUE
 
     def last_pass(self, node_id: NodeId) -> int | None:
-        return self._attempt_passes.get(node_id)
+        return self._attempt_passes.get(self.catalog.instance.bindings[node_id])
 
     def end_phase(self) -> None:
         self._active = False
 
     def begin_level(self, identities: tuple[ExecutionIdentity, ...]) -> None:
-        current = {identity.node_id for identity in self.catalog.current_outputs}
+        current = {identity.invocation_id for identity in self.catalog.current_outputs}
         for node_id, status in self._statuses.items():
             if status == NodeStatus.SUCCESS and node_id not in current:
                 self._statuses[node_id] = NodeStatus.IDLE
         for identity in identities:
-            self._statuses[identity.node_id] = NodeStatus.RUNNING
+            self._statuses[identity.invocation_id] = NodeStatus.RUNNING
         for node_id in current:
             self._statuses[node_id] = NodeStatus.SUCCESS
 
     def finish_level(self, snapshot: ExecutionLevelSnapshot) -> None:
         for trace in snapshot.traces:
-            self._statuses[trace.identity.node_id] = trace.status
-            self._attempt_passes[trace.identity.node_id] = snapshot.pass_number
+            self._statuses[trace.identity.invocation_id] = trace.status
+            self._attempt_passes[trace.identity.invocation_id] = snapshot.pass_number
         self._traces.extend(snapshot.traces)
         self._levels.append(snapshot)
         self._decision = snapshot.decision

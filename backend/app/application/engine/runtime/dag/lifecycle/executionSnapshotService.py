@@ -4,6 +4,7 @@ from typing import Generic, TypeVar
 
 from pydantic import BaseModel
 
+from app.application.engine.runtime.invocations.sessionFrame import SessionFrame
 from app.application.cancellation.typed.sessionSnapshot import SessionSnapshot
 from app.application.engine.contracts.executionBindings import SnapshotExtension
 from app.application.engine.registration.nodeRegistry import NodeRegistry
@@ -50,6 +51,19 @@ class ExecutionSnapshotService(Generic[S]):
             except Exception as error:
                 raise ValueError(f"snapshot extension '{extension.contract_id}': {error}") from error
         return state
+
+    def encode(self, state: ExecutionState, registry: NodeRegistry) -> str:
+        return SessionFrame.capture(self.capture(state), registry).model_dump_json(round_trip=True)
+
+    async def decode(self, payload: str, registry: NodeRegistry) -> ExecutionState:
+        frame = SessionFrame.model_validate_json(payload)
+        extension = self._extension
+        if frame.extension_contract != (None if extension is None else (extension.contract_id, extension.version)):
+            raise ValueError("snapshot extension contract changed")
+        value: S | None = None
+        if extension is not None and frame.extension is not None:
+            value = extension.snapshot_type.model_validate_json(frame.extension)
+        return await self.restore(frame.restore(registry, value), registry)
 
     def capture(self, state: ExecutionState) -> SessionSnapshot[S]:
         self._check_quiescent(state)

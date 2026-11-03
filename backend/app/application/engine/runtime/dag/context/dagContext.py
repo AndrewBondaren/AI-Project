@@ -13,8 +13,10 @@ from app.application.engine.runtime.dag.context.catalogSnapshot import CatalogSn
 from app.application.engine.runtime.dag.context.resultInvalidation import ResultInvalidation
 from app.application.engine.runtime.validation.contractValidator import ContractValidator
 from app.dataModel.engine.dag.errors.nodeError import NodeError
+from app.application.engine.runtime.invocations.planInstance import PlanInstance
+from app.dataModel.engine.dag.identity import InvocationId
 from app.dataModel.engine.dag.identity import (
-    DomainRevision, ExecutionId, ExecutionIdValue, ExecutionIdentity, NodeId, NodeIdValue, PlanRevision,
+    DomainRevision, ExecutionId, ExecutionIdValue, ExecutionIdentity, PlanInstanceId, NodeId, NodeIdValue, PlanRevision,
 )
 from app.dataModel.engine.dag.records import DependencyRead, OutputRecord
 from app.dataModel.validation.immutableValue import validate_immutable
@@ -29,14 +31,16 @@ def _validate_record(value: object) -> None:
 
 
 class DAGContext:
-    def __init__(self, execution_id: ExecutionId, registry: NodeRegistry) -> None:
+    def __init__(self, execution_id: ExecutionId, registry: NodeRegistry, *,
+                 plan_instance_id: PlanInstanceId = PlanInstanceId("root")) -> None:
+        self.instance = PlanInstance.bind(plan_instance_id, registry.ids())
         self._execution_id = TypeAdapter[ExecutionId](ExecutionIdValue).validate_python(execution_id)
         self._registrations = {reg.node_id: reg for reg in registry.graph_registrations()}
-        self._counters: dict[NodeId, int] = {}
-        self._open: dict[NodeId, ExecutionIdentity] = {}
-        self._closed: dict[tuple[ExecutionId, NodeId, int], ExecutionIdentity] = {}
-        self._current: dict[NodeId, object] = {}
-        self._errors: dict[NodeId, tuple[ExecutionIdentity, NodeError]] = {}
+        self._counters: dict[InvocationId, int] = {}
+        self._open: dict[InvocationId, ExecutionIdentity] = {}
+        self._closed: dict[tuple[ExecutionId, InvocationId, int], ExecutionIdentity] = {}
+        self._current: dict[InvocationId, object] = {}
+        self._errors: dict[InvocationId, tuple[ExecutionIdentity, NodeError]] = {}
 
     @property
     def execution_id(self) -> ExecutionId:
@@ -44,15 +48,19 @@ class DAGContext:
 
     @property
     def attempt_counters(self) -> tuple[tuple[NodeId, int], ...]:
-        return tuple(sorted(self._counters.items()))
+        return tuple(sorted((node, self._counters[key]) for node, key in self.instance.bindings.items() if key in self._counters))
 
     @property
     def closed_attempts(self) -> tuple[ExecutionIdentity, ...]:
         return tuple(self._closed.values())
 
     @property
+    def _current_nodes(self) -> tuple[NodeId, ...]:
+        return tuple(node for node, key in self.instance.bindings.items() if key in self._current)
+
+    @property
     def current_outputs(self) -> tuple[ExecutionIdentity, ...]:
-        return tuple(self._record(node_id).identity for node_id in sorted(self._current))
+        return tuple(self._record(node_id).identity for node_id in sorted(self._current_nodes))
 
     @property
     def is_quiescent(self) -> bool:
@@ -62,33 +70,35 @@ class DAGContext:
         if not self.is_quiescent:
             raise RuntimeError("cannot capture a catalog with open attempts")
         return CatalogSnapshot(
+            plan_instance_id=self.instance.id,
             execution_id=self._execution_id, attempt_counters=self.attempt_counters,
             closed_attempts=self.closed_attempts,
             contracts=tuple((node, reg.contract.contract_id, reg.contract.version)
                             for node, reg in sorted(self._registrations.items())),
-            _records=tuple(self._record(node) for node in sorted(self._current)),
+            _records=tuple(self._record(node) for node in sorted(self._current_nodes)),
             _errors=tuple(self._errors[node] for node in sorted(self._errors)),
         )
 
     def begin_attempt(self, node_id: NodeId, plan_revision: PlanRevision) -> ExecutionIdentity:
         if node_id not in self._registrations:
             raise KeyError(f"node '{node_id}' is not registered in this execution")
-        if node_id in self._open:
+        invocation = self.instance.bindings[node_id]
+        if invocation in self._open:
             raise RuntimeError(f"node '{node_id}' already has an open attempt")
         identity = ExecutionIdentity(
-            execution_id=self._execution_id, node_id=node_id,
-            attempt=self._counters.get(node_id, 0) + 1, plan_revision=plan_revision,
+            execution_id=self._execution_id, node_id=node_id, invocation_id=invocation,
+            attempt=self._counters.get(invocation, 0) + 1, plan_revision=plan_revision,
         )
         self._remove_current(self._affected(removed=(node_id,)))
-        self._errors.pop(node_id, None)
-        self._counters[node_id] = identity.attempt
-        self._open[node_id] = identity
+        self._errors.pop(invocation, None)
+        self._counters[invocation] = identity.attempt
+        self._open[invocation] = identity
         return identity
 
     @classmethod
     def from_snapshot(cls, snapshot: CatalogSnapshot, registry: NodeRegistry) -> "DAGContext":
         snapshot.__post_init__()
-        catalog = cls(snapshot.execution_id, registry)
+        catalog = cls(snapshot.execution_id, registry, plan_instance_id=snapshot.plan_instance_id)
         bindings = {node: (key, version) for node, key, version in snapshot.contracts}
         for node, saved in bindings.items():
             registration = catalog._registrations.get(node)
@@ -100,15 +110,15 @@ class DAGContext:
             record = snapshot.record(node, contract)
             error = snapshot.node_error(node, contract)
             if record is not None:
-                catalog._current[node] = record
+                catalog._current[catalog.instance.bindings[node]] = record
             if error is not None:
                 identity = next(identity for identity in snapshot.error_identities if identity.node_id == node)
-                catalog._errors[node] = (identity, error)
+                catalog._errors[identity.invocation_id] = (identity, error)
         if set(bindings) != set(catalog._registrations):
             raise ValueError("snapshot registered node set mismatch")
-        for node in catalog._current:
+        for node in catalog._current_nodes:
             catalog._check_reads(catalog._record(node))
-        catalog._counters = dict(snapshot.attempt_counters)
+        catalog._counters = {catalog.instance.bindings[node]: count for node, count in snapshot.attempt_counters}
         catalog._closed = {identity.result_key: identity for identity in snapshot.closed_attempts}
         return catalog
 
@@ -141,7 +151,7 @@ class DAGContext:
         return PublishedDAGReadView(
             consumer, requirements,
             {node_id: self._registrations[node_id] for node_id in producers if node_id in self._registrations},
-            {node_id: self._record(node_id) for node_id in producers if node_id in self._current},
+            {node_id: self._record(node_id) for node_id in producers if node_id in self._current_nodes},
             self._execution_id,
         )
 
@@ -157,14 +167,14 @@ class DAGContext:
         admitted, validation = ContractValidator().validate_error(error, contract.error_types)
         if admitted is None or not validation.ok:
             raise TypeError("error does not satisfy the declared POJO contract")
-        self._errors[identity.node_id] = (identity, admitted)
+        self._errors[identity.invocation_id] = (identity, admitted)
         self._close(identity)
 
     def node_error[I: BaseModel, O: BaseModel, E: NodeError](
         self, node_id: NodeId, contract: NodeContract[I, O, E],
     ) -> E | None:
         self.validate_binding(node_id, contract)
-        record = self._errors.get(node_id)
+        record = self._errors.get(self.instance.bindings[node_id])
         # Only close_error writes, after admission under this exact binding.
         return cast(E, record[1]) if record is not None else None
 
@@ -180,7 +190,7 @@ class DAGContext:
         if record.identity.node_id in invalidated:
             raise RuntimeError("candidate reads are no longer current after invalidation")
         self._remove_current(invalidated)
-        self._current[record.identity.node_id] = record
+        self._current[record.identity.invocation_id] = record
         self._close(record.identity)
 
     def publish_batch[O: BaseModel](self, records: tuple[OutputRecord[O], ...]) -> None:
@@ -191,8 +201,8 @@ class DAGContext:
             self._validate_publication(record)
             if any(read.producer in nodes for read in record.reads):
                 raise ValueError("LLM batch cannot read a sibling Output")
-        current = {node: self._record(node).identity for node in self._current}
-        reads = {node: self._record(node).reads for node in self._current}
+        current = {node: self._record(node).identity for node in self._current_nodes}
+        reads = {node: self._record(node).reads for node in self._current_nodes}
         current.update((record.identity.node_id, record.identity) for record in records)
         reads.update((record.identity.node_id, record.reads) for record in records)
         invalidated = ResultInvalidation.affected(current, reads)
@@ -202,7 +212,7 @@ class DAGContext:
         # validation occurs during this coordinator-owned batch commit.
         self._remove_current(invalidated)
         for record in records:
-            self._current[record.identity.node_id] = record
+            self._current[record.identity.invocation_id] = record
             self._close(record.identity)
 
     def _validate_publication[O: BaseModel](self, record: OutputRecord[O]) -> None:
@@ -221,7 +231,7 @@ class DAGContext:
         self, confirmed_domain_revisions: Mapping[str, DomainRevision],
     ) -> tuple[ExecutionIdentity, ...]:
         seeds = ResultInvalidation.unconfirmed_domains(
-            {node_id: self._record(node_id).domain_reads for node_id in self._current},
+            {node_id: self._record(node_id).domain_reads for node_id in self._current_nodes},
             confirmed_domain_revisions,
         )
         return self._remove_current(self._affected(removed=seeds))
@@ -230,8 +240,8 @@ class DAGContext:
         self, *, removed: Collection[NodeId] = (),
         candidate: tuple[ExecutionIdentity, tuple[DependencyRead, ...]] | None = None,
     ) -> frozenset[NodeId]:
-        current = {node_id: self._record(node_id).identity for node_id in self._current}
-        reads = {node_id: self._record(node_id).reads for node_id in self._current}
+        current = {node_id: self._record(node_id).identity for node_id in self._current_nodes}
+        reads = {node_id: self._record(node_id).reads for node_id in self._current_nodes}
         if candidate is not None:
             identity, evidence = candidate
             current[identity.node_id] = identity
@@ -241,7 +251,7 @@ class DAGContext:
     def _remove_current(self, node_ids: Collection[NodeId]) -> tuple[ExecutionIdentity, ...]:
         removed = tuple(self._record(node_id).identity for node_id in sorted(node_ids))
         for node_id in node_ids:
-            del self._current[node_id]
+            del self._current[self.instance.bindings[node_id]]
         return removed
 
     def _check_open(self, identity: ExecutionIdentity) -> None:
@@ -250,17 +260,17 @@ class DAGContext:
             raise ValueError("attempt belongs to a different execution")
         if identity.result_key in self._closed:
             raise RuntimeError(f"attempt '{identity.result_key}' is already closed")
-        if self._open.get(identity.node_id) != identity:
+        if self._open.get(identity.invocation_id) != identity:
             raise RuntimeError(f"attempt '{identity.result_key}' is not the current open identity")
 
     def _close(self, identity: ExecutionIdentity) -> None:
-        del self._open[identity.node_id]
+        del self._open[identity.invocation_id]
         self._closed[identity.result_key] = identity
 
     def _record(self, producer: NodeId) -> OutputRecord[BaseModel]:
         # Only publish writes this closed heterogeneous store, after checking
         # the registered class and identity. Payload references are preserved.
-        return cast(OutputRecord[BaseModel], self._current[producer])
+        return cast(OutputRecord[BaseModel], self._current[self.instance.bindings[producer]])
 
     def _check_reads[O: BaseModel](self, record: OutputRecord[O]) -> None:
         requirements = self._registrations[record.identity.node_id].contract.reads
@@ -276,6 +286,6 @@ class DAGContext:
                 raise TypeError(f"read from '{read.producer}' has an incompatible contract version")
             if not any(issubclass(producer_contract.output_type, req.ref.output_type) for req in declarations):
                 raise TypeError(f"read from '{read.producer}' has an incompatible Output declaration")
-            current = self._record(read.producer).identity if read.producer in self._current else None
+            current = self._record(read.producer).identity if self.instance.bindings[read.producer] in self._current else None
             if read.result != current:
                 raise RuntimeError(f"read from '{read.producer}' is no longer current")

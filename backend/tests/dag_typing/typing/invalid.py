@@ -1,5 +1,8 @@
 """Every marked line must produce exactly the declared Pyright error."""
 
+from app.application.engine.contracts.invocation.callTarget import CallTarget
+from app.application.engine.contracts.invocation.resumeEvent import CallFailure, CallResults, CallSuccess
+from app.dataModel.engine.dag.identity import CallKey
 from typing import Never
 from pydantic import BaseModel
 
@@ -54,6 +57,17 @@ from tests.dag_typing.fixtures import (
     RecordingValidator, identity,
     ERROR_CONTRACT, TestNodeError, TestOtherError, TypedErrorNode,
 )
+
+
+def wrong_return(results: CallResults, target: CallTarget[NodeInput, LeafOutput, TestNodeError]) -> None:
+    target.request(CallKey("wrong-input"), OtherInput(text="invalid"))  # expect: reportArgumentType
+    returned = results.get(CallKey("test"), target)
+    if isinstance(returned, CallFailure):
+        wrong_error: TestOtherError = returned.error  # expect: reportAssignmentType
+        print(wrong_error)
+    if isinstance(returned, CallSuccess):
+        wrong: CompositeOutput = returned.output  # expect: reportAssignmentType
+        print(wrong)
 
 
 async def wrong_calls(view: DAGReadView, executor: PythonExecutor, node: TypedPythonNode) -> None:

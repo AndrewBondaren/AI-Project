@@ -257,7 +257,7 @@ SP-R2 не принимается этим документом: `check_scene` �
 
 ### 4.2. Контракты lifecycle и порядок реализации
 
-Техническая детализация и file map: [DAG invocation runtime и bake admission](dag-invocations-bake-admission.md). Первый core-срез R1–R4 определён для реализации на тестовых Python-нодах; R5–R7 закрывают HTTP wait, bake admission и concrete integration. Упоминания OPEN ниже относятся к ещё не реализованным bindings/доменным контрактам, а не к повторному выбору execution model.
+Техническая детализация и file map: [DAG invocation runtime и bake admission](dag-invocations-bake-admission.md). Первый core-срез R1–R4 определён для реализации на Python-нодах GEN-DAG-1 в тестовом binding; R5–R7 закрывают HTTP wait, bake admission и concrete integration. Упоминания OPEN ниже относятся к ещё не реализованным bindings/доменным контрактам, а не к повторному выбору execution model.
 
 1. Execution model: resumable invocation внутри одного execution, с persisted continuation и отдельным WAIT_INPUT. Композиция нескольких завершённых executions для этого flow не выбирается.
 2. Typed interaction state: identities, stage выбора/загрузки, parent/child identity, выбранная location, policy/source evidence, version и operation id; exact поля/owner/storage/POJO OPEN.
@@ -300,7 +300,7 @@ Owner — generic DAG runtime / DAG-TYPING-1, затем concrete bindings GEN. 
 
 Размещение в `backend/app/application/engine/`: `contracts/` — декларации вызовов и continuation; новый `runtime/invocations/` — создание вызовов, доставка результатов и продолжение caller; существующий `runtime/dag/` — scheduler invocation; `runtime/execution/` — обработка CALL/ожидания/завершения; `runtime/dag/lifecycle/` — snapshot/restore. Identity и сохраняемые модели — `backend/app/dataModel/engine/dag/`. Второй executor не создаётся.
 
-Первый проверяемый срез: родитель дважды вызывает одну тестовую ноду с разными Input; затем retry, Error, duplicate dispatch/return и restart между CALL/RETURN. Дополнительно проверяются параллельная группа, изоляция результатов и отсутствие starvation из-за занятых ожидающими родителями слотов. После этого подключаются world_creation и HTTP continuation.
+Первый проверяемый срез: в одном execution select_start_location и load_player_into_world последовательно вызывают world_creation с разными Input по контрактам GEN-DAG-1; затем retry, Error, duplicate dispatch/return и restart между CALL/RETURN. Дополнительно проверяются параллельная группа, изоляция результатов и отсутствие starvation из-за занятых ожидающими родителями слотов. Production bindings и HTTP continuation подключаются на последующих этапах.
 
 ### 4.3.2. Принятое решение: повторный bake одного мира
 
