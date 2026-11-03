@@ -47,6 +47,7 @@ class HydrologyPlacementBinding:
     facts: PolicyFacts
 
 
+# GEO-LEGACY-80: Propagate the new policy evidence type.
 def bind_hydrology_placement_policy[H: HydrologyPlan](
     source: WaterPlacementPolicySource,
     category: HydrologySeasPolicy | HydrologyLakesPolicy,

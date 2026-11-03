@@ -14,6 +14,7 @@ from app.dataModel.terrain.sampling.fineSurfaceWindow import FineSurfaceWindow
 from app.dataModel.topology.fineTopology import fine_topology
 
 
+# GEO-LEGACY-70: Rebind the native routes/final identity and post-river shore evidence.
 def build_source_payload(*, before: FineSurfaceWindow, water: FineWaterResult,
                          routes: GeoHydrologyRoutesPlan, river: RiverReliefPlan,
                          final: GeoHydrologyPlan, inputs: GeoHydrologyPlanInput,

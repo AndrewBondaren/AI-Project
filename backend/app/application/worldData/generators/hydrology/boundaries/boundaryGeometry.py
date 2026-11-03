@@ -37,6 +37,7 @@ class BoundaryGeometryResult:
 class BoundaryGeometry:
     """No policy or height writes: preserve the path's raster and label contiguous parts."""
 
+    # GEO-LEGACY-83: Preserve exact source revision when rebinding boundary geometry.
     def prepare[H: HydrologyPlan](self, source: DeclaredCoastline, snapshot: BoundaryWaterSnapshot[H]) -> BoundaryGeometryResult:
         if not isinstance(source, DeclaredCoastline) or not isinstance(snapshot, BoundaryWaterSnapshot):
             raise TypeError("boundary geometry requires typed source and final-water snapshot")

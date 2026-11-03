@@ -32,6 +32,7 @@ class HydrologyWorkingFields:
     _empty_hydro: Mapping[Coord, MapCellHydrology] = field(repr=False)
 
     @classmethod
+    # GEO-LEGACY-85: Build downstream working maps from the revision-bound GEO projections.
     def from_plan(cls, plan: HydrologyPlan, grid: SurfaceGridSettings) -> Self:
         fine_z: Mapping[Coord, int] = MappingProxyType({(x, y): z for (x, y), z in plan.fine_z_overrides})
         fine_hydro: Mapping[Coord, MapCellHydrology] = MappingProxyType(

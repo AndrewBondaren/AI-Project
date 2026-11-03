@@ -16,6 +16,7 @@ from app.dataModel.policy.policyEnums import PolicyDisableReason
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 
+# GEO-LEGACY-84: Propagate canonical boundary evidence into the result.
 class BoundaryResultAssembler[H: HydrologyPlan]:
     def __init__(self, input: CoastlineBoundaryInput, snapshot: BoundaryWaterSnapshot[H], batch: PlacementBatchV2) -> None:
         self._sources = {source.location_uid: source for source in input.sources}

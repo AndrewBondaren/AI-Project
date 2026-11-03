@@ -72,6 +72,7 @@ class SurfacePlanningEntry:
         climate = ClimateWorkingFields.from_plans(bundle.climate_base.payload,
             bundle.climate_local.payload, partial(profile_for, world))
         terrain = TerrainWorkingFields.from_plan(bundle.terrain_base.payload)
+        # GEO-LEGACY-86: Supply the GEO projections when building working maps.
         hydrology = HydrologyWorkingFields.from_plan(bundle.hydrology.payload, view.terrain_base.grid)
         working = SurfaceWorkingMaps(
             climate=climate, terrain=terrain, hydrology=hydrology,

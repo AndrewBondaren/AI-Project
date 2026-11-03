@@ -195,5 +195,6 @@ class GeoRiverReliefPlanProvider:
         refs = {dependency.slot: dependency.ref for dependency in routes.dependencies}
         if refs.get(PlanSlot(SurfacePlanSlot.RELIEF.value)) != relief.ref:
             raise PlanBuildFailure((FieldPathError(("dependencies",), "routes must use the exact pre-river relief ref"),))
+        # GEO-LEGACY-76: Replace the coarse routes.base handoff with native river publication.
         return _plan_river_relief(request.inputs, relief.payload, routes.payload.base,
             world_uid=request.key.world_uid, control=control)

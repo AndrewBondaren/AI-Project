@@ -34,6 +34,7 @@ from app.dataModel.validation.immutableValue import validate_immutable
 type WaterPlacementPolicySource = WaterDesignSource | DeclaredCoastline
 
 
+# GEO-LEGACY-78: Type final policy evidence against the admitted canonical source.
 H = TypeVar("H", bound=HydrologyPlan, default=HydrologyPlan)
 
 

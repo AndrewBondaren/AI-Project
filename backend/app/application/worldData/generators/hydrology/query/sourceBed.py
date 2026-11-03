@@ -8,6 +8,7 @@ from app.dataModel.terrain.relief.planning.reliefPlan import RiverReliefPlan
 from app.dataModel.terrain.sampling.fineSurfaceWindow import FineSurfaceWindow
 
 
+# GEO-LEGACY-71: Use native route samples and the independently published final delta.
 def build_source_bed(*, before: FineSurfaceWindow, post: FineSurfaceWindow,
                      routes: GeoHydrologyRoutesPlan, river: RiverReliefPlan,
                      final: GeoHydrologyPlan, z_min: FineZ, z_max: FineZ,

@@ -47,6 +47,7 @@ class NativeFinalWaterQuery:
         if errors:
             raise PlanBuildFailure(errors)
         self._coverage = water.payload[0].coverage.spans
+        # GEO-LEGACY-73: Bind diagnostic XY rows to admitted native final roles.
         self._rows = final.payload.sparse_fine_hydro
         # Admit geometry once; absent final facts imply dry only inside this source's observations.
         for cell, fact in self._rows:

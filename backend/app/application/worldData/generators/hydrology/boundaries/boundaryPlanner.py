@@ -15,6 +15,7 @@ from app.dataModel.placement.lifecycle.header import PlacementHeader
 class CoastlineBoundaryPlanner:
     """Coordinate one boundary operation through stable domain and placement APIs."""
 
+    # GEO-LEGACY-81: Propagate canonical boundary evidence through the public operation.
     def prepare[H: HydrologyPlan](self, input: CoastlineBoundaryInput, snapshot: BoundaryWaterSnapshot[H],
                 admissions: tuple[PlacementAdmissionInput, ...], *, snapshot_uid: EntityUid) -> CoastlineBoundaryPlan:
         preparation = BoundaryPreparationJob(input, snapshot, admissions, snapshot_uid=snapshot_uid)

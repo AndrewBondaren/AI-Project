@@ -50,6 +50,7 @@ def build_local_field_from_coarse(
     return run_anchor_collect_pass(world, locations, cells, pole_field)
 
 
+# GEO-LEGACY-89: Read projected coarse surface heights through the downstream contract.
 def build_local_plan_from_coarse(inputs: ClimateLocalInput, base: ClimateBasePlan,
                                   hydrology: HydrologyPlan) -> PlanBuildResult[ClimateLocalPlan]:
     """Final coarse z drives local anchors; hydro roles do not replace synthetic terrain."""

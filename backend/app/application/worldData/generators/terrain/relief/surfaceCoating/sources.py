@@ -21,6 +21,7 @@ class SupportSources(CapturedLandcoverSources):
         profiles = {p.key: ClimateZoneProfile.from_data(p.key, p.values) for p in climate_base.profiles}
         self.climate = ClimateWorkingFields.from_plans(climate_base, climate_local, profiles.__getitem__)
         observations = LandcoverObservations.from_views(inputs.topology, inputs.grid, self.climate,
+            # GEO-LEGACY-87: Consume the same revision-bound hydrology working projection.
             TerrainWorkingFields.from_plan(terrain), HydrologyWorkingFields.from_plan(hydrology, inputs.grid))
         landcover_inputs = observations.inputs({s.region_uid: StateSnapshotEntry(s.current_type, s.tombstone,
             s.spec_fingerprint) for s in inputs.region_states})

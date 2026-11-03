@@ -78,6 +78,7 @@ def unknown_support(cell: FineXY, channel: str, message: str) -> UnknownFact:
         code=SurfaceCoatingIssueCode.UNKNOWN_SUPPORT.value))
 
 
+# GEO-LEGACY-88: Use downstream shore projections instead of fields inherited from HydrologyPlan.
 def shore_cells(hydrology: HydrologyPlan, span: int) -> dict[FineXY, MapCellHydrology]:
     """Final sparse fine observations override the coarse projection, including dry overrides."""
     result: dict[FineXY, MapCellHydrology] = {}

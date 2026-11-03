@@ -32,6 +32,7 @@ def _levels(bodies: tuple[WaterBody, ...], control: PlanBuildControl) -> dict[st
     return levels
 
 
+# GEO-LEGACY-72: Read final open-water roles from the admitted native join.
 def build_wet_runs(*, water: FineWaterResult, final: GeoHydrologyPlan, bed: FineSurfaceWindow,
                    control: PlanBuildControl) -> tuple[WaterMembershipRun, ...]:
     control.raise_if_shutdown()

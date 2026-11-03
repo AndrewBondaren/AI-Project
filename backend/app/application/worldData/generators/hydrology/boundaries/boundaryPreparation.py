@@ -13,6 +13,7 @@ from app.dataModel.topology.fineTopology import fine_topology
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 
+# GEO-LEGACY-82: Bind boundary batch revision to the admitted source snapshot.
 class BoundaryPreparationJob[H: HydrologyPlan]:
     def __init__(self, input: CoastlineBoundaryInput, snapshot: BoundaryWaterSnapshot[H],
                  admissions: tuple[PlacementAdmissionInput, ...], *, snapshot_uid: EntityUid) -> None:

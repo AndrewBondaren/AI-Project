@@ -8,14 +8,16 @@ from pathlib import Path
 import tempfile
 from collections.abc import Callable
 
-from app.application.artifacts.contracts.formatBackend import ArtifactBackend, ArtifactFormatContract
+from app.application.artifacts.contracts.blobRead import ReadableBlobBackend
+from app.application.artifacts.contracts.formatBackend import ArtifactFormatContract
 from app.application.artifacts.storage.artifactLeases import IArtifactLeases
 from app.application.publication.errors import PublicationInfrastructureError
 from app.dataModel.artifacts.lifecycle.lease import StagingReservation
 from app.dataModel.artifacts.references import ArtifactKind, ArtifactRef
+from app.storage.artifacts.blobRead import read_verified_file
 
 
-class ContentAddressedBlobBackend(ArtifactBackend[bytes]):
+class ContentAddressedBlobBackend(ReadableBlobBackend):
     def __init__(self, root: Path, contract: ArtifactFormatContract[bytes], leases: IArtifactLeases) -> None:
         if not root.is_absolute() or root.is_symlink():
             raise ValueError("artifact root must be an absolute, non-symlink directory")
@@ -156,6 +158,17 @@ class ContentAddressedBlobBackend(ArtifactBackend[bytes]):
     async def verify(self, ref: ArtifactRef) -> None:
         ref = self._ref(ref)
         await self._io(lambda: self._verify(self._path(ref), ref))
+
+    async def read_verified(self, ref: ArtifactRef, *, max_bytes: int) -> bytes:
+        if type(ref) is not ArtifactRef:
+            raise ValueError("expected an ArtifactRef")
+        ref = self._ref(ref)
+        if type(max_bytes) is not int or not 0 < ref.nbytes <= max_bytes:
+            raise ValueError("artifact size outside read budget")
+        try:
+            return await self._io(lambda: read_verified_file(self._path(ref), ref))
+        except OSError as exc:
+            raise PublicationInfrastructureError("cannot read artifact content") from exc
 
     async def delete(self, ref: ArtifactRef) -> None:
         """Caller must hold the shared GC guard and have rechecked the live-set."""

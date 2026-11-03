@@ -57,6 +57,7 @@ class NativeFinalPublicationJob:
         routes = PlanEnvelope[GeoHydrologyRoutesPlan].model_validate(routes)
         river = PlanEnvelope[RiverReliefPlan].model_validate(river)
         self._admit(before, expected_before, PRE_WATER_WINDOW, world_uid, expected_before)
+        # GEO-LEGACY-75: Admit the new standalone routes schema before joining final facts.
         self._admit(routes, expected_routes, NATIVE_ROUTES_CONTRACT, world_uid, before.ref)
         self._admit(river, expected_river, NATIVE_RIVER_RELIEF, world_uid, before.ref)
         errors = tuple(d.issue for d in before.diagnostics if d.disposition is PlanDiagnosticDisposition.ERROR)

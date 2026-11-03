@@ -13,6 +13,7 @@ from app.dataModel.policy.policyFacts import FactValue, KnownFact, UnknownFact
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 
+# GEO-LEGACY-79: Use source mapping, canonical bodies and wet runs for boundary support.
 def collect_hydrology_policy_facts[H: HydrologyPlan](
     source: WaterPlacementPolicySource, snapshot: HydrologyPolicySnapshot[H],
 ) -> HydrologyPolicyFacts:

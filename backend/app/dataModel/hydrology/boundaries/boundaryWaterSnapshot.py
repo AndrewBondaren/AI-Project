@@ -28,6 +28,7 @@ class FineBoundaryWaterCell(BaseModel, frozen=True):
     body_uid: EntityUid | None
 
 
+# GEO-LEGACY-77: Replace the PC payload bound and coarse extent check with canonical source evidence.
 H = TypeVar("H", bound=HydrologyPlan, default=HydrologyPlan)
 
 

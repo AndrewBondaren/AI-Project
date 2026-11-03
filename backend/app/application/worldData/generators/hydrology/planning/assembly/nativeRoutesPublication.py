@@ -14,6 +14,7 @@ from app.dataModel.planning.identity.planRef import PlanRef
 from app.dataModel.registryKey import RegistryKey
 
 
+# GEO-LEGACY-74: Version the standalone routes layout independently of surface bindings.
 NATIVE_ROUTES_CONTRACT = PlanContractMetadata(id=RegistryKey[PlanContractRegistry]("hydrology.native_routes"),
     schema_version=SchemaVersion(1), algorithm_version=AlgorithmVersion(1))
 
