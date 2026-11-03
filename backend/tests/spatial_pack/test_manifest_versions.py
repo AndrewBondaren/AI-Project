@@ -1,6 +1,7 @@
 """Pure manifest version admission and legacy writer guard boundaries."""
 import hashlib
 import json
+import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
@@ -13,7 +14,9 @@ from app.application.worldData.pack.encoding.packManifestCodec import (
 from app.application.worldData.pack.io.packManifestStore import PackManifestStore
 from app.dataModel.artifacts.references import ArtifactKind, ArtifactRef
 from app.dataModel.worldPack.meta.spatial.domainRoot import SpatialDatasetKind, SpatialDomainRootRef
-from app.dataModel.worldPack.meta.worldPackManifest import WorldPackManifest
+from app.dataModel.registryKey import RegistryKey
+from app.dataModel.worldPack.meta.wildernessRegionEntry import RegionIndexBounds, WildernessRegionEntry, WildernessRegionStatus
+from app.dataModel.worldPack.meta.worldPackManifest import TileManifestEntry, WorldPackManifest
 
 
 def payload(**fields):
@@ -26,6 +29,59 @@ def descriptor():
 
 
 class ManifestVersionsTests(TestCase):
+    def test_candidate_checks_both_json_integer_readers_before_serialization(self):
+        candidate = decode_manifest(payload(pack_version="2.0.0", spatial_roots=[]))
+        original_limit = sys.get_int_max_str_digits()
+        try:
+            for limit in (4300, 0, 640):
+                sys.set_int_max_str_digits(limit)
+                digits = min(limit or 4300, 4300)
+                for value in (10**(digits-1), -(10**(min(digits, 4299)-1))):
+                    valid = candidate.model_copy(update={"world_map_cells": value})
+                    self.assertEqual(decode_manifest(encode_candidate_manifest(valid)), valid)
+                for value in (10**digits, -(10**min(digits, 4299))):
+                    invalid = candidate.model_copy(update={"world_map_cells": value})
+                    with self.subTest(limit=limit, negative=value < 0), patch.object(
+                            WorldPackManifest, "model_dump_json", side_effect=AssertionError), self.assertRaises(ValueError):
+                        encode_candidate_manifest(invalid)
+        finally:
+            sys.set_int_max_str_digits(original_limit)
+
+    def test_candidate_checks_utf8_before_serialization(self):
+        candidate = decode_manifest(payload(pack_version="2.0.0", spatial_roots=[], world_map_cells=1))
+        for field in ("world_uid", "registry_hash"):
+            invalid = candidate.model_copy(update={field: chr(0xD800)})
+            with self.subTest(field=field), patch.object(
+                    WorldPackManifest, "model_dump_json", side_effect=AssertionError), self.assertRaises(ValueError):
+                encode_candidate_manifest(invalid)
+        nested = candidate.model_copy(update={"tiles": [TileManifestEntry(gx=0, gy=0, world_map_path=chr(0xDFFF))]})
+        with patch.object(WorldPackManifest, "model_dump_json", side_effect=AssertionError), self.assertRaises(ValueError):
+            encode_candidate_manifest(nested)
+        valid = candidate.model_copy(update={"world_uid": chr(0x1F30D)})
+        self.assertEqual(decode_manifest(encode_candidate_manifest(valid)), valid)
+
+    def test_candidate_refuses_undeclared_tile_subclass_before_serialization(self):
+        class ExtendedTile(TileManifestEntry):
+            marker: str
+
+        candidate = decode_manifest(payload(pack_version="2.0.0", spatial_roots=[]))
+        candidate.tiles.append(ExtendedTile(gx=1, gy=0, marker="keep"))
+        with patch.object(WorldPackManifest, "model_dump_json", side_effect=AssertionError), self.assertRaises(ValueError):
+            encode_candidate_manifest(candidate)
+
+    def test_candidate_refuses_empty_branded_keys_before_serialization(self):
+        candidate = decode_manifest(payload(pack_version="2.0.0", spatial_roots=[]))
+        for entry, current in (("", "forest"), ("forest", ""), ("forest", "forest")):
+            candidate.wilderness_region_entries[:] = [WildernessRegionEntry(
+                region_uid="r", entry_type=RegistryKey(entry), current_type=RegistryKey(current),
+                bbox=RegionIndexBounds(x_min=0, y_min=0, x_max=1, y_max=1), status=WildernessRegionStatus.DECLARED)]
+            if entry and current:
+                self.assertEqual(decode_manifest(encode_candidate_manifest(candidate)), candidate)
+            else:
+                with self.subTest(entry=entry, current=current), patch.object(
+                        WorldPackManifest, "model_dump_json", side_effect=AssertionError), self.assertRaises(ValueError):
+                    encode_candidate_manifest(candidate)
+
     def test_candidate_revalidates_nested_pojos_before_serializing(self):
         wire = payload(pack_version="2.0.0", spatial_roots=[descriptor()],
                        tiles=[{"gx": 1, "gy": 0, "chunks": [{"cx": 2, "cy": 3}]}])

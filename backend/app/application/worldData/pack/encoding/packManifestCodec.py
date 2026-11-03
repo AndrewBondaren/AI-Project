@@ -1,8 +1,11 @@
 """Versioned World Pack JSON boundary. Disk publication belongs to the store."""
 import json
+from typing import get_args, get_origin
 
 from pydantic import BaseModel
+from pydantic_core import from_json
 
+from app.dataModel.registryKey import RegistryKey
 from app.dataModel.worldPack.meta.spatial.domainRoot import SpatialDomainRootRef
 from app.dataModel.worldPack.meta.worldPackManifest import (
     PACK_WIRE_VERSION, SPATIAL_PACK_WIRE_VERSION, WorldPackManifest, WorldPackManifestV2,
@@ -53,23 +56,36 @@ def encode_legacy_manifest(manifest: WorldPackManifest) -> bytes:
     return admitted.model_dump_json(indent=2).encode("utf-8")
 
 
-def _require_pojo_tree(value: object) -> None:
-    """Revalidate each actual record before its parent can trust that instance."""
+def _require_pojo_tree(value: object, annotation: object) -> None:
+    """Check each record against the field type used by the V2 serializer."""
+    if isinstance(value, RegistryKey) and len(value) == 0:
+        raise ValueError("empty V2 registry key")
+    if isinstance(value, str):
+        str.encode(value, "utf-8")
+    elif isinstance(value, int) and value.bit_length() > 63:
+        # Decimal conversion checks the interpreter limit used by json.loads.
+        # The V2 model's JSON parser also limits the signed token independently.
+        from_json(str(int(value)))
     if isinstance(value, dict):
         raise ValueError("unexpected dictionary in typed V2 manifest")
     if isinstance(value, BaseModel):
+        if type(value) is not annotation:
+            raise ValueError("unexpected V2 record type")
         fields = vars(value)
         if fields.keys() != type(value).model_fields.keys():
             raise ValueError("incomplete or extra V2 record fields")
-        for child in fields.values():
-            _require_pojo_tree(child)
+        for name, child in fields.items():
+            _require_pojo_tree(child, type(value).model_fields[name].annotation)
         admitted = type(value).model_validate(fields, strict=True, context=TerritoryVolume.STRICT_BOUNDS)
         if any(type(original) is not type(getattr(admitted, name)) or original != getattr(admitted, name)
                for name, original in fields.items()):
             raise ValueError("V2 record changed under strict admission")
     elif isinstance(value, (tuple, list)):
+        if get_origin(annotation) is not type(value):
+            raise ValueError("unexpected V2 collection type")
+        item_type = get_args(annotation)[0]
         for item in value:
-            _require_pojo_tree(item)
+            _require_pojo_tree(item, item_type)
 
 
 def encode_candidate_manifest(manifest: WorldPackManifest) -> bytes:
@@ -77,5 +93,5 @@ def encode_candidate_manifest(manifest: WorldPackManifest) -> bytes:
         raise ValueError("candidate encoding requires V2")
     if type(manifest.spatial_roots) is not tuple or any(type(row) is not SpatialDomainRootRef for row in manifest.spatial_roots):
         raise ValueError("expected typed spatial root descriptors")
-    _require_pojo_tree(manifest)
+    _require_pojo_tree(manifest, WorldPackManifest)
     return manifest.model_dump_json(indent=2, warnings="error").encode("utf-8")
