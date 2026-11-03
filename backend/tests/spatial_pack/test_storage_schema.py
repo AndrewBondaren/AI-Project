@@ -1,6 +1,7 @@
 """Storage representations tested entirely in memory."""
 import subprocess
 import sys
+from hashlib import sha256
 from textwrap import dedent
 from unittest import TestCase
 from unittest.mock import patch
@@ -59,6 +60,29 @@ def records():
 
 
 class StorageSchemaTests(TestCase):
+    def test_artifact_kind_effective_wire_value_is_locked(self):
+        root, _ = records()
+        manifest = packSchema.OPEN_WATER_PACK_SCHEMA_V1
+        wire = encode(root, manifest)
+        self.assertEqual(sha256(wire).hexdigest(), "ef55146133c7271a635a006aa8d3667511d12bfe4bf114e52a74460cc9caadef")
+        override = property(lambda kind: "binary" if kind is ArtifactKind.BLOB else kind.value)
+        with patch.object(ArtifactKind, "wire_value", override, create=True):
+            with self.assertRaisesRegex(CanonicalEncodingError, "shape drift: 60006"):
+                packSchema.require_pack_schema_v1()
+            with self.assertRaisesRegex(CanonicalEncodingError, "shape drift: 60006"):
+                packSchema.require_pack_record_v1(root)
+        self.assertEqual(decode(wire, HydrologyPackRoot, manifest), root)
+
+    def test_duplicate_pack_binding_is_refused_at_admission(self):
+        root, _ = records()
+        manifest = packSchema.OPEN_WATER_PACK_SCHEMA_V1
+        duplicate = manifest.model_copy(update={"entries": manifest.entries + (manifest.entries[-1],)})
+        with patch.object(packSchema, "OPEN_WATER_PACK_SCHEMA_V1", duplicate):
+            with self.assertRaisesRegex(CanonicalEncodingError, "binding drift"):
+                packSchema.require_pack_schema_v1()
+            with self.assertRaisesRegex(CanonicalEncodingError, "binding drift"):
+                packSchema.require_pack_record_v1(root)
+
     def test_branded_liquid_key_requires_nonempty_wire_string(self):
         root, _ = records()
         for name in ("", "fresh-water"):

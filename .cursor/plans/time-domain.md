@@ -20,6 +20,10 @@ T3-C, матрица §32: проверены обе границы для не�
 
 T3-C, §32: конфликт REMOVE_SPAN/REPLACE_SPAN после удаления цели проверен через CalendarValidator и World prepare_calendar_update. Исправлен пропущенный сегмент definition в диагностике. Оба отказа указывают на конфликтующее правило, исходные настройки сохранены. Прошли 19 тестов Time, Pyright по application/time и worldData/timeSettings без ошибок.
 
+T3-C / World preparation, §32: сокращение авторских суток с 24 до 12 часов проверено при 18:00:00.123456789. Без замены возвращён SettingsAnchorRequired; повтор с явным origin подготовил изменение на той же физической координате с сохранением наносекунд. Исходная версия календаря сохранена. Прошли 20 тестов Time.
+
+T2-TZ / §32: на входе PrepareInitialSettings проверены отсутствующая и явно null дата авторского календаря при переданном captured_utc. Обе формы отклонены с диагностикой поля anchor.origin.date. После восстановления явной даты тот же запрос проходит prepare_initial и сохраняет авторские настройки. Прошёл 21 тест Time.
+
 <details><summary>Изменённые файлы ядра</summary>
 
 Документы: `docs/tz_time.md`, `docs/project_data_storage_tz.md`, `.cursor/plans/time-domain.md`. В перечисленных пакетах добавлены также файлы `__init__.py`.

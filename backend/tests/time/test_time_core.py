@@ -198,6 +198,39 @@ class CalendarTests(unittest.TestCase):
         self.assertEqual(proposal.before.hours_per_day, 10)
 
 class WorldOperationTests(unittest.TestCase):
+    def test_shorter_day_requires_anchor_and_keeps_physical_clock(self):
+        from app.dataModel.world.calendar.dates.anchor import CalendarOrigin
+        from app.dataModel.world.calendar.dates.clock import CalendarClockTime
+        from app.dataModel.world.settings.timeOperations.changes import CalendarAnchorReplacement
+        from app.dataModel.world.settings.timeOperations.results import PreparedTimeSettingsChange
+
+        before = custom_settings().model_copy(update={"hours_per_day": 24})
+        publication_ref = self.base.clock.publication
+        capture = TimeSettingsCapture(source=publication_ref, settings=before, versions=self.base.capture.versions)
+        effective = point(18 * 3600, 123456789)
+        clock = TimeCapture(publication=publication_ref, point=effective)
+        base = SettingsPreparationBase(operation_id="shorten_day", capture=capture, clock=clock, budget=self.base.budget)
+        pipeline = make_hours_settings_pipeline(self.validator, self.projector)
+        request = HoursChange(base=base, hours_per_day=12, anchors=())
+        refusal = pipeline.prepare_hours_change(request)
+        self.assertIsInstance(refusal, SettingsAnchorRequired)
+        self.assertEqual(refusal.calendar, self.key)
+        self.assertEqual(refusal.current, CalendarClockTime(hour=18, minute=0, second=0, nanoseconds=123456789))
+
+        original = before.calendars.entry_for(self.key).anchor
+        origin = CalendarOrigin(date=original.origin.date,
+                                time=CalendarClockTime(hour=6, minute=0, second=0, nanoseconds=987654321))
+        replacement = CalendarAnchorReplacement(calendar=self.key, origin=origin)
+        proposal = pipeline.prepare_hours_change(HoursChange(base=base, hours_per_day=12, anchors=(replacement,)))
+        self.assertIsInstance(proposal, PreparedTimeSettingsChange)
+        anchor = proposal.after.calendars.entry_for(self.key).anchor
+        self.assertEqual((anchor.coordinate_seconds, anchor.coordinate_nanoseconds), effective.coordinate)
+        self.assertEqual(anchor.origin, origin)
+        self.assertEqual(proposal.effective_at, clock.point)
+        self.assertEqual(proposal.after.hours_per_day, 12)
+        self.assertEqual(proposal.before.hours_per_day, 24)
+        self.assertEqual(proposal.before.calendars.entry_for(self.key).anchor, original)
+
     def test_repeated_date_resolves_against_pinned_reform_version(self):
         from app.application.worldData.timeSettings.factory import make_calendar_settings_pipeline
         from app.dataModel.time.reads.capture import HistoricalTimeCapture
@@ -450,6 +483,33 @@ class InitializationTests(unittest.TestCase):
         from app.dataModel.world.settings.timeOperations.initial import AuthoredTimeSettingsInput
         authored = AuthoredTimeSettingsInput(kind=CalendarInitializationKind.AUTHORED, settings=custom_settings())
         result = self.prepare(authored, "2026-11-03T18:20:00.000000Z")
+        self.assertEqual(result.settings, authored.settings)
+
+    def test_authored_start_required_even_with_captured_utc(self):
+        from app.application.worldData.timeSettings.factory import make_initial_settings_pipeline
+        from app.dataModel.world.calendar.enums.rules import CalendarInitializationKind
+        from app.dataModel.world.settings.timeOperations.initial import AuthoredTimeSettingsInput, PrepareInitialSettings
+
+        authored = AuthoredTimeSettingsInput(kind=CalendarInitializationKind.AUTHORED, settings=custom_settings())
+        request = PrepareInitialSettings(operation_id="initial", world_uid="world", input=authored,
+                                         captured_utc="2026-11-03T18:20:00.000000Z",
+                                         budget=CalendarBudget(max_year_patterns=100, max_rule_checks=100))
+        payload = request.model_dump(mode="json")
+        entry, = payload["input"]["settings"]["calendars"]["entries"]
+        origin = entry["anchor"]["origin"]
+        date = origin.pop("date")
+        for supplied_null in (False, True):
+            with self.subTest(supplied_null=supplied_null):
+                if supplied_null:
+                    origin["date"] = None
+                with self.assertRaises(ValidationError) as rejected:
+                    PrepareInitialSettings.model_validate_json(json.dumps(payload))
+                issue, = (error for error in rejected.exception.errors() if error["loc"][-3:] == ("anchor", "origin", "date"))
+                self.assertEqual(issue["type"] == "missing", not supplied_null)
+
+        origin["date"] = date
+        restored = PrepareInitialSettings.model_validate_json(json.dumps(payload))
+        result = make_initial_settings_pipeline(make_calendar_validator()).prepare_initial(restored)
         self.assertEqual(result.settings, authored.settings)
 
     def test_one_second_across_hour_boundary_in_custom_length_days(self):

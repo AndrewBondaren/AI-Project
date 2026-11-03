@@ -15770,3 +15770,11 @@ Admission ревизий, exact fine P2, diagnostics/fingerprints и публи�
 #### I6.3. Приёмка GEO-I6.1 (2026-11-03)
 
 **Приёмка GEO-I6.1 прошла** по поручению пользователя зафиксировать приёмку при чистом независимом ревью. Основание — PASS в §I6.2, 50/50 тестов и дополнительные негативные пробы. Принят контракт CapturedPlacementGeometry. Сопоставление с expected W revision, проверка координат по topology и подключение к placement session остаются следующим шагом; общий P2 cutover и G10-A этим решением не закрываются.
+
+### GEO-I7.1. Передача одной захваченной геометрии конкурента в placement session
+
+Реализация предъявлена на независимое ревью. В `preparation/capturedCompetitor.py` операция `submit_captured_competitor` принимает активную PlacementSession, предложенный ею header, CapturedPlacementGeometry, W envelope, expected_before, prepare_competitor и control. Caller предварительно допускает batch/W/regions по I5.1. Операция повторно валидирует record, связывает оба полных ref с expected_before, проверяет PRE_RELIEF, мир, snapshot_revision и topology сессии.
+
+До callback сверяются header с текущим предложением сессии и PlacementHeader.from_intent(captured.intent), затем каждая XY каждого кандидата с canonicalize в W. Callback получает текущий admission, включая решение после возможной переоценки supports. Его полные intent, original_area и candidates должны совпасть с capture. PlacementSession.submit проверяет decision и передаёт подготовку в общую очередь. Отказ или отмена до submit сохраняют возможность повторить передачу.
+
+Прямой caller этого среза — `backend/tests/geo1/integration/test_captured_competitor.py`, с проходом через ready_for_preparation, submit, step и finish. Вызов для всего списка competitor_geometry принадлежит будущей native preparation: там проверяются полнота и уникальность capture по batch headers. Действующий coarse prepare_designed_water использует TerrainPlan; его перевод, fine geometry воды, markers V2 и G10-A остаются открытыми.

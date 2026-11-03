@@ -33,7 +33,7 @@ OPEN_WATER_PACK_SCHEMA_V1 = CanonicalSchemaManifest(entries=tuple(sorted((
 def _shape(owner):
     name = owner.__module__ + "." + owner.__name__
     if issubclass(owner, Enum):
-        rows = [(key, value.value) for key, value in owner.__members__.items()]
+        rows = [(key, getattr(member, "wire_value", member.value)) for key, member in owner.__members__.items()]
     else:
         rows = [(key, repr(field.annotation), repr(field.default), repr(field.default_factory), repr(field.metadata))
                 for key, field in owner.model_fields.items()]
@@ -81,7 +81,8 @@ def require_pack_schema_v1() -> None:
         expected[i] = (owner, CanonicalTypeKind.ENUM if issubclass(owner, Enum) else CanonicalTypeKind.RECORD)
         if _shape(owner) != _STORAGE_SHAPES[i]:
             raise CanonicalEncodingError(f"open-water storage v1 shape drift: {i}")
-    if {e.type_id: (e.python_type, e.kind) for e in OPEN_WATER_PACK_SCHEMA_V1.entries} != expected:
+    entries = OPEN_WATER_PACK_SCHEMA_V1.entries
+    if len(entries) != len(expected) or {e.type_id: (e.python_type, e.kind) for e in entries} != expected:
         raise CanonicalEncodingError("open-water storage v1 binding drift")
     records, aliases = _closure()
     if records != {owner for owner, _ in expected.values()} or len(aliases) != 16:
