@@ -24,6 +24,8 @@ T3-C / World preparation, §32: сокращение авторских суто
 
 T2-TZ / §32: на входе PrepareInitialSettings проверены отсутствующая и явно null дата авторского календаря при переданном captured_utc. Обе формы отклонены с диагностикой поля anchor.origin.date. После восстановления явной даты тот же запрос проходит prepare_initial и сохраняет авторские настройки. Прошёл 21 тест Time.
 
+T3-C, §32: REPLACE_SPAN с YEAR_RANGE [17,17] удлиняет 30-дневный месяц на один день. Через resolve/project проверены точная координата 31-го дня, переход на первый день года 18 и CalendarInvalid для 31-го дня в годах 16 и 18. Прошли 22 теста Time.
+
 <details><summary>Изменённые файлы ядра</summary>
 
 Документы: `docs/tz_time.md`, `docs/project_data_storage_tz.md`, `.cursor/plans/time-domain.md`. В перечисленных пакетах добавлены также файлы `__init__.py`.

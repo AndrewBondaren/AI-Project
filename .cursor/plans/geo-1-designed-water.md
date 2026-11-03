@@ -15779,6 +15779,12 @@ Admission ревизий, exact fine P2, diagnostics/fingerprints и публи�
 
 Прямой caller этого среза — `backend/tests/geo1/integration/test_captured_competitor.py`, с проходом через ready_for_preparation, submit, step и finish. Вызов для всего списка competitor_geometry принадлежит будущей native preparation: там проверяются полнота и уникальность capture по batch headers. Действующий coarse prepare_designed_water использует TerrainPlan; его перевод, fine geometry воды, markers V2 и G10-A остаются открытыми.
 
+#### I7.2. Исправление по независимому ревью GEO-I7.1 — на повторное ревью
+
+Вердикт исходного ревью — FAIL (P2). При capture площади `2**53` callback мог вернуть через `model_copy` целое `2**53+1`: revalidation округляла его до сравнения, и session.submit расходовал offer.
+
+Теперь submit_captured_competitor сравнивает исходную площадь callback с capture до revalidation. Конструктор PreparedPlacementV2 также отклоняет потерю точности при преобразовании целого в float: это закрывает путь, когда callback сам конструирует модель до возврата. Регрессия `test_callback_area_cannot_round_to_captured_area` проверяет оба пути, пустую очередь и сохранённый offer после каждого отказа, затем успешный retry с точным `2**53`.
+
 ### GEO-I8.1. Проверка полного competitor_geometry перед стартом native placement
 
 Реализация предъявлена на независимое ревью. После admission batch/W/regions по I5.1 caller передаёт тот же batch и W, expected_before, water_intents, competitor_geometry, reevaluate_support и control в `start_native_placement_session`. Water ownership устанавливается по тем же intent/header и уникальным source/region UID, что в WaterDesignUniverse.capture. Входной tuple геометрии должен быть строго упорядочен по region_uid. Для всех non-water READY и WAITING_SUPPORT запись обязательна, включая участников, ещё не получивших support. Для принадлежащего batch терминального DISABLED/UNRESOLVED участника запись допустима, но необязательна; при наличии проверяется полностью. Запись для water или отсутствующего header отклоняется.

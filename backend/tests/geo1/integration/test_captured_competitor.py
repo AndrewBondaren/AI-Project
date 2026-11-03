@@ -98,3 +98,18 @@ class CapturedCompetitorTests(TestCase):
             self.submit(prepare_competitor=cancel, control=control)
         self.assertFalse(self.session.queue.prepared)
         self.submit()
+
+    def test_callback_area_cannot_round_to_captured_area(self):
+        captured = replace(self.capture, original_area=2**53)
+        changed = 2**53 + 1
+        callbacks = (
+            ("changed captured original area", lambda _: self.prepared.model_copy(update={"original_area": changed})),
+            ("loses integer precision", lambda admission: prepared(admission, area=changed)),
+        )
+        for message, callback in callbacks:
+            with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):
+                self.submit(captured=captured, prepare_competitor=callback)
+            self.assertEqual(self.session.offered, {"competitor"})
+            self.assertFalse(self.session.queue.prepared)
+        self.submit(captured=captured, prepare_competitor=lambda admission: prepared(admission, area=2**53))
+        self.assertEqual(self.session.queue.prepared["competitor"].original_area, 2**53)

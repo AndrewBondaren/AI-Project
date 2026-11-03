@@ -89,9 +89,14 @@ def submit_captured_competitor(*, session: PlacementSession, header: PlacementHe
     captured = CapturedPlacementGeometry.model_validate(captured, strict=True)
     _require_capture_binding(captured, header, before, control)
 
-    prepared = PreparedPlacementV2.model_validate(prepare_competitor(admission), strict=True)
-    if (prepared.intent != captured.intent or prepared.original_area != captured.original_area
-            or prepared.candidates != captured.candidates):
+    prepared = prepare_competitor(admission)
+    if not isinstance(prepared, PreparedPlacementV2):
+        raise ValueError("competitor callback must return PreparedPlacementV2")
+    # Compare the raw number: strict float validation can round an integer.
+    if type(prepared.original_area) not in (int, float) or prepared.original_area != captured.original_area:
+        raise ValueError("competitor preparation changed captured original area")
+    prepared = PreparedPlacementV2.model_validate(prepared, strict=True)
+    if prepared.intent != captured.intent or prepared.candidates != captured.candidates:
         raise ValueError("competitor preparation changed captured geometry")
     control.raise_if_shutdown()
     session.submit(prepared)

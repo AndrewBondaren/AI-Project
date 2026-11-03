@@ -4153,3 +4153,40 @@ cutover и P1-B не начинались. Time/API-1 и чужие измене
 Перед сравнением bindings с V1 lock функция require_pack_schema_v1 строго повторно валидирует текущий manifest через CanonicalSchemaManifest.model_validate. Вложенные RegisteredTypeEntry проходят проверку типов даже после model_copy. Ошибка валидации становится CanonicalEncodingError с указанием повреждённого поля. Эту же проверку вызывает require_pack_record_v1.
 
 Регрессия test_equal_but_mistyped_binding_refused_before_encode воспроизводит две независимые подмены в записи ID 60005. Строка «record» вместо CanonicalTypeKind.RECORD и float 60005.0 вместо int до исправления проходили через обе точки входа (четыре FAIL). После исправления все четыре вызова дают CanonicalEncodingError до encode. Прогон четырёх модулей из §15.37 — **55 тестов OK за 1,053 с**, включая V1 golden и проверки REV-4/5. **P1-B предъявлен на повторную пользовательскую приёмку.**
+
+### 15.39. Независимое повторное ревью SP-P1-B на ce7b1d2d (2026-11-03)
+
+**CHANGES REQUIRED. REV-6 закрыто.** В отдельной пробе с запрещающей заглушкой на CanonicalCodec.encode обе исходные подмены (`kind="record"` и `type_id=60005.0`) вызвали CanonicalEncodingError при проверке схемы, root и shard. Замена одного binding дубликатом другого при сохранении длины также отклонена.
+
+**SP-P1-B-REV-7 · P2 · Schema admission проверяет восстановленную копию binding, а потребители используют исходный объект.** [packSchema.py, require_pack_schema_v1:84–89](../../backend/app/application/worldData/generators/hydrology/encoding/packSchema.py#L84). По §§15.18.2/15.20.1 успешная проверка должна удостоверять фактический storage manifest. Взять исходный manifest `m`, заменить единственный RegisteredTypeEntry для ID 60005 обычным словарём с теми же тремя полями и значениями:
+
+```python
+entries = tuple(dict(vars(e)) if e.type_id == 60005 else e for e in m.entries)
+candidate = m.model_copy(update={"entries": entries})
+```
+
+Временно подставить `candidate` как `OPEN_WATER_PACK_SCHEMA_V1`. Ожидается CanonicalEncodingError уже от `require_pack_schema_v1()`. Фактически функция возвращает None: strict model_validate строит RegisteredTypeEntry из dict, и с lock сравниваются entries новой модели. Следующие вызовы `require_pack_record_v1(root)`, `require_pack_record_v1(shard)` и `encode(root, candidate)` каждый дают CanonicalEncodingError с причиной `'dict' object has no attribute 'python_type'`. Отказ записи происходит до encode, повреждённые байты не выдаются. Критерий закрытия — сама проверка схемы отклоняет исходный manifest с dict вместо записи при сохранении отказов REV-5/6 и golden исходного root.
+
+Из backend повторена команда четырёх модулей из §15.34 — **55 тестов OK за 1,061 с**. На исходном manifest отдельно подтверждены равенство целой записи и побайтовый encode→decode→encode для малого root (7518 байтов, golden §15.36) и shard (1913 байтов). Подмена manifest выполнялась только в памяти. Ревью ограничено P1-B.
+
+### 15.40. Исправление SP-P1-B-REV-7 (2026-11-03)
+
+Тест test_dict_binding_rejected_by_schema_before_reconstruction заменяет binding 60005 словарём с теми же полями. До исправления schema admission пропускал подмену, а record admission доходил до обращения к отсутствующему атрибуту python_type.
+
+Теперь require_pack_schema_v1 до вызова Pydantic проверяет тип исходного manifest, tuple entries и точный класс RegisteredTypeEntry у каждого элемента. Затем строго валидирует поля и сравнивает с V1 lock исходные entries, которые использует codec. Обе точки входа отклоняют словарь с CanonicalEncodingError на проверке bindings.
+
+**REV-7 исправлен и предъявлен на повторную приёмку P1-B.** Прогон четырёх модулей из §15.39 — 56 тестов OK (1,101 с), включая проверки типов полей REV-6, дубликатов и V1 golden.
+
+### 15.41. Независимое повторное ревью SP-P1-B после REV-7 (2026-11-03)
+
+**PASS. REV-7 закрыто.** Проверено актуальное рабочее дерево поверх `ce7b1d2d`, включая незакоммиченные изменения packSchema.py и test_storage_schema.py. При подмене только binding 60005 словарём с теми же полями `require_pack_schema_v1()` и `require_pack_record_v1()` для root и shard дали CanonicalEncodingError с причиной `expected RegisteredTypeEntry instances`. Отказ произошёл на проверке исходного binding до encode.
+
+В отдельной пробе через те же три вызова проверены подкласс RegisteredTypeEntry, строка вместо enum kind, float вместо int ID, дубликат при сохранении числа записей, list вместо tuple entries и dict вместо manifest. Во всех 21 вызовах, включая исходный контрпример, получен ожидаемый отказ на проверке bindings. Запрещающая заглушка на CanonicalCodec.encode ни разу не сработала.
+
+На исходном manifest у малого root (7518 байтов, SHA-256 совпал с §15.36) и малого shard (1913 байтов) после decode совпали целые записи, после повторного encode совпали байты. Обязательная команда четырёх модулей из §15.34 дала **56 тестов OK за 1,073 с**. Новых замечаний к исправлению не выявлено. Вердикт относится к P1-B; пользовательская приёмка остаётся отдельным решением.
+
+### 15.42. Пользовательская приёмка SP-P1-B (2026-11-03)
+
+**SP-P1-B принят пользователем.** Основание — решение «Закрыто, приемку прошел» после независимого ревью §15.41. Замечания SP-P1-B-REV-1…7 закрыты. Приняты storage records root/shard, ссылки на shards, schema lock V1 (38 типов и 16 aliases) и проверка отдельных записей в памяти.
+
+В §15.41 зафиксированы 56 прошедших тестов и 21 отказ на повреждённых bindings до encode. Следующий шаг по §15.20 — SP-P1-C, bounded decoder и codec root/shard. Реализация этого шага требует отдельной команды.

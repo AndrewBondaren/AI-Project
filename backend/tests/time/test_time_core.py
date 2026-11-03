@@ -149,6 +149,41 @@ class CalendarTests(unittest.TestCase):
         self.assertIsNone(self.project(point(144000)).weekday)
         self.assertEqual(self.project(point(180000)).weekday, "b")
 
+    def test_one_off_year_extension_does_not_repeat(self):
+        from app.dataModel.world.calendar.dates.date import CalendarDate
+        from app.dataModel.world.calendar.enums.rules import CalendarEditKind
+        from app.dataModel.world.calendar.rules.edits import ReplaceSpanRule
+        from app.dataModel.world.calendar.definitions.registry import WorldCalendarRegistry
+
+        settings = self.capture.settings
+        entry = settings.calendars.entry_for(settings.selected)
+        month, = entry.definition.base_year
+        ordinary = month.model_copy(update={"days": 30})
+        extension = ReplaceSpanRule(kind=CalendarEditKind.REPLACE_SPAN, condition=festival_condition(17, 17),
+                                    value=ordinary.model_copy(update={"days": 31}))
+        definition = entry.definition.model_copy(update={"base_year": (ordinary,), "rules": (extension,)})
+        registry = WorldCalendarRegistry(entries=(entry.model_copy(update={"definition": definition}),))
+        capture = self.capture.model_copy(update={"settings": settings.model_copy(update={"calendars": registry})})
+        resolved = WorldCalendarResolver.resolve_at(ResolveCalendarAt(capture=capture, calendar=settings.selected))
+        projector = make_calendar_projector()
+        for year in (16, 17, 18):
+            with self.subTest(year=year):
+                date = CalendarDate(year=year, span=month.span, day=31)
+                result = projector.resolve(CalendarResolveInput(
+                    resolved=resolved, calendar=settings.selected, date=date, time=entry.anchor.origin.time,
+                    scope=self.clock.point.scope, budget=self.budget))
+                if year != 17:
+                    self.assertIsInstance(result, CalendarInvalid)
+                    continue
+                day_seconds = settings.hours_per_day * 3600
+                expected = point((17 * 30 + 30) * day_seconds)
+                self.assertEqual(result.point, expected)
+                request = CalendarProjectionInput(point=expected, capture=self.clock, resolved=resolved,
+                                                  calendar=settings.selected, budget=self.budget)
+                self.assertEqual(projector.project(request).date, date)
+                following = request.model_copy(update={"point": point(expected.seconds + day_seconds)})
+                self.assertEqual(projector.project(following).date, CalendarDate(year=18, span=month.span, day=1))
+
     def test_budget_for_modulo_restricted_to_one_year(self):
         modulo = YearModuloPredicate(kind=CalendarPredicateKind.YEAR_MODULO, modulus=10**30, residue=1, offset=0)
         settings = custom_settings(festival_condition(modulo=modulo))

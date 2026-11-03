@@ -3,7 +3,7 @@
 from enum import Enum
 from typing import Literal, Self
 
-from pydantic import Field, StrictInt, field_validator, model_validator
+from pydantic import Field, StrictInt, ValidatorFunctionWrapHandler, field_validator, model_validator
 
 from app.dataModel.annotationPolicy import StrictEnumOnWire, StrictOnWire
 from app.dataModel.placement.common import (
@@ -116,6 +116,14 @@ class PreparedPlacementV2(PlacementModel):
     original_area: OriginalArea
     candidates: tuple[PlacementCandidate, ...]
     decision: ObjectAdmissionDecision[Enum, Enum]
+
+    @field_validator("original_area", mode="wrap")
+    @classmethod
+    def preserve_integer_area(cls, value: object, validate: ValidatorFunctionWrapHandler) -> float:
+        area = validate(value)
+        if isinstance(value, int) and area != value:
+            raise ValueError("original area loses integer precision")
+        return area
 
     @model_validator(mode="after")
     def ready_geometry(self) -> Self:

@@ -60,6 +60,17 @@ def records():
 
 
 class StorageSchemaTests(TestCase):
+    def test_dict_binding_rejected_by_schema_before_reconstruction(self):
+        root, _ = records()
+        manifest = packSchema.OPEN_WATER_PACK_SCHEMA_V1
+        entries = tuple(dict(entry) if entry.type_id == 60005 else entry for entry in manifest.entries)
+        malformed = manifest.model_copy(update={"entries": entries})
+        with patch.object(packSchema, "OPEN_WATER_PACK_SCHEMA_V1", malformed):
+            for check, args in ((packSchema.require_pack_schema_v1, ()),
+                                (packSchema.require_pack_record_v1, (root,))):
+                with self.subTest(check=check.__name__), self.assertRaisesRegex(CanonicalEncodingError, "binding drift"):
+                    check(*args)
+
     def test_equal_but_mistyped_binding_refused_before_encode(self):
         root, _ = records()
         manifest = packSchema.OPEN_WATER_PACK_SCHEMA_V1

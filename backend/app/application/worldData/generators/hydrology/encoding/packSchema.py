@@ -81,8 +81,14 @@ def require_pack_schema_v1() -> None:
         expected[i] = (owner, CanonicalTypeKind.ENUM if issubclass(owner, Enum) else CanonicalTypeKind.RECORD)
         if _shape(owner) != _STORAGE_SHAPES[i]:
             raise CanonicalEncodingError(f"open-water storage v1 shape drift: {i}")
+    manifest = OPEN_WATER_PACK_SCHEMA_V1
+    if type(manifest) is not CanonicalSchemaManifest or type(getattr(manifest, "entries", None)) is not tuple:
+        raise CanonicalEncodingError("open-water storage v1 binding drift: expected manifest with tuple entries")
+    entries = manifest.entries
+    if any(type(entry) is not RegisteredTypeEntry for entry in entries):
+        raise CanonicalEncodingError("open-water storage v1 binding drift: expected RegisteredTypeEntry instances")
     try:
-        entries = CanonicalSchemaManifest.model_validate(OPEN_WATER_PACK_SCHEMA_V1, strict=True).entries
+        CanonicalSchemaManifest.model_validate(manifest, strict=True)
     except ValidationError as exc:
         raise CanonicalEncodingError(f"open-water storage v1 binding drift: {exc}") from exc
     if len(entries) != len(expected) or {e.type_id: (e.python_type, e.kind) for e in entries} != expected:
