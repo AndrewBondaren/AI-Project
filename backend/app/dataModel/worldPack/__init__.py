@@ -79,6 +79,7 @@ from app.dataModel.worldPack.wire.parentLightTile import ParentLightTile
 from app.dataModel.worldPack.bake.parentLightRefinePolicy import ParentLightRefinePolicy
 from app.dataModel.worldPack.bake.pathHeadingPolicy import PathHeadingPolicy
 from app.dataModel.worldPack.meta.worldPackManifest import (
+    # LEGACY REMOVE(SP-P-V1-REMOVE/V1-01) Remove this V1 re-export at retirement.
     PACK_WIRE_VERSION,
     ChunkRef,
     ChunkRefineRole,

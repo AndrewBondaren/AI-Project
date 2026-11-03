@@ -16,6 +16,7 @@ from app.dataModel.terrain.designedWater.geometry.authoredGeometry import (
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 
+# GEO-LEGACY-17: Remove legacy request union arm and surface-frame branch.
 def rasterize_authored_geometry(request: AuthoredWaterGeometryRequest | LegacyAuthoredWaterGeometryRequest,
         source: DeclaredBasin | DeclaredLake | DeclaredCoastline, view: AuthoredGeometryView) -> AuthoredWaterGeometry:
     uid = source.location_uid

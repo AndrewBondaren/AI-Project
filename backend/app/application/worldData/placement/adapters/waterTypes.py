@@ -53,6 +53,7 @@ class AuthoredGeometryView:
     anchors: Mapping[str, Coord]
 
 
+# GEO-LEGACY-13: Retire PC water adapter transport.
 @dataclass(frozen=True)
 class WaterPlacementContext:
     world_uid: str
@@ -69,6 +70,7 @@ class WaterPlacementContext:
     separations: Mapping[str, tuple[PlacementSeparation, ...]]
 
 
+# GEO-LEGACY-13: Retire PC water adapter transport.
 @dataclass(frozen=True)
 class PreparedWaterEntry:
     """One resolved metadata source; the accepted design owns the floor payload."""
@@ -98,12 +100,14 @@ class PreparedWaterEntry:
                 raise ValueError("water field floor must match the captured metadata and bound")
 
 
+# GEO-LEGACY-13: Retire PC water adapter transport.
 @dataclass(frozen=True)
 class WaterPreparationFailure:
     source_uid: str
     issue: FieldPathError
 
 
+# GEO-LEGACY-13: Retire PC water adapter transport.
 @dataclass(frozen=True)
 class WaterPlacementPreparation:
     world_uid: str

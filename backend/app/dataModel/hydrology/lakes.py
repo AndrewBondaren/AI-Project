@@ -12,6 +12,7 @@ from app.dataModel.hydrology.shore import HydrologyShoreDefaults
 from app.dataModel.terrain.relief.enums import ReliefConditionTerrain
 
 
+# GEO-LEGACY-12: Retire inherited enabled/autoresolve water gates.
 class HydrologyLakesPolicy(HydrologyCategoryPolicy, WaterCategoryPlacementFields):
     """default_lakes — same shape as category policy."""
 

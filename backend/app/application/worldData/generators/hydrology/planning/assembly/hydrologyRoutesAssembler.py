@@ -30,6 +30,7 @@ class HydrologyRoutesAssembler:
 
     def assemble_fine(self, *, world_uid: EntityUid, inputs: GeoHydrologyPlanInput,
                       water: PlanEnvelope[FineWaterResult], expected_water: PlanRef,
+                      # GEO-LEGACY-49: Bind route inputs to the same P2 publication.
                       specs: tuple[BasinSpec, ...],
                       classification_decisions: tuple[tuple[WaterGenerationCategory, HydrologyGenerationDecision], ...],
                       control: PlanBuildControl) -> PlanEnvelope[GeoHydrologyRoutesPlan]:
@@ -59,6 +60,7 @@ class HydrologyRoutesAssembler:
             PlanBuildResult[GeoHydrologyRoutesPlan](payload=payload, diagnostics=diagnostics),
             world_uid=world_uid, inputs=inputs, water=water.ref, control=control)
 
+    # GEO-LEGACY-27: Retire the coarse assembly path.
     def assemble(self, *, world_uid: EntityUid, inputs: HydrologyPlanInput,
                  relief: ReliefPlan, placement: WaterPlacementPlan,
                  control: PlanBuildControl) -> PlanBuildResult[HydrologyRoutesPlan]:
@@ -67,6 +69,7 @@ class HydrologyRoutesAssembler:
             surface_z=relief.surface_z, placement=placement, control=control)
         return self._routes(world_uid=world_uid, inputs=inputs, relief=relief, water=water, control=control)
 
+    # GEO-LEGACY-27: Retire the coarse assembly path.
     def assemble_geo(self, *, world_uid: EntityUid, inputs: GeoHydrologyPlanInput,
                      relief: ReliefPlan, placement: GeoWaterPlacementPlan,
                      classification_decisions: tuple[tuple[WaterGenerationCategory, HydrologyGenerationDecision], ...],
@@ -80,6 +83,7 @@ class HydrologyRoutesAssembler:
             base=routes.payload, source_mapping=water.payload.source_mapping,
             classification_decisions=classification_decisions), diagnostics=routes.diagnostics)
 
+    # GEO-LEGACY-27: Retire the coarse assembly path.
     def _routes(self, *, world_uid: EntityUid, inputs: HydrologyPlanInput | GeoHydrologyPlanInput,
                 relief: ReliefPlan, water: PlanBuildResult[OpenWaterPlan],
                 control: PlanBuildControl) -> PlanBuildResult[HydrologyRoutesPlan]:

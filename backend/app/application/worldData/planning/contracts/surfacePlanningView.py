@@ -28,6 +28,7 @@ class SurfacePlanningViewKind(StrEnum):
     NO_EXTENT = "no_extent"
 
 
+# GEO-LEGACY-36: Retire the ready PC input set.
 class ReadySurfacePlanningView(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
 

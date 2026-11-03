@@ -22,6 +22,7 @@ from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
 from app.dataModel.terrain.regions.terrainRegionsSnapshot import TerrainRegionPlan
 
 
+# GEO-LEGACY-44: Retire the procedural-only coarse handoff.
 def prepare_procedural_designed_water(
     inputs: GeoWaterPlacementInput, batch: PlacementBatchV2, *, water_intents: tuple[PlacementIntent, ...],
     pre_hydrology: PlanEnvelope[TerrainPlan], regions: TerrainRegionPlan, seed_root: EntityUid,

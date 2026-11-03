@@ -76,6 +76,7 @@ def declared_binding[I, T](declaration: SurfacePlanBinding, input_type: type[I],
             SurfaceEnvelopeCodec(PlanEnvelope[payload_type], SURFACE_MANIFEST)), SURFACE_MANIFEST)
 
 
+# GEO-LEGACY-33: Retire the PC handle set and registry path.
 @dataclass(frozen=True)
 class WorldPlanProviders:
     climate_base: RegisteredPlanContract[ClimateBaseInput, ClimateBasePlan]
@@ -104,6 +105,7 @@ class GeoWorldPlanProviders:
     coating: RegisteredPlanContract[CoatingPlanInput, CoatingPlan]
 
 
+# GEO-LEGACY-33: Retire the PC handle set and registry path.
 def register_world_plan_providers(registry: PlanRegistry) -> WorldPlanProviders:
     S = SurfacePlanSlot
     base = _binding(S.CLIMATE_BASE, ClimateBaseInput, ClimateBasePlan)

@@ -48,6 +48,7 @@ class PacksWiring:
     def world_pack_paths_for(self, world: World) -> WorldPackPaths:
         return WorldPackPaths.for_world(world, app_settings.db_path)
 
+    # LEGACY REMOVE(SP-P-V1-REMOVE/V1-03) Replace V1 writer construction at cutover.
     def world_pack_writer_for(self, world: World) -> WorldPackWriter:
         """Writer with process-scoped parent-light cache (shared across HTTP calls)."""
         return WorldPackWriter(
@@ -69,6 +70,7 @@ class PacksWiring:
     def world_pack_paths(self, world_uid: str) -> WorldPackPaths:
         return WorldPackPaths.from_db_parent(app_settings.db_path, world_uid)
 
+    # LEGACY REMOVE(SP-P-V1-REMOVE/V1-03) Replace V1 writer construction at cutover.
     def world_pack_writer(self, world_uid: str) -> WorldPackWriter:
         return WorldPackWriter(
             self.world_pack_paths(world_uid),

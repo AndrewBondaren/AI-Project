@@ -26,6 +26,7 @@ def _failure(message: str) -> PlanBuildFailure:
     return PlanBuildFailure((FieldPathError(("dependencies",), message),))
 
 
+# GEO-LEGACY-25: Retire the PC hydrology provider.
 class HydrologyRoutesPlanProvider:
     def __init__(self, relief: RegisteredPlanContract[ReliefPlanInput, ReliefPlan],
                  water_placement: RegisteredPlanContract[WaterPlacementInput, WaterPlacementPlan],
@@ -48,6 +49,7 @@ class HydrologyRoutesPlanProvider:
             raise _failure("routes must use relief's exact water-placement ref")
 
 
+# GEO-LEGACY-26: Replace the coarse provider body and dependency checks.
 class GeoHydrologyRoutesPlanProvider:
     """Bind exact GEO dependencies and delegate policy and route production."""
 
@@ -75,6 +77,7 @@ class GeoHydrologyRoutesPlanProvider:
             raise _failure("GEO routes must use relief's exact water-placement ref")
 
 
+# GEO-LEGACY-25: Retire the PC hydrology provider.
 class HydrologyFinalPlanProvider:
     def __init__(self, relief: RegisteredPlanContract[ReliefPlanInput, ReliefPlan],
                  hydrology_routes: RegisteredPlanContract[HydrologyPlanInput, HydrologyRoutesPlan],
@@ -103,6 +106,7 @@ class HydrologyFinalPlanProvider:
             raise _failure("final water requires exact pre-relief/routes/river-relief refs")
 
 
+# GEO-LEGACY-26: Replace the coarse provider body and dependency checks.
 class GeoHydrologyFinalPlanProvider:
     """Keep accepted-water provenance while delegating final facts to hydrology."""
 

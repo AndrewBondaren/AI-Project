@@ -12,6 +12,7 @@ from app.dataModel.placement import (
 )
 
 
+# GEO-LEGACY-18: Retire the V1 resolver.
 class _PlacementPass:
     def __init__(self, batch: PlacementBatch, geometry: PlacementGeometry) -> None:
         self.batch = batch
@@ -81,6 +82,7 @@ class _PlacementPass:
                                     results=results, diagnostics=tuple(issues))
 
 
+# GEO-LEGACY-18: Retire the V1 resolver.
 def resolve_placements(batch: PlacementBatch, *, ctx: ResolveContext) -> PlacementBatchResult:
     # Preserve authored presence; shared Pydantic validation also verifies typed
     # copies and topology without introducing another wire or REF-W resolver.

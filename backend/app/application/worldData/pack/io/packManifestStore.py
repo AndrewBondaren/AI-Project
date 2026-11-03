@@ -14,6 +14,7 @@ class PackManifestStore:
     def load(self, path: Path) -> WorldPackManifest:
         return decode_manifest(path.read_bytes())
 
+    # LEGACY REMOVE(SP-P-V1-REMOVE/V1-02) Retire V1 head admission with its writer.
     def legacy_head(self, path: Path, world_uid: str) -> WorldPackManifest | None:
         if not self.exists(path):
             return None
@@ -21,6 +22,7 @@ class PackManifestStore:
         require_legacy_manifest(head, world_uid=world_uid)
         return head
 
+    # LEGACY REMOVE(SP-P-V1-REMOVE/V1-02) Replace legacy save callers with the accepted V2 publisher.
     def save(self, path: Path, manifest: WorldPackManifest) -> None:
         payload = encode_legacy_manifest(manifest)
         self.legacy_head(path, manifest.world_uid)

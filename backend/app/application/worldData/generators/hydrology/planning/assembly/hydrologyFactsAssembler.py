@@ -33,6 +33,7 @@ def _failure(message: str) -> PlanBuildFailure:
 
 class HydrologyFactsAssembler:
     def publish_fine(self, *, world_uid: EntityUid, inputs: GeoHydrologyPlanInput,
+                     # GEO-LEGACY-48: Replace independently supplied specs with the admitted P2 handoff.
                      relief_inputs: RiverReliefInput, specs: tuple[BasinSpec, ...],
                      before: PlanEnvelope[FineSurfaceWindow], expected_before: PlanRef,
                      water: PlanEnvelope[FineWaterResult], expected_water: PlanRef,
@@ -50,6 +51,7 @@ class HydrologyFactsAssembler:
         return NativeFinalFactsJob().assemble(inputs=inputs, before=before, water=water,
             routes=routes, river=river, control=control)
 
+    # GEO-LEGACY-28: Retire coarse final assembly.
     def _require_coverage(self, inputs: HydrologyFinalInput, relief: ReliefPlan,
                           routes: HydrologyRoutesPlan, river: RiverReliefPlan) -> None:
         bounds = inputs.topology.bounds
@@ -62,6 +64,7 @@ class HydrologyFactsAssembler:
                 != {cell for cell, _ in routes.fine_base_surface_z}):
             raise _failure("final river surface must preserve complete coarse and sampled fine coverage")
 
+    # GEO-LEGACY-28: Retire coarse final assembly.
     def assemble(self, *, inputs: HydrologyFinalInput, relief: ReliefPlan,
                  routes: HydrologyRoutesPlan, river: RiverReliefPlan,
                  control: PlanBuildControl) -> PlanBuildResult[HydrologyPlan]:

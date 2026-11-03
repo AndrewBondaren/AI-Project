@@ -30,6 +30,7 @@ from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
 
 
+# GEO-LEGACY-30: Retire the coarse plan/plan_geo materialization job.
 class WaterBodyJob:
     def plan(self, *, world_uid: EntityUid, inputs: HydrologyPlanInput,
              surface_z: tuple[tuple[SurfaceGridCoord, FineZ], ...], placement: WaterPlacementPlan,

@@ -73,12 +73,14 @@ class CapturedPlacementGeometry(PlacementModel):
         return self
 
 
+# GEO-LEGACY-01: Retire V1 preparation and its coastline decision.
 class CoastlinePlacementFact(PlacementModel):
     snapshot_uid: StrictOnWire[PlacementUid]
     water_presence: StrictEnumOnWire[WaterPresence]
     reason: StrictOnWire[PlacementText]
 
 
+# GEO-LEGACY-01: Retire V1 preparation and its coastline decision.
 class PreparedPlacement(PlacementModel):
     intent: StrictOnWire[PlacementIntent]
     original_area: StrictOnWire[OriginalArea]

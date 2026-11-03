@@ -20,6 +20,7 @@ from app.dataModel.terrain.relief.surfaceCoating.surfaceCoatingFacts import Surf
 from app.dataModel.validation.immutableValue import validate_immutable
 
 
+# GEO-LEGACY-37: Retire the PC envelope bundle.
 class SurfacePlanBundle(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
 

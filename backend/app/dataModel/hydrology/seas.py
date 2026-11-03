@@ -13,6 +13,7 @@ from app.dataModel.masks.maskCategoryPolicy import MaskCategoryPolicy
 from app.dataModel.terrain.relief.enums import ReliefConditionTerrain
 
 
+# GEO-LEGACY-11: Retire inherited enabled/autoresolve gates and the two sea autoresolve flags.
 class HydrologySeasPolicy(MaskCategoryPolicy, WaterCategoryPlacementFields):
     """default_seas — MaskCategoryPolicy.enabled + coastal/ocean autoresolve flags."""
 

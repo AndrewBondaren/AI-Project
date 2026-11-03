@@ -37,12 +37,14 @@ class WaterBodyPlanner:
             placement=placement, expected_placement=expected_placement, inputs=inputs, specs=specs,
             classification_decisions=classification_decisions, control=control)
 
+    # GEO-LEGACY-29: Retire the coarse water planner entry.
     def plan(self, *, world_uid: EntityUid, inputs: HydrologyPlanInput,
              surface_z: tuple[tuple[SurfaceGridCoord, FineZ], ...], placement: WaterPlacementPlan,
              control: PlanBuildControl) -> PlanBuildResult[OpenWaterPlan]:
         return WaterBodyJob().plan(world_uid=world_uid, inputs=inputs, surface_z=surface_z,
                                    placement=placement, control=control)
 
+    # GEO-LEGACY-29: Retire the coarse water planner entry.
     def plan_geo(self, *, world_uid: EntityUid, inputs: GeoHydrologyPlanInput,
                  surface_z: tuple[tuple[SurfaceGridCoord, FineZ], ...], placement: GeoWaterPlacementPlan,
                  classification_decisions: tuple[tuple[Category, HydrologyGenerationDecision], ...],

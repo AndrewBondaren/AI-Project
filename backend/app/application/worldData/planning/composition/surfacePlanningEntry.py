@@ -58,6 +58,7 @@ class SurfacePlanningEntry:
         report_surface_diagnostics(view.capture_diagnostics, resolve_ctx=resolve_ctx)
         return self.extent_status(view)
 
+    # GEO-LEGACY-35: Replace the PC bundle handoff.
     def prepare_captured(self, view: SurfacePlanningView, *, world: World,
                          wait: PlanWaitControl, resolve_ctx: ResolveContext
                          ) -> tuple[SurfacePlanBundle, SurfaceWorkingMaps] | None:

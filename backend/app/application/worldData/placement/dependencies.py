@@ -53,6 +53,7 @@ def cyclic_components(graph: Mapping[str, set[str]]) -> list[tuple[str, ...]]:
     return sorted(components)
 
 
+# GEO-LEGACY-19: Remove only PreparedPlacement and V1 outcome branches.
 class DependencyQueue:
     def __init__(self, objects: Mapping[str, PreparedPlacement | PlacementAdmissionInput], accepted_uids: set[str], *,
                  deferred_preparation: bool = False) -> None:

@@ -39,6 +39,7 @@ class CoastlineWaterSourceAdapter:
     neither executes policy/strategy nor allocates coverage or writes terrain.
     """
 
+    # GEO-LEGACY-22: Replace the legacy coastline request.
     def prepare_source(
         self, source: DeclaredCoastline, *, geometry_request: LegacyAuthoredWaterGeometryRequest,
         context: ResolvedWaterGenerationContext, generation: HydrologyGenerationDecision,

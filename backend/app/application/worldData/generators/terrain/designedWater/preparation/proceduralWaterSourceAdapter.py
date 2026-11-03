@@ -72,6 +72,7 @@ class CapturedProceduralWaterInputs:
     """Bind captured native source facts to ready strategy inputs; no P2 lifecycle."""
     inputs: GeoWaterPlacementInput
     sources: ProceduralSourceAdmissions
+    # GEO-LEGACY-45: Replace the captured coarse surface with fine W.
     pre_hydrology: PlanEnvelope[TerrainPlan]
     regions: TerrainRegionPlan
     seed_root: EntityUid

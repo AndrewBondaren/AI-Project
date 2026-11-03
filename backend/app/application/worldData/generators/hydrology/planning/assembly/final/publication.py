@@ -44,6 +44,7 @@ class NativeFinalPublicationJob:
                     envelope.payload, envelope.dependencies, envelope.diagnostics, SURFACE_MANIFEST)):
             raise ValueError("native final requires exact expected revisions, contracts and output proofs")
 
+    # GEO-LEGACY-32: Remove the independently supplied specs channel.
     def publish(self, *, world_uid: EntityUid, inputs: GeoHydrologyPlanInput,
                 relief_inputs: RiverReliefInput, specs: tuple[BasinSpec, ...],
                 before: PlanEnvelope[FineSurfaceWindow], expected_before: PlanRef,

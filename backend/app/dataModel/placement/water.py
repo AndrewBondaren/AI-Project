@@ -9,6 +9,7 @@ from app.dataModel.placement.common import FineCell, PlacementModel
 from app.dataModel.placement.result import ResolvedPlacement
 
 
+# GEO-LEGACY-05: Retire the records row carried by the PC plan.
 class ResolvedWaterPlacement(PlacementModel):
     placement: StrictOnWire[ResolvedPlacement]
     z_water_level: StrictOnWire[StrictInt]

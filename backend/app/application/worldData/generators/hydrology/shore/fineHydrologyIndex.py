@@ -23,6 +23,7 @@ from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 
+# GEO-LEGACY-40: Retire at reader cutover after import/dynamic closure (HSP-09).
 def apply_declared_fine_river_carves(
     world: World, locations: list[NamedLocation], base_surface_z: dict[Coord, int], *, topology: WorldTopology,
     base_space: CoordinateSpace = CoordinateSpace.WORLD_FINE_GRID,
@@ -62,6 +63,7 @@ def apply_declared_fine_river_carves(
     return merged, hm.surface_z
 
 
+# GEO-LEGACY-40: Retire at reader cutover after import/dynamic closure (HSP-09).
 def merge_fine_hydro_for_tile(
     tile_gx: int,
     tile_gy: int,

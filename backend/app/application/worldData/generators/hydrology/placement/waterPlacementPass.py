@@ -51,6 +51,7 @@ from app.ids import UidKind, entity_uid
 logger = logging.getLogger(__name__)
 
 
+# GEO-LEGACY-14: Retire the surface placement pass.
 @dataclass(frozen=True)
 class WaterPlacementPassResult:
     preparation: WaterPlacementPreparation
@@ -60,6 +61,7 @@ class WaterPlacementPassResult:
     topology: WorldTopology
 
 
+# GEO-LEGACY-14: Retire the surface placement pass.
 def _auto_specificity(projected: WorldHydrology,
                       source: DeclaredBasin | DeclaredCoastline | DeclaredLake) -> int | None:
     if isinstance(source, DeclaredLake) or source.kind is BasinKind.LAKE:
@@ -67,6 +69,7 @@ def _auto_specificity(projected: WorldHydrology,
     return projected.default_seas.placement_specificity
 
 
+# GEO-LEGACY-14: Retire the surface placement pass.
 def legacy_surface_revision(heightmap: SurfaceHeightmap) -> OutputFingerprint:
     """PC-6W bridge until PC-9: fingerprint the actual uncached legacy surface.
 
@@ -82,6 +85,7 @@ def legacy_surface_revision(heightmap: SurfaceHeightmap) -> OutputFingerprint:
     return output_fingerprint(plan, (), (), manifest)
 
 
+# GEO-LEGACY-14: Retire the surface placement pass.
 def run_prepared_water_placement(pojo: WorldHydrology, context: WaterPlacementContext, *,
                                  fine_span: int, ctx: ResolveContext) -> WaterPlacementPassResult:
     """One baseline placement kernel for frozen planning and the legacy caller."""
@@ -100,6 +104,7 @@ def run_prepared_water_placement(pojo: WorldHydrology, context: WaterPlacementCo
     return WaterPlacementPassResult(preparation, batch_result, records, specs, context.topology)
 
 
+# GEO-LEGACY-14: Retire the surface placement pass.
 def run_water_placement_pass(world: World, locations: list[NamedLocation], heightmap: SurfaceHeightmap,
                              *, ctx: ResolveContext | None = None) -> WaterPlacementPassResult | None:
     ctx = ctx or ResolveContext()

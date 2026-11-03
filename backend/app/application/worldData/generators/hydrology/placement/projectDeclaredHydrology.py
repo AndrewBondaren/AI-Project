@@ -12,10 +12,12 @@ from app.dataModel.hydrology.declaredLake import DeclaredLake
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 
 
+# GEO-LEGACY-15: Retire fine-to-surface projection for water placement.
 def _project_waypoints(waypoints: tuple[HydrologyWaypoint, ...], map_cell: int) -> tuple[HydrologyWaypoint, ...]:
     return tuple(HydrologyWaypoint(x=point.x // map_cell, y=point.y // map_cell, z=point.z) for point in waypoints)
 
 
+# GEO-LEGACY-15: Retire fine-to-surface projection for water placement.
 def project_water_source[S: DeclaredBasin | DeclaredCoastline | DeclaredLake](source: S, map_cell: int) -> S:
     """Typed single-source projection shared by G5 and the existing caller.
 
@@ -35,6 +37,7 @@ def project_water_source[S: DeclaredBasin | DeclaredCoastline | DeclaredLake](so
     return type(source).model_validate(source.model_dump() | {"shoreline": _project_waypoints(source.shoreline, map_cell)})
 
 
+# GEO-LEGACY-15: Retire fine-to-surface projection for water placement.
 def _collapse_issue(ctx: ResolveContext, world_uid: str, collection: str, index: int,
                     source_uid: str, error: Exception) -> FieldPathError:
     return FieldPathError(
@@ -46,6 +49,7 @@ def _collapse_issue(ctx: ResolveContext, world_uid: str, collection: str, index:
     )
 
 
+# GEO-LEGACY-15: Retire fine-to-surface projection for water placement.
 def project_declared_hydrology(hydrology: WorldHydrology, map_cell: int, *, ctx: ResolveContext,
                                world_uid: str) -> WorldHydrology:
     issues: list[FieldPathError] = []

@@ -15,6 +15,7 @@ from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 class CoastlineConstraintPreparer:
     """Geometry only: no policy, budget allocation, hydro presence or relief writes."""
 
+    # GEO-LEGACY-21: Replace the coarse authored request with fine W.
     def prepare(self, request: LegacyAuthoredWaterGeometryRequest) -> WaterDesignConstraints:
         if not isinstance(request, LegacyAuthoredWaterGeometryRequest):
             raise TypeError("coastline constraints require a typed geometry request")

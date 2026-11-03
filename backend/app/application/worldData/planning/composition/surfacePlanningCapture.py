@@ -150,6 +150,7 @@ class SurfacePlanningCapture:
             subtype=geographic_subtype(loc) if loc.location_uid in geographic_uids else None)
             for loc in sorted(rows, key=lambda loc: loc.location_uid))
 
+    # GEO-LEGACY-34: Retire PC WaterPlacementInput construction.
     @staticmethod
     def _water(hydro: WorldHydrology, anchors: tuple[HydrologyAnchorInput, ...], geographic_uids: frozenset[str],
                terrain: TerrainBaseInput, topology: WorldTopology, mode: ResolutionMode,

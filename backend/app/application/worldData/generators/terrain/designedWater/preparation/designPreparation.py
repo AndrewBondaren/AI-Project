@@ -27,6 +27,7 @@ from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
 from app.dataModel.terrain.regions.terrainRegionsSnapshot import TerrainRegionPlan
 
 
+# GEO-LEGACY-43: Replace the coarse pre_hydrology argument.
 def prepare_designed_water(
     batch: PlacementBatchV2, *, water_intents: tuple[PlacementIntent, ...],
     pre_hydrology: PlanEnvelope[TerrainPlan], grid: SurfaceGridSettings, seed_root: EntityUid,

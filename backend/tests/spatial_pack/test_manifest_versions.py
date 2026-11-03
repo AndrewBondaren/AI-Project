@@ -183,6 +183,7 @@ class ManifestVersionsTests(TestCase):
             with self.subTest(rows=rows), self.assertRaises(ValueError):
                 decode_manifest(payload(pack_version="2.0.0", spatial_roots=rows))
 
+    # LEGACY REMOVE(SP-P-V1-REMOVE/V1-02) Replace with cutover refusal tests.
     def test_legacy_guard_precedes_directory_counters_hash_and_store(self):
         candidate = decode_manifest(payload(pack_version="2.0.0", spatial_roots=[descriptor()]))
         with TemporaryDirectory() as tmp:
@@ -216,6 +217,7 @@ class ManifestVersionsTests(TestCase):
             self.assertIsNone(writer.manifest.content_hash)
             self.assertEqual(path.read_bytes(), wire)
 
+    # LEGACY REMOVE(SP-P-V1-REMOVE/V1-02) Retire the legacy writer hash fixture at cutover.
     def test_v1_hash_still_uses_original_document(self):
         with TemporaryDirectory() as tmp:
             paths = WorldPackPaths(Path(tmp), "w")

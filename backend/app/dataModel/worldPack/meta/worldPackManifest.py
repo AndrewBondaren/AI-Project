@@ -17,6 +17,7 @@ from app.dataModel.worldPack.wire.worldMapCellsPerTile import WORLD_MAP_CELLS_PE
 from app.dataModel.worldPack.meta.wildernessRegionEntry import WildernessRegionEntry, require_region_index
 from app.dataModel.worldPack.meta.spatial.domainRoot import SpatialDomainRootRef
 
+# LEGACY REMOVE(SP-P-V1-REMOVE/V1-01) Retire the V1 default and its public export.
 PACK_WIRE_VERSION = "1.0.0"
 SPATIAL_PACK_WIRE_VERSION = "2.0.0"
 BakeMode = PackBakeMode  # manifest last L0 mode — not "detailed"
@@ -95,6 +96,7 @@ class _ManifestFields(BaseModel):
     @model_serializer(mode="wrap")
     def serialize_version(self, handler):
         data = handler(self)
+        # LEGACY REMOVE(SP-P-V1-REMOVE/V1-01) Remove the V1 JSON projection.
         if self.pack_version == PACK_WIRE_VERSION and self.spatial_roots == ():
             data.pop("spatial_roots", None)
         return data
@@ -145,6 +147,7 @@ class _ManifestFields(BaseModel):
 
 
 class WorldPackManifest(_ManifestFields):
+    # LEGACY REMOVE(SP-P-V1-REMOVE/V1-01) Remove implicit V1 creation.
     pack_version: str = PACK_WIRE_VERSION
     spatial_roots: tuple[SpatialDomainRootRef, ...] = Field(default=(), strict=True)
 
@@ -153,6 +156,7 @@ class WorldPackManifest(_ManifestFields):
     def _reject_removed_size_keys(cls, data):
         """Removed wire keys read as an error, not a silent default."""
         if isinstance(data, dict):
+            # LEGACY REMOVE(SP-P-V1-REMOVE/V1-01) Remove missing-version handling and the V1 branch.
             version = data.get("pack_version", PACK_WIRE_VERSION)
             if version == PACK_WIRE_VERSION:
                 if "spatial_roots" in data and data["spatial_roots"] != ():

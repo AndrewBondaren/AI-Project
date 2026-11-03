@@ -61,6 +61,7 @@ class _GeometryRequest[T](BaseModel, frozen=True):
         return self
 
 
+# GEO-LEGACY-09: Retire the TerrainPlan specialization and coarse_snapshot.
 class LegacyAuthoredWaterGeometryRequest(_GeometryRequest[TerrainPlan], frozen=True):
     @model_validator(mode="after")
     def coarse_snapshot(self) -> Self:
@@ -88,6 +89,7 @@ class AuthoredWaterGeometryRequest(_GeometryRequest[FineSurfaceWindow], frozen=T
         return self
 
 
+# GEO-LEGACY-10: Remove the surface-frame alternative from coordinate_space.
 class AuthoredWaterGeometry(BaseModel, frozen=True):
     """One computed geometry, reused by metadata, strategy and G4-C.
 

@@ -68,6 +68,7 @@ class FineWaterPublicationJob:
         control.raise_if_shutdown()
         return water
 
+    # GEO-LEGACY-31: Remove independently supplied placement and specs.
     def publish(self, surface: PlanEnvelope[FineSurfaceWindow], *, expected_surface: PlanRef,
                 placement: PlanEnvelope[PlacementBatchResultV2], expected_placement: PlanRef,
                 inputs: GeoHydrologyPlanInput, specs: tuple[BasinSpec, ...],

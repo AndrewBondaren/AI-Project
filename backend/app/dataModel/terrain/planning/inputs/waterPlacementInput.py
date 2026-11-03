@@ -27,6 +27,7 @@ class WaterAnchorInput(BaseModel):
     subtype: GeographicSubtype | None
 
 
+# GEO-LEGACY-08: Retire the PC capture input.
 class WaterPlacementInput(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
 

@@ -40,6 +40,7 @@ class PlacementDiagnostic(PlacementModel):
         return self.code != PlacementIssueCode.COASTLINE_PRIORITY_LOWERED
 
 
+# GEO-LEGACY-04: Retire the V1 outcome transport.
 class ResolvedPlacement(PlacementModel):
     status: DefaultWhenMissing[Literal["resolved"]] = "resolved"
     prepared: StrictOnWire[PreparedPlacement]
@@ -73,6 +74,7 @@ class ResolvedPlacement(PlacementModel):
         return value
 
 
+# GEO-LEGACY-04: Retire the V1 outcome transport.
 class UnresolvedPlacement(PlacementModel):
     status: DefaultWhenMissing[Literal["unresolved"]] = "unresolved"
     prepared: StrictOnWire[PreparedPlacement]
@@ -92,9 +94,11 @@ class UnresolvedPlacement(PlacementModel):
         return self
 
 
+# GEO-LEGACY-04: Retire the V1 outcome transport.
 type PlacementOutcome = Annotated[ResolvedPlacement | UnresolvedPlacement, Field(discriminator="status")]
 
 
+# GEO-LEGACY-04: Retire the V1 outcome transport.
 class PlacementBatchResult(PlacementModel):
     model_config = {**PlacementModel.model_config, "ser_json_bytes": "hex", "val_json_bytes": "hex"}
 

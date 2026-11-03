@@ -31,6 +31,7 @@ def decode_manifest(payload: bytes) -> WorldPackManifest:
     if not isinstance(raw, dict):
         raise ValueError("expected World Pack JSON object")
     version = raw.get("pack_version", PACK_WIRE_VERSION)
+    # LEGACY REMOVE(SP-P-V1-REMOVE/V1-02) Remove historical missing-version/V1 dispatch after retirement.
     if version == PACK_WIRE_VERSION:
         if "spatial_roots" in raw:
             raise ValueError("unexpected V1 spatial_roots")
@@ -41,6 +42,7 @@ def decode_manifest(payload: bytes) -> WorldPackManifest:
     raise ValueError("unsupported World Pack version")
 
 
+# LEGACY REMOVE(SP-P-V1-REMOVE/V1-02) Remove with the V1 store and writer callers.
 def require_legacy_manifest(manifest: WorldPackManifest, *, world_uid: str | None = None) -> None:
     if (type(manifest) is not WorldPackManifest or manifest.pack_version != PACK_WIRE_VERSION
             or type(manifest.spatial_roots) is not tuple or manifest.spatial_roots):
@@ -49,6 +51,7 @@ def require_legacy_manifest(manifest: WorldPackManifest, *, world_uid: str | Non
         raise ValueError("foreign World Pack manifest")
 
 
+# LEGACY REMOVE(SP-P-V1-REMOVE/V1-02) Remove the V1 JSON encoder after writer cutover.
 def encode_legacy_manifest(manifest: WorldPackManifest) -> bytes:
     require_legacy_manifest(manifest)
     # Mutable legacy lists must still pass the original save-time validation.

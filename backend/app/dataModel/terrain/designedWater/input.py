@@ -62,6 +62,7 @@ class WaterDesignInput(BaseModel, Generic[SourceT], frozen=True):
     seed_root: EntityUid
     topology: WorldTopology
     grid: SurfaceGridSettings
+    # GEO-LEGACY-41: Replace TerrainPlan and coarse frame checks with the admitted fine W.
     pre_hydrology: PlanEnvelope[TerrainPlan]
     region_coverage: RegionCoverage
     constraints: WaterDesignConstraints | None = None

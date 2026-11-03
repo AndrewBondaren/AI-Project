@@ -49,6 +49,7 @@ from app.dataModel.worldPack.meta.worldPackManifest import (
 from app.db.models.world import World
 
 
+# LEGACY REMOVE(SP-P-V1-REMOVE/V1-03) Migrate mutation callers before retiring this V1 writer.
 class WorldPackWriter:
     """Atomic pack writer. Prefer Container.world_pack_writer_for so parent-light
     cache is process-scoped; constructing with bare paths creates a private cache.

@@ -150,6 +150,7 @@ def require_rooted_links(links: dict[str, str], roots: set[str]) -> None:
             uid = receiver
 
 
+# GEO-LEGACY-39: Retire coarse water authority; isolate downstream projections.
 class HydrologyRoutesPlan(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
 
@@ -187,6 +188,7 @@ class HydrologyRoutesPlan(BaseModel):
         return self
 
 
+# GEO-LEGACY-39: Retire coarse water authority; isolate downstream projections.
 class HydrologyPlan(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
 
@@ -211,6 +213,7 @@ class HydrologyPlan(BaseModel):
         return self
 
 
+# GEO-LEGACY-39: Retire coarse water authority; isolate downstream projections.
 class GeoHydrologyPlan(HydrologyPlan):
     """Final common facts plus hydrology-owned GEO provenance and decisions."""
 
@@ -228,6 +231,7 @@ class GeoHydrologyPlan(HydrologyPlan):
         return self
 
 
+# GEO-LEGACY-39: Retire coarse water authority; isolate downstream projections.
 class GeoHydrologyRoutesPlan(BaseModel):
     """Route-stage common facts with the mapping/decisions reused by final fill."""
 

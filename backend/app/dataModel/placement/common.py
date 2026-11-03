@@ -49,6 +49,7 @@ class PlacementPhase(StrEnum):
     DEPENDENT = "dependent"
 
 
+# GEO-LEGACY-02: Retire the V1 coastline verdict.
 class WaterPresence(StrEnum):
     PRESENT = "present"
     ABSENT = "absent"

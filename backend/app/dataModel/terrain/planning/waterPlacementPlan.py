@@ -17,6 +17,7 @@ from app.dataModel.terrain.relief.bathymetry.basinSpec import BasinSpec
 from app.dataModel.topology.worldTopology import WorldTopology
 
 
+# GEO-LEGACY-06: Retire the PC surface payload.
 class WaterPlacementPlan(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
 
@@ -43,6 +44,7 @@ class WaterPlacementPlan(BaseModel):
         return self
 
 
+# GEO-LEGACY-07: Drop PC inheritance, records and outcomes; carry the native batch.
 class GeoWaterPlacementPlan(WaterPlacementPlan):
     """One spatial batch plus its source admission, metadata and budget evidence."""
 

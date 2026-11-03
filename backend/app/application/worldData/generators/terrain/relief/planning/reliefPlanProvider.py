@@ -46,6 +46,7 @@ from app.dataModel.terrainMasks.mountain.enums import MountainKind
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 
+# GEO-LEGACY-38: Remove PC water payload dependency.
 def _coarse_relief(inputs: ReliefPlanInput, terrain: TerrainPlan, water: WaterPlacementPlan,
                    layout: MountainLayout, world_uid: str, scale: LightGridScale,
                    control: PlanBuildControl) -> tuple[tuple[SurfaceGridCoord, FineZ], ...]:
@@ -69,6 +70,7 @@ def _coarse_relief(inputs: ReliefPlanInput, terrain: TerrainPlan, water: WaterPl
     return tuple((coord, FineZ(surface[(coord.gx, coord.gy)])) for coord, _ in terrain.surface_z)
 
 
+# GEO-LEGACY-38: Remove PC water payload dependency.
 def _require_relief_refs[W: WaterPlacementPlan](climate: PlanEnvelope[ClimateBasePlan],
     terrain: PlanEnvelope[TerrainPlan], water: PlanEnvelope[W]) -> None:
     terrain_refs = {dependency.slot: dependency.ref for dependency in terrain.dependencies}
@@ -78,6 +80,7 @@ def _require_relief_refs[W: WaterPlacementPlan](climate: PlanEnvelope[ClimateBas
         raise PlanBuildFailure((FieldPathError(("dependencies",), "incoherent upstream climate/terrain/water refs"),))
 
 
+# GEO-LEGACY-38: Remove PC water payload dependency.
 def _plan_relief(inputs: ReliefPlanInput, climate: ClimateBasePlan, base: TerrainPlan,
     water: WaterPlacementPlan, *, world_uid: EntityUid, control: PlanBuildControl) -> PlanBuildResult[ReliefPlan]:
     bounds = water.topology.bounds

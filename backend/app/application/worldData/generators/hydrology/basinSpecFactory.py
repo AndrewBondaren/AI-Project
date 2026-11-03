@@ -7,6 +7,7 @@ from app.application.worldData.placement.adapters.waterTypes import WaterPlaceme
 from app.dataModel.placement import ResolvedWaterPlacement
 
 
+# GEO-LEGACY-20: Retire the PC preparation/records input pair.
 def basin_specs(preparation: WaterPlacementPreparation, records: Sequence[ResolvedWaterPlacement]) -> list[BasinSpec]:
     """Project accepted metadata; category/source defaults were resolved upstream."""
     entries = {entry.source.source_uid: entry for entry in preparation.entries}

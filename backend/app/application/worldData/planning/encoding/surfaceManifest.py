@@ -288,6 +288,7 @@ SURFACE_MANIFEST = CanonicalSchemaManifest(entries=tuple(
     (24, _MProminenceScale, CanonicalTypeKind.ENUM),
     (25, _MTerrainBaseInput, CanonicalTypeKind.RECORD),
     (26, _MSurfaceGridSettings, CanonicalTypeKind.RECORD),
+    # GEO-LEGACY-47: Retire PC water IDs; version the changed GEO payload separately.
     (27, _MWaterPlacementInput, CanonicalTypeKind.RECORD),
     (28, _MResolutionMode, CanonicalTypeKind.ENUM),
     (29, _MHydrologySeasPolicy, CanonicalTypeKind.RECORD),

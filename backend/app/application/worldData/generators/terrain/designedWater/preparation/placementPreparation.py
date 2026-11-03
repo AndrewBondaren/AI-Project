@@ -36,6 +36,7 @@ def _wet_score(value: ContinentalFieldValue, bits: int) -> int:
 
 
 class DesignedWaterPlacementPreparer:
+    # GEO-LEGACY-23: Replace the coarse frame binding.
     def bind_admission(self, input: WaterStrategyInput, preparation: WaterDesignPreparation, *,
                        intent: PlacementIntent, admission: PlacementAdmissionInput) -> PreparedPlacementV2:
         """Bind computed geometry to its original intent and ready common decision."""
@@ -129,6 +130,7 @@ class DesignedWaterPlacementPreparer:
             if constraints is not None:
                 notices += constraints.notices
             capacity = (len(ranked) + len(required)) * full_area
+            # GEO-LEGACY-46: Retire the procedural surface-frame output.
             space = CoordinateSpace.WORLD_SURFACE_GRID
             if not cells:
                 raise PlanBuildFailure((FieldPathError(input.metadata.source_path,

@@ -14,6 +14,7 @@ from app.dataModel.placement.lifecycle.admission import PlacementAdmissionInput
 from app.dataModel.placement.result import ResolvedPlacementV2
 
 
+# GEO-LEGACY-03: Retire the V1 input batch.
 class PlacementBatch(PlacementModel):
     model_config = {**PlacementModel.model_config, "ser_json_bytes": "hex", "val_json_bytes": "hex"}
 

@@ -35,6 +35,7 @@ from app.dataModel.topology.worldTopology import WorldTopology
 from app.ids import seed_root
 
 
+# GEO-LEGACY-16: Retire the PC placement adapter.
 def prepare_authored_water_geometry(request: LegacyAuthoredWaterGeometryRequest) -> AuthoredWaterGeometry:
     """G5: compute source geometry once, before G8 constructs metadata.
 
@@ -70,12 +71,14 @@ def prepare_authored_water_geometry(request: LegacyAuthoredWaterGeometryRequest)
             code=WaterPreparationCode.GEOMETRY.value),)) from error
 
 
+# GEO-LEGACY-16: Retire the PC placement adapter.
 def _context_issue(context: WaterPlacementContext, ctx: ResolveContext, reason: str) -> FieldPathError:
     return FieldPathError(path=ctx.path_prefix + ("water_placement",),
                           code=WaterPreparationCode.SNAPSHOT.value, schema_id=ctx.schema_id,
                           message=f"world_uid={context.world_uid} snapshot_uid={context.snapshot_uid}; {reason}")
 
 
+# GEO-LEGACY-16: Retire the PC placement adapter.
 def _source_issue(context: WaterPlacementContext, ctx: ResolveContext, source_uid: str,
                   code: WaterPreparationCode, reason: str) -> FieldPathError:
     return FieldPathError(path=ctx.path_prefix + ("water_placement", source_uid), code=code.value,
@@ -84,6 +87,7 @@ def _source_issue(context: WaterPlacementContext, ctx: ResolveContext, source_ui
                                   f"source_uid={source_uid}; {reason}")
 
 
+# GEO-LEGACY-16: Retire the PC placement adapter.
 def _validate_context(context: WaterPlacementContext, hydrology: WorldHydrology,
                       ctx: ResolveContext) -> WaterPlacementContext:
     topology = resolve_model(WorldTopology, context.topology.model_dump(), ctx=ctx.child("topology"))
@@ -119,6 +123,7 @@ def _validate_context(context: WaterPlacementContext, hydrology: WorldHydrology,
     return context
 
 
+# GEO-LEGACY-16: Retire the PC placement adapter.
 def _source_cells(source: DeclaredBasin | DeclaredCoastline | DeclaredLake,
                   hydrology: WorldHydrology, context: WaterPlacementContext,
                   ctx: ResolveContext, notices: list[FieldPathError],
@@ -144,6 +149,7 @@ def _source_cells(source: DeclaredBasin | DeclaredCoastline | DeclaredLake,
             uid, _source_issue(context, ctx, uid, WaterPreparationCode.GEOMETRY, str(error)))
 
 
+# GEO-LEGACY-16: Retire the PC placement adapter.
 def _source_kind(source: DeclaredBasin | DeclaredCoastline | DeclaredLake) -> BasinKind:
     return source.kind if not isinstance(source, DeclaredLake) else BasinKind.LAKE
 
@@ -151,6 +157,7 @@ def _source_kind(source: DeclaredBasin | DeclaredCoastline | DeclaredLake) -> Ba
 _PRIMARY_ORDER = (DeclaredBasin, DeclaredCoastline, DeclaredLake)
 
 
+# GEO-LEGACY-16: Retire the PC placement adapter.
 def _merged_issue(context: WaterPlacementContext, ctx: ResolveContext, uid: str,
                   members: list[tuple[str, int, DeclaredBasin | DeclaredCoastline | DeclaredLake]],
                   primary_index: int) -> FieldPathError:
@@ -169,6 +176,7 @@ def _merged_issue(context: WaterPlacementContext, ctx: ResolveContext, uid: str,
     return _source_issue(context, ctx, uid, WaterPreparationCode.MERGED_SOURCES, reason)
 
 
+# GEO-LEGACY-16: Retire the PC placement adapter.
 def _build_entry(primary: DeclaredBasin | DeclaredCoastline | DeclaredLake,
                  cells: frozenset, area: float,
                  hydrology: WorldHydrology, context: WaterPlacementContext,
@@ -228,6 +236,7 @@ def _build_entry(primary: DeclaredBasin | DeclaredCoastline | DeclaredLake,
     return PreparedWaterEntry(source=metadata, prepared=prepared, floor_z=FineZ(floor), floor_profile=None)
 
 
+# GEO-LEGACY-16: Retire the PC placement adapter.
 def prepare_water_placements(hydrology: WorldHydrology, context: WaterPlacementContext, *,
                              ctx: ResolveContext) -> WaterPlacementPreparation:
     """Caller combines .objects with every ready domain before invoking P2."""
@@ -281,6 +290,7 @@ def prepare_water_placements(hydrology: WorldHydrology, context: WaterPlacementC
                                       tuple(failures), tuple(notices))
 
 
+# GEO-LEGACY-16: Retire the PC placement adapter.
 def resolved_water_placements(preparation: WaterPlacementPreparation,
                               result: PlacementBatchResult) -> tuple[ResolvedWaterPlacement, ...]:
     """Project a shared result; caller retains its unresolved and preparation failures."""

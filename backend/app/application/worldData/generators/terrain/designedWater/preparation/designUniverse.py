@@ -54,6 +54,7 @@ def water_intents_by_region(water_intents: tuple[PlacementIntent, ...],
 @dataclass(frozen=True)
 class WaterDesignUniverse:
     batch: PlacementBatchV2
+    # GEO-LEGACY-42: Replace the frozen coarse terrain binding with fine W.
     pre_hydrology: PlanEnvelope[TerrainPlan]
     grid: SurfaceGridSettings
     seed_root: EntityUid

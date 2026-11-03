@@ -26,6 +26,7 @@ from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.ids import UidKind, entity_uid
 
 
+# GEO-LEGACY-24: Replace the PC provider body and input contract.
 class WaterPlacementPlanProvider:
     def __init__(self, terrain_base: RegisteredPlanContract[TerrainBaseInput, TerrainPlan]) -> None:
         self._terrain_base = terrain_base
