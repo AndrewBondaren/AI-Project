@@ -64,6 +64,7 @@ class DAGExecutor:
         self, plan: ExecutionPlan, execution_id: ExecutionId, root: NodeId, revision: PlanRevision,
         store: ExecutionStore, *, owner: str, workers: int, invocation_limit: int,
         input: BaseModel | None = None, lease_seconds: int = 300,
+        prior_outputs: tuple[OutputRecord[BaseModel], ...] = (),
     ) -> InvocationRecord:
         if workers < 1:
             raise ValueError("workers must be positive")
@@ -83,6 +84,7 @@ class DAGExecutor:
             ):
                 raise RestoreFailure("execution already exists with different input")
             coordinator = InvocationCoordinator(plan, graph, invocation_limit)
+            coordinator.bind_published(prior_outputs)
             return await self._schedule_invocations(coordinator, OwnedExecution(store, claim, saved.revision, graph, lease_seconds), workers)
         finally:
             await store.release(claim)
@@ -210,18 +212,31 @@ class DAGExecutor:
         root, options = plan.invocation_root, self._invocations
         if root is None or options is None:
             raise ValueError("invocation plan requires execution options")
+        catalog = state.catalog.capture()
+        earlier_levels = plan.pre_llm_levels if phase == ExecutionPhase.POST_LLM else ()
+        if phase == ExecutionPhase.POST_LLM:
+            earlier_levels += tuple(level for group in plan.llm_groups for level in group.levels)
+        earlier: list[OutputRecord[BaseModel]] = []
+        for level in earlier_levels:
+            for node in level:
+                prior_output = catalog.record(node, plan.registrations[node].contract)
+                if prior_output is None:
+                    raise RestoreFailure(f"missing prior-phase output for '{node}'")
+                earlier.append(prior_output)
         state.begin_phase(revision, pass_number)
         try:
             if durable is None:
                 await self.run_invocation(plan, state.catalog.execution_id, root, revision, options.store,
                                           owner=str(uuid4()), workers=options.workers,
-                                          invocation_limit=options.invocation_limit, lease_seconds=options.lease_seconds)
+                                          invocation_limit=options.invocation_limit, lease_seconds=options.lease_seconds,
+                                          prior_outputs=tuple(earlier))
                 saved = await options.store.load(state.catalog.execution_id)
                 graph = CheckpointCodec.decode(saved.blob, plan)
             else:
                 graph = durable.graph
-                await self._schedule_invocations(InvocationCoordinator(plan, graph, options.invocation_limit),
-                                                 durable, options.workers)
+                coordinator = InvocationCoordinator(plan, graph, options.invocation_limit)
+                coordinator.bind_published(tuple(earlier))
+                await self._schedule_invocations(coordinator, durable, options.workers)
             prior = {item.invocation_id: item for item in state.catalog.current_outputs}
             for level, nodes in enumerate(levels):
                 traces: list[ExecutionTrace] = []

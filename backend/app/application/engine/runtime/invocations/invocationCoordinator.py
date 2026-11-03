@@ -1,4 +1,10 @@
+from time import time
+
 from pydantic import BaseModel
+from app.dataModel.engine.dag.nodeStatus import NodeStatus
+from app.dataModel.engine.dag.diagnostics import ExecutionDiagnostic, ExecutionEventCode, ExecutionSeverity
+from app.application.engine.nodeTypes.pythonNode import PythonNode
+from app.application.engine.nodeTypes.resumablePythonNode import ResumablePythonNode
 from app.application.engine.runtime.invocations.checkpointCodec import CheckpointCodec
 from app.dataModel.validation.immutableValue import validate_immutable
 
@@ -65,6 +71,22 @@ class InvocationCoordinator:
                                   dependency_bindings=deps)
         self.graph.records[key] = record
         return record
+
+    def bind_published(self, outputs: tuple[OutputRecord[BaseModel], ...]) -> None:
+        root = self.graph.records[self.graph.root]
+        for output in outputs:
+            identity = output.identity
+            record = self.graph.records[identity.invocation_id]
+            if (identity.execution_id != self.graph.execution_id or record.plan_instance_id != root.plan_instance_id
+                    or record.node_id != identity.node_id):
+                raise RestoreFailure("prior-phase output belongs to another invocation")
+            contract = self.plan.registrations[record.node_id].contract
+            record.terminal = self.encode(output.output, contract.output_type)
+            record.plan_revision = identity.plan_revision
+            record.attempt_counter = identity.attempt
+            record.reads = output.reads
+            record.domain_reads = output.domain_reads
+            record.status = Status.SUCCEEDED
 
     def next_pass(self, root: NodeId, revision: PlanRevision, reusable: set[InvocationId],
                   instance: PlanInstanceId) -> None:
@@ -191,12 +213,23 @@ class InvocationCoordinator:
                     record.step_index += 1
                     record.step_attempts = 0
                     record.status = Status.READY
-                if record.status == Status.READY and any(
-                    records[key].status in (Status.FAILED, Status.CANCELLED) for key in record.dependency_bindings
-                ):
+                if record.status != Status.READY:
+                    continue
+                failed = next((records[key] for key in record.dependency_bindings
+                               if records[key].status in (Status.FAILED, Status.CANCELLED)), None)
+                if failed is not None:
                     changed = True
                     record.status = Status.FAILED
                     record.attempt_counter = max(record.attempt_counter, 1)
+                    node = self.plan.nodes[record.node_id].node
+                    if not isinstance(node, (PythonNode, ResumablePythonNode)):
+                        raise TypeError("unsupported invocation binding")
+                    record.diagnostics += (ExecutionDiagnostic(
+                        identity=record.identity(), phase=node.phase, pass_number=self.graph.pass_number,
+                        level=0, timestamp=time(), code=ExecutionEventCode.NODE_FINISHED,
+                        severity=ExecutionSeverity.ERROR, status=NodeStatus.FAILED,
+                        message=f"prerequisite {failed.invocation_id} ended with {failed.status}",
+                    ),)
         return tuple(r for r in records.values() if r.status == Status.READY and
                      all(records[k].status == Status.SUCCEEDED for k in r.dependency_bindings))
 

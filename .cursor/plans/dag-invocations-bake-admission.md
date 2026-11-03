@@ -115,3 +115,36 @@ Crash matrix: до/после CALL checkpoint; во время child step; по�
 R6 acceptance: full+equivalent full → один operation; full+light/full+ detailed/detailed+другой scope → BakeConflict; другой мир → параллельно; отказ от всех waiters не прекращает worker; unknown publication commit не освобождает claim. Group acceptance: child error не отменяет siblings, parent видит весь набор результатов.
 
 План первого core-среза готов к реализации после чтения этого документа и текущих repository instructions, без нового продуктового выбора. Production acceptance всего GEN остаётся заблокирована R5–R7 и существующими доменными gates. Не объявлять completed по одним contract tests: нужны migration существующего catalog и restart evidence. Измерение ускорения full/light вне scope и отменено пользователем.
+
+## 9. Независимое ревью R1–R4 от 2026-11-03
+
+**CHANGES REQUIRED на `87bbfb08`.** Для повторного ревью открыты четыре находки. Первые две воспроизводятся через `DAGEngine.run` в одном живом процессе без отмены и без конкурирующего владельца.
+
+### REV-1 · P1 · R2/R3 · Повторное исполнение PRE-зависимости POST-корня
+
+Через GraphCompiler собрать план из двух Python-нод: `Pre` в PRE_LLM и invocation root `Post` в POST_LLM со статической зависимостью от `Pre`. Записать вызовы обеих нод в список. За один pass engine вернул успешный результат и последовательность `pre, pre, post`. После выполнения PRE-фазы workflow scheduler снова выделяет весь closure корня и исполняет `Pre` в POST. **Критерий закрытия:** через публичный engine получить `pre, post`; POST должен использовать результат уже выполненного PRE invocation в том же root instance. Сохранить изоляцию одноимённых нод в отдельных CALL instances. [dagExecutor.py:175–177](../../backend/app/application/engine/runtime/dag/dagExecutor.py#L175) · [invocationCoordinator.py:54–59](../../backend/app/application/engine/runtime/invocations/invocationCoordinator.py#L54)
+
+### REV-2 · P1 · R4 · Потеря lease во время apply_effects
+
+На временной SQLite БД задать `lease_seconds=2`. В `apply_effects` увеличить счётчик вызовов и выполнить `await asyncio.sleep(2.2)`. Первый `run` выполнил эффект и вернул `OwnershipConflict`. Второе соединение прочитало checkpoint с `response=None`. Затем `resume` повторил эффект (счётчик 2), снова вернул `OwnershipConflict`, response остался пустым. Scheduler продлевает lease при ожидании invocation workers, но в ожидании этого lifecycle hook продления нет. **Критерий закрытия:** живой owner сохраняет lease на протяжении hook, первый run записывает terminal response; повторный resume возвращает сохранённый ответ при счётчике 1. Сохранить отказ stale owner после действительного takeover. [dagEngine.py:219–223](../../backend/app/application/engine/runtime/dagEngine.py#L219) · [dagExecutor.py:111–114](../../backend/app/application/engine/runtime/dag/dagExecutor.py#L111)
+
+### REV-3 · P1 · R4 · SQLiteExecutionStore подтверждает чужую транзакцию
+
+На соединении A выполнить `INSERT INTO caller VALUES (7)` без commit. Соединение B видит пустую таблицу. Вызвать `SQLiteExecutionStore(A).create(...)`, затем выполнить caller rollback на A. После rollback соединение B прочитало `[(7,)]`: выход из `with self.db` внутри store закоммитил обе записи. Та же граница транзакции используется в claim, checkpoint, renew и release. **Критерий закрытия:** изолировать собственную транзакцию store либо отклонять вызов на соединении с открытой caller transaction до записи. Двухсоединительная регрессия должна показать, что после rollback caller его строка отсутствует, а при его собственном commit становится видимой на B. Проверить также путь отказа, чтобы store не откатывал чужой DML. [executionStore.py:14–18](../../backend/app/db/repositories/sqlite/dagExecutions/executionStore.py#L14) · [executionStore.py:35–70](../../backend/app/db/repositories/sqlite/dagExecutions/executionStore.py#L35)
+
+### REV-4 · P2 · R3 · diagnostic_ref указывает на invocation без диагностики
+
+В diamond fixture заставить `Merge.execute` выбросить исключение. Это prerequisite дочернего `world_creation`. Родителю доставлен `CallRuntimeFailure` со ссылкой на `call-2/world_creation`. В сохранённом checkpoint по этому адресу 0 диагностик, у `call-2/merge` — 1. При распространении FAILED scheduler помечает зависимый child, а RETURN ссылается на identity этого пропущенного child. **Критерий закрытия:** родитель получает ссылку на исходную диагностику prerequisite либо на записанную диагностику child с причиной отказа. Регрессия должна разрешить фактически возвращённый diagnostic_ref в сохранённом checkpoint. [invocationCoordinator.py:194–200](../../backend/app/application/engine/runtime/invocations/invocationCoordinator.py#L194) · [invocationCoordinator.py:225–230](../../backend/app/application/engine/runtime/invocations/invocationCoordinator.py#L225)
+
+### Проверки и граница R4
+
+На проверенном дереве полный прогон 19 модулей `dag_typing` дал **356 тестов OK за 17,016 с**, включая typing, LLM, pass/replan и invocation recovery. Обычный discover от `tests/dag_typing` нашёл 0 тестов. Команда для повторения из `backend` в PowerShell:
+
+```powershell
+$mods = rg --files tests/dag_typing -g 'test_*.py' | ForEach-Object { ($_ -replace '\.py$','') -replace '[\\/]','.' }
+../.venv/Scripts/python.exe -B -m unittest $mods
+```
+
+Четыре контрпримера проверены отдельно от штатного набора. При повторном предъявлении приложить результат каждой новой регрессии и полного прогона.
+
+**Отдельная проверка deployment.** На БД со схемой до R4 и уже применённой migration version 1 штатный `apply_migrations()` пропускает `0001_initial.sql`. Вызов `store.load` завершился `OperationalError: no such table: dag_executions`. По действующей политике локальная схема обновляется через recreate. Проверенный restart относится к БД, где таблица уже создана. Обновление существующей БД с сохранением данных остаётся отдельным deployment gate по §7. [database.py:66–86](../../backend/app/db/database.py#L66) · [0001_initial.sql:1966](../../backend/app/db/migrations/0001_initial.sql#L1966)

@@ -221,7 +221,7 @@ class Merge(Source):
         return Payload()
 
 
-def runtime(entry=Entry, store=None, world=World, retry_policy=None, diamond=False, select=Select):
+def runtime(entry=Entry, store=None, world=World, retry_policy=None, diamond=False, select=Select, lease_seconds=300):
     registry, bindings = NodeRegistry(), GraphBindings()
     if diamond:
         for cls, deps in ((Source, ()), (Left, (Source.id,)), (Right, (Source.id,)), (Merge, (Left.id, Right.id))):
@@ -243,7 +243,7 @@ def runtime(entry=Entry, store=None, world=World, retry_policy=None, diamond=Fal
         bindings.nodes[cls.id] = cls(deps=(Merge.id,)) if diamond and cls is world else cls()
     compiler = GraphCompiler(registry, bindings, compile_rules=lambda rules: (), evaluate_rules=lambda *_: True)
     compiler.precompile()
-    config = InvocationOptions(store, workers=1, invocation_limit=16) if store else None
+    config = InvocationOptions(store, workers=1, invocation_limit=16, lease_seconds=lease_seconds) if store else None
     executor = DAGExecutor(NodeRunner(ContractValidator(), NodeValidator()), {FakeExecutor: FakeExecutor()},
                            invocation_options=config)
     plan = compiler.compile(GraphRuleState(), invocation_root=entry.id)
@@ -338,6 +338,119 @@ class FailOnceWorld(World):
 
 
 class RecoveryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_prior_phase_output_is_bound_to_post_root(self):
+        from app.dataModel.engine.dag.executionPhase import ExecutionPhase
+        from app.application.engine.runtime.invocations.memoryExecutionStore import MemoryExecutionStore
+        seen = []
+        class Pre(Source):
+            async def execute(self, input):
+                seen.append("pre")
+                return input
+
+        pre_ref = RequiredOutput(OutputRef(Pre.id, Payload))
+        class Post(Left):
+            async def prepare_input(self, view):
+                return view.require(pre_ref)
+
+            async def execute(self, input):
+                seen.append("post")
+                return input
+
+        registry, bindings = NodeRegistry(), GraphBindings()
+        for node, reads in ((Pre(), ()), (Post(phase=ExecutionPhase.POST_LLM, deps=(Pre.id,)), (pre_ref,))):
+            registry.register_python(type(node), FakeExecutor, NodeContract(Payload, Payload, ContractId(node.id),
+                                     ContractVersion("1"), reads, error_types=()))
+            bindings.nodes[node.id] = node
+        compiler = GraphCompiler(registry, bindings, compile_rules=lambda _: (), evaluate_rules=lambda *_: True)
+        compiler.precompile()
+        class Hooks(EntryHooks):
+            response_type = Payload
+            reads = (RequiredOutput(OutputRef(Post.id, Payload)),)
+
+        store = MemoryExecutionStore()
+        executor = DAGExecutor(NodeRunner(ContractValidator(), NodeValidator()), {FakeExecutor: FakeExecutor()},
+                               invocation_options=InvocationOptions(store, workers=1, invocation_limit=2))
+        engine = DAGEngine(executor, None, registry, Hooks(compiler.compile(GraphRuleState(), invocation_root=Post.id)),
+                           None, ExecutionSnapshotService(), SnapshotStore())
+        result = await engine.run(ExecutionId("mixed"), TaskType.INTENT_DETECTION, max_passes=1,
+                                  options=LLMExecutionOptions(player_message="", language="ru", repair_iterations=0,
+                                                              repair_mode=RepairMode.MAXIMUM))
+        self.assertTrue(result.ok)
+        self.assertEqual(seen, ["pre", "post"])
+
+    async def test_slow_effect_retains_lease(self):
+        from unittest.mock import patch
+        calls = []
+        async def slow_effect(hooks, view):
+            calls.append(1)
+            await asyncio.sleep(2.2)
+        schema = (Path(__file__).resolve().parents[3] / "app/db/migrations/0001_initial.sql").read_text("utf-8")
+        with tempfile.TemporaryDirectory() as directory:
+            from contextlib import closing
+            path = Path(directory) / "effects.sqlite"
+            with closing(sqlite3.connect(path)) as a, closing(sqlite3.connect(path)) as b:
+                a.executescript(schema)
+                key = ExecutionId("lease")
+                options = LLMExecutionOptions(player_message="", language="ru", repair_iterations=0, repair_mode=RepairMode.MAXIMUM)
+                with patch.object(EntryHooks, "apply_effects", slow_effect):
+                    result = await runtime(store=SQLiteExecutionStore(a), lease_seconds=2).run(
+                        key, TaskType.INTENT_DETECTION, max_passes=1, options=options)
+                    self.assertEqual((await SQLiteExecutionStore(b).load(key)).status, "COMPLETED")
+                    self.assertEqual(result, await runtime(store=SQLiteExecutionStore(b)).resume(key, max_passes=1, options=options))
+                self.assertEqual(calls, [1])
+
+    async def test_store_preserves_caller_transaction(self):
+        from contextlib import closing
+        schema = (Path(__file__).resolve().parents[3] / "app/db/migrations/0001_initial.sql").read_text("utf-8")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "caller.sqlite"
+            with closing(sqlite3.connect(path)) as a, closing(sqlite3.connect(path)) as b:
+                a.executescript(schema + "\nCREATE TABLE caller(n INTEGER);")
+                store = SQLiteExecutionStore(a)
+                key = ExecutionId("txn")
+                await store.create(key, b"initial")
+                claim = await store.claim(key, "a", 30)
+                for commit in (False, True):
+                    a.execute("INSERT INTO caller VALUES (7)")
+                    for operation in (store.create(key, b"x"), store.claim(key, "b", 30),
+                                      store.checkpoint(claim, 9, "failed", b"x"), store.renew(claim, 30), store.release(claim)):
+                        with self.assertRaisesRegex(RuntimeError, "active transaction"):
+                            await operation
+                        self.assertTrue(a.in_transaction)
+                        self.assertEqual(b.execute("SELECT * FROM caller").fetchall(), [])
+                    if commit:
+                        a.commit()
+                    else:
+                        a.rollback()
+                    self.assertEqual(b.execute("SELECT * FROM caller").fetchall(), [(7,)] if commit else [])
+                self.assertEqual((await store.load(key)).revision, 0)
+                await store.release(claim)
+
+    async def test_prerequisite_runtime_failure_resolves_diagnostic(self):
+        from unittest.mock import patch
+        from app.application.engine.contracts.invocation.resumeEvent import CallRuntimeFailure
+        from app.application.engine.runtime.invocations.memoryExecutionStore import MemoryExecutionStore
+        refs = []
+        class Capture(Select):
+            async def resume(self, state, event):
+                result = event.get(KEY, WORLD)
+                assert isinstance(result, CallRuntimeFailure)
+                refs.append(result.diagnostic_ref)
+                return Complete(Selection(location=PORT, accepted_base=BaseReceipt(publication="full-17"),
+                                          interaction_id="selection-1", session_uid="session-1"))
+        async def fail(node, input):
+            raise RuntimeError("merge failed")
+        store = MemoryExecutionStore()
+        executor, plan = runtime(select=Capture, diamond=True)
+        key = ExecutionId("diagnostic")
+        with patch.object(Merge, "execute", fail):
+            await executor.run_invocation(plan, key, Select.id, PlanRevision("1"), store,
+                                          owner="test", workers=1, invocation_limit=8)
+        graph = InvocationGraph.model_validate_json((await store.load(key)).blob)
+        self.assertEqual(len(refs), 1)
+        diagnostics = graph.records[refs[0].invocation_id].diagnostics
+        self.assertTrue(any(d.identity == refs[0] and "/merge" in d.message for d in diagnostics))
+
     async def test_replay_after_resume_effect_before_checkpoint(self):
         schema = (Path(__file__).resolve().parents[3] / "app/db/migrations/0001_initial.sql").read_text("utf-8")
         with tempfile.TemporaryDirectory() as directory:

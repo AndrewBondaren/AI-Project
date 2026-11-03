@@ -130,7 +130,7 @@ class DAGEngine(Generic[O, S]):
         requested_task: TaskType | None = None,
     ) -> ResolveResult[O]:
         claim = await settings.store.claim(execution_id, str(uuid4()), settings.lease_seconds)
-        try:
+        async def drive_claimed() -> ResolveResult[O]:
             saved = await settings.store.load(execution_id)
             try:
                 header = InvocationGraph.model_validate_json(saved.blob)
@@ -152,7 +152,17 @@ class DAGEngine(Generic[O, S]):
                 raise RestoreFailure("incompatible durable execution") from exc
             owned = OwnedExecution(settings.store, claim, saved.revision, graph, settings.lease_seconds)
             return await self._drive(state, plan, max_passes, options, confirmed, cancellation, owned)
+        task = asyncio.create_task(drive_claimed())
+        try:
+            while not task.done():
+                done, _ = await asyncio.wait((task,), timeout=settings.lease_seconds / 3)
+                if not done:
+                    await settings.store.renew(claim, settings.lease_seconds)
+            return task.result()
         finally:
+            if not task.done():
+                task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
             await settings.store.release(claim)
 
     async def _drive(
