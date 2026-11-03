@@ -198,6 +198,52 @@ class CalendarTests(unittest.TestCase):
         self.assertEqual(proposal.before.hours_per_day, 10)
 
 class WorldOperationTests(unittest.TestCase):
+    def test_repeated_date_resolves_against_pinned_reform_version(self):
+        from app.application.worldData.timeSettings.factory import make_calendar_settings_pipeline
+        from app.dataModel.time.reads.capture import HistoricalTimeCapture
+        from app.dataModel.world.calendar.dates.anchor import CalendarAnchor
+        from app.dataModel.world.calendar.definitions.definition import CalendarEntry
+        from app.dataModel.world.calendar.projection.errors import CalendarSourceMismatch
+        from app.dataModel.world.settings.timeOperations.changes import CalendarUpdate
+        from app.dataModel.world.settings.timeOperations.read import HistoricalTimeSettingsCapture
+        from app.dataModel.world.settings.timeOperations.results import PreparedTimeSettingsChange
+
+        before = self.base.capture
+        entry = before.settings.calendars.entry_for(self.key)
+        effective = self.base.clock.point
+        anchor = CalendarAnchor(coordinate_seconds=effective.seconds, coordinate_nanoseconds=effective.nanoseconds,
+                                origin=entry.anchor.origin)
+        pipeline = make_calendar_settings_pipeline(self.validator, self.projector)
+        proposal = pipeline.prepare_calendar_update(CalendarUpdate(
+            base=self.base, entry=CalendarEntry(definition=entry.definition, anchor=anchor)))
+        self.assertIsInstance(proposal, PreparedTimeSettingsChange)
+
+        snapshot = WorldSnapshotRef(world_uid=effective.world_uid, timeline_id=effective.timeline_id,
+                                    snapshot_id="before_reform")
+        historical = HistoricalTimeSettingsCapture(source=snapshot, settings=before.settings, versions=before.versions)
+        publication_after = before.source.model_copy(update={"publication_id": "after_reform"})
+        current = TimeSettingsCapture(source=publication_after, settings=proposal.after, versions=(
+            CalendarVersionRef(calendar_key=self.key, publication=publication_after),))
+        old_version = WorldCalendarResolver.resolve_at(ResolveCalendarAt(capture=historical, calendar=self.key))
+        new_version = WorldCalendarResolver.resolve_at(ResolveCalendarAt(capture=current, calendar=self.key))
+        historical_clock = HistoricalTimeCapture(snapshot=snapshot, point=point())
+        current_clock = TimeCapture(publication=publication_after, point=effective)
+
+        for version, clock in ((old_version, historical_clock), (new_version, current_clock)):
+            with self.subTest(version=version.version.publication.publication_id):
+                reverse = CalendarResolveInput(resolved=version, calendar=self.key, scope=effective.scope,
+                                               date=anchor.origin.date, time=anchor.origin.time, budget=self.base.budget)
+                self.assertEqual(self.projector.resolve(reverse).point, clock.point)
+                request = CalendarProjectionInput(point=clock.point, capture=clock, resolved=version,
+                                                  calendar=self.key, budget=self.base.budget)
+                projected = self.projector.project(request)
+                self.assertEqual((projected.date, projected.time), (anchor.origin.date, anchor.origin.time))
+                self.assertEqual(projected.version, version.version)
+
+        mixed = CalendarProjectionInput(point=historical_clock.point, capture=historical_clock, resolved=new_version,
+                                        calendar=self.key, budget=self.base.budget)
+        self.assertIsInstance(self.projector.project(mixed), CalendarSourceMismatch)
+
     def setUp(self):
         settings = custom_settings()
         self.key = settings.selected

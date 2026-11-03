@@ -9,7 +9,10 @@ from app.dataModel.hydrology.physicalWaterUnion import PhysicalWaterUnion
 from app.dataModel.hydrology.planning.sourceBodyMapping import SourceBodyMapping
 from app.dataModel.hydrology.waterBody import WaterBody
 from app.dataModel.identity.uid import EntityUid
-from app.dataModel.planning.contracts.planDependency import PlanDependency
+from app.dataModel.planning.contracts.planContract import PlanContractRegistry
+from app.dataModel.planning.contracts.planDependency import PlanDependency, PlanDependencyContract
+from app.dataModel.planning.identity.planKey import AlgorithmVersion, PlanSlot, SchemaVersion
+from app.dataModel.registryKey import RegistryKey
 from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic
 from app.dataModel.planning.identity.planRef import PlanRef
 from app.dataModel.spatial.grid.coordinateTypes import FineZ
@@ -18,14 +21,28 @@ from app.dataModel.validation.immutableValue import validate_immutable
 
 
 # Contract revisions captured by storage v1, in canonical slot order.
-_DEPENDENCIES = (
-    ("fine_water", "hydrology.fine_water", 1, 2),
-    ("hydrology_routes", "hydrology.native_routes", 1, 1),
-    ("native_final", "hydrology.native_final", 1, 1),
-    ("pre_water_surface", "terrain.pre_water_window", 1, 2),
-    ("prepared_natural", "terrain.prepared_natural", 1, 1),
-    ("river_relief", "terrain.native_river_relief", 1, 1),
-    ("water_placement", "surface.geo.water_placement", 2, 1),
+_DEPENDENCIES: tuple[PlanDependencyContract, ...] = (
+    PlanDependencyContract(
+        slot=PlanSlot("fine_water"), contract_id=RegistryKey[PlanContractRegistry]("hydrology.fine_water"),
+        schema_version=SchemaVersion(1), algorithm_version=AlgorithmVersion(2)),
+    PlanDependencyContract(
+        slot=PlanSlot("hydrology_routes"), contract_id=RegistryKey[PlanContractRegistry]("hydrology.native_routes"),
+        schema_version=SchemaVersion(1), algorithm_version=AlgorithmVersion(1)),
+    PlanDependencyContract(
+        slot=PlanSlot("native_final"), contract_id=RegistryKey[PlanContractRegistry]("hydrology.native_final"),
+        schema_version=SchemaVersion(1), algorithm_version=AlgorithmVersion(1)),
+    PlanDependencyContract(
+        slot=PlanSlot("pre_water_surface"), contract_id=RegistryKey[PlanContractRegistry]("terrain.pre_water_window"),
+        schema_version=SchemaVersion(1), algorithm_version=AlgorithmVersion(2)),
+    PlanDependencyContract(
+        slot=PlanSlot("prepared_natural"), contract_id=RegistryKey[PlanContractRegistry]("terrain.prepared_natural"),
+        schema_version=SchemaVersion(1), algorithm_version=AlgorithmVersion(1)),
+    PlanDependencyContract(
+        slot=PlanSlot("river_relief"), contract_id=RegistryKey[PlanContractRegistry]("terrain.native_river_relief"),
+        schema_version=SchemaVersion(1), algorithm_version=AlgorithmVersion(1)),
+    PlanDependencyContract(
+        slot=PlanSlot("water_placement"), contract_id=RegistryKey[PlanContractRegistry]("surface.geo.water_placement"),
+        schema_version=SchemaVersion(2), algorithm_version=AlgorithmVersion(1)),
 )
 TILE_SIDE = 64
 
@@ -128,14 +145,14 @@ class HydrologyPackRoot(_PackRecord):
         require_source_ref(self.source_ref)
         if self.z_min > self.z_max:
             raise ValueError("invalid catalog extent")
-        actual = []
-        for dependency in self.dependencies:
+        if len(self.dependencies) != len(_DEPENDENCIES):
+            raise ValueError("unexpected open-water dependency count")
+        for expected, dependency in zip(_DEPENDENCIES, self.dependencies, strict=True):
+            if not expected.accepts(dependency):
+                raise ValueError("unexpected open-water dependency slot or revision")
             key = dependency.ref.key
             if (key.world_uid, key.scope) != (self.source_ref.key.world_uid, self.source_ref.key.scope):
                 raise ValueError("dependency belongs to a different world or scope")
-            actual.append((dependency.slot, key.contract_id, key.schema_version, key.algorithm_version))
-        if tuple(actual) != _DEPENDENCIES:
-            raise ValueError("unexpected open-water dependency slots or revisions")
         bounds = self.topology.bounds
         tiles = tuple((row.ty, row.tx) for row in self.shards)
         if tiles != tuple(sorted(set(tiles))) or any(

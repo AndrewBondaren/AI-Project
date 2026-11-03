@@ -14,6 +14,8 @@ T5, сверка по коду: [SnapshotApplyContext](../../backend/app/applica
 
 T3-C, §29.3: календарный индекс рассчитывает период отдельно в каждой области YEAR_RANGE. Проверена проекция разовой вставки с modulus 10^30 при бюджете в три класса годов; при двух классах возвращается CalendarBudgetExceeded. Прогон Time: 16 тестов, Pyright для application/time и dataModel/time без ошибок.
 
+T3-C, матрица §32: проверена повторяющаяся дата при реформе календаря. На двух заданных версиях World resolver и Time projector возвращают разные точные координаты для одной даты и времени; исторический capture с текущей версией даёт CalendarSourceMismatch. Проверка изолирована от записи Snapshot. Все 17 тестов Time прошли.
+
 <details><summary>Изменённые файлы ядра</summary>
 
 Документы: `docs/tz_time.md`, `docs/project_data_storage_tz.md`, `.cursor/plans/time-domain.md`. В перечисленных пакетах добавлены также файлы `__init__.py`.
