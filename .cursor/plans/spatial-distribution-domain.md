@@ -4139,3 +4139,17 @@ cutover и P1-B не начинались. Time/API-1 и чужие измене
 - REV-5. Перед сравнением привязок по ID проверяется длина исходной последовательности. Manifest из model_copy с повторной последней записью (39 вместо 38) отклонён как binding drift.
 
 Команда четырёх модулей из §15.35 — **54 теста OK за 1,099 с**. Исправления и P1-B предъявлены на повторную пользовательскую приёмку.
+
+### 15.37. Независимая проверка SP-P1-B на 2a5947da (2026-11-03)
+
+**CHANGES REQUIRED. REV-4 и REV-5 закрыты.** На текущем дереве с запрещающей заглушкой на CanonicalCodec.encode обе точки входа (schema и record admission) отказали до encode. Подмена BLOB wire value на `binary` дала `shape drift: 60006`. Лишний дубликат и замена последней записи первой при сохранении длины дали `binding drift`.
+
+**SP-P1-B-REV-6 · P2 · Проверка принимает неверный тип поля binding, если его значение сравнивается равным.** [packSchema.py, require_pack_schema_v1:84–86](../../backend/app/application/worldData/generators/hydrology/encoding/packSchema.py#L84). Контрпример для exact storage roster §§15.18.2/15.20.1 использует ту же подмену manifest через model_copy, что и REV-5. В исходных 38 entries заменить только запись ID 60005 на `entry.model_copy(update={"kind": "record"})`, сохранив остальные поля. Поместить полученный tuple в `manifest.model_copy(update={"entries": entries})` и временно подставить этот manifest как `OPEN_WATER_PACK_SCHEMA_V1`. Ожидается CanonicalEncodingError на проверке схемы. Фактически `require_pack_schema_v1()` и `require_pack_record_v1(root)` возвращают None, а `encode(root, manifest)` отказывает на `entries.34.kind`, где требуется экземпляр CanonicalTypeKind. Отдельная подмена только `type_id` на `60005.0` даёт такой же результат с ошибкой codec на `entries.34.type_id`. Сравнение dict считает эти строку и число равными значениям lock. Критерий закрытия — оба входа дают типизированный отказ уже при schema admission. Строгая повторная валидация manifest перед сравнением привязок доступна в существующей модели.
+
+Обязательная команда четырёх модулей из §15.34 прошла на этом дереве — **54 теста OK за 1,128 с**. Независимый контроль на исходном manifest подтвердил равенство целых записей и байтов encode→decode→encode для root (7518 байтов, SHA-256 совпал с §15.36) и shard (1913 байтов). REV-6 воспроизводится на намеренно повреждённом in-memory manifest. Предел проверки — storage schema и record admission P1-B.
+
+### 15.38. Исправление SP-P1-B-REV-6 (2026-11-03)
+
+Перед сравнением bindings с V1 lock функция require_pack_schema_v1 строго повторно валидирует текущий manifest через CanonicalSchemaManifest.model_validate. Вложенные RegisteredTypeEntry проходят проверку типов даже после model_copy. Ошибка валидации становится CanonicalEncodingError с указанием повреждённого поля. Эту же проверку вызывает require_pack_record_v1.
+
+Регрессия test_equal_but_mistyped_binding_refused_before_encode воспроизводит две независимые подмены в записи ID 60005. Строка «record» вместо CanonicalTypeKind.RECORD и float 60005.0 вместо int до исправления проходили через обе точки входа (четыре FAIL). После исправления все четыре вызова дают CanonicalEncodingError до encode. Прогон четырёх модулей из §15.37 — **55 тестов OK за 1,053 с**, включая V1 golden и проверки REV-4/5. **P1-B предъявлен на повторную пользовательскую приёмку.**

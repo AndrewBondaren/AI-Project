@@ -38,6 +38,19 @@ def invalid_water_design_input(message: str) -> PlanBuildFailure:
         code=WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value),))
 
 
+def water_intents_by_region(water_intents: tuple[PlacementIntent, ...],
+        admissions: Mapping[EntityUid, PlacementAdmissionInput]) -> dict[EntityUid, PlacementIntent]:
+    intents = tuple(PlacementIntent.model_validate(intent, strict=True) for intent in water_intents)
+    by_region = {intent.identity.region_uid: intent for intent in intents}
+    if (len(by_region) != len(intents)
+            or len({intent.identity.source_uid for intent in intents}) != len(intents)):
+        raise invalid_water_design_input("water source and placement identities must be unique")
+    for uid, intent in by_region.items():
+        if uid not in admissions or PlacementHeader.from_intent(intent) != admissions[uid].header:
+            raise invalid_water_design_input("every water intent must retain its exact batch admission header")
+    return by_region
+
+
 @dataclass(frozen=True)
 class WaterDesignUniverse:
     batch: PlacementBatchV2
@@ -72,15 +85,8 @@ class WaterDesignUniverse:
         if (bounds.x_min, bounds.x_max, bounds.y_min, bounds.y_max) != (
                 bbox.x_min, bbox.x_max, bbox.y_min, bbox.y_max):
             raise invalid_water_design_input("design requires whole-scope terrain matching batch topology")
-        intents = tuple(PlacementIntent.model_validate(intent, strict=True) for intent in water_intents)
-        by_region = {intent.identity.region_uid: intent for intent in intents}
-        if (len(by_region) != len(intents)
-                or len({intent.identity.source_uid for intent in intents}) != len(intents)):
-            raise invalid_water_design_input("water source and placement identities must be unique")
         admissions = {item.header.identity.region_uid: item for item in batch.objects}
-        for uid, intent in by_region.items():
-            if uid not in admissions or PlacementHeader.from_intent(intent) != admissions[uid].header:
-                raise invalid_water_design_input("every water intent must retain its exact batch admission header")
+        by_region = water_intents_by_region(water_intents, admissions)
 
         regions = TerrainRegionPlan.model_validate(regions, strict=True)
         requests = _REQUESTS.validate_python(coverage_requests, strict=True)

@@ -60,6 +60,19 @@ def records():
 
 
 class StorageSchemaTests(TestCase):
+    def test_equal_but_mistyped_binding_refused_before_encode(self):
+        root, _ = records()
+        manifest = packSchema.OPEN_WATER_PACK_SCHEMA_V1
+        for update in ({"kind": "record"}, {"type_id": 60005.0}):
+            entries = tuple(entry.model_copy(update=update) if entry.type_id == 60005 else entry
+                            for entry in manifest.entries)
+            malformed = manifest.model_copy(update={"entries": entries})
+            with patch.object(packSchema, "OPEN_WATER_PACK_SCHEMA_V1", malformed):
+                for check, args in ((packSchema.require_pack_schema_v1, ()),
+                                    (packSchema.require_pack_record_v1, (root,))):
+                    with self.subTest(update=update, check=check.__name__), self.assertRaises(CanonicalEncodingError):
+                        check(*args)
+
     def test_artifact_kind_effective_wire_value_is_locked(self):
         root, _ = records()
         manifest = packSchema.OPEN_WATER_PACK_SCHEMA_V1
