@@ -1,10 +1,15 @@
 import sqlite3
+from pydantic import TypeAdapter
 from hashlib import sha256
 
 from app.application.engine.contracts.invocation.executionStore import (
     Checkpoint, Claim, OwnershipConflict, RestoreFailure,
 )
 from app.dataModel.engine.dag.identity import ExecutionId, WaitId
+from app.dataModel.engine.dag.invocations.record import ExecutionCheckpointStatus, InvocationStatus
+
+
+_checkpoint_status = TypeAdapter[ExecutionCheckpointStatus](ExecutionCheckpointStatus)
 
 
 class SQLiteExecutionStore:
@@ -20,7 +25,8 @@ class SQLiteExecutionStore:
         with self._transaction():
             self.db.execute(
                 "INSERT INTO dag_executions(execution_id,schema_version,revision,fence,status,checkpoint_blob,checksum)"
-                " VALUES (?,2,0,0,'READY',?,?) ON CONFLICT(execution_id) DO NOTHING", (execution_id, blob, sha256(blob).hexdigest()),
+                " VALUES (?,2,0,0,?,?,?) ON CONFLICT(execution_id) DO NOTHING",
+                (execution_id, InvocationStatus.READY, blob, sha256(blob).hexdigest()),
             )
 
     async def load(self, execution_id: ExecutionId) -> Checkpoint:
@@ -33,7 +39,7 @@ class SQLiteExecutionStore:
         version, revision, status, blob, checksum = row
         if version != 2 or sha256(blob).hexdigest() != checksum:
             raise RestoreFailure("unsupported or corrupt execution checkpoint")
-        return Checkpoint(revision, status, blob)
+        return Checkpoint(revision, _checkpoint_status.validate_python(status), blob)
 
     async def claim(self, execution_id: ExecutionId, owner_id: str, seconds: int) -> Claim:
         if seconds <= 0 or not owner_id:
@@ -48,7 +54,7 @@ class SQLiteExecutionStore:
                 raise OwnershipConflict(execution_id)
             return Claim(execution_id, owner_id, row[0])
 
-    async def checkpoint(self, claim: Claim, revision: int, status: str, blob: bytes) -> int:
+    async def checkpoint(self, claim: Claim, revision: int, status: ExecutionCheckpointStatus, blob: bytes) -> int:
         with self._transaction():
             cursor = self.db.execute(
                 "UPDATE dag_executions SET revision=revision+1,status=?,checkpoint_blob=?,checksum=? "
@@ -75,9 +81,9 @@ class SQLiteExecutionStore:
     async def cancel(self, execution_id: ExecutionId, revision: int, blob: bytes) -> bool:
         with self._transaction():
             cursor = self.db.execute(
-                "UPDATE dag_executions SET revision=revision+1,status='CANCELLED',checkpoint_blob=?,checksum=?,"
+                "UPDATE dag_executions SET revision=revision+1,status=?,checkpoint_blob=?,checksum=?,"
                 "fence=fence+1,owner_id=NULL,lease_until=NULL WHERE execution_id=? AND revision=?",
-                (blob, sha256(blob).hexdigest(), execution_id, revision),
+                (InvocationStatus.CANCELLED, blob, sha256(blob).hexdigest(), execution_id, revision),
             )
             return cursor.rowcount == 1
 

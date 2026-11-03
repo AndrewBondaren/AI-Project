@@ -21,6 +21,13 @@ class InvocationStatus(StrEnum):
     CANCELLED = "CANCELLED"
 
 
+class ExecutionResponseStatus(StrEnum):
+    COMPLETED = "COMPLETED"
+
+
+type ExecutionCheckpointStatus = InvocationStatus | ExecutionResponseStatus
+
+
 class InvocationRecord(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, validate_assignment=True)
     execution_id: ExecutionIdValue
@@ -89,14 +96,16 @@ class InvocationGraph(BaseModel):
     registry: tuple[RegisteredContract, ...]
     records: dict[InvocationId, InvocationRecord]
 
-    def checkpoint_status(self) -> str:
+    def checkpoint_status(self) -> ExecutionCheckpointStatus:
         if self.cancellation is not None:
-            return "CANCELLED"
+            return InvocationStatus.CANCELLED
         if self.failure is not None:
-            return "FAILED"
+            return InvocationStatus.FAILED
         if self.response is not None:
-            return "COMPLETED"
-        return "WAITING_INPUT" if self.waiting_for_input else self.records[self.root].status.value
+            return ExecutionResponseStatus.COMPLETED
+        if self.waiting_for_input:
+            return InvocationStatus.WAITING_INPUT
+        return self.records[self.root].status
 
     def cancel_wait(self, child: InvocationRecord) -> None:
         if child.caller_invocation_id is None or child.status != InvocationStatus.WAITING_INPUT:

@@ -271,7 +271,7 @@ class DAGEngine(Generic[O, S]):
                 await settings.store.release(claim)
         except OwnershipConflict:
             saved = await settings.store.load(execution_id)
-            if saved.status != "CANCELLED" or settings.interaction is None:
+            if saved.status != InvocationStatus.CANCELLED or settings.interaction is None:
                 raise
             graph, _ = self._interaction_graph(execution_id, settings, saved)
             if graph.cancellation is None:
@@ -376,7 +376,7 @@ class DAGEngine(Generic[O, S]):
                 pass
             if durable is not None and durable.graph.interaction_owner is not None:
                 saved = await durable.store.load(durable.claim.execution_id)
-                if saved.status == "CANCELLED" and InvocationGraph.model_validate_json(saved.blob).cancellation is not None:
+                if saved.status == InvocationStatus.CANCELLED and InvocationGraph.model_validate_json(saved.blob).cancellation is not None:
                     # The cancelling request already persisted the terminal graph and revoked our claim.
                     raise
             try:

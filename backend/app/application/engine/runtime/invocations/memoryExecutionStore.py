@@ -3,6 +3,7 @@ from time import monotonic
 
 from app.application.engine.contracts.invocation.executionStore import Checkpoint, Claim, OwnershipConflict
 from app.dataModel.engine.dag.identity import ExecutionId, WaitId
+from app.dataModel.engine.dag.invocations.record import ExecutionCheckpointStatus, InvocationStatus
 
 
 @dataclass
@@ -18,7 +19,7 @@ class MemoryExecutionStore:
         self._entries: dict[ExecutionId, _Entry] = {}
 
     async def create(self, execution_id: ExecutionId, blob: bytes) -> None:
-        self._entries.setdefault(execution_id, _Entry(Checkpoint(0, "READY", blob)))
+        self._entries.setdefault(execution_id, _Entry(Checkpoint(0, InvocationStatus.READY, blob)))
 
     async def load(self, execution_id: ExecutionId) -> Checkpoint:
         return self._entries[execution_id].snapshot
@@ -40,7 +41,7 @@ class MemoryExecutionStore:
             raise OwnershipConflict(claim.execution_id)
         return entry
 
-    async def checkpoint(self, claim: Claim, revision: int, status: str, blob: bytes) -> int:
+    async def checkpoint(self, claim: Claim, revision: int, status: ExecutionCheckpointStatus, blob: bytes) -> int:
         entry = self._owned(claim)
         if entry.snapshot.revision != revision or entry.lease_until <= monotonic():
             raise OwnershipConflict(claim.execution_id)
@@ -64,7 +65,7 @@ class MemoryExecutionStore:
         entry = self._entries[execution_id]
         if entry.snapshot.revision != revision:
             return False
-        entry.snapshot = Checkpoint(revision + 1, "CANCELLED", blob)
+        entry.snapshot = Checkpoint(revision + 1, InvocationStatus.CANCELLED, blob)
         entry.fence += 1
         entry.owner = None
         entry.lease_until = 0

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from app.dataModel.engine.dag.identity import ExecutionId, WaitId
-from app.dataModel.engine.dag.invocations.record import InvocationGraph
+from app.dataModel.engine.dag.invocations.record import ExecutionCheckpointStatus, InvocationGraph
 
 
 class OwnershipConflict(RuntimeError):
@@ -23,7 +23,7 @@ class Claim:
 @dataclass(frozen=True)
 class Checkpoint:
     revision: int
-    status: str
+    status: ExecutionCheckpointStatus
     blob: bytes
 
     def with_cancelled_child(self, wait_id: WaitId) -> "Checkpoint":
@@ -40,7 +40,7 @@ class ExecutionStore(Protocol):
     async def create(self, execution_id: ExecutionId, blob: bytes) -> None: ...
     async def load(self, execution_id: ExecutionId) -> Checkpoint: ...
     async def claim(self, execution_id: ExecutionId, owner_id: str, seconds: int) -> Claim: ...
-    async def checkpoint(self, claim: Claim, revision: int, status: str, blob: bytes) -> int: ...
+    async def checkpoint(self, claim: Claim, revision: int, status: ExecutionCheckpointStatus, blob: bytes) -> int: ...
     async def cancel_child(self, execution_id: ExecutionId, revision: int, wait_id: WaitId) -> bool:
         """Publish a single validated wait cancellation by revision CAS, preserving the current lease."""
         ...

@@ -1,6 +1,7 @@
 """Durable, immutable bytes under a DI-owned database artifact root."""
 
 import asyncio
+from contextvars import copy_context
 import ctypes
 import hashlib
 import os
@@ -54,20 +55,21 @@ class ContentAddressedBlobBackend(ReadableBlobBackend):
 
     @staticmethod
     async def _io[T](call: Callable[[], T]) -> T:
-        # A cancelled caller must retain its writer claim until the worker stops.
-        task = asyncio.create_task(asyncio.to_thread(call))
+        # Runner shutdown cancels Tasks directly. Shield the executor Future itself
+        # so completion still means the worker has returned and closed its file.
+        worker = asyncio.get_running_loop().run_in_executor(None, copy_context().run, call)
         try:
-            return await asyncio.shield(task)
+            return await asyncio.shield(worker)
         except asyncio.CancelledError:
-            while not task.done():
+            while not worker.done():
                 try:
-                    await asyncio.shield(task)
+                    await asyncio.shield(worker)
                 except asyncio.CancelledError:
                     continue
                 except Exception:
                     break
-            if not task.cancelled():
-                task.exception()
+            if not worker.cancelled():
+                worker.exception()
             raise
 
     @staticmethod

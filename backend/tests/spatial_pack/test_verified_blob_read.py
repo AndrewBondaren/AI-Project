@@ -5,7 +5,7 @@ import io
 import threading
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest import IsolatedAsyncioTestCase
+from unittest import IsolatedAsyncioTestCase, TestCase
 from unittest.mock import patch
 
 from app.application.publication.errors import PublicationInfrastructureError
@@ -25,6 +25,41 @@ from tests.spatial_pack.test_storage_schema import records
 def descriptor(contract, data):
     return ArtifactRef(kind=ArtifactKind.BLOB, format_key=contract.key, format_version=1,
                        content_hash=hashlib.sha256(data).hexdigest(), nbytes=len(data))
+
+
+class RunnerShutdownTests(TestCase):
+    def test_shutdown_cancels_read_only_after_file_is_closed(self):
+        entered, release = threading.Event(), threading.Event()
+        observed = []
+
+        class Blocking(io.BytesIO):
+            def read(stream, size):
+                entered.set()
+                if not release.wait(5):
+                    raise AssertionError("worker did not receive release")
+                return super().read(size)
+
+        stream = Blocking(b"x")
+        backend = ContentAddressedBlobBackend(Path.cwd(), ROOT_FORMAT, Admission())
+
+        async def read():
+            try:
+                await backend.read_verified(descriptor(ROOT_FORMAT, b"x"), max_bytes=1)
+            except asyncio.CancelledError:
+                observed.append(stream.closed)
+                raise
+
+        async def main():
+            task = asyncio.create_task(read())
+            self.assertTrue(await asyncio.to_thread(entered.wait, 5))
+            # main returns with the read pending; the runner cancels all tasks.
+            asyncio.get_running_loop().call_later(0.1, release.set)
+            return task
+
+        with patch.object(Path, "open", return_value=stream):
+            task = asyncio.run(main())
+        self.assertTrue(task.cancelled())
+        self.assertEqual(observed, [True])
 
 
 class VerifiedReadTests(IsolatedAsyncioTestCase):
