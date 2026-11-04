@@ -13,6 +13,8 @@ _uid = TypeAdapter[str](EntityUid)
 
 class PublicationOperationId(str):
     def __new__(cls, value: str) -> "PublicationOperationId":
+        if isinstance(value, StrEnum):
+            raise TypeError("publication operation ID cannot be a StrEnum")
         return super().__new__(cls, _uid.validate_python(value, strict=True))
 
 

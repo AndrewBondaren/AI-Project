@@ -56,7 +56,10 @@ class SQLiteBakeOperations:
                               "WHERE operation_id=?", (operation,)).fetchone()
         if row is None:
             raise KeyError(operation)
-        return BakeRecord(BakeRequest.model_validate_json(row[0]), BakeStatus(row[1]),
+        status = BakeStatus(row[1])
+        if status in (BakeStatus.PUBLISHING, BakeStatus.RECOVERY_REQUIRED) and row[4] is None:
+            raise ValueError(f"bake operation {operation} in {status} requires publication_operation_id")
+        return BakeRecord(BakeRequest.model_validate_json(row[0]), status,
                           BakeResult.model_validate_json(row[2]) if row[2] else None, row[3],
                           PublicationOperationId(row[4]) if row[4] is not None else None)
 

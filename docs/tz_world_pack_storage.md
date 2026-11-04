@@ -129,7 +129,7 @@ flowchart TB
 | ID | Правило |
 |---|---|
 | WP-1 | Generators **не** пишут в pack/SQLite — только typed layout на выходе pass |
-| WP-2 | Persist skeleton — **только** `WorldPackWriter` на границе orchestrator |
+| WP-2 | До gameplay DAG вызывает доменную операцию публикации подготовленного Pack. Единственная точка активации V2 — общий world CAS с передачей holds. Существующий `WorldPackWriter` обслуживает legacy-путь до cutover. |
 | WP-3 | Persist **gameplay** — только `PatchStoreService` / `save_pass(layer_kind)`. **Authored outdoor city** (master) — pack city layer (`CITY_STRUCTURE` / `l.{uid}.settlement.zst`), не патчи — [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) |
 | WP-4 | Patch **>** pack на `(world_uid,x,y,z)`; `system_building_element IS NOT NULL` не затирается regen |
 | WP-5 | Climate read: `field.sample(x,y)` + patch override |
@@ -143,14 +143,19 @@ content-addressed, manifest immutable и адресуется hash, файлы �
 пишет pack: мутации тиков — patches, читаемые поверх (WP-4, WP-6). До
 публикации pack новые blobs — staged artifacts, недостижимые из
 опубликованного состояния; их пишет доменная операция materialization через
-staging port, а не generator и не Snapshot. Граница — старт gameplay (проверка DAG): до старта
+staging port, а не generator и не Snapshot. Граница — старт gameplay: при активации общий CAS проверяет ожидаемую публикацию и условие `gameplay_started == false`. До старта
 `light` → `full` → `detailed` дописывают один pack новыми версиями manifest;
 после старта всё — full_bake поверх light, detailed, runtime L2 (WP-13, lazy
-refine), правки локаций — уходит в snapshot, pack игры не меняется. WP-2 «только `WorldPackWriter`»
-этим пересматривается на contract freeze. Норматив —
+refine), правки локаций — уходит в snapshot, pack игры не меняется. Норматив —
 [`tz_world_snapshot.md`](./tz_world_snapshot.md) § «Staged artifacts и точки публикации».
 
+**Граница активации V2 (целевой контракт).** Hydrology и другие владельцы данных готовят доменные факты и ссылки. Spatial предоставляет общие типизированные контракты чтения. DAG выбирает, когда вызвать операцию World Pack с подготовленным кандидатом и ожидаемой публикацией. Pack проверяет кандидат, а publication coordinator обеспечивает одну физическую транзакцию для CAS и передачи удержаний. Конфликт возвращается caller. Ошибка передачи удержаний после CAS требует rollback, при котором другая транзакция продолжает видеть прежнюю версию. Решение заново подготовить кандидат и запустить следующую попытку принимает DAG.
+
+Приёмка должна подтвердить, что конфликт и сбой handoff не запускают вложенный bake, а прежний pin сохраняет доступ к своим артефактам. При cutover на V2 удаляются V1-паки и обходные пути активации, включая legacy writer и finalizer, по реестру SP-P-V1-REMOVE. Границу публичного OpenPipeline и его DAG caller согласуют после проверки typed Input/Output/Error и вложенных вызовов. [План Spatial, §§15.70–15.75](../.cursor/plans/spatial-distribution-domain.md#1575-spatial-и-активация-pack--callers-и-граница-операции)
+
 ---
+
+**Публичная граница Spatial.** Spatial предоставляет только открытые типизированные контракты чтения: запрос окна, результат, диагностику и привязку к ревизии. Доменный reader реализует этот контракт для своих данных. При интеграции владелец доменной операции может использовать контракт в своём OpenPipeline. Отдельный `SpatialOpenPipeline` в этой архитектуре отсутствует. Чтение байтов root/shard выполняется через artifact-порты, активация подготовленной версии принадлежит World Pack.
 
 ## Продуктовые идеи (утверждено)
 

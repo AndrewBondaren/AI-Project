@@ -1,4 +1,5 @@
 import asyncio
+import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import sqlite3
@@ -6,12 +7,31 @@ import tempfile
 from threading import Barrier
 import unittest
 
+from pydantic import ValidationError
+
 from app.application.worldData.bakeOperations.service import BakeService
 from app.application.worldData.bakeOperations.worker import BakeWorker
 from app.dataModel.world.bakeOperation.admission import BakeConflict, Joined, Started
 from app.dataModel.world.bakeOperation.record import BakeResult, BakeStatus, Waiter, PublicationOperationId
 from app.dataModel.world.bakeOperation.request import BakeKind, BakeRequest
 from app.db.repositories.sqlite.bakeOperations.operationStore import BakeFenceLost, SQLiteBakeOperations
+
+
+class BakeRequestTests(unittest.TestCase):
+    def test_publication_id_rejects_foreign_enum_with_valid_text(self):
+        self.assertIs(type(PublicationOperationId("RUNNING")), PublicationOperationId)
+        with self.assertRaises(TypeError):
+            PublicationOperationId(BakeStatus.RUNNING)
+
+    def test_format_version_on_wire(self):
+        fields = dict(world_uid="w", kind="FULL", scope=[], source_revision="r1",
+                      preparation_contract_version="1", parameters_fingerprint="a"*64)
+        default = BakeRequest.model_validate_json(json.dumps(fields))
+        self.assertEqual(default.version, 1)
+        self.assertEqual(default, BakeRequest.model_validate_json(json.dumps(dict(fields, version=1))))
+        for value in (True, 1.0, "1", None, 0, 2):
+            with self.subTest(version=value), self.assertRaises(ValidationError):
+                BakeRequest.model_validate_json(json.dumps(dict(fields, version=value)))
 
 
 class Binding:
@@ -200,6 +220,29 @@ class BakeOperationsTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.service.cancel_operation(next_op.operation_ref))
         with self.assertRaises(BakeFenceLost):
             self.first.begin(next_op.owner_token)
+
+    async def test_recovery_rejects_missing_publication_id_before_reconcile(self):
+        from unittest.mock import patch
+
+        owner = self.first.admit(self.request, self.waiter).owner_token
+        self.assertIsNone(self.first.read(owner.operation_id).publication_operation_id)
+        self.first.begin(owner)
+        self.assertIsNone(self.first.read(owner.operation_id).publication_operation_id)
+        self.first.publishing(owner, PublicationOperationId("publication"))
+        for status in (BakeStatus.PUBLISHING, BakeStatus.RECOVERY_REQUIRED):
+            for invalid_id in (None, ""):
+                with self.subTest(status=status, invalid_id=invalid_id):
+                    with self.a:
+                        self.a.execute("UPDATE bake_operations SET status=?,publication_operation_id=?,lease_until=0 "
+                                       "WHERE operation_id=?", (status, invalid_id, owner.operation_id))
+                    replacement = self.second.recover()
+                    with patch.object(self.binding, "reconcile", return_value=BakeResult(result_ref="unverified")) as reconcile:
+                        with self.assertRaises(ValueError):
+                            await BakeWorker(self.second, self.binding).run(replacement)
+                        reconcile.assert_not_called()
+                    row = self.a.execute("SELECT status,result_blob FROM bake_operations JOIN bake_world_claims "
+                                         "USING(world_uid,operation_id) WHERE operation_id=?", (owner.operation_id,)).fetchone()
+                    self.assertEqual(row, (status, None))
 
     async def test_unknown_publication_holds_claim_and_recovery_fences_stale_worker(self):
         old = self.first.admit(self.request, self.waiter).owner_token
