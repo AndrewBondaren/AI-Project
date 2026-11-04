@@ -2940,6 +2940,16 @@ Evidence гонок получено на отдельных соединени�
 
 Из backend: `../.venv/Scripts/python.exe -B -m unittest tests.snapshotCore.storage.publication.test_atomicity.AssignedPublicationTests tests.snapshotCore.contracts.test_typing` — 2 OK (9.255 s). Полный `../.venv/Scripts/python.exe -B -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — 164 теста OK (1 skipped, 117.988 s). Исправления предъявлены на повторное независимое ревью.
 
+#### Приёмка assigned Q и следующий срез 4D2 — player CAS, 2026-11-04
+
+Владелец принял срез «передача assigned Q в handlers и world CAS» после [повторного независимого ревью с результатом PASS](world-domain-4d2-assigned-q-review.md).
+
+Следующий срез расширяет ту же фазу публикации на явно заданных игроков. Сервис проверяет взаимно однозначное соответствие назначенных refs и expected players по player_uid до вызова handlers. После metadata и успешного world CAS он вызывает IPlayerPublicationStore.compare_append в порядке expectations с тем же writer scope и operation_id. MISMATCH возвращается через границу rollback как CONFLICT с указанием игрока.
+
+В AssignedPublicationTests добавлены два сценария с двумя реальными SQLite player CAS. Порядок назначенных refs обратен порядку expectations. Проверяются аргументы и порядок вызовов, оба player head, world head, metadata и маркеры handlers со второго соединения. Конфликт на втором игроке откатывает весь тик после успешного CAS первого игрока. Новый срез представлен отдельно от принятого assigned Q.
+
+Проверки рабочего дерева с реализацией player CAS: AssignedPublicationTests + contracts.test_typing — 2 OK (16,909 с), полный snapshotCore — 164 теста, OK (1 skipped, 121,960 с). Адресный Pyright для worldSnapshotService.py — 0 errors, 0 warnings.
+
 ## Контракты Snapshot для интеграции Time (2026-11-03)
 
 Входящий запрос из [Time §§14.2, 34, 37, 44–46, 48](./time-domain.md). Ниже три отдельных результата с владельцем Snapshot. Статус каждого — OPEN до согласования контракта и проверки соответствующего пути. Эти работы лежат вне среза leases 4C3-C.

@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from operator import attrgetter
 
-from app.dataModel.world.bakeOperation.record import BakeError, BakeStatus, DeliveryStatus, PublicationOperationId
+from app.dataModel.world.bakeOperation.record import BakeError, BakeResult, BakeStatus, DeliveryStatus, PublicationOperationId
 from app.dataModel.world.bakeOperation.request import BakeKind
 
 
@@ -20,7 +20,9 @@ class BakeOperation:
     owner_id: str
     fence: int
     lease_until: float
-    result_blob: str | None
+    result: BakeResult | None = field(metadata={
+        "col": "result_blob", "to_db": BakeResult.model_dump_json, "from_db": BakeResult.model_validate_json,
+    })
     error: BakeError | None = field(metadata={
         "to_db": BakeError.encode, "from_db": BakeError.decode,
     })

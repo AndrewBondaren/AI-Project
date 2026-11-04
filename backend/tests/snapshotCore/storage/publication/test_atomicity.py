@@ -341,13 +341,14 @@ class AssignedPublicationTests(unittest.TestCase):
         from app.dataModel.patch.sections.section import SectionHeader
         from app.dataModel.registryKey import RegistryKey
         from app.dataModel.patch.registry.sectionMetadata import PatchSectionRegistry
-        from app.dataModel.worldSnapshot.identity.refs import WorldSnapshotRef
-        from app.dataModel.worldSnapshot.metadata.envelope import WorldSnapshotMetadata
+        from app.dataModel.worldSnapshot.identity.publication import PlayerHeadExpectation
+        from app.dataModel.worldSnapshot.identity.refs import PlayerSnapshotRef, WorldSnapshotRef
+        from app.dataModel.worldSnapshot.metadata.envelope import PlayerSnapshotMetadata, WorldSnapshotMetadata
         from tests.snapshotCore.support.fixtures import STAMP
 
         async def check(mode):
             async with live_database() as bundle, live_database(bundle[0].path, seed=False) as peer:
-                _, commits, world, _, history, operations = bundle
+                db, commits, world, player_store, history, operations = bundle
                 base = await live_started(bundle)
                 before = base
                 if mode == "conflict":
@@ -356,7 +357,20 @@ class AssignedPublicationTests(unittest.TestCase):
                 await operations.claim_publication(OperationKind.SNAPSHOT_APPLY, op, "w1", "a"*64, "b"*64)
                 assigned = WorldSnapshotRef(world_uid="w1", timeline_id="t1", snapshot_id="candidate-world")
                 registry = Mock(spec=SectionRegistry)
-                service = WorldSnapshotService(registry, world)
+                service = WorldSnapshotService(registry, world, player_store)
+                player_refs = ()
+                expectations = ()
+                if mode in ("players", "player_conflict"):
+                    async with db.transaction():
+                        await db.conn.execute("INSERT INTO character_sheet(character_uid,character_type,display_name,"
+                                              "world_uid,created_at) VALUES ('p2','player','p2','w1',?)", (STAMP,))
+                    player_refs = tuple(PlayerSnapshotRef(player_uid=uid, snapshot_id=f"candidate-{uid}")
+                                        for uid in ("p2", "p1"))
+                    stale = PlayerSnapshotRef(player_uid="p2", snapshot_id="stale")
+                    expectations = (PlayerHeadExpectation(player_uid="p1", expected_head=None),
+                                    PlayerHeadExpectation(player_uid="p2", expected_head=stale
+                                                          if mode == "player_conflict" else None))
+                committed = mode in ("success", "players")
                 sections = []
                 handlers = []
                 targets = []
@@ -366,6 +380,9 @@ class AssignedPublicationTests(unittest.TestCase):
                     diagnostics=(FieldPathError(path=("two",), message="refused"),))
                 conflict = SectionRefused(category=SnapshotApplyOutcomeKind.CONFLICT,
                     diagnostics=(FieldPathError(path=(), message="world publication changed"),))
+                if mode == "player_conflict":
+                    conflict = SectionRefused(category=SnapshotApplyOutcomeKind.CONFLICT,
+                        diagnostics=(FieldPathError(path=("expected_players", "p2"), message="player publication changed"),))
                 faults = {"metadata_error": PublicationInfrastructureError("after append"),
                           "metadata_cancel": asyncio.CancelledError("after append")}
 
@@ -391,16 +408,21 @@ class AssignedPublicationTests(unittest.TestCase):
                     nonlocal outer_scope
                     async with commits.transaction(op) as scope:
                         outer_scope = scope
-                        validation = SnapshotValidationContext(op, base, (), (), scope.read_scope)
-                        async with service._apply_to_target(scope, validation, tuple(sections), assigned, ()) as (ctx, receipts):
+                        validation = SnapshotValidationContext(op, base, expectations, (), scope.read_scope)
+                        async with service._apply_to_target(scope, validation, tuple(sections), assigned, player_refs) as (ctx, receipts):
                             await history.append(scope, WorldSnapshotMetadata(ref=assigned, parent=base.snapshot_head,
                                 operation_id=op, turn_id=1, created_at=STAMP, envelope_format_version=1,
                                 base_pack_hash=base.pack_hash, state_refs=(), history_refs=(), retained_artifacts=()), receipts)
+                            for ref in ctx.player_snapshots:
+                                await history.append(scope, PlayerSnapshotMetadata(ref=ref, parent=None, operation_id=op,
+                                    turn_id=1, created_at=STAMP, envelope_format_version=1, state_refs=(),
+                                    history_refs=(), retained_artifacts=()), receipts)
                             if mode in faults:
                                 raise faults[mode]
 
-                with patch.object(world, "compare_append", wraps=world.compare_append) as cas:
-                    if mode == "success":
+                with (patch.object(world, "compare_append", wraps=world.compare_append) as cas,
+                      patch.object(player_store, "compare_append", wraps=player_store.compare_append) as player_cas):
+                    if committed:
                         await execute()
                     elif mode in faults:
                         with self.assertRaises(type(faults[mode])) as error:
@@ -418,14 +440,20 @@ class AssignedPublicationTests(unittest.TestCase):
                         cas.assert_not_awaited()
                     else:
                         self.assertIs(cas.await_args.args[2], targets[0])
-                self.assertEqual(await peer[2].read("w1"), targets[0] if mode == "success" else before)
-                self.assertEqual((await peer[4].read(assigned)) is not None, mode == "success")
+                    by_uid = {ref.player_uid: ref for ref in player_refs}
+                    self.assertEqual([call.args for call in player_cas.await_args_list],
+                                     [(outer_scope, head, by_uid[head.player_uid], op) for head in expectations])
+                for ref in player_refs:
+                    self.assertEqual(await peer[3].read(ref.player_uid), ref if committed else None)
+                    self.assertEqual((await peer[4].read(ref)) is not None, committed)
+                self.assertEqual(await peer[2].read("w1"), targets[0] if committed else before)
+                self.assertEqual((await peer[4].read(assigned)) is not None, committed)
                 async with peer[0].conn.execute("SELECT name FROM worlds WHERE world_uid='w1'") as cur:
                     self.assertEqual((await cur.fetchone())[0], "w1")
                 async with peer[0].conn.execute("SELECT operation_id FROM publication_operations "
                                                 "WHERE operation_id LIKE 'marker-%' ORDER BY operation_id") as cur:
                     self.assertEqual([row[0] for row in await cur.fetchall()],
-                                     ["marker-one", "marker-three", "marker-two"] if mode == "success" else [])
-        for mode in ("success", "refuse", "conflict", "metadata_error", "metadata_cancel"):
+                                     ["marker-one", "marker-three", "marker-two"] if committed else [])
+        for mode in ("success", "refuse", "conflict", "metadata_error", "metadata_cancel", "players", "player_conflict"):
             with self.subTest(mode=mode):
                 run_async(check(mode))
