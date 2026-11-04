@@ -4,6 +4,7 @@ from unittest import TestCase
 from pydantic import ValidationError
 
 from app.application.planning.service.planningService import PlanBuildFailure
+from app.application.worldData.generators.terrain.designedWater.preparation.coastlineConstraintPreparer import CoastlineConstraintPreparer
 from app.application.worldData.placement.adapters.water import prepare_authored_water_geometry
 from app.application.worldData.placement.adapters.waterGeometry.nativeGeometry import prepare_native_water_geometry
 from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
@@ -78,3 +79,18 @@ class NativeAuthoredGeometryTests(TestCase):
             prepare_native_water_geometry(request())
         with self.assertRaises(TypeError):
             prepare_authored_water_geometry(AuthoredWaterGeometryRequest(**self.args))
+
+    def test_native_constraints_use_fine_ring_and_inner_strip(self):
+        coast = CoastlineWaterSource(value=DeclaredCoastline(location_uid="coast", kind=BasinKind.SEA,
+            path=ring(), closed=True, water_side=WaterSide.INTERIOR))
+        preparer = CoastlineConstraintPreparer()
+        constraints = preparer.prepare_native(AuthoredWaterGeometryRequest(**(self.args | {"source": coast})))
+        allowed = frozenset((x, y) for y in range(5, 12) for x in range(5, 12))
+        self.assertEqual(constraints.allowed_cells, allowed)
+        self.assertEqual(constraints.required_cells, allowed - {(x, y) for y in range(6, 11) for x in range(6, 11)})
+        self.assertEqual(constraints.pre_hydrology_ref, self.window.ref)
+        self.assertIs(constraints.coordinate_space, CoordinateSpace.WORLD_FINE_GRID)
+        with self.assertRaises(TypeError):
+            preparer.prepare_native(request())
+        with self.assertRaises(ValueError):
+            preparer.prepare_native(AuthoredWaterGeometryRequest(**self.args))

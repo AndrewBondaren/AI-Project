@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from uuid import uuid4
 
 from app.dataModel.world.bakeOperation.admission import BakeAdmission, BakeConflict, Joined, Started
-from app.dataModel.world.bakeOperation.record import BakeOwner, BakeRecord, BakeResult, BakeStatus, RolledBack, Waiter, PublicationOperationId
+from app.dataModel.world.bakeOperation.record import BakeError, BakeErrorKind, BakeOwner, BakeRecord, BakeResult, BakeStatus, RolledBack, Waiter, PublicationOperationId
 from app.dataModel.world.bakeOperation.request import BakeRequest
 from app.db.repositories.sqlite.bakeOperations.waiterStore import SQLiteBakeWaiters
 
@@ -60,7 +60,8 @@ class SQLiteBakeOperations:
         if status in (BakeStatus.PUBLISHING, BakeStatus.RECOVERY_REQUIRED) and row[4] is None:
             raise ValueError(f"bake operation {operation} in {status} requires publication_operation_id")
         return BakeRecord(BakeRequest.model_validate_json(row[0]), status,
-                          BakeResult.model_validate_json(row[2]) if row[2] else None, row[3],
+                          BakeResult.model_validate_json(row[2]) if row[2] else None,
+                          BakeError.decode(row[3]) if row[3] is not None else None,
                           PublicationOperationId(row[4]) if row[4] is not None else None)
 
     def cancel_preparation(self, operation: str) -> bool:
@@ -119,24 +120,25 @@ class SQLiteBakeOperations:
     def uncertain(self, token: BakeOwner, publication: PublicationOperationId) -> BakeStatus:
         with self.transaction():
             committed = self.db.execute(
-                "SELECT 1 FROM bake_operations WHERE operation_id=? AND owner_id=? AND fence=? "
-                "AND publication_operation_id=? AND status=? AND result_blob IS NOT NULL",
-                (token.operation_id, token.owner_id, token.fence, publication.value, BakeStatus.SUCCEEDED),
+                "SELECT status FROM bake_operations WHERE operation_id=? AND owner_id=? AND fence=? "
+                "AND publication_operation_id=? AND ((status=? AND result_blob IS NOT NULL AND error IS NULL) "
+                "OR (status=? AND result_blob IS NULL AND error IS NOT NULL))",
+                (token.operation_id, token.owner_id, token.fence, publication.value, BakeStatus.SUCCEEDED, BakeStatus.FAILED),
             ).fetchone()
             if committed:
-                return BakeStatus.SUCCEEDED
+                return BakeStatus(committed[0])
             if self._guard(token).status not in (BakeStatus.PUBLISHING, BakeStatus.RECOVERY_REQUIRED):
                 raise ValueError("no publication to recover")
             self.db.execute("UPDATE bake_operations SET status=? WHERE operation_id=?", (BakeStatus.RECOVERY_REQUIRED, token.operation_id))
             return BakeStatus.RECOVERY_REQUIRED
 
-    def _terminal(self, token: BakeOwner, result: BakeResult | None, error: str | None) -> None:
+    def _terminal(self, token: BakeOwner, result: BakeResult | None, error: BakeError | None) -> None:
         self.db.execute("UPDATE bake_operations SET status=?,result_blob=?,error=? WHERE operation_id=?",
                         (BakeStatus.SUCCEEDED if result else BakeStatus.FAILED, result.model_dump_json() if result else None,
-                         error, token.operation_id))
+                         BakeError.encode(error) if error is not None else None, token.operation_id))
         self.db.execute("DELETE FROM bake_world_claims WHERE operation_id=?", (token.operation_id,))
 
-    def prepared_terminal(self, token: BakeOwner, result: BakeResult | None, error: str | None) -> None:
+    def prepared_terminal(self, token: BakeOwner, result: BakeResult | None, error: BakeError | None) -> None:
         with self.transaction():
             if self._guard(token).status != BakeStatus.RUNNING or (result is None) == (error is None):
                 raise ValueError("invalid preparation outcome")
@@ -153,4 +155,4 @@ class SQLiteBakeOperations:
             elif isinstance(outcome, BakeResult):
                 self._terminal(token, outcome, None)
             else:
-                self._terminal(token, None, outcome.reason)
+                self._terminal(token, None, BakeError(kind=BakeErrorKind.PUBLICATION_ROLLED_BACK, message=outcome.reason))

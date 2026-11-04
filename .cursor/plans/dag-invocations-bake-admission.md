@@ -362,3 +362,43 @@ revision 2
 **Первые прогоны.** R6 — 8/8 OK за 41,046 с. Полный DAG по команде §9 — 382/382 OK за 197,117 с, 21 модуль. Оба набора прошли без повторов. Вспомогательная проба границ сначала остановилась до проверок из-за отказа sandbox открыть временную SQLite БД, повтор вне sandbox прошёл. У отдельной runtime-пробы были предупреждения Windows об очистке временных файлов, сценарии завершились с кодом 0.
 
 **Вопросы автору.** Как трактовать scope=() по видам LIGHT/FULL/DETAILED и где проверять обязательные цели? Конструктор принимает пустой tuple для всех трёх, §§6–8 не задают минимальную длину. Допустимы ли явное создание ID из чужого StrEnum и приведение version=True к 1? Требуется ли upgrade существующей БД с уже применённой миграцией 1? Проверен restart на БД с таблицами R6. Исторический upgrade и настоящий kill процесса остаются непроверенными. Production bindings входят в R7.
+
+## Итог повторного ревью R6 от 2026-11-04
+
+**PASS по §§6–8.** База предыдущего ревью — `362c54fe`. Проверено рабочее дерево на HEAD `8de6092f6db35f75240fcc0e7d36fcaae26b738a`, включая незакоммиченные `worker.py`, `operationStore.py` и `test_bake_operations.py`. Вердикт относится к этому дереву.
+
+| Прежняя находка | Вердикт и проверенный результат |
+|---|---|
+| P1 · Повреждённый checkpoint | **CLOSED.** На двух соединениях все четыре сочетания PUBLISHING / RECOVERY_REQUIRED и SQL NULL / пустой строки остановили worker до reconcile. Статус и claim сохранились. В PENDING и RUNNING чтение NULL вернуло None. |
+| P2 · Потеря ответа после publish | **CLOSED.** Настоящий commit с последующим OperationalError дал SUCCEEDED, один эффект, один publish и снятый claim. Worker завершился штатно. После rollback claim удерживался до подтверждения исхода. |
+| P2 · Некорректный submit | **CLOSED.** При пустом и заполненном кеше отсутствие request или waiter давало TypeError до authorize, ready и admit. Все три таблицы bake остались пустыми. |
+| P2 · Общий DB mapper | **CLOSED.** Оба пути чтения и запись через to_row проверены для заполненного ID и допустимого NULL. SQL round-trip прошёл также для BakeWaiter, World и DagExecution. |
+| P2 · Строгая типизация | **CLOSED.** Все девять модулей R6 входят в include и strict штатного конфига. Статические и runtime-пробы приведены ниже. |
+| P2 из повторного ревью · Потеря ответа после reconcile | **CLOSED.** После commit с BakeResult или RolledBack worker подтвердил соответствующий SUCCEEDED или FAILED без повторной публикации. При неизвестном исходе сохранился исходный claim. Если мир уже заняла следующая операция, её claim сохранился. Старый fence и чужой ID при подтверждении терминала отклонены. |
+
+### Pyright strict — PASS
+
+Штатный конфиг прошёл без диагностик. Во временной strict-пробе приняты async stage с результатом PublicationOperationId, publishing(token, publication_id), send_text(publication_id.value) при параметре str и require("pub-1") при параметре object. Получены ровно шесть ожидаемых ошибок.
+
+| Выражение во временном probe.py | Диагностика |
+|---|---|
+| Строки 11 и 14 · stage возвращает str или None | Две reportIncompatibleMethodOverride |
+| Строки 23 и 25 · publishing получает "pub-1" или ExecutionId | Две reportArgumentType |
+| Строка 24 · send_text получает сам PublicationOperationId | reportArgumentType |
+| Строка 26 · присваивание publication_id.value | reportAttributeAccessIssue, поле доступно только для чтения |
+
+### Нетипизированный Python — PASS
+
+Валидный PublicationOperationId("pub-1") через async stage дал SUCCEEDED, снятый claim и publish=1. Прямой publishing перевёл операцию в PUBLISHING. По отдельности проверены "pub-1", пустая строка, пробелы, None, bytes, чужой StrEnum и посторонний объект с полем value. Все семь значений через stage дали FAILED с ошибкой «expected a PublicationOperationId», снятым claim и publish=0. Прямой publishing во всех семи случаях выбросил TypeError, сохранив RUNNING и claim.
+
+require вернул исходный экземпляр для готового ID и выбросил TypeError для строки. Конструктор отклонил ForeignEnum.X с TypeError. У готового ID type(value) is str, isinstance(id, str) и id == "pub-1" ложны. Присваивание value вызвало FrozenInstanceError. Аннотация str у обычной функции send_text сама по себе вызов в Python не блокирует.
+
+При чтении BakeRequest из JSON пропущенная version и целое 1 дали int со значением 1. Для true, 1.0, "1" и null получен ValidationError с «version must be an integer», для 0 и 2 — «Input should be 1».
+
+### SQLite — PASS
+
+Одну строку записал текущий worker, другую — исторический SQLiteBakeOperations.publishing из `362c54fe` с тогдашним PublicationOperationId(str). После закрытия и повторного открытия БД у обеих строк typeof(publication_operation_id) = 'text'. И SQLiteBakeOperations.read, и from_row(BakeOperation, row) вернули точный тип PublicationOperationId с value == "pub-1". Для обеих строк колонки и параметры из to_row переданы напрямую в INSERT под новым PK. Копии прошли те же проверки.
+
+**Прогоны.** До правки reconcile первые попытки внутри sandbox прерваны на Windows asyncio socketpair. Вне sandbox R6 прошёл 14/14, полный §9 дал 387/388 с OwnershipConflict в test_slow_effect_retains_one_second_lease. Изолированный повтор прошёл 1/1, полный повтор — 388/388. После правки reconcile профильный набор прошёл 15/15 за 55,557 с, полный — 389/389 за 118,805 с. В отдельном повторном ревью полный набор прошёл с первого запуска, 389/389 за 104,777 с.
+
+Проверка конкретной цели scope остаётся в builder R7. Для тестовых БД принят reset, upgrade не требуется. Принудительный kill процесса и физический обрыв соединения не воспроизводились.

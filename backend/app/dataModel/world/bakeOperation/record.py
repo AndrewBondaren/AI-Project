@@ -50,6 +50,31 @@ class DeliveryStatus(StrEnum):
     DELIVERED = "DELIVERED"
 
 
+class BakeErrorKind(StrEnum):
+    PREPARATION_FAILED = "PREPARATION_FAILED"
+    PUBLICATION_ROLLED_BACK = "PUBLICATION_ROLLED_BACK"
+    LEGACY = "LEGACY"
+
+
+class BakeError(BaseModel):
+    model_config = ConfigDict(frozen=True, strict=True, extra="forbid")
+    kind: BakeErrorKind
+    message: str
+
+    @staticmethod
+    def encode(value: object) -> bytes:
+        if not isinstance(value, BakeError):
+            raise TypeError("expected a BakeError")
+        return value.model_dump_json().encode("utf-8")
+
+    @classmethod
+    def decode(cls, stored: bytes | str) -> Self:
+        # Existing rows store arbitrary diagnostic text. New envelopes use SQLite BLOB.
+        if isinstance(stored, str):
+            return cls(kind=BakeErrorKind.LEGACY, message=stored)
+        return cls.model_validate_json(stored)
+
+
 class BakeResult(BaseModel):
     model_config = ConfigDict(frozen=True, strict=True, extra="forbid")
     result_ref: EntityUid
@@ -72,5 +97,5 @@ class BakeRecord:
     request: BakeRequest
     status: BakeStatus
     result: BakeResult | None
-    error: str | None
+    error: BakeError | None
     publication_operation_id: PublicationOperationId | None

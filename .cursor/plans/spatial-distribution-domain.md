@@ -4705,3 +4705,58 @@ SP-P2W проектирует и проверяет операцию публи�
 В tests/test_spatial_read_contract.py тестовый reader структурно удовлетворяет Protocol. Через него проверены успех и отказ с исходным запросом. Адресные проверки включают касающиеся и пересекающиеся boxes, обе формы revision, повреждённые вложенные модели, REQUIRED/PREVIEW, несколько paths и reasons. Импорты ведут в существующие dataModel-типы. Прямые counts Python-файлов после шага: spatial — 4, query — 2, read — 5, tests — 280 (один новый модуль по карте §15.76).
 
 Windows: из backend команда ../.venv/Scripts/python -B -m unittest -v tests.test_spatial_read_contract дала 7/7 OK. Для asyncio.run использован прогон вне sandbox после остановки первого прогона на async-тесте. Из корня node node_modules/pyright/index.js -p pyrightconfig.cascade.json backend/app/dataModel/spatial/query backend/app/dataModel/spatial/read backend/tests/test_spatial_read_contract.py — 0 ошибок и предупреждений. Проверен in-process контракт; независимое ревью и пользовательская приёмка SP-1C впереди.
+
+### 15.78. Независимое ревью SP-1C (2026-11-04)
+
+**CHANGES REQUIRED.** Основание — §§14.1–14.6, принятые F1–F3 (§§14.9–14.14) и §§15.76–15.77. Проверен фактический diff `8de6092f^..8de6092f` в scope SP-1C. Все семь shared-файлов и адресный тест уже tracked. Дополнительных untracked-файлов в query/read при проверке не было.
+
+1. **P2. Повреждённый frame проходит shared admission.** [window.py:58](../../backend/app/dataModel/spatial/query/window.py#L58) возвращает исходный экземпляр legacy topology после проверки его полей. На данных из `SpatialReadContractTest.setUp` взять `frame = self.frame.model_copy(update={"canonicalize": None})`, затем `window = self.window.model_copy(update={"topology": frame})` и вызвать `SpatialReadRequest.model_validate(self.request.model_copy(update={"window": window}))`. По F2 ожидается отказ до чтения. Фактически запрос принят, и вызов `request.window.topology.canonicalize(0, 0)` даёт `TypeError: 'NoneType' object is not callable` даже для точки внутри frame.
+2. **P2. Публичный тестовый путь не демонстрирует admission до чтения.** [test_spatial_read_contract.py:45](../../backend/tests/test_spatial_read_contract.py#L45) сразу обращается к revision. Передать `SpatialReadRequest.model_construct()` через переменную `reader: SpatialFieldReader[int]` в `await reader.read_window(request)`. Ожидаемый результат пути admission → read по §15.76 п. 2 — ValidationError до сравнения ревизий. Фактически fixture начинает исполнение и выбрасывает AttributeError при доступе к revision. Для `self.request.model_copy(update={"mode": "required"})` выполняется ветка успеха, ValidationError возникает лишь при сборке SpatialSlice. Это пробел в тестовом caller/admission: проверку можно показать на стороне caller до вызова Protocol.
+
+**Evidence.** Из backend повторён `../.venv/Scripts/python -B -m unittest -v tests.test_spatial_read_contract` — 7/7 OK вне sandbox после остановки sandbox-прогона на async-тесте. Адресный Pyright по команде §15.77 — 0 ошибок и предупреждений. Через типизированный fixture проверены Slice и Failure с равенством всего request, включая UUID, окно, режим и ревизию. Импорты соответствуют карте §14.5, прямые counts spatial/query/read/tests — 4/2/5/280.
+
+- Для 729 упорядоченных пар boxes из всех непустых интервалов с концами −1, 0, 1 по каждой оси результат совпал с независимой проверкой строгого порядка и пересечения трёх half-open интервалов. Проверены касание гранью, ребром и вершиной, дубли, обратный порядок, пустые и перевёрнутые интервалы, выход за четыре XY-границы и допустимость max+1. Строка, bool и float в координате отклонены.
+- Raw dict вместо topology, bounds, revision или source ref, строковые space/mode, неполные constructed bounds/ref, нечётная ширина SPHERE и повреждённый вложенный fingerprint отклонены. Исключение для подмены метода frame описано выше.
+- Bootstrap Slice требует точного PlanRef, другая output revision того же мира недостаточна. Pinned Pack принимает BLOB, отклоняет отсутствие BLOB, дубли и дополнительный PlanRef чужого мира. Null pack_hash допустим для запроса и Failure с DOMAIN_REJECTED, но отклонён при создании Slice.
+- REQUIRED отклоняет непустые issues, PREVIEW сохраняет их. Failure сохранил три ошибки в исходном порядке, включая SOURCE_MISSING с paths (0,) и (1,), затем SOURCE_CORRUPT. Пустой errors и добавленный payload отклонены.
+
+**Пределы.** Ревью охватывает in-process API и тестовый reader. Проверка принадлежности BLOB pinned manifest, равенства frame источнику, доменного coverage и семантики T/F1, а также выбор причины отказа реальным reader относятся к SP-3 и профильной интеграции. Storage IO и production reader не проверялись. Пользовательская приёмка SP-1C остаётся отдельным шагом.
+
+### 15.79. Отдельный аудит статической типизации SP-1C (2026-11-04)
+
+**PASS в scope статической типизации §§14 и 15.76.** Проверены фактические публичные импорты из модулей `spatial.query.window` (SpatialBox, SpatialWindow), `spatial.read.request` (SpatialReadRequest, SpatialReadRevision, SpatialReadMode), `spatial.read.reader` (SpatialFieldReader), `spatial.read.result` (SpatialReadResult, SpatialSlice, SpatialSourceRef), `spatial.read.failure` (SpatialReadFailure, SpatialReadError) и `spatial.readFailureReason` (SpatialReadFailureReason). Полный префикс модулей — `app.dataModel.`
+
+Команды из корня, в порядке базовый / positive / negative:
+
+```powershell
+node node_modules/pyright/index.js -p pyrightconfig.cascade.json backend/app/dataModel/spatial/query backend/app/dataModel/spatial/read backend/tests/test_spatial_read_contract.py
+node node_modules/pyright/index.js -p pyrightconfig.cascade.json backend/tests/typing/_sp1c_audit_positive.py
+node node_modules/pyright/index.js -p pyrightconfig.cascade.json backend/tests/typing/_sp1c_audit_negative.py
+```
+
+Базовый и positive прогоны дали по 0 errors, 0 warnings, 0 informations, exit 0. Positive fixture присвоил существующий async FixtureReader переменной SpatialFieldReader[int]. Отдельная consumer-функция принимала параметр типа SpatialFieldReader[int], поэтому анализ вызова не мог опираться на конкретный класс. Для результата `await reader.read_window(request)` прошёл `assert_type(result, SpatialReadResult[int])`. После `isinstance(result, SpatialSlice)` прошли `assert_type(result, SpatialSlice[int])` и `assert_type(result.payload, int)`. В ветви else прошёл `assert_type(result, SpatialReadFailure)`.
+
+Negative fixture дал ровно четыре ошибки на четырёх целевых выражениях, 0 warnings, 0 informations, exit 1. Фрагменты фактических диагностик Pyright:
+
+| Строка:колонка | Проба | Сообщение | Правило |
+|---|---|---|---|
+| 17:33 | Присвоение синхронного Sync() | `Function return type "SpatialReadResult[int]" is incompatible with type "CoroutineType[Any, Any, SpatialReadResult[T@SpatialFieldReader]]"` | reportAssignmentType |
+| 18:34 | Присвоение WrongParam() с request: str | `Parameter 1: type "SpatialReadRequest" is incompatible with type "str"` | reportAssignmentType |
+| 19:40 | Присвоение WrongResult() с результатом SpatialReadResult[str] переменной SpatialFieldReader[int] | `Type "WrongResult" is not assignable to declared type "SpatialFieldReader[int]"` и `Function return type "CoroutineType[Any, Any, SpatialReadResult[str]]" is incompatible with type "CoroutineType[Any, Any, SpatialReadResult[T@SpatialFieldReader]]"` | reportAssignmentType |
+| 23:18 | result.payload сразу после await, до сужения | `Cannot access attribute "payload" for class "SpatialReadFailure"` | reportAttributeAccessIssue |
+
+**Пределы проверки.** Pyright проверил сигнатуры и сужение типов. Значения проверяются при выполнении: порядок, пересечение и границы boxes, присутствие точного bootstrap PlanRef или нужного BLOB в source_refs и запрет issues для REQUIRED — в shared-моделях. Сверка ревизии с подготовленным источником, принадлежность BLOB конкретной публикации и достаточность покрытия — обязанности доменного reader. Статический PASS не закрывает findings §15.78. Временные fixtures удалены. Пользовательская приёмка отдельная.
+
+### 15.80. SP-1C — исправление двух P2 из §15.78
+
+До правки запрос принял frame с canonicalize=None, а FixtureReader при прямой передаче SpatialReadRequest.model_construct() упал с AttributeError на revision. Теперь SpatialWindow перед чтением полей проверяет точный тип и полный набор атрибутов экземпляров WorldTopology и WorldBounds по metadata POJO. Регрессия test_reject_shadowed_frame_methods проверяет ValidationError при подмене topology.canonicalize и bounds.contains через вложенный model_copy.
+
+В тестовом caller admitted_read вход повторно валидируется до вызова SpatialFieldReader. Через этот путь проверены оба валидных исхода и два недопустимых входа: пустой model_construct и строковый mode после model_copy. В test_invalid_request_never_enters_reader оба получают ValidationError, счётчик входов в reader остаётся нулевым. Это доказательство порядка вызовов тестового caller; production caller проверяется при интеграции.
+
+Windows unittest tests.test_spatial_read_contract — 9/9 OK; адресный Pyright по модулям query/read и тесту — 0 ошибок и предупреждений. SP-1C повторно предъявлен на независимое ревью.
+
+### 15.81. SP-1C — независимая повторная проверка исправления §15.80
+
+**PASS. Обе находки P2 из §15.78 закрыты.** Проверен рабочий diff в query/window.py и tests/test_spatial_read_contract.py. Подмена topology.canonicalize или вложенного bounds.contains на None через model_copy теперь даёт ValidationError при повторной валидации запроса. На пути admitted_read → SpatialFieldReader[int].read_window пустой SpatialReadRequest.model_construct() и скопированный запрос со строковым mode дают ValidationError до входа в reader. После каждой пробы reader.calls равен 0. Валидные запросы по тому же пути возвращают Slice и Failure с точным исходным запросом.
+
+Из backend повторён `../.venv/Scripts/python -B -m unittest -v tests.test_spatial_read_contract` — 9/9 OK. Из корня повторён `node node_modules/pyright/index.js -p pyrightconfig.cascade.json backend/app/dataModel/spatial/query backend/app/dataModel/spatial/read backend/tests/test_spatial_read_contract.py` — 0 ошибок и предупреждений. Повторная проверка охватывает shared admission и тестовый caller. Проверка production caller относится к интеграции SP-3. Пользовательская приёмка отдельная.

@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from app.application.worldData.bakeOperations.service import BakeService
 from app.application.worldData.bakeOperations.worker import BakeWorker
 from app.dataModel.world.bakeOperation.admission import BakeConflict, Joined, Started
-from app.dataModel.world.bakeOperation.record import BakeResult, BakeStatus, Waiter, PublicationOperationId
+from app.dataModel.world.bakeOperation.record import BakeError, BakeErrorKind, BakeResult, BakeStatus, Waiter, PublicationOperationId
 from app.dataModel.world.bakeOperation.request import BakeKind, BakeRequest
 from app.db.repositories.sqlite.bakeOperations.operationStore import BakeFenceLost, SQLiteBakeOperations
 
@@ -35,6 +35,17 @@ class BakeRequestTests(unittest.TestCase):
         for value in (True, 1.0, "1", None, 0, 2):
             with self.subTest(version=value), self.assertRaises(ValidationError):
                 BakeRequest.model_validate_json(json.dumps(dict(fields, version=value)))
+
+
+class LoseReply(sqlite3.Connection):
+    lose_reply = False
+
+    def __exit__(self, *args):
+        result = super().__exit__(*args)
+        if self.lose_reply:
+            self.lose_reply = False
+            raise sqlite3.OperationalError("lost commit reply")
+        return result
 
 
 class Binding:
@@ -217,7 +228,8 @@ class BakeOperationsTests(unittest.IsolatedAsyncioTestCase):
         self.expire()
         self.binding.evidence = RolledBack("rollback confirmed")
         await self.service.worker.run(self.first.recover())
-        self.assertEqual(self.second.read(token.operation_id).error, "rollback confirmed")
+        self.assertEqual(self.second.read(token.operation_id).error,
+                         BakeError(kind=BakeErrorKind.PUBLICATION_ROLLED_BACK, message="rollback confirmed"))
         next_op = self.first.admit(self.request, self.other)
         self.assertIsInstance(next_op, Started)
         self.assertTrue(self.service.cancel_operation(next_op.operation_ref))
@@ -233,6 +245,27 @@ class BakeOperationsTests(unittest.IsolatedAsyncioTestCase):
                         self.service.submit(request, waiter)
                 ready.assert_not_called()
         self.assertEqual(self.a.execute("SELECT count(*) FROM bake_operations").fetchone()[0], 0)
+
+    async def test_preparation_error_and_legacy_text_round_trip(self):
+        from unittest.mock import patch
+        from app.db.mapper import from_row, to_row
+        from app.db.models.bakeOperation import BakeOperation
+
+        token = self.first.admit(self.request, self.waiter).owner_token
+        with patch.object(self.binding, "stage", side_effect=RuntimeError("stage failed")):
+            await self.service.worker.run(token)
+        expected = BakeError(kind=BakeErrorKind.PREPARATION_FAILED, message="stage failed")
+        self.b.row_factory = sqlite3.Row
+        row = from_row(BakeOperation, self.b.execute("SELECT * FROM bake_operations").fetchone())
+        self.assertEqual(row.error, expected)
+        columns, values = to_row(row)
+        self.assertEqual(BakeError.decode(values[columns.index("error")]), expected)
+        self.assertEqual(self.second.read(token.operation_id).error, expected)
+        with self.a:
+            self.a.execute("UPDATE bake_operations SET error=?", ("old message",))
+        self.assertEqual(self.second.read(token.operation_id).error, BakeError(kind=BakeErrorKind.LEGACY, message="old message"))
+        with self.assertRaises(TypeError):
+            BakeError.encode("untyped")
 
     def test_generic_mapper_restores_bake_domain_types(self):
         from app.db.mapper import from_row, to_row
@@ -253,15 +286,6 @@ class BakeOperationsTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_lost_reply_after_publication_commit_returns_success(self):
         from unittest.mock import patch
-        class LoseReply(sqlite3.Connection):
-            lose_reply = False
-
-            def __exit__(self, *args):
-                result = super().__exit__(*args)
-                if self.lose_reply:
-                    self.lose_reply = False
-                    raise sqlite3.OperationalError("lost commit reply")
-                return result
 
         db = sqlite3.connect(self.path, factory=LoseReply)
         self.addCleanup(db.close)
@@ -280,6 +304,41 @@ class BakeOperationsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.second.read(owner.operation_id).result, BakeResult(result_ref="confirmed"))
         self.assertEqual(self.b.execute("SELECT count(*) FROM effects").fetchone()[0], 1)
         self.assertEqual(self.b.execute("SELECT count(*) FROM bake_world_claims").fetchone()[0], 0)
+
+    async def test_lost_reconcile_reply_confirms_committed_outcome(self):
+        from app.dataModel.world.bakeOperation.record import RolledBack
+        from unittest.mock import patch
+
+        db = sqlite3.connect(self.path, factory=LoseReply)
+        self.addCleanup(db.close)
+        store = SQLiteBakeOperations(db)
+        result = BakeResult(result_ref="confirmed")
+        for evidence, status, expected_result, error in (
+            (result, BakeStatus.SUCCEEDED, result, None),
+            (RolledBack("proven"), BakeStatus.FAILED, None, BakeError(kind=BakeErrorKind.PUBLICATION_ROLLED_BACK, message="proven")),
+        ):
+            with self.subTest(status=status):
+                old = self.first.admit(self.request, self.waiter).owner_token
+                self.first.begin(old)
+                self.first.publishing(old, PublicationOperationId("pub-1"))
+                self.expire()
+                owner = store.recover()
+
+                def reconcile(conn, record):
+                    db.lose_reply = True
+                    return evidence
+
+                with patch.object(self.binding, "reconcile", side_effect=reconcile) as callback:
+                    await BakeWorker(store, self.binding).run(owner)
+                    callback.assert_called_once()
+                record = self.second.read(old.operation_id)
+                self.assertEqual((record.status, record.result, record.error), (status, expected_result, error))
+                self.assertEqual(self.b.execute("SELECT count(*) FROM bake_world_claims").fetchone()[0], 0)
+                self.assertEqual(self.binding.publishes, 0)
+                with self.assertRaises(BakeFenceLost):
+                    store.uncertain(old, PublicationOperationId("pub-1"))
+                with self.assertRaises(BakeFenceLost):
+                    store.uncertain(owner, PublicationOperationId("different"))
 
     async def test_recovery_rejects_missing_publication_id_before_reconcile(self):
         from unittest.mock import patch

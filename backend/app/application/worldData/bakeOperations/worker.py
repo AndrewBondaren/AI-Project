@@ -2,8 +2,8 @@ import asyncio
 import sqlite3
 from typing import Protocol
 
-from app.application.worldData.bakeOperations.store import BakeStore
-from app.dataModel.world.bakeOperation.record import BakeOwner, BakeRecord, BakeResult, BakeStatus, RolledBack, Waiter, PublicationOperationId
+from app.application.worldData.bakeOperations.store import BakeStore, Evidence
+from app.dataModel.world.bakeOperation.record import BakeError, BakeErrorKind, BakeOwner, BakeRecord, BakeResult, BakeStatus, RolledBack, Waiter, PublicationOperationId
 from app.dataModel.world.bakeOperation.request import BakeRequest
 
 
@@ -29,7 +29,8 @@ class BakeWorker:
     async def run(self, owner: BakeOwner) -> None:
         record = self.store.begin(owner)
         if record.status in (BakeStatus.PUBLISHING, BakeStatus.RECOVERY_REQUIRED):
-            self.store.publication(owner, self.binding.reconcile)
+            publication = PublicationOperationId.require(record.publication_operation_id)
+            self._apply_publication(owner, publication, self.binding.reconcile)
             return
         preparing = asyncio.create_task(self._prepare(owner, record.request))
         try:
@@ -45,11 +46,14 @@ class BakeWorker:
         if publication is None:
             return
         self.store.publishing(owner, publication)
+        self._apply_publication(owner, publication, self.binding.publish)
+
+    def _apply_publication(self, owner: BakeOwner, publication: PublicationOperationId, evidence: Evidence) -> None:
         try:
-            self.store.publication(owner, self.binding.publish)
+            self.store.publication(owner, evidence)
         except Exception:
             # The publishing checkpoint survives even if the commit result could not be read.
-            if self.store.uncertain(owner, publication) == BakeStatus.SUCCEEDED:
+            if self.store.uncertain(owner, publication) in (BakeStatus.SUCCEEDED, BakeStatus.FAILED):
                 return
             raise
 
@@ -60,7 +64,8 @@ class BakeWorker:
                 publication = await self.binding.stage(owner, request)
                 return PublicationOperationId.require(publication)
         except Exception as exc:
-            self.store.prepared_terminal(owner, None, str(exc) or type(exc).__name__)
+            error = BakeError(kind=BakeErrorKind.PREPARATION_FAILED, message=str(exc) or type(exc).__name__)
+            self.store.prepared_terminal(owner, None, error)
             return None
         self.store.prepared_terminal(owner, result, None)
         return None

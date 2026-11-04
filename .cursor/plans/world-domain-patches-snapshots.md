@@ -2924,6 +2924,22 @@ Evidence гонок получено на отдельных соединени�
 
 Изменены context.py, tests/snapshotCore/contracts/test_registry.py и tests/typing/snapshotCore/invalid.py. Первый positive Pyright также выявил четыре диагностики в общем application/encoding/boundedCanonicalDecode.py: связь между build и optional list/dict не сужала тип. Проверка самого накопителя на None устранила диагностики без изменения wire format. Из backend `../.venv/Scripts/python.exe -B -m unittest tests.snapshotCore.contracts.test_registry tests.snapshotCore.contracts.test_typing tests.spatial_pack.test_bounded_decode` — 20 OK, включая typing gate. Полный Snapshot discover — 163 теста, OK (1 skipped), 108.470 s. Producer WorldSnapshotService и передача Q до реального CAS — следующий код 4D2.
 
+#### 4D2 — передача assigned Q в handlers и world CAS, 2026-11-04
+
+В `backend/app/application/worldSnapshot/service/worldSnapshotService.py` добавлена внутренняя фаза WorldSnapshotService._apply_to_target для уже проверенных секций и выданного writer scope. Сервис создаёт одну WorldPublicationRef с назначенным world head и один SnapshotApplyContext. Секции выполняются по порядку; после receipts внешний owner может записать metadata и выполнить handoff в том же scope. При нормальном завершении этой части service передаёт тот же объект Q в world.compare_append. При SectionRefused или CAS mismatch typed refusal выходит исключением через границу rollback. Добавлен пустой package __init__.py.
+
+В `backend/tests/snapshotCore/storage/publication/test_atomicity.py` AssignedPublicationTests проверяет identity Q в двух тестовых handlers и в обёртке реального SQLite CAS. На отдельном соединении проверяются world head, наличие assigned metadata и результат SQL writes обоих handlers. Сценарии — успешная запись, отказ второй секции и несовпадающий expected publication_id. При обоих отказах сохраняется прежнее состояние. Targeted unittest AssignedPublicationTests + contracts.test_typing — 2 OK (9.288 s). Из backend полный unittest discover -s tests/snapshotCore — 164 теста OK (1 skipped), 109.456 s. Адресный Pyright по сервису — 0 errors, 0 warnings.
+
+Граница среза: тест владеет внешней транзакцией и записывает metadata; registry/handlers контролируемые, CAS/history/rollback реальные. Публичный apply, preflight/validation, общий builder, player CAS, terminal/refusal и retry остаются работой 4D2. Production binding не вводился.
+
+#### 4D2 assigned Q — исправления по ревью, 2026-11-04
+
+[Независимый вердикт CHANGES REQUIRED](world-domain-4d2-assigned-q-review.md) выявил четыре ложных PASS в AssignedPublicationTests. Сервис оставлен в проверенном виде. Усилен `backend/tests/snapshotCore/storage/publication/test_atomicity.py`: каждый handler сверяет ctx.scope с выданным внешним scope и вставляет свою SQL marker row через ScopedSqliteAccess.insert(ctx.scope, ...). Вторая из трёх секций может отказать; проверяются остановка вызовов и полная диагностика отказа секции и CAS. После успешного history.append отдельно инъецируются PublicationInfrastructureError и CancelledError. Caller получает исходный объект исключения без вызова CAS. Отдельное соединение проверяет head, metadata и все marker rows после завершения внешнего UOW.
+
+Четыре подмены _apply_to_target выполнены только в памяти. Подмена scope обнаружена в пяти сценариях, выполнение после отказа — в одном, неверная диагностика CAS — в одном, CAS в finally — в обоих сценариях ошибки metadata. У каждого отрицательного прогона проверено место ожидаемого assertion failure. Отмена здесь инъецирована после SQL append; планировщик задач в этой пробе не отменял SQLite worker.
+
+Из backend: `../.venv/Scripts/python.exe -B -m unittest tests.snapshotCore.storage.publication.test_atomicity.AssignedPublicationTests tests.snapshotCore.contracts.test_typing` — 2 OK (9.255 s). Полный `../.venv/Scripts/python.exe -B -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — 164 теста OK (1 skipped, 117.988 s). Исправления предъявлены на повторное независимое ревью.
+
 ## Контракты Snapshot для интеграции Time (2026-11-03)
 
 Входящий запрос из [Time §§14.2, 34, 37, 44–46, 48](./time-domain.md). Ниже три отдельных результата с владельцем Snapshot. Статус каждого — OPEN до согласования контракта и проверки соответствующего пути. Эти работы лежат вне среза leases 4C3-C.

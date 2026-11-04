@@ -15923,6 +15923,9 @@ GEO-I9.1 принят в границах authored geometry. G10-A и итого
 | GEO-LEGACY-100 | `application/worldData/planning/composition/surfacePlanningAssembler.py` — `SurfacePlanningAssembler.prepare_geo` | После native final запросить source через get_or_build с view.hydrology и семью сохранёнными envelopes. Использовать domain admission/сборку CanonicalWaterSourceJob по EF-1.5 и общий publisher 90–94. Передать в reader boundary только зарегистрированные source и P2, включить оба полных ref в request и его fingerprint. Собирать BoundaryWaterSnapshot из admitted source, source_mapping, fine evidence и batch P2 по 77, проверяя source.dependencies[water_placement] == P2.ref. |
 | GEO-LEGACY-101 | `application/worldData/planning/contracts/surfacePlanningView.py` — `GeoSurfacePlanningView.model_config` | Объявить у GEO ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always"). Вместе с 36 убрать PC imports и старую ветвь union, сохранить GeoSurfacePlanningViewResult и NoExtent. |
 | GEO-LEGACY-102 | `application/worldData/planning/contracts/surfacePlanBundle.py` — `GeoSurfacePlanBundle.model_config, coherent` | Объявить такой же ConfigDict непосредственно у GeoSurfacePlanBundle. Убрать PC-only imports по 37. Расширить поля и таблицу expected refs по 94 точными envelopes prepared_natural и canonical_open_water вместе с W/F. В coherent проверять полные множества слотов и ref из независимых полей bundle. |
+| GEO-LEGACY-103 | `application/worldData/planning/composition/planProviders.py` — `declared_binding` | Для canonical_open_water передавать единый GEO manifest из 104 во все четыре места: encode в validate, fingerprint_inputs, SurfaceEnvelopeCodec и RegisteredPlanContract.manifest. Остальные существующие bindings используют свои объявленные схемы. |
+| GEO-LEGACY-104 | `application/worldData/planning/encoding/surfaceManifest.py` — `SURFACE_MANIFEST`, запись 255 | Владельцем комбинированной схемы GEO_SOURCE_MANIFEST назначить planning/encoding. Построить её из актуальной surface-схемы и OPEN_WATER_SOURCE_SCHEMA_V1 посредством merge_manifests после require_source_schema_v1(). Для нового layout GeoSurfacePlanBundle заменить запись 255 в surface-схеме на свежий ID (предлагается 298, проверить и зарезервировать при реализации). Вывести 255 из активного decoder. Для encode/decode всего нового bundle использовать GEO_SOURCE_MANIFEST, включая вложенный source envelope. |
+| GEO-LEGACY-105 | `dataModel/terrain/designedWater/geometry/waterDesignConstraints.py` — `WaterDesignConstraints` | После переключения procedural strategy input и coastline adapter удалить coarse transport. FineWaterDesignConstraints хранит fine cells и обязательный marker. |
 
 Замечания первого ревью отражены в реестре: 1 → 51, 2 → 52–53, 3 → 54, 4 → 55, 5 → 56–57, 6 → 47/58, 7 → 59–60, 8 → 61–65. Обратная проверка L0/L2 → 66–69.
 
@@ -15968,6 +15971,14 @@ GEO-I9.1 принят в границах authored geometry. G10-A и итого
 
 **Независимое ревью 01–102 от 2026-11-04 — FAIL по полноте.** Четыре замечания к 01–96 учтены. Открыт выбор совместимого manifest для зарегистрированного canonical source и содержащего его GEO bundle. [Отчёт с caller, требуемым действием и проверкой](geo-i9-3-legacy-registry-review-01-102.md).
 
+**Поправка по ревью 01–102.** Строки 103–104 дополняют 91/99/100/102. Обе исходные схемы сохраняют ID общих типов. WaterMembershipRun, CanonicalOpenWaterSource и его envelope приходят из source-схемы под 60004/60007/60008. Конфликт owner, ID или kind при merge останавливает регистрацию. На текущем дереве require_source_schema_v1 и merge_manifests успешно выполнены: 297 surface entries и 33 source entries дают 300 уникальных. Новый ID bundle вводится только при изменении его layout.
+
+До вычисления output_fingerprint domain build передаёт **тот же окончательный tuple diagnostics**, который возвращает в PlanBuildResult, в require_source_diagnostics_v1. При чтении из cache проверять source diagnostics также в source-specific codec.validate, при декодировании bundle — у вложенного source. Merge расширяет множество кодируемых типов, поэтому сама успешная сериализация не доказывает допустимость diagnostics.
+
+Приёмка 103–104: на подлинном GeoHydrologyPlanInput и семи принятых refs выполнить зарегистрированный get_or_build на холодном кэше, затем получить cache hit без повторного build. Независимо вычислить input_fingerprint по SURFACE_MANIFEST с metadata/world/scope/inputs/dependencies, а output_fingerprint — по OPEN_WATER_SOURCE_SCHEMA_V1 с payload/dependencies/окончательными diagnostics. Сверить оба значения с обоими результатами и полным source.ref в request/dependencies boundary. Выполнить encode/decode нового GeoSurfacePlanBundle через GEO_SOURCE_MANIFEST с непустым wet_runs, проверить равенство runs, source envelope и полного bundle. Фиксированные старые bytes с ID 255 должны отклоняться новым decoder. Проверить отказ на недопустимой паре diagnostic code/disposition до публикации и при чтении.
+
+**Решение пользователя 2026-11-04. I9.3 остаётся OPEN.** Полную независимую проверку реестра провести непосредственно перед удалением legacy. Открытый пункт позволяет продолжать изолированные срезы producer. Приёмка удаления требует сценариев ниже.
+
 **Как закрыть реестр**
 
 1. После перевода preparation проверить basin/lake/coastline при map_cell > 1 и разных fine высотах внутри одной coarse клетки. Surface frame и чужой W.ref должны отклоняться до публикации.
@@ -15975,3 +15986,23 @@ GEO-I9.1 принят в границах authored geometry. G10-A и итого
 3. Проверить reexports в `dataModel/placement/__init__.py`, `application/worldData/placement/__init__.py` и `application/worldData/generators/hydrology/placement/__init__.py`, строки registry/codec, model_fields и schema, fixtures и dynamic imports. Для старых sea/lake ключей §6.29 допускает однократную нормализацию при импорте. Проверить отсутствие этих ключей в runtime model_fields, сериализации и admission readers.
 4. Для SP-4/SP-M действуют HSP-02…09. Для каждого оставшегося поля routes/final указать реального reader и удалить поле после перевода либо подтвердить необходимую downstream projection от canonical source. Сохранить проверки geometry, river carve и landcover по их ответственности. L0 approximation и sparse fine paint не могут служить доказательством wet membership или final bed.
 5. На независимом ревью из корня выполнить `rg -n 'GEO-LEGACY-' backend/app` для открытых отметок. По каждому удаляемому имени выполнить `rg -n -w <имя> backend`, разобрать совпадения по owner, включая imports, aliases, сериализацию и тесты. Для изменённых методов проверить сигнатуру, body и callers. Обнаруженный дополнительный вход добавить в реестр с владельцем. Итоговая приёмка требует удаления всех старых исполняемых путей и ненужных POJO/полей, успешных production entry и отрицательных проверок. Оставшийся legacy reader блокирует приёмку.
+
+### GEO-I10.1. Fine constraints для процедурного water-source coastline
+
+Реализован CoastlineConstraintPreparer.prepare_native(AuthoredWaterGeometryRequest) → FineWaterDesignConstraints. После admission полного W вызывающей стороной операция строит allowed mask через I9.1 и обязательную полосу соседей исходной authored линии в topology W. Результат хранит W.ref, grid, source, notices и WORLD_FINE_GRID. Отсутствие water-side соседа даёт CONSTRAINT_CONFLICT. Следующий caller — native ветвь CoastlineWaterSourceAdapter при переводе strategy input по EF-1.2. Срез предъявлен на ревью.
+
+**Независимое ревью GEO-I10.1 — FAIL.** Один дефект диагностики.
+
+**P2.** В `backend/app/application/worldData/generators/terrain/designedWater/preparation/coastlineConstraintPreparer.py:47` вызов `prepare_native_water_geometry` завершает подготовку до проверки обязательной полосы, если водная сторона линии целиком лежит за границей W.
+
+- **Воспроизведение.** Взять аргументы из `NativeAuthoredGeometryTests.setUpClass` (полное планарное W, обе оси от 0 до 31, высота 10, `fine_span=16`). Подставить `CoastlineWaterSource` с UID `probe`, `kind=SEA` и открытым путём `[(4,0), (5,0)]`. Вызвать `prepare_native`.
+- **Ожидалось.** `PlanBuildFailure` с кодом `WATER_DESIGN_CONSTRAINT_CONFLICT` и UID `probe`, поскольку у клеток линии нет допустимого соседа с водной стороны.
+- **Получено.** `PlanBuildFailure` с кодом `WATER_PLACEMENT_GEOMETRY`, путём `('authored_geometry', 'probe')` и сообщением `coastline has no reachable water-side candidate cells`.
+
+**Запущенные проверки**
+
+1. Из `backend` при `$env:PYTHONPATH='.;tests'` выполнена команда `.\.venv\Scripts\python -m unittest tests.geo1.authored.test_native_geometry tests.geo1.preparation.test_coastline_constraints tests.geo1.coastline_source.test_adapter`. Все 34 теста прошли.
+2. Для открытого пути `[(4,4),(12,4)]` при `fine_span=16` получены точные множества `allowed = [0,28] × [0,3]` и `required = [3,13] × {3}`. Совпали `W.ref`, `grid`, `source` и `notices`, включая уведомление о лимите. Модель отклонила отсутствующий marker и `WORLD_SURFACE_GRID`.
+3. Для планарного кольца подтверждены маска 7 × 7 и её внутренняя граничная полоса. Для кольца `(-4,4), (4,4), (4,12), (-4,12)` отдельно сверены точные маска и полоса через шов в режимах `WRAPPED` и `SPHERE`.
+4. Для открытого пути из проверки 2 при `max_area_fraction=0.001` часть линии лишена соседей, получены ожидаемые `WATER_DESIGN_CONSTRAINT_CONFLICT` и UID. Подтверждены отказы для coarse request, источника-бассейна и неполного W, переданного через `model_copy`.
+5. Для открытой и замкнутой линии сверены coarse entry и модель из `HEAD` на момент ревью. Результаты `model_dump_json()` совпали. Обе версии отклонили пустые маски, обязательную клетку вне разрешённой маски и лишнее поле.

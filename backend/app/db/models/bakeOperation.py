@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from operator import attrgetter
 
-from app.dataModel.world.bakeOperation.record import BakeStatus, DeliveryStatus, PublicationOperationId
+from app.dataModel.world.bakeOperation.record import BakeError, BakeStatus, DeliveryStatus, PublicationOperationId
 from app.dataModel.world.bakeOperation.request import BakeKind
 
 
@@ -21,7 +21,9 @@ class BakeOperation:
     fence: int
     lease_until: float
     result_blob: str | None
-    error: str | None
+    error: BakeError | None = field(metadata={
+        "to_db": BakeError.encode, "from_db": BakeError.decode,
+    })
     publication_operation_id: PublicationOperationId | None = field(metadata={
         "to_db": attrgetter("value"), "from_db": PublicationOperationId,
     })

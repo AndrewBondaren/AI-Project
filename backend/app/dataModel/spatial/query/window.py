@@ -44,12 +44,14 @@ class SpatialWindow(BaseModel):
     @field_validator("topology", mode="before")
     @classmethod
     def prepared_frame(cls, value: object) -> WorldTopology:
-        if not isinstance(value, WorldTopology) or not isinstance(getattr(value, "mode", None), WorldTopologyMode):
+        if type(value) is not WorldTopology or vars(value).keys() != WorldTopology.model_fields.keys():
+            raise ValueError("expected exact world topology fields")
+        if not isinstance(value.mode, WorldTopologyMode):
             raise ValueError("expected a prepared world topology")
-        bounds = getattr(value, "bounds", None)
-        if not isinstance(bounds, WorldBounds):
-            raise ValueError("expected world bounds")
-        if any(type(getattr(bounds, name, None)) is not int for name in WorldBounds.model_fields):
+        bounds = value.bounds
+        if type(bounds) is not WorldBounds or vars(bounds).keys() != WorldBounds.model_fields.keys():
+            raise ValueError("expected exact world bounds fields")
+        if any(type(coord) is not int for coord in vars(bounds).values()):
             raise ValueError("expected integer bounds")
         if bounds.x_min > bounds.x_max or bounds.y_min > bounds.y_max:
             raise ValueError("reversed world bounds")

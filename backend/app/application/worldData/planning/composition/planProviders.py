@@ -55,6 +55,7 @@ def _binding[I, T](slot: SurfacePlanSlot, input_type: type[I], payload_type: typ
     return declared_binding(surface_plan_binding(slot), input_type, payload_type)
 
 
+# GEO-LEGACY-103: Replace the fixed surface-only manifest for the registered canonical source.
 def declared_binding[I, T](declaration: SurfacePlanBinding, input_type: type[I],
                            payload_type: type[T]) -> RegisteredPlanContract[I, T]:
     """Bind an explicit domain declaration; no dependency-family inference."""

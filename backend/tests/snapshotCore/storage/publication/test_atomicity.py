@@ -327,3 +327,105 @@ class AtomicSnapshotCommitTests(unittest.TestCase):
                     if not pending.done():
                         await pending
         run_async(check())
+
+
+class AssignedPublicationTests(unittest.TestCase):
+    def test_handlers_and_sqlite_cas_share_target_and_rollback(self):
+        from unittest.mock import Mock, AsyncMock
+        from app.application.publication.errors import PublicationInfrastructureError
+        from app.db.models.snapshotCore.operationRows import PublicationOperationRow
+        from app.application.patch.registry.sectionRegistry import SectionRegistry, BoundSectionHandler
+        from app.application.worldSnapshot.contracts.context import SnapshotValidationContext
+        from app.application.worldSnapshot.service.worldSnapshotService import WorldSnapshotService, _ApplyRefused
+        from app.dataModel.patch.results.sectionResult import SectionApplyReceipt, SectionRefused
+        from app.dataModel.patch.sections.section import SectionHeader
+        from app.dataModel.registryKey import RegistryKey
+        from app.dataModel.patch.registry.sectionMetadata import PatchSectionRegistry
+        from app.dataModel.worldSnapshot.identity.refs import WorldSnapshotRef
+        from app.dataModel.worldSnapshot.metadata.envelope import WorldSnapshotMetadata
+        from tests.snapshotCore.support.fixtures import STAMP
+
+        async def check(mode):
+            async with live_database() as bundle, live_database(bundle[0].path, seed=False) as peer:
+                _, commits, world, _, history, operations = bundle
+                base = await live_started(bundle)
+                before = base
+                if mode == "conflict":
+                    base = base.model_copy(update={"publication_id": "stale-expectation"})
+                op = "candidate"
+                await operations.claim_publication(OperationKind.SNAPSHOT_APPLY, op, "w1", "a"*64, "b"*64)
+                assigned = WorldSnapshotRef(world_uid="w1", timeline_id="t1", snapshot_id="candidate-world")
+                registry = Mock(spec=SectionRegistry)
+                service = WorldSnapshotService(registry, world)
+                sections = []
+                handlers = []
+                targets = []
+
+                outer_scope = None
+                refused = SectionRefused(category=SnapshotApplyOutcomeKind.REJECTED,
+                    diagnostics=(FieldPathError(path=("two",), message="refused"),))
+                conflict = SectionRefused(category=SnapshotApplyOutcomeKind.CONFLICT,
+                    diagnostics=(FieldPathError(path=(), message="world publication changed"),))
+                faults = {"metadata_error": PublicationInfrastructureError("after append"),
+                          "metadata_cancel": asyncio.CancelledError("after append")}
+
+                async def apply(section, ctx):
+                    self.assertIs(ctx.scope, outer_scope)
+                    targets.append(ctx.next_publication)
+                    await operations._access.insert(ctx.scope, PublicationOperationRow(
+                        f"marker-{section.header.key}", "w1", OperationKind.SNAPSHOT_APPLY.value, "a" * 64))
+                    if mode == "refuse" and section.header.key == "two":
+                        return refused
+                    return SectionApplyReceipt(section_key=section.header.key, state_refs=(), history_refs=(),
+                                               retained_artifacts=(), changed=())
+
+                for key in ("one", "two", "three"):
+                    header = SectionHeader(key=RegistryKey[PatchSectionRegistry](key), format_version=1, depends_on=())
+                    sections.append(Mock(header=header))
+                    handler = Mock(spec=BoundSectionHandler)
+                    handler.apply = AsyncMock(side_effect=apply)
+                    handlers.append(handler)
+                registry.resolve.side_effect = handlers
+
+                async def execute():
+                    nonlocal outer_scope
+                    async with commits.transaction(op) as scope:
+                        outer_scope = scope
+                        validation = SnapshotValidationContext(op, base, (), (), scope.read_scope)
+                        async with service._apply_to_target(scope, validation, tuple(sections), assigned, ()) as (ctx, receipts):
+                            await history.append(scope, WorldSnapshotMetadata(ref=assigned, parent=base.snapshot_head,
+                                operation_id=op, turn_id=1, created_at=STAMP, envelope_format_version=1,
+                                base_pack_hash=base.pack_hash, state_refs=(), history_refs=(), retained_artifacts=()), receipts)
+                            if mode in faults:
+                                raise faults[mode]
+
+                with patch.object(world, "compare_append", wraps=world.compare_append) as cas:
+                    if mode == "success":
+                        await execute()
+                    elif mode in faults:
+                        with self.assertRaises(type(faults[mode])) as error:
+                            await execute()
+                        self.assertIs(error.exception, faults[mode])
+                    else:
+                        with self.assertRaises(_ApplyRefused) as error:
+                            await execute()
+                        self.assertEqual(error.exception.refusal, refused if mode == "refuse" else conflict)
+                    self.assertEqual(len(targets), 2 if mode == "refuse" else 3)
+                    self.assertTrue(all(target is targets[0] for target in targets))
+                    if mode == "refuse":
+                        handlers[2].apply.assert_not_awaited()
+                    if mode == "refuse" or mode in faults:
+                        cas.assert_not_awaited()
+                    else:
+                        self.assertIs(cas.await_args.args[2], targets[0])
+                self.assertEqual(await peer[2].read("w1"), targets[0] if mode == "success" else before)
+                self.assertEqual((await peer[4].read(assigned)) is not None, mode == "success")
+                async with peer[0].conn.execute("SELECT name FROM worlds WHERE world_uid='w1'") as cur:
+                    self.assertEqual((await cur.fetchone())[0], "w1")
+                async with peer[0].conn.execute("SELECT operation_id FROM publication_operations "
+                                                "WHERE operation_id LIKE 'marker-%' ORDER BY operation_id") as cur:
+                    self.assertEqual([row[0] for row in await cur.fetchall()],
+                                     ["marker-one", "marker-three", "marker-two"] if mode == "success" else [])
+        for mode in ("success", "refuse", "conflict", "metadata_error", "metadata_cancel"):
+            with self.subTest(mode=mode):
+                run_async(check(mode))

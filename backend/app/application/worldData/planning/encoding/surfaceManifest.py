@@ -518,6 +518,7 @@ SURFACE_MANIFEST = CanonicalSchemaManifest(entries=tuple(
     (252, _MCoastlineBoundaryInput, CanonicalTypeKind.RECORD),
     (253, _MWorldTerrainCategoryRegistry, CanonicalTypeKind.RECORD),
     (254, _MTerrainCategoryEntry, CanonicalTypeKind.RECORD),
+    # GEO-LEGACY-104: Retire ID 255 when the GEO bundle gains its canonical source envelope.
     (255, _MGeoSurfacePlanBundle, CanonicalTypeKind.RECORD),
     (256, _MPlanEnvelope[_MTerrainRegionPlan], CanonicalTypeKind.RECORD),
     (257, _MTerrainRegionPlan, CanonicalTypeKind.RECORD),

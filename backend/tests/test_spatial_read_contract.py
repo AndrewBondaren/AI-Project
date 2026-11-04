@@ -40,13 +40,19 @@ def box(x: int) -> SpatialBox:
 class FixtureReader:
     def __init__(self, source: PlanRef):
         self.source = source
+        self.calls = 0
 
     async def read_window(self, request: SpatialReadRequest) -> SpatialReadResult[int]:
+        self.calls += 1
         if request.revision != self.source:
             error = SpatialReadError(reason=SpatialReadFailureReason.REVISION_MISMATCH,
                                      issue=FieldPathError(path=("revision",), message="unexpected revision"))
             return SpatialReadFailure(request=request, errors=(error,))
         return SpatialSlice[int](request=request, payload=0, source_refs=(self.source,), issues=())
+
+
+async def admitted_read(reader: SpatialFieldReader[int], request: SpatialReadRequest) -> SpatialReadResult[int]:
+    return await reader.read_window(SpatialReadRequest.model_validate(request))
 
 
 class SpatialReadContractTest(unittest.TestCase):
@@ -63,13 +69,27 @@ class SpatialReadContractTest(unittest.TestCase):
 
     def test_protocol_outcomes(self):
         reader: SpatialFieldReader[int] = FixtureReader(self.source)
-        success = asyncio.run(reader.read_window(self.request))
+        success = asyncio.run(admitted_read(reader, self.request))
         self.assertIsInstance(success, SpatialSlice)
         self.assertEqual(success.request, self.request)
         other = self.request.model_copy(update={"revision": bootstrap("other")})
-        failure = asyncio.run(reader.read_window(other))
+        failure = asyncio.run(admitted_read(reader, other))
         self.assertIsInstance(failure, SpatialReadFailure)
         self.assertEqual(failure.request, other)
+
+    def test_invalid_request_never_enters_reader(self):
+        reader = FixtureReader(self.source)
+        for request in (SpatialReadRequest.model_construct(), self.request.model_copy(update={"mode": "required"})):
+            with self.subTest(request=request), self.assertRaises(ValidationError):
+                asyncio.run(admitted_read(reader, request))
+            self.assertEqual(reader.calls, 0)
+
+    def test_reject_shadowed_frame_methods(self):
+        for frame in (self.frame.model_copy(update={"canonicalize": None}),
+                      self.frame.model_copy(update={"bounds": self.bounds.model_copy(update={"contains": None})})):
+            window = self.window.model_copy(update={"topology": frame})
+            with self.subTest(frame=frame), self.assertRaises(ValidationError):
+                SpatialReadRequest.model_validate(self.request.model_copy(update={"window": window}))
 
     def test_revalidate_nested_window(self):
         first, second = self.window.boxes
