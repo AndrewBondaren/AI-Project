@@ -7,7 +7,8 @@ from typing import Any, ClassVar
 from pydantic import BaseModel, ConfigDict
 
 from app.application.jsonValidation.resolve import ResolveContext, ResolveMode, resolve_model
-from app.application.jsonValidation.types import FieldPathError, ImportValidationError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.application.jsonValidation.types import ImportValidationError
 from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictEnumOnWire, StrictOnWire
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     WorldConnectionTypeRegistry,

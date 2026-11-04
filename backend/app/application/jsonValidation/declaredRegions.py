@@ -1,7 +1,7 @@
 """Collection checks shared by import, world patches and region operations."""
 
 from app.application.jsonValidation.resolve import ResolveContext, report_issues, resolve_model
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.application.jsonValidation.worldSlices import slice_column_key
 from app.application.worldData.masks.regionIdentity import declared_region_identity
 from app.dataModel.fields.fieldBinding import bind_field

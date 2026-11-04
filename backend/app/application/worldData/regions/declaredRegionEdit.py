@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import NoReturn
 
 from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.application.jsonValidation.worldSlices import slice_column_key
 from app.application.jsonValidation.worldRow import terrain_masks, terrain
 from app.application.worldData.masks.regionIdentity import declared_region_identity

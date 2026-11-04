@@ -4,7 +4,7 @@ from pydantic import TypeAdapter, ValidationError
 from app.application.jsonValidation.index.worldRegistryIndex import WorldRegistryIndex
 from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
 from app.application.jsonValidation.sourceValidation import validate_reference_value
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.application.worldData.generators.terrain.landcover.types import ResolvedRegion
 from app.dataModel.terrain.worldTerrainRegistry import TerrainKey, WorldTerrainRegistry
 

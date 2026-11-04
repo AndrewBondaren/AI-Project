@@ -6,7 +6,7 @@ from random import Random
 
 from app.application.jsonValidation import economic_tiers
 from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.application.worldData.generators.utils.tierRegistry import tier_rank, tiers_sorted
 from app.dataModel.cascade.cascadeSpec import ChannelKind
 from app.dataModel.economy.enums.economicTierBand import EconomicTierBand

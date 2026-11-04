@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 from pydantic import BaseModel
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 from app.db.models.libraryPackMember import LibraryPackMemberRow
 from app.db.models.libraryPack import LibraryPackRow

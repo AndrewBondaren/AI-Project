@@ -34,11 +34,7 @@ from app.application.jsonValidation.resolve import (
     UnresolvedModelError,
     report_issues,
 )
-from app.application.jsonValidation.types import (
-    FieldPathError,
-    ReferenceIssueContext,
-    ReferenceIssueReason,
-)
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError, ReferenceIssueContext, ReferenceIssueReason
 from app.application.templateLibrary.packs.domainAdapters import PackDomainAdapter
 from app.application.templateLibrary.packs.effectiveCatalog import EffectiveCatalog
 from app.application.templateLibrary.packs.errors import LibraryPackValidationError

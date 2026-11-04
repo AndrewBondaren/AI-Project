@@ -9,7 +9,7 @@ from typing import Any
 from app.application.jsonValidation.index.build import build_world_registry_index
 from app.application.jsonValidation.index.refKinds import RefKind
 from app.application.jsonValidation.index.worldRegistryIndex import WorldRegistryIndex
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.climate.worldClimateScalars import WorldClimateScalars
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.dataModel.materials.worldMaterialRegistry import WorldMaterialRegistry

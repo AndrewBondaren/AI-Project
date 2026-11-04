@@ -35,7 +35,7 @@ from app.application.templateLibrary.packs.refResolve import (
 )
 from app.dataModel.libraryPacks.libraryPinEntry import LibraryPinEntry
 from app.application.jsonValidation.resolve import ResolveContext
-from app.application.jsonValidation.types import ReferenceIssueReason
+from app.dataModel.validation.diagnostics.fieldPathError import ReferenceIssueReason
 from app.core.container import Container
 from app.db.database import Database
 from app.db.models.world import World

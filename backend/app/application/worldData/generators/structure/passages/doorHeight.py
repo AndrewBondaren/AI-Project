@@ -2,7 +2,7 @@
 import logging
 from math import floor
 from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 from app.application.worldData.generators.structure.errors import GenerationError
 from app.dataModel.locations.structure.building.structureTemplate import (

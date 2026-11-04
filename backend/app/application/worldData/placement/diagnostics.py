@@ -1,7 +1,7 @@
 """Spatial facts use the existing validation/logging sinks, without wire policy changes."""
 
 from app.application.jsonValidation.resolve import ResolveContext, log_issues, report_issues
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.placement import PlacementBatchResult, PlacementDiagnostic, PlacementIssueCode
 from app.dataModel.placement.lifecycle.header import PlacementHeader, PreparedGeometry
 from app.dataModel.placement.result import PlacementBatchResultV2

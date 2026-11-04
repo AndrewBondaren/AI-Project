@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 from app.application.worldData.generators.terrain.relief.log.events import (
     EVENT_RESOLVE_FALLBACK,

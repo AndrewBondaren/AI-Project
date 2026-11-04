@@ -1,7 +1,7 @@
 """Route typed facts through the shared runtime/import diagnostic sinks."""
 
 from app.application.jsonValidation.resolve import ResolveContext, ResolveMode, log_issues, report_issues
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.hydrology.riverRouting import RiverRouteDiagnostic
 
 

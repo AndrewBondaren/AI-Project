@@ -20,7 +20,8 @@ from app.application.worldBundle.worldLibraries import (
 from app.application.jsonValidation.bundle import normalize_bundle_connections
 from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.types import ImportValidationError
-from app.application.jsonValidation.types import FieldPathError, ImportValidationReport
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.application.jsonValidation.types import ImportValidationReport
 from app.application.jsonValidation.resolve import ResolveContext, StrictFieldError, UnresolvedModelError, reject_unresolved
 from app.application.templateLibrary.reliefErrors import ReliefValidationError
 from pydantic import ValidationError

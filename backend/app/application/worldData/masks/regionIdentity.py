@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.application.jsonValidation.resolve import ResolveContext, log_issues, report_issues, resolve_model
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.spatial.regionShape import AnchorRadiusShape
 from app.dataModel.terrainMasks.regions import RegionSpecBase
 from app.dataModel.terrainMasks.regions.specs import REGION_NAME

@@ -18,7 +18,7 @@ from app.dataModel.locations.transitions.transitionType import TransitionType
 from app.dataModel.spatial.facing import Facing
 from app.application.worldData.generators.structure.structureOrientation import entry_orientation, validate_facing
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError, resolve_model, reject_unresolved
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.application.jsonValidation import materials
 from app.application.cascade.locationScope import (
     debug_building_context,

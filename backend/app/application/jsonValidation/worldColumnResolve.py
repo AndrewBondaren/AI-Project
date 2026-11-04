@@ -7,7 +7,8 @@ from typing import Any
 from app.application.jsonValidation.resolve import (
     ResolveContext, UnresolvedModelError, resolve_model, resolve_model_field,
 )
-from app.application.jsonValidation.types import FieldPathError, ImportValidationError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.application.jsonValidation.types import ImportValidationError
 from app.application.jsonValidation.worldSliceMerge import merge_world_slice
 from app.application.jsonValidation.worldSlices import slice_for_world_key
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
     SettlementSizeKey,

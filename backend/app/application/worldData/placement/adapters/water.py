@@ -7,7 +7,7 @@ from types import MappingProxyType
 from app.application.jsonValidation.resolve import (
     ResolveContext, log_issues, reject_unresolved, report_issues, resolve_model,
 )
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.application.planning.service.planningService import PlanBuildFailure
 from app.application.worldData.placement.adapters.coastlineShape import coastline_cells
 from app.application.worldData.placement.adapters.lakeShape import lake_cells, lake_level

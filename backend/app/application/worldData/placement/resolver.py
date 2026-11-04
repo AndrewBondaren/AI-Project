@@ -1,7 +1,7 @@
 """Shared prepared-input placement pass — tz_map_light_bake § Placement P2."""
 
 from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved, resolve_model
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.application.worldData.placement.constraints import check_candidate
 from app.application.worldData.placement.dependencies import DependencyQueue
 from app.application.worldData.placement.diagnostics import diagnostic, emit_diagnostics

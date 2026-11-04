@@ -9,7 +9,7 @@ from pydantic import Field, TypeAdapter, ValidationError
 from app.application.jsonValidation.resolve import (
     ResolveContext, UnresolvedModelError, report_issues, resolve_patch, resolve_result,
 )
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.hydrology.enums.basinKind import BasinKind
 from app.dataModel.annotationPolicy import DefaultWhenMissing
 from app.dataModel.materials.worldMaterialRegistry import WorldMaterialRegistry

@@ -6,7 +6,8 @@ from typing import Any
 
 from app.application.jsonValidation.resolve import ResolveContext, ResolveMode
 from app.application.jsonValidation.index import validate_ref_w
-from app.application.jsonValidation.types import FieldPathError, ImportValidationError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.application.jsonValidation.types import ImportValidationError
 from app.application.jsonValidation.worldSliceMerge import merge_facade_slices
 from app.application.jsonValidation.worldSlices import facade_world_slices
 

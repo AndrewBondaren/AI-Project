@@ -5,7 +5,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved, UnresolvedModelError
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.application.templateLibrary.reliefErrors import ReliefValidationError
 
 

@@ -6,7 +6,7 @@ No policy/default decisions live here: facts reach the shared reject sink.
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved, resolve_model
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.application.jsonValidation.index.worldRegistryIndex import WorldRegistryIndex
 from app.application.jsonValidation.worldSlices import canonical_registry_wire, slice_for_pojo, resolve_registry_list_world
 from app.dataModel.cascade.cascadeSpec import CascadeChannel, ChannelKind

@@ -3,7 +3,7 @@
 from copy import deepcopy
 import unittest
 
-from app.application.jsonValidation.types import ReferenceIssueReason
+from app.dataModel.validation.diagnostics.fieldPathError import ReferenceIssueReason
 from app.application.templateLibrary.packs.domainAdapters.bodyPreparation import TemplatePreparationError
 from app.application.templateLibrary.packs.domainAdapters.building import BuildingBodyPreparation
 from app.application.templateLibrary.packs.domainAdapters.plot import PlotBodyPreparation

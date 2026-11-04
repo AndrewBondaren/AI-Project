@@ -7,7 +7,7 @@ from typing import Protocol
 
 from pydantic import TypeAdapter
 
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.hydrology.sources.waterSourceMetadata import WaterSourceMetadata
 from app.dataModel.locations.enums.geographicSubtype import GeographicSubtype
 from app.dataModel.spatial.grid.coordinateTypes import FineZ

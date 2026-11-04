@@ -12,7 +12,7 @@ from pydantic import BaseModel, ValidationError
 
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
 from app.application.jsonValidation.sourceValidation import validate_prepared_source
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.application.templateLibrary.packs.domainAdapters.contract import (
     SYSTEM_NAME_FIELD,
 )

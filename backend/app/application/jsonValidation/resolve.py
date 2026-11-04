@@ -18,7 +18,8 @@ from pydantic import BaseModel, RootModel, ValidationError
 from pydantic_core import SchemaSerializer, SchemaValidator, core_schema
 from functools import lru_cache
 
-from app.application.jsonValidation.types import FieldPathError, ResolveReport
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.application.jsonValidation.types import ResolveReport
 from app.dataModel.registryKey import registry_key_target
 
 if TYPE_CHECKING:
