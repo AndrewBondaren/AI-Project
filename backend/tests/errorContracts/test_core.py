@@ -37,6 +37,7 @@ class Root(BaseModel):
     scores: dict[str, int] = {}
     pet: Cat | Dog = Cat(lives=9)
     labelled: Annotated[list[Leaf], "meta"] = []
+    children: list[Annotated[Leaf, "meta"]] = []
 
 
 class Code(StrEnum):
@@ -62,6 +63,7 @@ ROOT_PAIR = FieldRef(lambda: Root, lambda pojo: pojo.pair)
 ROOT_SCORES = FieldRef(lambda: Root, lambda pojo: pojo.scores)
 ROOT_PET = FieldRef(lambda: Root, lambda pojo: pojo.pet)
 ROOT_LABELLED = FieldRef(lambda: Root, lambda pojo: pojo.labelled)
+ROOT_CHILDREN = FieldRef(lambda: Root, lambda pojo: pojo.children)
 LEAF_UID = FieldRef(lambda: Leaf, lambda pojo: pojo.uid)
 CAT_LIVES = FieldRef(lambda: Cat, lambda pojo: pojo.lives)
 
@@ -102,6 +104,9 @@ class CheckedPathTests(unittest.TestCase):
             lambda: root.field(ROOT_PAIR).item(5),
             lambda: root.field(ROOT_PET).variant(Leaf),
             lambda: root.freeze(),
+            lambda: root.field(ROOT_SCORES).key(4),
+            lambda: root.field(ROOT_PAIR).item(-3),
+            lambda: root.field(ROOT_LEAVES).item(-1),
         ]
         for case in cases:
             with self.subTest(case=case), self.assertRaises(CheckedPathError):
@@ -114,6 +119,14 @@ class CheckedPathTests(unittest.TestCase):
         self.assertEqual(resolved, {("leaves", 1, "uid"), ("leaf", "uid")})
         self.assertIsNone(CheckedPath.from_pydantic_loc(Root, ("unknown",)))
         self.assertIsNone(CheckedPath.from_pydantic_loc(Root, ()))
+        for loc in (("scores", 4), ("pair", -3), ("leaves", -1), ("pair", 7)):
+            with self.subTest(loc=loc):
+                self.assertIsNone(CheckedPath.from_pydantic_loc(Root, loc))
+
+    def test_annotated_element_type_is_navigable(self) -> None:
+        expected = ("children", 0, "uid")
+        self.assertEqual(CheckedPath.root(Root).field(ROOT_CHILDREN).item(0).field(LEAF_UID).freeze().projection(), expected)
+        self.assertEqual(CheckedPath.from_pydantic_loc(Root, expected).projection(), expected)  # type: ignore[union-attr]
 
     def test_validated_path_must_start_at_root_field(self) -> None:
         with self.assertRaises(ValidationError):
@@ -163,6 +176,14 @@ class CollectorTests(unittest.TestCase):
         with self.assertRaises(LookupError) as caught:
             collector.raise_if_any(lambda issues: LookupError(issues))
         self.assertEqual(caught.exception.args[0], (first, second))
+
+    def test_forged_code_is_not_admitted(self) -> None:
+        collector = ValidatorAggregationHelper((RootTypeError,))
+        forged = RootTypeError(code=Code.MISSING, path=_name_path(), message="a").model_copy(
+            update={"code": Foreign.MISSING})
+        with self.assertRaises(IssueAdmissionError):
+            collector.add(forged)
+        self.assertEqual(collector.snapshot(), ())
 
     def test_empty_collector_does_not_raise_and_needs_admitted_classes(self) -> None:
         ValidatorAggregationHelper((RootTypeError,)).raise_if_any(lambda issues: LookupError(issues))

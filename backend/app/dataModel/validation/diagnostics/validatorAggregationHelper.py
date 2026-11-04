@@ -7,6 +7,8 @@ exact class, never by ``isinstance`` on a parameterized generic.
 from collections.abc import Callable
 from typing import Generic, TypeVar
 
+from pydantic import BaseModel, ValidationError
+
 from app.dataModel.validation.immutableValue import validate_immutable
 
 IssueT = TypeVar("IssueT")
@@ -27,8 +29,10 @@ class ValidatorAggregationHelper(Generic[IssueT]):
         if type(issue) not in self._admitted:
             raise IssueAdmissionError(f"issue class {type(issue).__qualname__} is not admitted")
         try:
+            if isinstance(issue, BaseModel):
+                type(issue).model_validate(issue, strict=True)
             validate_immutable(issue)
-        except ValueError as exc:
+        except (ValueError, ValidationError) as exc:
             raise IssueAdmissionError("issue must be a complete immutable record") from exc
         self._issues.append(issue)
 

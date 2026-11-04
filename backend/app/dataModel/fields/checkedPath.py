@@ -8,9 +8,9 @@ The path is not serialized: ``freeze`` yields ``ValidatedFieldPath``.
 
 from collections.abc import Mapping, Sequence
 from types import NoneType, UnionType
-from typing import Any, Generic, TypeVar, Union, cast, get_args, get_origin, overload
+from typing import Annotated, Any, Generic, TypeVar, Union, cast, get_args, get_origin, overload
 
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from app.dataModel.annotationPolicy import unwrap_wire_type
 from app.dataModel.fields.fieldBinding import bind_field
@@ -43,7 +43,10 @@ class CheckedPathError(ValueError):
 
 
 def _strip(annotation: Any) -> Any:
-    return unwrap_wire_type(annotation)
+    current = unwrap_wire_type(annotation)
+    while get_origin(current) is Annotated:
+        current = unwrap_wire_type(get_args(current)[0])
+    return current
 
 
 def _union_members(annotation: Any) -> tuple[Any, ...]:
@@ -96,6 +99,8 @@ class CheckedPath(Generic[RootT, CurrentT]):
         args = get_args(self._current)
         if origin not in _SEQUENCES or not args:
             raise CheckedPathError("item() requires a sequence current value")
+        if type(index) is not int or index < 0:
+            raise CheckedPathError("item() index must be a non-negative int")
         if origin is tuple and not (len(args) == 2 and args[1] is Ellipsis):
             if index >= len(args):
                 raise CheckedPathError("item() index is outside the fixed tuple")
@@ -114,6 +119,10 @@ class CheckedPath(Generic[RootT, CurrentT]):
             raise CheckedPathError("key() requires a mapping current value")
         if not isinstance(key, (str, int)) or isinstance(key, bool):
             raise CheckedPathError("key() supports str or int keys")
+        try:
+            TypeAdapter(_strip(args[0])).validate_python(key, strict=True)
+        except ValidationError as exc:
+            raise CheckedPathError("key() key does not match the mapping key type") from exc
         return self._step(_strip(args[1]), KeySegment(key=key))
 
     def variant(self, branch: type[BranchT]) -> "CheckedPath[RootT, BranchT]":
