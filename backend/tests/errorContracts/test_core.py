@@ -4,7 +4,7 @@ import unittest
 from enum import StrEnum
 from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.dataModel.fields.checkedPath import CheckedPath, CheckedPathError
 from app.dataModel.fields.fieldRef import FieldRef
@@ -38,6 +38,7 @@ class Root(BaseModel):
     pet: Cat | Dog = Cat(lives=9)
     labelled: Annotated[list[Leaf], "meta"] = []
     children: list[Annotated[Leaf, "meta"]] = []
+    positive: dict[Annotated[int, Field(gt=0)], int] = {}
 
 
 class Code(StrEnum):
@@ -123,7 +124,8 @@ class CheckedPathTests(unittest.TestCase):
         self.assertEqual(resolved, {("leaves", 1, "uid"), ("leaf", "uid")})
         self.assertIsNone(CheckedPath.from_pydantic_loc(Root, ("unknown",)))
         self.assertIsNone(CheckedPath.from_pydantic_loc(Root, ()))
-        for loc in (("scores", 4), ("pair", -3), ("leaves", -1), ("pair", 7)):
+        self.assertEqual(CheckedPath.from_pydantic_loc(Root, ("positive", 2)).projection(), ("positive", 2))  # type: ignore[union-attr]
+        for loc in (("scores", 4), ("pair", -3), ("leaves", -1), ("pair", 7), ("positive", -2)):
             with self.subTest(loc=loc):
                 self.assertIsNone(CheckedPath.from_pydantic_loc(Root, loc))
 
@@ -155,6 +157,22 @@ class FieldPathErrorTests(unittest.TestCase):
         for kind in (FieldPathError, FieldPathError[Code]):
             with self.subTest(kind=kind), self.assertRaises(TypeError):
                 kind(code=Code.MISSING, path=_name_path(), message="x")
+
+    def test_subclass_must_bind_a_concrete_enum(self) -> None:
+        with self.assertRaises(TypeError):
+            class Loose(FieldPathError[Any]):  # pyright: ignore[reportUnusedClass]
+                pass
+
+    def test_carrier_in_union_falls_through_to_other_branch(self) -> None:
+        class Envelope(BaseModel):
+            model_config = ConfigDict(strict=True, revalidate_instances="always")
+            data: FieldPathError[Any] | int
+
+        issue = RootTypeError(code=Code.MISSING, path=_name_path(), message="a")
+        self.assertIs(type(Envelope(data=issue).data), RootTypeError)
+        self.assertEqual(Envelope(data=42).data, 42)
+        with self.assertRaises(ValidationError):
+            Envelope(data="x")  # type: ignore[arg-type]
 
     def test_base_carrier_keeps_concrete_class_and_rejects_forgery(self) -> None:
         class AnyHolder(BaseModel):
@@ -213,6 +231,14 @@ class CollectorTests(unittest.TestCase):
         with self.assertRaises(IssueAdmissionError):
             collector.add(forged)
         self.assertEqual(collector.snapshot(), ())
+
+    def test_collector_requires_revalidating_frozen_models(self) -> None:
+        class Plain(BaseModel):
+            model_config = ConfigDict(frozen=True)
+            count: int
+
+        with self.assertRaises(IssueAdmissionError):
+            ValidatorAggregationHelper((Plain,))
 
     def test_empty_collector_does_not_raise_and_needs_admitted_classes(self) -> None:
         ValidatorAggregationHelper((RootTypeError,)).raise_if_any(lambda issues: LookupError(issues))

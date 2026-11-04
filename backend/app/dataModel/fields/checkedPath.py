@@ -120,7 +120,7 @@ class CheckedPath(Generic[RootT, CurrentT]):
         if not isinstance(key, (str, int)) or isinstance(key, bool):
             raise CheckedPathError("key() supports str or int keys")
         try:
-            TypeAdapter(_strip(args[0])).validate_python(key, strict=True)
+            TypeAdapter(args[0]).validate_python(key, strict=True)
         except ValidationError as exc:
             raise CheckedPathError("key() key does not match the mapping key type") from exc
         return self._step(_strip(args[1]), KeySegment(key=key))

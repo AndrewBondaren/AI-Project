@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, StrEnum
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Self, TypeVar
 
 from pydantic import BaseModel, ConfigDict, ModelWrapValidatorHandler, StrictStr, model_validator
 
@@ -47,6 +47,20 @@ class FieldPathError(BaseModel, Generic[CodeT]):
     path: ValidatedFieldPath
     message: StrictStr
 
+    def __new__(cls, *args: Any, **kwargs: Any) -> Self:
+        if _is_carrier(cls):
+            raise TypeError("FieldPathError requires a named concrete domain subclass")
+        return super().__new__(cls)
+
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
+        super().__pydantic_init_subclass__(**kwargs)
+        if _is_carrier(cls):
+            return
+        code = cls.model_fields["code"].annotation
+        if not (isinstance(code, type) and issubclass(code, Enum)):
+            raise TypeError(f"{cls.__qualname__} must bind CodeT to a concrete Enum, got {code!r}")
+
     @model_validator(mode="wrap")
     @classmethod
     def _validate_carrier(cls, value: Any, handler: ModelWrapValidatorHandler[Any]) -> Any:
@@ -54,17 +68,13 @@ class FieldPathError(BaseModel, Generic[CodeT]):
         if not _is_carrier(cls):
             return handler(value)
         if not isinstance(value, FieldPathError):
-            raise TypeError("FieldPathError requires a named concrete domain subclass")
+            raise ValueError("FieldPathError carrier needs a named concrete domain subclass instance")
         kind = type(value)
         if _is_carrier(kind):
             raise ValueError("FieldPathError carrier needs a named concrete domain subclass instance")
         if not _admits(cls, kind):
             raise ValueError(f"{kind.__qualname__} does not match carrier {cls.__qualname__}")
         return kind.model_validate(value, strict=True)
-
-    def model_post_init(self, context: Any, /) -> None:
-        if _is_carrier(type(self)):
-            raise TypeError("FieldPathError requires a named concrete domain subclass")
 
 
 def _is_carrier(kind: type[BaseModel]) -> bool:

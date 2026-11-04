@@ -22,6 +22,11 @@ class ValidatorAggregationHelper(Generic[IssueT]):
     def __init__(self, admitted: tuple[type[IssueT], ...]) -> None:
         if not admitted or not all(isinstance(kind, type) for kind in admitted):
             raise IssueAdmissionError("collector needs at least one concrete issue class")
+        for kind in admitted:
+            if issubclass(kind, BaseModel) and not (
+                    kind.model_config.get("frozen") and kind.model_config.get("revalidate_instances") == "always"):
+                raise IssueAdmissionError(
+                    f"{kind.__qualname__} must be frozen with revalidate_instances='always'")
         self._admitted = admitted
         self._issues: list[IssueT] = []
 
