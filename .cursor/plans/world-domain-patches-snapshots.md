@@ -2615,11 +2615,11 @@ Concrete 4C3 adapters в checkout отсутствуют: SQL integration и п�
 | 4C2-O | **DONE / ПРИНЯТ**, 2026-11-02, реализованный operation/terminal/evidence scope | 4C3 implementation и его собственные code/legacy gates |
 | DB-FIELDS-1A | **DONE / ПРИНЯТ**, 2026-11-02, typed row boundary и первые три consumers | Остальные шаги DB-FIELDS-1, который остаётся OPEN |
 | 4C4 | **ПРИНЯТ**, 2026-11-01, изолированный ContentAddressedBlobBackend | Concrete 4C3 integration и SN-CORE |
-| 4D1 / 4D1-L | **ПРИНЯТ**, 2026-11-02, реализация через существующие ports и LEASE_RELEASED logging follow-up | Concrete 4C3 integration, проверка фактического lock/claim ownership и интеграционная приёмка полного 4D1 gate |
-| 4C3 | **4C3-A ПРИНЯТ ПОЛЬЗОВАТЕЛЕМ 2026-11-02; 4C3-B ПРИНЯТ ПОЛЬЗОВАТЕЛЕМ 2026-11-03, REV-1 CLOSED / RE-REVIEW PASS**, handoff amendment принят; C ПРИНЯТ ПОЛЬЗОВАТЕЛЕМ, RE-REVIEW PASS / REV-1…4 CLOSED, D НА ПРИЁМКЕ, безопасное ограничение recovery сохраняется | Полный crash takeover OPEN вне 4C3; concrete lifecycle integration и полный 4D1 gate не закрыты |
-| 4D2 | **НЕ НАЧАТ / BLOCKED** | Нужны принятые SN-CORE и полный 4D1 integration gate; никакой Snapshot.apply реализации эта запись не подтверждает |
+| 4D1 / 4D1-L | **ПРИНЯТЫ**, включая concrete integration 2026-11-04 | Production composition — 4E2 |
+| 4C3 / SN-CORE | **ПРИНЯТЫ** в объёме storage core 4C2–4C4. 4C3-D принят 2026-11-04 после повторного PASS | Полный crash takeover остаётся OPEN вне freeze |
+| 4D2 | **PREFLIGHT**, runtime apply | Требуется решение по target publication в handler context ниже |
 
-**SN-CORE, SN-STAGE, SN-RUNTIME и Snapshot B-2 остаются OPEN** до своих реальных producer/consumer evidence. Отдельная приёмка выполненных компонентов не разрешает пропустить 4C3, изменить установленный порядок будущих шагов или считать 4D2 начатым.
+SN-STAGE, SN-RUNTIME и Snapshot B-2 остаются OPEN до соответствующих producer/consumer evidence.
 
 ### 4C3 — preflight / proposed guard freeze (2026-11-02; исправлен ревью ниже)
 
@@ -2905,6 +2905,18 @@ Evidence гонок получено на отдельных соединени�
 - `../.venv/Scripts/python.exe -B -m unittest tests.snapshotCore.storage.artifacts.test_staging.SqliteBlobLifecycleTests` — 5 OK, 23.081 s.
 - `../.venv/Scripts/python.exe -B -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — 162 теста, OK (1 skipped), 109.338 s, включая typing gate.
 - Из корня `git diff --check -- .cursor/plans/world-domain-patches-snapshots.md backend/tests/snapshotCore/storage/artifacts/test_staging.py` — PASS.
+
+#### Приёмка 4C3-D и preflight 4D2 — 2026-11-04
+
+Мастер принял 4C3-D после повторного независимого PASS на `17804a96`. Регрессия прошла на штатном GC и обнаружила ранний COMMIT при переносе физического delete за guard. В независимом прогоне 5 интеграционных тестов OK, полный Snapshot suite 162 теста OK (1 skipped). Это evidence ревью, повторного запуска в документальном preflight не было.
+
+**Контрактный вопрос для 4D2 (SN-TIME-APPLY).** Для тика с ожидаемой публикацией P сервис назначает world snapshot S и следующую публикацию Q. Сейчас SnapshotApplyContext содержит validation с P, S, player snapshots и scope. Q.publication_id не выводится из S.snapshot_id. Если handler запишет binding для P, чтение P получит состояние другого тика; если сам назначит publication_id, он может разойтись с Q в compare_append. Проверенные границы: application/worldSnapshot/contracts/context.py, storage/publicationStore.py, application/patch/registry/sectionRegistry.py и запрос Time §37/§44.
+
+**Предлагаемое изменение freeze.** Добавить обязательное поле `SnapshotApplyContext.next_publication: WorldPublicationRef`. WorldSnapshotService назначает Q один раз, проверяет world_uid, timeline, pack и snapshot_head == S и передаёт тот же Q во все BoundSectionHandler.apply и в IWorldPublicationStore.compare_append(scope, P, Q). Перед созданием контекста — claim через ledger по PatchSetCodec.fingerprint; existing terminal возвращается до вызова handlers. Validation получает pinned read scope. В одном writer scope — apply в порядке sections, сбор receipts, append snapshot metadata и CAS. Отказ handler или CAS откатывает доменные записи и metadata до записи terminal refusal. При UnknownCommitOutcome — recovery через ledger, без записи refusal.
+
+**Порядок FK для обсуждения с Time.** Handler пишет новые snapshot-bound строки до metadata, а publication-bound строки могут предшествовать CAS. Для будущих доменных таблиц с такими ссылками предложены `DEFERRABLE INITIALLY DEFERRED` owner FKs внутри одного CommitScope. Существующие таблицы core остаются под своими действующими constraints. Это предложение касается будущей схемы Time и требует отдельной проверки DDL у её владельца.
+
+**Проверка после согласования.** Два handler получают одну Q; независимое соединение после commit наблюдает Q с head S. При отказе второго handler или несовпадении CAS отсутствуют обе доменные записи, S и Q. Повтор с тем же fingerprint возвращает тот же terminal без вызова handlers. Пустой tick создаёт новую metadata и Q. Отдельная проверка будущей интеграции Time — чтение закреплённой P после Q.
 
 ## Контракты Snapshot для интеграции Time (2026-11-03)
 

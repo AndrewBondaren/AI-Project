@@ -1974,3 +1974,33 @@ CREATE TABLE IF NOT EXISTS dag_executions (
     checkpoint_blob BLOB NOT NULL,
     checksum TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS bake_operations (
+    operation_id TEXT PRIMARY KEY NOT NULL,
+    world_uid TEXT NOT NULL REFERENCES worlds(world_uid),
+    kind TEXT NOT NULL,
+    fingerprint TEXT NOT NULL,
+    request_version INTEGER NOT NULL,
+    request_blob BLOB NOT NULL,
+    status TEXT NOT NULL,
+    owner_id TEXT NOT NULL,
+    fence INTEGER NOT NULL CHECK(fence > 0),
+    lease_until REAL NOT NULL,
+    result_blob TEXT,
+    error TEXT,
+    publication_operation_id TEXT,
+    UNIQUE(world_uid, operation_id)
+);
+CREATE TABLE IF NOT EXISTS bake_world_claims (
+    world_uid TEXT PRIMARY KEY NOT NULL,
+    operation_id TEXT NOT NULL UNIQUE,
+    FOREIGN KEY(world_uid, operation_id) REFERENCES bake_operations(world_uid, operation_id)
+);
+CREATE TABLE IF NOT EXISTS bake_waiters (
+    operation_id TEXT NOT NULL REFERENCES bake_operations(operation_id),
+    execution_id TEXT NOT NULL,
+    invocation_id TEXT NOT NULL,
+    step_index INTEGER NOT NULL CHECK(step_index >= 0),
+    delivery_status TEXT NOT NULL,
+    PRIMARY KEY(operation_id, execution_id, invocation_id, step_index)
+);

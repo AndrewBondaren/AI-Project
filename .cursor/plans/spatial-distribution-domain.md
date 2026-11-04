@@ -4566,3 +4566,40 @@ V2 candidate admission теперь принимает для брендиров
 Проверки в tests/spatial_pack/test_guarded_blob_read.py используют реальные SQLite catalog/holders и физические BLOB. Отдельный сценарий удерживает файловый worker, дожидается BEGIN IMMEDIATE от GC на втором соединении, отменяет caller и проверяет активность первой транзакции. После release caller получает CancelledError, а GC обнаруживает действующий hold. Для busy-отказа отдельное соединение удерживает guard при нулевом busy_timeout reader. Direct counts Python-файлов: новый pack/spatial 2, dataModel/spatial 4, tests/spatial_pack 8. V1-02 из §15.50 остаётся на стороне legacy manifest; в этом read-пути отсутствует V1 dispatch/fallback. Файлы Time, API-1 и межплановые документы не менялись.
 
 Итог Windows-прогона: tests.spatial_pack.test_guarded_blob_read, tests.spatial_pack.test_verified_blob_read, tests.snapshotCore.storage.artifacts.test_blob_backend, test_gc и test_staging — 48 тестов прошли, один прежний symlink-тест пропущен. Адресный Pyright по пяти production-файлам — 0 ошибок и предупреждений. P2R-B предъявлен на независимое ревью.
+
+### 15.67. Независимое ревью SP-P2R-B — PASS
+
+Проверен diff B в 39415f1f относительно родителя и текущие файлы. При сверке рабочего дерева с включёнными untracked параллельные изменения bake admission в область B не входили. Дефектов по §§15.62–15.66 не обнаружено. Пользовательская приёмка B остаётся отдельным решением.
+
+От read_root/read_shard прослежены выбор точного ROOT_FORMAT/SHARD_FORMAT в registry, допуск ref, чтение descriptor, проверка seal и точного holder, затем read_verified под тем же guard. SQLite adapters fixture разделяют scope. Backend читает физический файл до заявленной длины, проверяет EOF и SHA-256, закрывает файл и возвращает bytes. Оба публичных метода вернули исходные четыре байта. Spy на backend подтвердил, что запрос выше профильного бюджета передаёт ровно 16 МиБ для root и 4 МиБ для shard. В пути отсутствуют вызовы Snapshot/Patch, чтение latest и fallback к WorldPackReader.
+
+Через публичные методы с запрещённым read_verified воспроизведены SOURCE_MISSING для отсутствующей записи, SOURCE_UNAVAILABLE для unsealed, чужого holder, отсутствия регистрации и занятого BEGIN IMMEDIATE, UNSUPPORTED_FORMAT для чужой роли и версии, SOURCE_CORRUPT для другой nbytes у той же catalog identity и превышения hard cap, RESOURCE_LIMIT для caller budget 3 при размере 4. С реальным backend удалённый файл дал SOURCE_MISSING, короткий, длинный и той же длины с иным digest — SOURCE_CORRUPT.
+
+В отдельной пробе на двух соединениях worker остановлен внутри открытого файла. После попытки GC выполнить BEGIN IMMEDIATE и отмены reader первая транзакция оставалась активной, обе задачи ожидали. Наблюдаемый порядок после release — закрытие файла (stream.closed), выход из guard, CancelledError у caller, SELECT каталога со стороны GC. GC вернул retained. Это порядок данного прогона. При обратном захвате guard reader дождался GC и вернул исходные bytes. Для этого ожидания после busy-пробы восстановлен busy_timeout=5000. При оставленном нулевом timeout reader закономерно вернул SOURCE_UNAVAILABLE.
+
+CorruptBlobError наследует PublicationInfrastructureError и обозначает физическое расхождение в read_verified_file. ArtifactStaging.verify использует отдельный backend.verify, GC вызывает delete. Оба используют catalog.guard и при SQLite OperationalError получают PublicationInfrastructureError с исходным __cause__. GC распространяет его из collect. Отдельная проба создала таблицу внутри guard и вызвала SQL-ошибку. После выхода транзакция закрыта, таблицы нет, повторный захват успешен. Классификация опирается на тип исключения и причину, без анализа сообщения.
+
+Команды повторного прогона из backend на Windows:
+
+```powershell
+../.venv/Scripts/python -m unittest -v tests.spatial_pack.test_guarded_blob_read tests.spatial_pack.test_verified_blob_read tests.snapshotCore.storage.artifacts.test_blob_backend tests.snapshotCore.storage.artifacts.test_gc tests.snapshotCore.storage.artifacts.test_staging
+../node_modules/.bin/pyright.cmd --pythonpath ../.venv/Scripts/python.exe app/application/artifacts/contracts/blobRead.py app/application/worldData/pack/spatial/openWaterBlobReader.py app/dataModel/spatial/readFailureReason.py app/db/repositories/sqlite/artifacts/access/artifactScope.py app/storage/artifacts/blobRead.py
+```
+
+Unittest выполнил 49 тестов за 54,415 с. Прошли 48, test_symlink_escape_is_rejected пропущен из-за отсутствия Windows symlink privilege. Pyright — 0 ошибок, предупреждений и информационных сообщений. Дополнительные пробы выполнялись через stdin в ../.venv/Scripts/python на временных SQLite-базах. Для asyncio использован запуск вне sandbox после зависания при создании Windows socketpair. Проверка охватывает transport и общий coordinator в fixture. Linux, production DI, валидность TLV, публикация и cutover не проверялись.
+
+### 15.68. Пользовательская приёмка SP-P2R-B
+
+2026-11-04 пользователь принял SP-P2R-B после независимого ревью PASS (§15.67). Принятый результат — чтение проверенных байтов root/shard по точным ArtifactRef и ArtifactHolderRef в границах §§15.65–15.67.
+
+### 15.69. SP-P2W — сверка границы публикации после приёмки read-пути
+
+Следующий шаг ветки Pack по §8 — согласование привязки staged artifacts к immutable manifest V2. В текущем дереве есть три разных контракта.
+
+- Artifact owner. `IArtifactStaging` в `application/artifacts/contracts/stagingPort.py` предоставляет reserve, seal, finish_preparation, verify, cancel и collect. finish_preparation принимает lease и refs. У вызова нет expected head для CAS.
+- Snapshot/publication owner. `IWorldPublicationStore.compare_append(scope, expected, next_publication)` в `application/worldSnapshot/storage/publicationStore.py` уже принимает typed expected/next WorldPublicationRef. В записи есть pack_hash и snapshot_head. В сигнатуре отсутствует перечень удерживаемых artifacts. Связь с их lifetime должна быть показана в вызывающей операции.
+- World Pack owner. `PackBakePublisher.publish` в `application/worldData/pack/bake/finalize/packBakePublisher.py` проверяет freshness входа, пересчитывает counters через WorldPackWriter и вызывает finalize_pack_on_world. Сохранение через `pack/io/packManifestStore.py` использует encode_legacy_manifest (V1-02, учёт §15.50). Это существующий caller для проверки при будущем удалении V1.
+
+Контрольный сценарий для проекта операции: два подготовленных manifest с общим expected head и разными hash. После конкурирующих commit виден один победитель. Повтор его операции идемпотентен, отмена проигравшей освобождает только её staging holds, а GC сохраняет доступные через прежний pin артефакты до release. Дополнительный fault case — остановка между подготовкой и CAS с последующим recover. Это критерии будущего теста.
+
+Предложение на согласование владельцам World Pack и Snapshot/publication: до реализации предъявить один typed Pack caller с идентичностью операции, expected publication, способом разрешить immutable manifest по hash, границей commit и переходом staging holds в retained holds. Для каждого перехода указать существующий port/transaction и результат conflict/replay/rollback. Spatial поставляет typed refs, построение полного набора root/shards проверяется в P3W. Открыта конкретная привязка портов для P2W. Кодовый gate §8 остаётся открыт до evidence принятого контракта. Следующая команда: «Подготовь проект контракта SP-P2W по §15.69, проверь реальные commit/holder/recovery callers и предъяви точные API, файлы и тесты на согласование».
