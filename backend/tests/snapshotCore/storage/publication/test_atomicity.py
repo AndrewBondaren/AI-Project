@@ -357,7 +357,7 @@ class AssignedPublicationTests(unittest.TestCase):
                 await operations.claim_publication(OperationKind.SNAPSHOT_APPLY, op, "w1", "a"*64, "b"*64)
                 assigned = WorldSnapshotRef(world_uid="w1", timeline_id="t1", snapshot_id="candidate-world")
                 registry = Mock(spec=SectionRegistry)
-                service = WorldSnapshotService(registry, world, player_store)
+                service = WorldSnapshotService(registry, world, player_store, history)
                 player_refs = ()
                 expectations = ()
                 if mode in ("players", "conflict", "player_conflict", "player_error", "player_cancel"):
@@ -490,7 +490,7 @@ class AssignedPublicationTests(unittest.TestCase):
                 h1 = PlayerHeadExpectation(player_uid="p1", expected_head=None)
                 h2 = PlayerHeadExpectation(player_uid="p2", expected_head=None)
                 snapshot = WorldSnapshotRef(world_uid="w1", timeline_id="t1", snapshot_id="assigned")
-                service = WorldSnapshotService(registry, bundle[2], bundle[3])
+                service = WorldSnapshotService(registry, bundle[2], bundle[3], bundle[4])
                 with (patch.object(bundle[2], "compare_append", new_callable=AsyncMock) as world_cas,
                       patch.object(bundle[3], "compare_append", new_callable=AsyncMock) as player_cas):
                     for case, heads, refs in (
@@ -506,4 +506,34 @@ class AssignedPublicationTests(unittest.TestCase):
                             registry.resolve.assert_not_called()
                             world_cas.assert_not_awaited()
                             player_cas.assert_not_awaited()
+        run_async(check())
+
+    def test_service_appends_metadata_from_pinned_parents_before_cas(self):
+        from app.application.patch.registry.sectionRegistry import SectionRegistry
+        from app.application.worldSnapshot.contracts.context import SnapshotValidationContext
+        from app.application.worldSnapshot.service.worldSnapshotService import WorldSnapshotService
+        from app.dataModel.worldSnapshot.identity.publication import PlayerHeadExpectation
+        from tests.snapshotCore.support.fixtures import STAMP
+
+        async def check():
+            async with live_database() as bundle, live_database(bundle[0].path, seed=False) as peer:
+                _, commits, world, players, history, operations = bundle
+                await live_started(bundle)
+                _, prior = await live_tick(bundle)
+                expected = prior.committed.publication
+                parent = prior.committed.player_snapshots[0]
+                snapshot = expected.snapshot_head.model_copy(update={"snapshot_id": "next-world"})
+                player = parent.model_copy(update={"snapshot_id": "next-player"})
+                service = WorldSnapshotService(SectionRegistry(), world, players, history)
+                await operations.claim_publication(OperationKind.SNAPSHOT_APPLY, "next", "w1", "a"*64, "b"*64)
+                async with commits.transaction("next") as scope:
+                    validation = SnapshotValidationContext("next", expected,
+                        (PlayerHeadExpectation(player_uid=parent.player_uid, expected_head=parent),), (), scope.read_scope)
+                    async with service._apply_to_target(scope, validation, (), snapshot, (player,)) as (ctx, receipts):
+                        await service._append_metadata(ctx, 2, STAMP, receipts, {})
+                for ref, pinned in ((snapshot, expected.snapshot_head), (player, parent)):
+                    envelope = await peer[4].read(ref)
+                    self.assertEqual((envelope.parent, envelope.turn_id, envelope.operation_id), (pinned, 2, "next"))
+                self.assertEqual(await peer[2].read("w1"), ctx.next_publication)
+                self.assertEqual(await peer[3].read(parent.player_uid), player)
         run_async(check())

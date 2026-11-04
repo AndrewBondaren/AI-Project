@@ -1,8 +1,9 @@
 """Join captured inputs for one coastline source; decisions remain common policy."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 
-from pydantic import TypeAdapter
+from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from app.core.validatorAggregationHelper import ValidatorAggregationHelper
 from app.dataModel.cascade.cascadeGraph import bind_field
@@ -27,7 +28,7 @@ from app.dataModel.terrain.designedWater.fields.field import NoiseRecipe, PlateR
 from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometryRequest, LegacyAuthoredWaterGeometryRequest
 from app.dataModel.terrain.designedWater.input import (
     AuthoredWaterDesignInput, CoastlineWaterDesignInput, NoiseWaterDesignInput, PlateWaterDesignInput,
-    NativeCoastlineStrategyInput, PlateNoiseWaterDesignInput, WaterDesignInput,
+    NativeCoastlineStrategyContext, NativeCoastlineStrategyInput, PlateNoiseWaterDesignInput, WaterDesignInput,
 )
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind as Strategy, WaterDesignIssueCode
 from app.dataModel.terrain.regions.coverageGeometry import RegionCoverage
@@ -39,35 +40,64 @@ _RECIPE = TypeAdapter(WaterFieldRecipe)
 _GENERATION = TypeAdapter(HydrologyGenerationDecision)
 
 
+@contextmanager
+def _validation_path(uid: str, *path: str) -> Iterator[None]:
+    try:
+        yield
+    except ValidationError as error:
+        raise PlanBuildFailure(tuple(
+            FieldPathError(("water_source", uid, *path, *detail["loc"]), detail["msg"],
+                           code=WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value)
+            for detail in error.errors(include_input=False, include_context=False, include_url=False)
+        )) from error
+
+
 def _ready_mode(source: DeclaredCoastline, request: AuthoredWaterGeometryRequest | LegacyAuthoredWaterGeometryRequest,
                 context: ResolvedWaterGenerationContext, admission: PlacementAdmissionInput,
                 generation: HydrologyGenerationDecision, metadata: WaterSourceMetadata) -> HydrologyExecutionMode:
     uid = source.location_uid
-    context = ResolvedWaterGenerationContext.model_validate(context, strict=True)
-    admission = PlacementAdmissionInput.model_validate(admission, strict=True)
-    decision = ObjectAdmissionDecision[Strategy, WaterPolicyReason].model_validate(admission.decision, strict=True)
-    generation = _GENERATION.validate_python(generation, strict=True)
-    if decision.state is not PolicyState.READY or generation.state is not PolicyState.READY:
-        raise ValueError("coastline geometry requires ready admission and generation decisions")
+    with _validation_path(uid, "context"):
+        context = ResolvedWaterGenerationContext.model_validate(context, strict=True)
+    with _validation_path(uid, "admission"):
+        admission = PlacementAdmissionInput.model_validate(admission, strict=True)
+    with _validation_path(uid, "admission", "decision"):
+        decision = ObjectAdmissionDecision[Strategy, WaterPolicyReason].model_validate(admission.decision, strict=True)
+    with _validation_path(uid, "generation"):
+        generation = _GENERATION.validate_python(generation, strict=True)
+    errors = ValidatorAggregationHelper()
+
+    def report[M: BaseModel, T](model: M, select: Callable[[M], T], message: str, *parent: str) -> None:
+        field = bind_field(FieldRef(lambda: type(model), select)).field
+        errors.add(FieldPathError(("water_source", uid, *parent, field), message,
+                                  code=WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value))
+
+    if decision.state is not PolicyState.READY:
+        report(decision, lambda d: d.state, "coastline requires ready admission", "admission", "decision")
+    elif decision.require_behavior() is not context.strategy:
+        report(decision, lambda d: d.behavior, "admission strategy must match the resolved context", "admission", "decision")
+    if generation.state is not PolicyState.READY:
+        report(generation, lambda g: g.state, "coastline requires ready generation", "generation")
+    else:
+        mode = generation.require_behavior()
+        if mode not in (HydrologyExecutionMode.DECLARED_ONLY, HydrologyExecutionMode.AUTORESOLVE):
+            report(generation, lambda g: g.behavior, "ready generation requires DECLARED_ONLY or AUTORESOLVE", "generation")
+        elif (mode is HydrologyExecutionMode.AUTORESOLVE) is not context.autoresolve:
+            report(context, lambda c: c.autoresolve, "generation decision must match resolved context autoresolve", "context")
     if request.source != CoastlineWaterSource(value=source):
-        raise ValueError("geometry request must capture the same complete coastline source")
+        report(request, lambda r: r.source, "geometry request must capture the same complete coastline source", "geometry_request")
     identity = admission.header.identity
-    if identity.source_uid != uid or identity.world_uid != request.pre_hydrology.ref.key.world_uid:
-        raise ValueError("admission source/world must match the captured terrain and source")
+    if identity.source_uid != uid:
+        report(identity, lambda i: i.source_uid, "admission source UID must match the coastline", "admission", "header", "identity")
+    if identity.world_uid != request.pre_hydrology.ref.key.world_uid:
+        report(identity, lambda i: i.world_uid, "admission world must match the captured terrain", "admission", "header", "identity")
     if admission.header.mode is not PlacementMode.ABSOLUTE:
-        raise ValueError("authored coastline path requires absolute placement")
+        report(admission.header, lambda h: h.mode, "authored coastline path requires absolute placement", "admission", "header")
     if any(d.target_uid in (identity.source_uid, identity.region_uid) for d in admission.header.dependencies):
-        raise ValueError("water source cannot depend on itself or its future water")
-    if decision.require_behavior() is not context.strategy:
-        raise ValueError("admission strategy must match the resolved generation context")
-    mode = generation.require_behavior()
-    if mode not in (HydrologyExecutionMode.DECLARED_ONLY, HydrologyExecutionMode.AUTORESOLVE):
-        raise ValueError("ready generation requires DECLARED_ONLY or AUTORESOLVE")
-    if (mode is HydrologyExecutionMode.AUTORESOLVE) is not context.autoresolve:
-        raise ValueError("generation decision must match resolved context autoresolve")
+        report(admission.header, lambda h: h.dependencies, "water source cannot depend on itself or its future water", "admission", "header")
     if metadata.source_kind is not WaterDesignSourceKind.COASTLINE:
-        raise ValueError("coastline metadata must retain the source origin")
-    return mode
+        report(metadata, lambda m: m.source_kind, "coastline metadata must retain the source origin", "metadata")
+    errors.raise_if_any(PlanBuildFailure)
+    return generation.require_behavior()
 
 
 class CoastlineWaterSourceAdapter:
@@ -85,14 +115,17 @@ class CoastlineWaterSourceAdapter:
         if not isinstance(source, DeclaredCoastline) or not isinstance(geometry_request, AuthoredWaterGeometryRequest):
             raise TypeError("native coastline join requires a typed source and fine geometry request")
         try:
-            request = AuthoredWaterGeometryRequest.model_validate(geometry_request, strict=True)
+            with _validation_path(source.location_uid, "geometry_request"):
+                request = AuthoredWaterGeometryRequest.model_validate(geometry_request, strict=True)
             if request.pre_hydrology.ref != expected_window:
                 raise ValueError("coastline request must match the expected fine window revision")
-            wrapped = CoastlineWaterSource(value=source)
+            with _validation_path(source.location_uid, "source"):
+                wrapped = CoastlineWaterSource(value=source)
             mode = _ready_mode(source, request, context, admission, generation, metadata)
             if mode is not HydrologyExecutionMode.AUTORESOLVE:
                 raise ValueError("native coastline requires ready AUTORESOLVE before preparation")
-            recipe = _RECIPE.validate_python(field_policy, strict=True)
+            with _validation_path(source.location_uid, "field_policy"):
+                recipe = _RECIPE.validate_python(field_policy, strict=True)
             errors = ValidatorAggregationHelper()
 
             def check_field[T](select: Callable[[WaterFieldRecipe], T], expected: T, message: str) -> None:
@@ -105,11 +138,13 @@ class CoastlineWaterSourceAdapter:
             check_field(lambda r: r.seed_root, request.seed_root, "recipe must match the captured seed")
             check_field(lambda r: r.topology, request.topology, "recipe must use the captured fine topology")
             errors.raise_if_any(PlanBuildFailure)
-            constraints = CoastlineConstraintPreparer().prepare_native(request)
-            return NativeCoastlineStrategyInput(strategy=context.strategy, source=wrapped, metadata=metadata,
-                context=context, region=region, budget=budget, seed_root=request.seed_root, topology=request.topology,
-                grid=request.grid, pre_hydrology=request.pre_hydrology, region_coverage=region_coverage,
-                constraints=constraints, field_policy=recipe, z_min=request.z_min)
+            with _validation_path(source.location_uid):
+                captured = NativeCoastlineStrategyContext(strategy=context.strategy, source=wrapped, metadata=metadata,
+                    context=context, region=region, budget=budget, seed_root=request.seed_root, topology=request.topology,
+                    grid=request.grid, pre_hydrology=request.pre_hydrology, region_coverage=region_coverage,
+                    field_policy=recipe, z_min=request.z_min)
+                constraints = CoastlineConstraintPreparer().prepare_native(request)
+                return NativeCoastlineStrategyInput.model_validate(dict(captured, constraints=constraints), strict=True)
         except ValueError as error:
             raise PlanBuildFailure((FieldPathError(("water_source", source.location_uid), str(error),
                 code=WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value),)) from error

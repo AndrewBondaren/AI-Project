@@ -2962,6 +2962,16 @@ Evidence гонок получено на отдельных соединени�
 
 Пользователь принял срез player CAS после [повторного независимого ревью](world-domain-4d2-player-cas-review.md#повторное-ревью-после-исправлений). На HEAD `73994eae` вердикт **PASS**, все три блокера закрыты. Ревьюер подтвердил отказ при неверном составе участников до dispatch, отсутствие player CAS при конфликте мира и полный rollback при исключении из CAS второго игрока. В повторном ревью адресный прогон с typing gate — 3 OK, полный Snapshot suite — 165 тестов OK (1 skipped). Приёмка охватывает world и player CAS во внешней транзакции; общий 4D2 остаётся в работе.
 
+#### 4D2 — metadata builder и scoped append, 2026-11-04
+
+В `backend/app/application/worldSnapshot/service/snapshotMetadataBuilder.py` SnapshotMetadataBuilder строит world/player envelopes для назначенных участников из typed receipts и точных pinned bases, заменяет state по ключу секции и сохраняет прежние refs остальных секций. History относится только к текущему snapshot. Builder отвергает новые state refs у no-op receipt, недостижимые refs, посторонние history и расхождение родителей; переиспользуется validate_receipt_provenance. WorldSnapshotService._append_metadata читает родителей по ID через read capability текущего writer scope и передаёт все envelopes одному history store в исходном scope. Transaction завершает внешний owner.
+
+Граница retention: аргумент retained задаёт явные destinations, включая необходимые inherited artifacts. Каждый retained artifact текущих receipts должен иметь destination. Плоский receipt со state refs одновременно для world и player и с одним artifact не задаёт, кто из них должен получить hold. Выбор этой карты внешним owner и handoff предстоят; builder не приписывает такой BLOB всем участникам по умолчанию.
+
+В `backend/tests/snapshotCore/contracts/test_registry.py` проверены merge/no-op, разделение history и artifacts, отрицательные случаи и разрешена точная зависимость service → builder. В `backend/tests/snapshotCore/storage/publication/test_atomicity.py` добавлена интеграция второго тика через real SQLite history/world/player CAS и peer read. Предыдущая защита stale-player CAS сохраняет отдельный fixture с синтетическим stale head; новая интеграция использует существующих родителей. Публичный apply, terminal/retry и отдельный выбор retention destinations в этот срез не входят.
+
+Из backend `../.venv/Scripts/python.exe -B -m unittest tests.snapshotCore.contracts.test_registry tests.snapshotCore.storage.publication.test_atomicity.AssignedPublicationTests tests.snapshotCore.contracts.test_typing` — 15 OK (18.992 s). Полный unittest discover -s tests/snapshotCore — 167 тестов OK (1 skipped, 131.126 s). Адресный Pyright по builder и service — 0 ошибок.
+
 ## Контракты Snapshot для интеграции Time (2026-11-03)
 
 Входящий запрос из [Time §§14.2, 34, 37, 44–46, 48](./time-domain.md). Ниже три отдельных результата с владельцем Snapshot. Статус каждого — OPEN до согласования контракта и проверки соответствующего пути. Эти работы лежат вне среза leases 4C3-C.

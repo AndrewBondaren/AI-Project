@@ -414,3 +414,19 @@ require вернул исходный экземпляр для готового
 | **P2 · OPEN** · [bakeOperation.py, строка 30](../../backend/app/db/models/bakeOperation.py#L30) | Для `publication_operation_id = SimpleNamespace(value="foreign")` mapper извлёк строку и INSERT прошёл. Оба пути чтения вернули `PublicationOperationId("foreign")`. Прямой publishing отклоняет такой объект. | Общий mapper проверяет тип ненулевого ID перед извлечением value. Допустимый SQL NULL сохраняется. |
 
 Контрольная строка с корректными BakeResult и PublicationOperationId прошла INSERT и оба пути чтения. Штатный Pyright завершился без диагностик. Первый полный DAG-прогон по §9 дал **389/390 за 144,376 с** с одним `OwnershipConflict('lease')` при checkpoint. Контрольный прогон 16 тестов R6 и двух lease-тестов дал **18/18 за 64,741 с**. Связь сбоя аренды с находками R6 не установлена. В пробе takeover Windows выдала предупреждение при очистке временной БД после проверки результата.
+
+## Повторное ревью R6 на 5ec113b1 от 2026-11-04
+
+**CHANGES REQUIRED.** Проверен HEAD `5ec113b1903a8e8ffce21cc613960d1846122629`. Все три находки от `42e7f6e0` закрыты. Открыта одна новая P2.
+
+| Прежняя находка | Вердикт | Результат повтора |
+|---|---|---|
+| P1 · Ложное подтверждение rollback | **CLOSED** | После takeover объект `SimpleNamespace(reason="unverified")` вызвал TypeError. При прямом вызове store сохранились PUBLISHING и claim, через worker — RECOVERY_REQUIRED и claim. |
+| P2 · Чужая модель в result_blob | **CLOSED** | При BakeError в поле result вызов to_row выбросил TypeError до INSERT. Строка не появилась. |
+| P2 · Посторонний объект вместо ID | **CLOSED** | При `SimpleNamespace(value="foreign")` в поле publication_operation_id вызов to_row выбросил TypeError до INSERT. Корректный ID и допустимый SQL NULL прошли запись и чтение. |
+
+**P2 · OPEN · Подклассы BakeResult и BakeError.** Если callback публикации возвращает подкласс BakeResult с дополнительным полем `detail`, кодировщик сохраняет это поле в JSON. После commit в БД видны SUCCEEDED и снятый claim, но и `SQLiteBakeOperations.read`, и `from_row(BakeOperation, row)` выбрасывают `ValidationError(extra_forbidden)` для `detail`. Та же проба с подклассом BakeError через `prepared_terminal` дала FAILED и снятый claim, а прочитать причину ошибки обоими путями не удалось. [BakeResult.encode](../../backend/app/dataModel/world/bakeOperation/record.py#L87) · [BakeError.encode](../../backend/app/dataModel/world/bakeOperation/record.py#L69)
+
+**Критерий закрытия.** Для обоих подклассов после фиксации терминала второе SQLite-соединение должно прочитать результат или причину ошибки обоими штатными путями.
+
+**Прогоны.** Профильный R6 — **17/17 за 33,170 с**, полный DAG по §9 — **391/391 за 102,094 с**. Оба прошли с первого запуска. Штатный Pyright и `git diff --check` прошли без замечаний. Контрпример с подклассами воспроизведён отдельной пробой на двух SQLite-соединениях.

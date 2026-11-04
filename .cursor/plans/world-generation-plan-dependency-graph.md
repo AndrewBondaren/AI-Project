@@ -318,10 +318,10 @@ Owners: PH-* — PHYSICS-1 §6 (PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-H
 | 4C2-H | Внешние условия / критерии owning-плана | DONE | ПРИНЯТ | Принят мастером 2026-11-01 по архитектурному ревью. [Snapshot §8.13–8.14](./world-domain-patches-snapshots.md) |
 | 4C2-O | 4C2-R, 4C2-H | DONE | ПРИНЯТ мастером 2026-11-02 | Изолированный operation/terminal/evidence scope принят; 108 PASS, typing 0/48 — исходное evidence, не приёмка 4C3. [Snapshot §8.14, актуальная приёмка](./world-domain-patches-snapshots.md) |
 | 4C2-R | Внешние условия / критерии owning-плана | DONE | ПРИНЯТ | Принят мастером 2026-11-01 по архитектурному ревью. [Snapshot §8.13–8.14](./world-domain-patches-snapshots.md) |
-| 4C3 | 4C2-O | A/B/C приняты | D предъявлен | Пять интеграционных регрессий. Process crash takeover вне scope. |
-| 4C4 | 4C3 | ПРИНЯТ владельцем | INTEGRATION OPEN | Принят мастером 2026-11-01 («от меня приемка прошла») в выполненном scope BLOB backend. Concrete 4C3 integration остаётся открытой; O отдельно принят 2026-11-02, 4C3 и SN-CORE этой BLOB-приёмкой не закрыты. [Snapshot evidence 4C4](./world-domain-patches-snapshots.md) |
-| 4D1 | SN-CORE | ЧАСТИЧНО: PORT-SCOPE ПРИНЯТ | INTEGRATION OPEN | Мастер принял реализацию через ports и 4D1-L logging follow-up 2026-11-02: 126 tests OK (1 skipped), typing 0/50 EXPECT. Concrete 4C3/SQL integration и общий 4D1 integration gate OPEN; 4D2 не начат. [Snapshot evidence 4D1, актуальная приёмка](./world-domain-patches-snapshots.md) |
-| 4D2 | 4D1 | НЕ ВЗЯТ | BLOCKED | Мастер подтвердил: 4D2 не начинали. Локальная приёмка port-scope 4D1 не закрывает требуемый SN-CORE/4C3 integration и полный 4D1 gate; до кода отдельный freeze/legacy/разрешение. [Snapshot §8.3, актуальная приёмка](./world-domain-patches-snapshots.md) |
+| 4C3 | 4C2-O | A–D приняты | Storage core принят | Crash takeover вне scope. |
+| 4C4 | 4C3 | Принят | SN-CORE принят | Snapshot §8.14. |
+| 4D1 | SN-CORE | Port-scope принят | SQL+BLOB проверены в 4C3-D | 4D2 в работе. |
+| 4D2 | 4D1 | В работе | Assigned Q и player CAS приняты | Открыты metadata builder, validation, apply(), terminal/retry. |
 | 4D3 | 4D2 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [Snapshot §8.3, §8.13–8.14](./world-domain-patches-snapshots.md) |
 | 4E2 | 4D3 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [Snapshot §8.3, §8.13–8.14](./world-domain-patches-snapshots.md) |
 | DT-A | Внешние условия / критерии owning-плана | РЕАЛИЗОВАН | ГОТОВ К АНАЛИЗУ: handoff/legacy review | A1–A3 implemented/verified; B не выполнен. Новый LEGACY-AC OPEN, DONE не выставлен. [DAG-TYPING execution evidence A3.6 / этап B](./dag-typing-1.md) |
@@ -349,7 +349,7 @@ Owners: PH-* — PHYSICS-1 §6 (PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-H
 | PH-PUBLISH | PH-ARCH, PH-ORCH | OPEN | ПРИЁМКА BLOCKED; дизайн по локальным constraints | Exact contracts и applicable legacy evidence OPEN; production-код не разрешён. [PHYSICS §6](./physics-spatial-dynamics.md) |
 | SN-APPLY-HANDLER | 4E2 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [Snapshot §8.3, §8.13–8.14](./world-domain-patches-snapshots.md) |
 | SN-B-2 | GEN-BAKE | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [Snapshot §8.3, §8.13–8.14](./world-domain-patches-snapshots.md) |
-| SN-CORE | 4C4 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [Snapshot §8.3, §8.13–8.14](./world-domain-patches-snapshots.md) |
+| SN-CORE | 4C4 | Принят | Storage core 4C2–4C4 | Snapshot §8.14. |
 | SN-RUNTIME | SN-APPLY-HANDLER | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [Snapshot §8.3, §8.13–8.14](./world-domain-patches-snapshots.md) |
 | SN-STAGE | 4E2 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [Snapshot §8.3, §8.13–8.14](./world-domain-patches-snapshots.md) |
 | SP-0 | Внешние условия / критерии owning-плана | DONE | ГОТОВ: переход к архитектурному SP-1 | Явная приёмка пользователя 2026-11-01; принят статический аудит §0.1–0.14 с доработками SP0-REV-1/2 (§0.15). Глобальный LEGACY-AC последующего cutover OPEN, runtime/code permission не выдано. [SPATIAL SP-0, §0.15](./spatial-distribution-domain.md) |
@@ -361,10 +361,10 @@ Owners: PH-* — PHYSICS-1 §6 (PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-H
 | SP-H | G10-A | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
 | SP-M | SP-1 | ПРИНЯТ ДОКУМЕНТАЛЬНО | SP-R0 design доступен; SP-4 code не разрешён | §§16.9–16.16: G1/context/result/protected-domain boundary; implementation evidence OPEN. |
 | SP-P0 | SP-1, GEO-SPATIAL-CONTRACT | DESIGN ПРИНЯТ | SP-P1 preflight доступен; код требует отдельного разрешения | §§15.17–15.19: 33/38 types, narrow diagnostic admission; parser/cold/retention evidence впереди. |
-| SP-P1 | SP-P0 | P1-A/B приняты, P1-C реализован (§15.45) | Далее P1-D по §15.20 | Bounded decode, root/shard codecs, TLV V1. |
+| SP-P1 | SP-P0 | P1-D принят | §15.61 | Удаление V1 отдельно по §15.73. |
 | SP-P2 | SP-P2R, SP-P2W | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
-| SP-P2R | SP-P1 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
-| SP-P2W | SP-P1, SN-STAGE | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
+| SP-P2R | SP-P1 | A/B приняты | §§15.65–68 | Чтение immutable BLOB под guard. |
+| SP-P2W | SP-P1, SN-STAGE | Проектирование | §§15.70–83 | Открыты lifetime и cold resolution manifest. |
 | SP-P3 | SP-P3W | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
 | SP-P3I | SP-H, SP-P0, SP-P1 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
 | SP-P3W | SP-P3I, SP-P2, SP-H, PACK-ENTRY-CONTRACT | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
@@ -503,7 +503,7 @@ print('PASS:', len(edges), 'edges; base and separate cutover alternatives')
 
 | Когда / стартовый gate | Какие конкретные работы можно вести независимо | Где обязательная синхронизация / что ещё запрещено |
 |---|---|---|
-| **Сейчас** | GEO-I8.1 и Spatial P1-C реализованы, изолированное ядро Time проверено. | Очередь и внешние зависимости в §12.1. |
+| **Сейчас** | GEO-I11.1, Snapshot 4D2, проектирование SP-P2W. | Очередь в §12.1. |
 | **После приёмки Snapshot 4C2-R/H** | Snapshot **4C2-O** как **один** собственный атомарный code step может идти одновременно с GEO контрактной/кодовой веткой и независимыми SPATIAL SP-0/1/P0 работами (при их собственных gates). | `4C3` не стартует до принятого `4C2-O`. Внутри Snapshot правило «один подшаг за заход» сохраняется, **4C2-O и 4C3 не параллелить**. |
 | **После SPATIAL SP-0/1/P0 и принятия exact Pack format/POJO** | `SP-P1` (после собственного P0), затем `SP-P2R` (после P1) может разрабатываться независимо от **GEO G10-A** и последовательной ветки Snapshot `4C3+`; кодовые steps только по отдельным разрешениям. | `SP-P2W` дополнительно ждёт **SN-STAGE**; `SP-P3I` ждёт `SP-H/GEO G10-A` и `SP-P1`. Нельзя начать их из-за одного наличия generic contract. |
 | **После GEO-SPATIAL-CONTRACT, GEO G10-A/SP-H и SP-P1** | `SP-P3I` (Hydrology compact facts/index) и `SP-P2R` (Pack read/verify) — **реальные независимые branches**; если к этому моменту уже принят SN-STAGE, `SP-P2W` тоже допустим параллельно, каждый со своей картой файлов и тестами. | `SP-P2` только после P2R+P2W, `SP-P3W` только после P3I+P2 и принятого PACK-ENTRY-CONTRACT; `SP-P3` только после P3W. Не смешивать hydrology source, storage port и writer в один кодовый шаг. |
@@ -809,18 +809,18 @@ flowchart TD
 
 **Проверка v6.10:** добавлен draft LOD трек и обратные ссылки без изменения hard-edge реестра. Markdown/Mermaid/ссылки и static graph должны быть проверены; implementation/runtime evidence отсутствует, GRAPH-AC остаётся OPEN.
 
-## 12. Действующая очередь на 2026-11-03
+## 12. Действующая очередь на 2026-11-04
 
 | Трек | Последнее решение и evidence | Следующая работа |
 |---|---|---|
-| [GEO](./geo-1-designed-water.md) | I7.1 принят (§I7.3), закрыт P2 потери точности площади, 175/175 integration по независимому отчёту. I8.1 реализован и предъявлен. | Следом подготовка fine geometry воды, production caller и согласованная миграция placement V2. |
-| [Snapshot](./world-domain-patches-snapshots.md) | A/B/C приняты. После CHANGES REQUIRED исправлен тест GC/reserve (`cd6746a7`). По отчёту 5 focused OK, suite 162 (1 skip). | Повторное ревью исправления, затем решение пользователя по D. Concrete 4C3 / полный 4D1 остаются на предъявлении. |
-| [Spatial](./spatial-distribution-domain.md) | P1-B принят. Независимый PASS P1-C (§15.46) для целой V1-записи в памяти: 74 теста, воспроизведены golden bytes и отказ до создания моделей. | P1-D после пользовательского решения по P1-C и отдельной проверки полного guard diff (§15.20). |
+| [GEO](./geo-1-designed-water.md) | I11.1 передаёт fine constraints и закреплённую ссылку W в procedural strategy input. | Построить procedural field по fine-клеткам W. |
+| [Snapshot](./world-domain-patches-snapshots.md) | Storage core принят. 4D2 в работе, назначенная Q поступает в handlers и world CAS, player CAS принят. | Metadata builder, полная validation, публичный apply и terminal/retry. |
+| [Spatial](./spatial-distribution-domain.md) | P1-D, P2R-A/B и SP-1C приняты. §15.83 сопоставляет исходы активации с CAS и retention. | World Pack согласует владельцев active/retained manifest и cold resolution до реализации P2W. |
 | [Time](./time-domain.md) | Изолированные T3-A/T3-C, подготовка T4 и World settings проверены: 25 тестов, Pyright без ошибок по отчёту. | Политика STANDARD для суток в 1–3 часа открыта. Production T4 требует SN-TIME-READ и Time reader, T5 — SN-TIME-APPLY и handler, создание ветки — SN-TIME-BRANCH. |
 | [Physics](./physics-spatial-dynamics.md) | P3.9–11 приняты F1–F3, typed group output и карта/порядок P3.5/P3.7. P3.15 приняты S1–S4 для settings. P3.16 добавляет PH-LOG | Проработать внешний контракт B и затем closure C. Для PH-LOG согласовать event matrix, correlation и регистрацию маршрута. После общей архитектуры возможен water kernel proposal |
-| [API-1](./api-1-transport-boundary.md) | Пользователь выбрал путь API → engine DAG → пользовательская нода → public domain operation. По Climate C1 предъявлена карточка с открытыми schema/revision/security и writer boundaries | Согласовать C1-schema и guarded update/acceptance. Domain contracts можно проектировать до пользовательских нод |
+| [API-1](./api-1-transport-boundary.md) | Проверено покрытие полей storage и wire. Climate C1 содержит девять scalars, десять после переноса lapse. | Сопоставить вход каждой операции с версией и выходом владельца, включая presence/aliases. |
 | [GEN-BAKE-READ](./generator-public-bake-reads.md) | Исправленный пакет D1–D7 предъявлен в §17.10.4 | Получить решение пользователя, затем R1/R2 отдельно по операциям. Handoff light, full L0+C23, named terrain и coordinate terrain описан в §17.10.3 |
-| [DAG invocation и bake admission](./dag-invocations-bake-admission.md) | R1–R4: повторное ревью PASS. После замечаний REV-7/8 по R5 в `09fd51ee` внесены изменения в cancellation, input wait и тесты. | Проверить исправления по обоим контрпримерам. Повторный verdict в owning-плане пока отсутствует. |
+| [DAG invocation и bake admission](./dag-invocations-bake-admission.md) | Ревью R6 на 42e7f6e0 выявило ошибки recovery и SQL mapper. | Исправить удержание claim при неизвестном исходе и проверку типов до записи. |
 | [LOD](./lod-simulation-handoff.md) | §11 учитывает draft и открытые вопросы coherent capture, continuation и неизменности мира | Продолжать согласование с владельцами первого consumer. Конкретные зависимости runtime уточняются по сценарию |
 
 Предложения новых bindings в этих планах не меняют hard-edge реестр автоматически. Исторические команды §9.3 для приёмки I1/B, preflight P1-A и проектирования уже принятой карты Physics заменены этой очередью.
@@ -829,9 +829,9 @@ flowchart TD
 
 | План | Номер трека | О чём трек | Следующий трек или внешняя зависимость |
 |---|---|---|---|
-| GEO | I8.1, реализован | До запуска placement session сверяется полный набор геометрии конкурентов. | GEO: подготовка fine geometry воды и подключение production caller. Для изменения V2 согласованно перевести оба placement entry и consumers. |
-| Spatial | P1-C, реализация проверена (§15.46) | Декодирование TLV и V1 codecs для root/shard в памяти. | P1-D: выбор V1/V2 в manifest и защита legacy-записи. Вход — решение по P1-C и отдельная проверка guard diff. |
+| GEO | I11.1 реализован | Передача constraints в procedural strategy для fine-сетки. | GEO: исполнить procedural field build по клеткам W. |
+| Spatial / World Pack | SP-P2W, проектирование | Атомарная активация V2 и удержание manifest с дочерними refs. | Согласовать ownership и cold resolution, затем проверить ACTIVE + CAS + retention + terminal в одном CommitScope и rollback после CAS. |
 | Time | T3-A / T3-C, подготовка T4 проверена | Арифметика, календарь, World settings, чтение через закреплённые тестовые источники. | Внутри Time открыта политика STANDARD для 1–3 часов. Production T4 ждёт SN-TIME-READ, T5 — SN-TIME-APPLY, ветвление — SN-TIME-BRANCH. |
-| Snapshot | SN-TIME-READ, доступно проектирование | Определить получение точного принятого состояния по закреплённой публикации или историческому snapshot в одном read scope. | Передача в Time T4 после реализации и проверки, что публикация P читается после появления Q. |
+| Snapshot | 4D2 в работе | Общий metadata builder появился в рабочем дереве после реализации world/player CAS. | Полный validation, публичный apply и terminal/retry. Для интеграции T5 ещё требуется проверка Time handler и эффектов в одном commit. |
 
-Snapshot D остаётся на повторном ревью. API-1 ведёт пользователь. GEN-BAKE-READ после решения по D1–D7 переходит к проектированию R1/R2 по операциям.
+API-1 ведёт пользователь. GEN-BAKE-READ после решения по D1–D7 переходит к проектированию R1/R2 по операциям.

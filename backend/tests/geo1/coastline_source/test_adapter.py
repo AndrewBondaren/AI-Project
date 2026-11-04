@@ -14,7 +14,7 @@ from tests.geo1.fine_water.test_fill import source as fine_window
 from tests.geo1.fine_water.fixtures import physical_inputs
 from app.application.worldData.generators.terrain.designedWater.coverage.waterCoverageBudgetPolicy import WaterCoverageBudgetPolicy
 from app.dataModel.hydrology.declaredCoastline import CoastlinePurpose
-from app.dataModel.hydrology.sources.waterDesignSource import CoastlineWaterSource
+from app.dataModel.hydrology.sources.waterDesignSource import CoastlineWaterSource, WaterDesignSourceKind
 from app.dataModel.placement.intent import PlacementDependency
 from app.dataModel.placement.common import DependencyRelation, PlacementMode
 from app.dataModel.terrain.designedWater.input import CoastlineWaterDesignInput, AuthoredWaterDesignInput, NoiseWaterDesignInput, PlateWaterDesignInput, PlateNoiseWaterDesignInput
@@ -66,6 +66,35 @@ class CoastlineSourceAdapterTests(TestCase):
         self.assertEqual([issue.path for issue in caught.exception.issues],
                          [("water_source", value.source.location_uid, "field_policy", field)
                           for field in ("strategy", "seed_root", "topology")])
+        self.assertEqual([issue.code for issue in caught.exception.issues],
+                         ["WATER_DESIGN_INVALID_PREPARATION_INPUT"] * 3)
+
+    def test_native_context_validates_nested_fields_and_join_before_geometry(self):
+        window, _, topology = fine_window(hills=False)
+        value = capture()
+        legacy = value.geometry_request
+        req = AuthoredWaterGeometryRequest(source=legacy.source, pre_hydrology=window, topology=topology,
+            grid=physical_inputs(topology).grid, seed_root=legacy.seed_root, anchors=(), seas=legacy.seas,
+            z_min=legacy.z_min)
+        args = dict(vars(value), geometry_request=req, expected_window=window.ref,
+                    field_policy=value.field_policy.model_copy(update={"topology": topology}))
+        prefix = ("water_source", value.source.location_uid)
+        with patch.object(CoastlineConstraintPreparer, "prepare_native", side_effect=AssertionError("geometry")):
+            with self.assertRaises(PlanBuildFailure) as caught:
+                CoastlineWaterSourceAdapter().prepare_native(**(args | {
+                    "metadata": value.metadata.model_copy(update={"default_depth": 0}),
+                    "budget": value.budget.model_copy(update={"requested_fine2": -1})}))
+            self.assertEqual([(i.path, i.code) for i in caught.exception.issues],
+                             [(prefix + path, "WATER_DESIGN_INVALID_PREPARATION_INPUT")
+                              for path in (("metadata", "default_depth"), ("budget", "requested_fine2"))])
+            for name, invalid in (
+                ("region", value.region.model_copy(update={"region_uid": "other"})),
+                ("region_coverage", value.region_coverage.model_copy(update={"region_uid": "other"})),
+                ("metadata", value.metadata.model_copy(update={"source_uid": "other"})),
+                ("budget", value.budget.model_copy(update={"source_uid": "other"})),
+            ):
+                with self.subTest(name=name), self.assertRaises(PlanBuildFailure):
+                    CoastlineWaterSourceAdapter().prepare_native(**(args | {name: invalid}))
 
     def test_each_strategy_keeps_exact_source_metadata_context_and_budget(self):
         for strategy,model in ((Strategy.AUTHORED_REGION,AuthoredWaterDesignInput),
@@ -117,6 +146,28 @@ class CoastlineSourceAdapterTests(TestCase):
             prepare(replace(value,generation=disabled))
         with self.assertRaises(TypeError):
             prepare(replace(value,generation=value.admission.decision))
+
+    def test_ready_mode_collects_independent_errors_with_both_decisions_disabled(self):
+        from app.dataModel.hydrology.generation.waterGenerationSettings import WorldHydrologyGenerationFields
+        from tests.geo1.contracts.test_hydrology_generation import context_for, resolve
+
+        value = capture(priority=0)
+        root = WorldHydrologyGenerationFields(enabled=False)
+        header = value.admission.header
+        identity = header.identity.model_copy(update={"world_uid": "other-world", "source_uid": "other-source"})
+        admission = value.admission.model_copy(update={"header": header.model_copy(update={
+            "identity": identity, "mode": PlacementMode.SEMANTIC})})
+        with patch.object(CoastlineConstraintPreparer, "prepare", side_effect=AssertionError("geometry")):
+            with self.assertRaises(PlanBuildFailure) as caught:
+                prepare(replace(value, admission=admission, generation=resolve(root, context_for(root)),
+                                metadata=value.metadata.model_copy(update={"source_kind": WaterDesignSourceKind.LAKE})))
+        prefix = ("water_source", value.source.location_uid)
+        self.assertEqual([(issue.path, issue.code) for issue in caught.exception.issues],
+                         [(prefix + suffix, "WATER_DESIGN_INVALID_PREPARATION_INPUT") for suffix in (
+                             ("admission", "decision", "state"), ("generation", "state"),
+                             ("admission", "header", "identity", "source_uid"),
+                             ("admission", "header", "identity", "world_uid"), ("admission", "header", "mode"),
+                             ("metadata", "source_kind"))])
 
     def test_ready_join_rejects_identity_source_and_strategy_mismatches(self):
         value = capture()

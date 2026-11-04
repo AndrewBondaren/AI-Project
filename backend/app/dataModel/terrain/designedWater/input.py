@@ -191,8 +191,7 @@ class WaterDesignInput(_WaterDesignContext[SourceT, TerrainPlan, WaterDesignCons
         return draft
 
 
-class NativeCoastlineStrategyInput(_WaterDesignContext[CoastlineWaterSource, FineSurfaceWindow, FineWaterDesignConstraints]):
-    constraints: FineWaterDesignConstraints
+class NativeCoastlineStrategyContext(_WaterDesignContext[CoastlineWaterSource, FineSurfaceWindow, FineWaterDesignConstraints]):
     field_policy: WaterFieldRecipe
     z_min: Annotated[FineZ, Field(strict=True)]
 
@@ -204,6 +203,10 @@ class NativeCoastlineStrategyInput(_WaterDesignContext[CoastlineWaterSource, Fin
         if self.metadata.level <= self.z_min or any(z < self.z_min for _, z in self.pre_hydrology.payload.surface_z):
             raise ValueError("native coastline floor requires the captured lower bound")
         return self
+
+
+class NativeCoastlineStrategyInput(NativeCoastlineStrategyContext):
+    constraints: FineWaterDesignConstraints
 
 
 class AuthoredWaterDesignInput(WaterDesignInput[AuthoredSourceT], Generic[AuthoredSourceT], frozen=True):

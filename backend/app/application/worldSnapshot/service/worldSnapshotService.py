@@ -1,16 +1,21 @@
 """Runtime tick application inside the publication owner's write transaction."""
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 
 from app.application.patch.registry.sectionRegistry import SectionRegistry
 from app.application.worldSnapshot.contracts.commitScope import CommitScope
 from app.application.worldSnapshot.contracts.context import SnapshotApplyContext, SnapshotValidationContext
+from app.application.publication.errors import PublicationInfrastructureError
+from app.application.worldSnapshot.service.snapshotMetadataBuilder import SnapshotMetadataBuilder
+from app.application.worldSnapshot.storage.historyStore import ISnapshotHistoryStore
+from app.dataModel.worldSnapshot.metadata.envelope import CreatedAtUtc, SnapshotEnvelope
+from app.dataModel.artifacts.references import ArtifactRef
 from app.application.worldSnapshot.storage.publicationStore import IPlayerPublicationStore, IWorldPublicationStore
 from app.dataModel.patch.results.sectionResult import SectionApplyReceipt, SectionRefused
 from app.dataModel.patch.sections.section import DomainSection
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
-from app.dataModel.worldSnapshot.identity.refs import PlayerSnapshotRef, WorldSnapshotRef
+from app.dataModel.worldSnapshot.identity.refs import PlayerSnapshotRef, SnapshotRef, WorldSnapshotRef
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
 from app.dataModel.worldSnapshot.results.publication import CasDecision
 from app.ids.deterministicIds import runtime_uid
@@ -25,10 +30,27 @@ class _ApplyRefused(Exception):
 
 
 class WorldSnapshotService:
-    def __init__(self, registry: SectionRegistry, world: IWorldPublicationStore, players: IPlayerPublicationStore) -> None:
+    def __init__(self, registry: SectionRegistry, world: IWorldPublicationStore, players: IPlayerPublicationStore,
+                 history: ISnapshotHistoryStore) -> None:
         self._registry = registry
         self._world = world
         self._players = players
+        self._history = history
+
+    async def _append_metadata(self, context: SnapshotApplyContext, turn_id: int, created_at: CreatedAtUtc,
+                               receipts: tuple[SectionApplyReceipt, ...],
+                               retained: Mapping[SnapshotRef, tuple[ArtifactRef, ...]]) -> None:
+        validation = context.validation
+        parents = (validation.expected_world.snapshot_head, *(p.expected_head for p in validation.expected_players))
+        bases: dict[SnapshotRef, SnapshotEnvelope] = {}
+        for ref in parents:
+            if ref is not None:
+                metadata = await self._history.read(ref, scope=context.scope.read_scope)
+                if metadata is None:
+                    raise PublicationInfrastructureError("missing pinned snapshot metadata")
+                bases[ref] = metadata
+        for envelope in SnapshotMetadataBuilder.build(context, turn_id, created_at, receipts, bases, retained):
+            await self._history.append(context.scope, envelope, receipts)
 
     @asynccontextmanager
     async def _apply_to_target(self, scope: CommitScope, validation: SnapshotValidationContext,

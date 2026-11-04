@@ -262,5 +262,56 @@ class SectionRegistryTests(unittest.TestCase):
                         allowed_service_edge = (
                             source.relative_to(root).as_posix() == "artifacts/staging/artifactStaging.py"
                             and name == "app.application.publication.service.operationLedger")
-                        if not allowed_service_edge:
+                        builder_edge = (source.relative_to(root).as_posix() == "worldSnapshot/service/worldSnapshotService.py"
+                                        and name == "app.application.worldSnapshot.service.snapshotMetadataBuilder")
+                        if not (allowed_service_edge or builder_edge):
                             self.assertNotIn(".service.", name, source)
+
+    def test_metadata_builder_merges_pinned_state_and_partitions_tick_receipts(self):
+        from app.application.worldSnapshot.service.snapshotMetadataBuilder import SnapshotMetadataBuilder
+        from app.dataModel.patch.results.sectionResult import SectionApplyReceipt
+        from app.dataModel.worldSnapshot.identity.publication import PlayerHeadExpectation
+        from app.dataModel.worldSnapshot.identity.refs import PlayerSnapshotRef
+        from app.dataModel.worldSnapshot.metadata.envelope import WorldSnapshotMetadata
+        from app.dataModel.worldSnapshot.sections.refs import SectionHistoryRef, SectionStateRef
+        from tests.snapshotCore.support.artifactFixtures import descriptor
+        from tests.snapshotCore.support.fixtures import STAMP
+
+        parent = WorldSnapshotRef(world_uid="world", timeline_id="timeline", snapshot_id="old")
+        world = parent.model_copy(update={"snapshot_id": "tick"})
+        player = PlayerSnapshotRef(player_uid="p1", snapshot_id="player")
+        expected = self.publication.model_copy(update={"snapshot_head": parent})
+        target = expected.model_copy(update={"publication_id": "next", "snapshot_head": world})
+        validation = replace(self.context, expected_world=expected,
+            expected_players=(PlayerHeadExpectation(player_uid="p1", expected_head=None),))
+        ctx = SnapshotApplyContext(validation, world, (player,), self.scope, target)
+        old = SectionStateRef(snapshot=parent, section_key=self.key, format_version=1)
+        unchanged = old.model_copy(update={"section_key": RegistryKey[PatchSectionRegistry]("unchanged")})
+        base = WorldSnapshotMetadata(ref=parent, parent=None, operation_id="prior", turn_id=1,
+            created_at=STAMP, envelope_format_version=1, base_pack_hash="a"*64, state_refs=(old, unchanged),
+            history_refs=(), retained_artifacts=())
+        state = old.model_copy(update={"snapshot": world})
+        event = SectionHistoryRef(snapshot=player, section_key=self.key, format_version=1)
+        artifact = descriptor()
+        receipt = SectionApplyReceipt(section_key=self.key, changed=(self.section.patches[0].header.ref,),
+            state_refs=(state,), history_refs=(event,), retained_artifacts=(artifact,))
+        def build(receipts, retained, bases):
+            return SnapshotMetadataBuilder.build(ctx, 2, STAMP, receipts, bases, retained)
+
+        w, p = build((receipt,), {player: (artifact,)}, {parent: base})
+        self.assertEqual((w.ref, w.parent, w.state_refs, w.history_refs, w.retained_artifacts),
+                         (world, parent, (state, unchanged), (), ()))
+        self.assertEqual((p.ref, p.parent, p.state_refs, p.history_refs, p.retained_artifacts),
+                         (player, None, (), (event,), (artifact,)))
+        noop, _ = build((), {}, {parent: base})
+        self.assertEqual(noop.state_refs, base.state_refs)
+        for bad in (receipt.model_copy(update={"changed": ()}),
+                    receipt.model_copy(update={"history_refs": (event.model_copy(update={"snapshot": parent}),)}),
+                    receipt.model_copy(update={"state_refs": (state.model_copy(update={"snapshot":
+                        parent.model_copy(update={"snapshot_id": "unreachable"})}),)})):
+            with self.assertRaises(ValueError):
+                build((bad,), {player: (artifact,)}, {parent: base})
+        with self.assertRaises(ValueError):
+            build((receipt,), {}, {parent: base})
+        with self.assertRaises(ValueError):
+            build((), {}, {})
