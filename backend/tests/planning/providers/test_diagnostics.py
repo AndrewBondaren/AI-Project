@@ -4,10 +4,10 @@ import unittest
 from unittest.mock import patch
 
 from app.application.cache.service.cacheService import CacheFailure
-from app.application.planning.service.planningService import PlanBuildFailure
+from app.application.planning.service.planningService import PlanProviderFault
 from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult
 from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from tests.planning.probeIssues import probe_issue
 from tests.planning.providers.test_domain_providers import Data, Harness, Provider, contract
 
 
@@ -22,7 +22,7 @@ class DiagnosticsTests(unittest.TestCase):
                 self.assertTrue(child.collect_only)
                 self.assertEqual(child.validate_only, validate_only)
                 with self.assertNoLogs("app.application.jsonValidation.resolve", level="DEBUG"):
-                    report_issues(child, [FieldPathError(("water",), "collected")])
+                    report_issues(child, [probe_issue("collected")])
                     resolve_root_list(WorldClimateZoneRegistry, [{"system_climate": "custom"}],
                         empty_factory=WorldClimateZoneRegistry.canonical_engine, label="test", ctx=child)
                 self.assertEqual(len(ctx.errors), 1)
@@ -30,7 +30,7 @@ class DiagnosticsTests(unittest.TestCase):
     def test_diagnostics_preserved_without_request_logging_on_hit_miss_rebuild(self):
         h = Harness()
         self.addCleanup(h.service.shutdown)
-        diagnostics = tuple(PlanDiagnostic(issue=FieldPathError(("setting",), kind.value), disposition=kind)
+        diagnostics = tuple(PlanDiagnostic(issue=probe_issue(kind.value), disposition=kind)
                             for kind in PlanDiagnosticDisposition)
         provider = Provider(lambda *args: PlanBuildResult[Data](payload=Data(value=1), diagnostics=diagnostics))
         binding, _ = h.register(provider=provider)
@@ -62,7 +62,7 @@ class DiagnosticsTests(unittest.TestCase):
         broken = Data(value=1).model_copy(update={"value": True})
         result = PlanBuildResult[Data].model_construct(payload=broken, diagnostics=())
         binding, _ = h.register(provider=Provider(lambda *args: result))
-        with self.assertRaises(PlanBuildFailure):
+        with self.assertRaises(PlanProviderFault):
             h.get(binding)
         self.assertEqual(h.backend.retained_bytes, 0)
 

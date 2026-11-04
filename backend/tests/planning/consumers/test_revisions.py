@@ -116,9 +116,9 @@ class RevisionTests(unittest.TestCase):
 
     def test_capture_preserves_producer_dispositions_without_classifying_ctx_errors(self):
         from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
-        from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+        from tests.planning.probeIssues import probe_issue
         baseline = capture(self.source)
-        facts = tuple(PlanDiagnostic(issue=FieldPathError(("climate_zone_registry",), disposition.value),
+        facts = tuple(PlanDiagnostic(issue=probe_issue(disposition.value),
             disposition=disposition) for disposition in PlanDiagnosticDisposition)
         with patch("app.application.worldData.planning.composition.surfacePlanningCapture.resolve_base_profiles",
                    return_value=(baseline.climate_base.profiles, facts)):

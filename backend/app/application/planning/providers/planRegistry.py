@@ -23,9 +23,7 @@ if TYPE_CHECKING:
 
 def _mismatch(message: str) -> Exception:
     from app.application.planning.service.planningService import PlanContractFailure, PlanContractFailureReason
-    from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
-    return PlanContractFailure(PlanContractFailureReason.DEPENDENCY_MISMATCH,
-                               (FieldPathError(("dependencies",), message),))
+    return PlanContractFailure(PlanContractFailureReason.DEPENDENCY_MISMATCH, message)
 
 
 @dataclass(frozen=True)
@@ -64,12 +62,11 @@ class PlanRegistry:
 
     def check[I, T](self, contract: RegisteredPlanContract[I, T]) -> None:
         from app.application.planning.service.planningService import PlanContractFailure, PlanContractFailureReason
-        from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
         with self._lock:
             registered = self._entries.get(contract.metadata.id)
             if registered is None or registered.handle is not contract:
                 raise PlanContractFailure(PlanContractFailureReason.UNKNOWN_CONTRACT,
-                    (FieldPathError(("contract",), "unknown or substituted registered handle"),))
+                                          "unknown or substituted registered handle")
 
     def build[I, T](self, contract: RegisteredPlanContract[I, T], request: PlanRequest[I],
                     dependencies: PlanDependencyReader, control: PlanBuildControl) -> PlanBuildResult[T]:

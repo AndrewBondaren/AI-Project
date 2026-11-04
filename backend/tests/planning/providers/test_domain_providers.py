@@ -26,7 +26,8 @@ from app.dataModel.planning.identity.planKey import PlanKey, RegionPlanScope, Wo
 from app.dataModel.planning.identity.planRef import PlanRef
 from app.dataModel.planning.policy.planningExecutionPolicy import PlanningExecutionPolicy
 from app.dataModel.cache.policy.cachePolicy import CachePolicy
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.dataModel.fields.validatedFieldPath import FieldSegment, IndexSegment, ModelIdentity, ValidatedFieldPath
+from tests.planning.probeIssues import ProbeCode, ProbeTypeError, probe_issue
 from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot
 
 
@@ -41,7 +42,10 @@ MANIFEST = CanonicalSchemaManifest(entries=tuple(RegisteredTypeEntry(type_id=ide
         (3, PlanRef, CanonicalTypeKind.RECORD), (4, WorldPlanScope, CanonicalTypeKind.RECORD),
         (5, RegionPlanScope, CanonicalTypeKind.RECORD), (6, type(WorldPlanScope().kind), CanonicalTypeKind.ENUM),
         (7, PlanDependency, CanonicalTypeKind.RECORD), (8, PlanDiagnostic, CanonicalTypeKind.RECORD),
-        (9, PlanDiagnosticDisposition, CanonicalTypeKind.ENUM), (10, FieldPathError, CanonicalTypeKind.RECORD))))
+        (9, PlanDiagnosticDisposition, CanonicalTypeKind.ENUM), (10, ProbeTypeError, CanonicalTypeKind.RECORD),
+        (11, ProbeCode, CanonicalTypeKind.ENUM), (12, ValidatedFieldPath, CanonicalTypeKind.RECORD),
+        (13, ModelIdentity, CanonicalTypeKind.RECORD), (14, FieldSegment, CanonicalTypeKind.RECORD),
+        (15, IndexSegment, CanonicalTypeKind.RECORD))))
 CANONICAL = CanonicalCodec(MANIFEST)
 
 
@@ -1708,7 +1712,7 @@ class ClimateLocalProviderTests(unittest.TestCase):
             result = self.get()
         changed = self.f.signed(self.hydro, self.hydro.payload.model_copy(update={"fine_z_overrides": ()}), self.f.hydro_manifest)
         self.assertEqual(self.get(hydro=changed).payload, result.payload)
-        issue = PlanDiagnostic(issue=FieldPathError(("upstream",), "upstream only", code="upstream"),
+        issue = PlanDiagnostic(issue=probe_issue("upstream only"),
                                disposition=PlanDiagnosticDisposition.FALLBACK)
         from app.application.planning.service.planFingerprints import output_fingerprint
         upstream = self.hydro.model_copy(update={"diagnostics": (issue,), "ref": self.hydro.ref.model_copy(update={
@@ -2267,10 +2271,9 @@ class HydrologyAssemblyBoundaryTests(unittest.TestCase):
         self.assertEqual(result.payload, self.f.routes().payload)
 
     def test_assembly_keeps_producer_severity_and_diagnostic_order(self):
-        from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
         from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic
         owner, calls, results = self.stages()
-        diagnostics = tuple(PlanDiagnostic(issue=FieldPathError(("test", str(i)), "producer fact", code="SAME_CODE"),
+        diagnostics = tuple(PlanDiagnostic(issue=probe_issue("producer fact", index=i),
             disposition=disposition) for i, disposition in enumerate((PlanDiagnosticDisposition.ERROR,
                 PlanDiagnosticDisposition.FALLBACK, PlanDiagnosticDisposition.NOTICE)))
         for mock, result, ds in zip((calls.water.plan, calls.coarse.plan, calls.fine.plan, calls.paint.project),
