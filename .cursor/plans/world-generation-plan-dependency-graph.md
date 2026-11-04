@@ -1,6 +1,6 @@
 # WORLD-PLAN-GRAPH-1 — Граф зависимостей GEO-1 / SPATIAL-1 / GEN-DAG-1 / PHYSICS-1 / TIME / LOD-SIM-1
 
-**Статус:** архитектурная карта межплановых gates, v6.11 (2026-11-03), после анализа зависимостей; **не** разрешение на код, изменение POJO/enum, cutover или закрытие owning-планов. Путь документа: `.cursor/plans/world-generation-plan-dependency-graph.md`.
+**Статус:** архитектурная карта межплановых gates, v6.12 (2026-11-04), с cross-cutting навигацией ERROR-CONTRACTS-1; **не** разрешение на код, изменение POJO/enum, cutover или закрытие owning-планов. Путь документа: `.cursor/plans/world-generation-plan-dependency-graph.md`.
 
 **Текущая очередь и источники приёмки приведены в §12.** Разделы 9–11 сохраняют историю последовательных сверок.
 
@@ -17,6 +17,7 @@
 | [GEN-DAG-1](./gen-dag-1-post-geo-ws.md) — `.cursor/plans/gen-dag-1-post-geo-ws.md` | **Совместный дизайн нового production DAG**, точные Input/Output/Error POJO, factories, публичные domain operations и единый cutover. Старые 15 ID — AS-IS inventory, **все legacy concrete-ноды под удаление, кроме перерабатываемой `check_scene`**; нет 1:1 миграции. **GEN-NODE-JOINT-REVIEW** обязателен с мастером: Mermaid-карта зависимостей, решения keep/split публичных pipelines и per-node contracts до кода. **DRAFT/DEFERRED**: GEO-1, необходимые Patch/Snapshot gates и concrete contracts/приёмка OPEN. |
 | [PHYSICS-1](./physics-spatial-dynamics.md) — `.cursor/plans/physics-spatial-dynamics.md` | **Owning план PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-HANDOFF/PH-PUBLISH**: DAG-node-only trigger, FAR/MEDIUM/NEAR через DAG+settings, **Grade/SQL только bounded NEAR (FAR/MEDIUM — без Grade)**; фоновая aggregate и локальная подробная стратегии; typed input/output, изменения только через domain-owned operations → Patch/Snapshot. Материалы — отдельный mutable-property owner и внешний контракт, не внутренний поддомен Physics; Physics формирует effects, DAG маршрутизирует Materials/domain change. PH-0 принят статически; направления P1.6, D1–D5 P2.10, SI/scope P2.11 и public pipelines boundary P2.12 приняты; полный PH-ARCH **OPEN**, exact freeze и runtime **OPEN**. В §5 выделены будущие water-first acceptance aliases `PH-AGG-RUNTIME`, `PH-LOCAL-RUNTIME`, `PH-GAMEPLAY-E2E`; это **не implementation steps** и не prerequisite GEO/Pack/GEN initial cutover. |
 | [LOD-SIM-1](./lod-simulation-handoff.md) — `.cursor/plans/lod-simulation-handoff.md` | **Новый DRAFT owning-план** generic LOD policy/consumer, FAR↔NEAR handoff, Time/revision continuity, causal interest, resource budgets и invariant validators. PH-AGG/LOCAL transforms принадлежат PHYSICS-1; Snapshot и Spatial не приобретают нового storage/orchestrator. Только предлагаемая документальная ветка §11; не hard gate и не prerequisite GEO/Pack/GEN initial cutover. |
+| [ERROR-CONTRACTS-1](./error-contracts-1.md) — `.cursor/plans/error-contracts-1.md` | **Cross-cutting owning-план типизированных ошибок/проверок/диагностики**, а не новый глобальный prerequisite всех планов. Приняты принципы F01–F09, generic `FieldPathError[CodeT]`, typed arguments, logging/product outcome policy; **A0 exact архитектура/impact и C0 contracts OPEN**, код C1 не разрешён до их приёмки. По затронутому домену D0-review → D1 typed contracts → D2 после C1 → применимый I0. После несовместимого shared C1 прямые call sites мигрируют **немедленно**, без V1-bridge и долгого промежуточного состояния. |
 
 **Новый owning-трек:** [Time](./time-domain.md) — world clock values, intervals, pure conversions, coherent reads и preparation. Calendar/settings/epochs принадлежат World, стоимость действий — Actions, выбор операций — DAG, commit/restore/branch — Snapshot. **RESEARCHED PROPOSAL; частные решения приняты, общий API/foreign freeze OPEN.** Этапы, статусы и реестр зависимостей Time — §10; это часть общего графа, не отдельный план реализации.
 
@@ -46,6 +47,7 @@
 - **DAG-TYPING A → GEN-DAG → DAG-TYPING B** — корректный **поэтапный** handoff, не цикл между двумя целыми планами. A1–A3 не нужно повторно реализовывать внутри GEN-DAG.
 - **SPATIAL Pack/root/read** и **SPATIAL runtime/gameplay** — разные gates. Runtime Snapshot и engine activation не должны блокировать независимый immutable-base water path.
 - **PHYSICS, SP-A/air, SP-G/geology, SP-5A/gas** не являются скрытыми prerequisite для water-only G10-A/SP-P3/SP-3/SP-4/SP-R.
+- **ERROR-CONTRACTS-1 — горизонтальная контрактная ветка:** A0/C0 gate обязателен только **перед изменением общего error/validation ядра C1**; D0/D1 gate — перед конкретной D2-миграцией ошибок соответствующего домена, I0 — перед принятием затронутой междоменной границы. Он **не** превращает весь ERROR-CONTRACTS-1 DONE в prerequisite для GEO/Pack/SPATIAL/GEN-DAG/TIME/PHYSICS и не останавливает независимые шаги, которые не используют изменяемый shared error API. Ни D0-review, ни preparation контракта не являются кодовой миграцией.
 
 ## 3. Bootstrap: Hydrology source → Pack → bounded read
 
@@ -821,6 +823,7 @@ flowchart TD
 | [API-1](./api-1-transport-boundary.md) | Проверено покрытие полей storage и wire. Climate C1 содержит девять scalars, десять после переноса lapse. | Сопоставить вход каждой операции с версией и выходом владельца, включая presence/aliases. |
 | [GEN-BAKE-READ](./generator-public-bake-reads.md) | Исправленный пакет D1–D7 предъявлен в §17.10.4 | Получить решение пользователя, затем R1/R2 отдельно по операциям. Handoff light, full L0+C23, named terrain и coordinate terrain описан в §17.10.3 |
 | [DAG invocation и bake admission](./dag-invocations-bake-admission.md) | Ревью R6 на 42e7f6e0 выявило ошибки recovery и SQL mapper. | Исправить удержание claim при неизвестном исходе и проверку типов до записи. |
+| [ERROR-CONTRACTS-1](./error-contracts-1.md) | Приняты только общие архитектурные принципы; A0 exact file/impact map, C0 runtime admission/version selection и per-domain D0/D1 OPEN; production-код не изменён. | Согласовать A0 → C0; реализовать C1 **сначала**, затем немедленно мигрировать прямых affected callers по заранее подготовленным D0/D1; targeted regression и соответствующие I0; без второго `FieldPathError` и V1 adapter. |
 | [LOD](./lod-simulation-handoff.md) | §11 учитывает draft и открытые вопросы coherent capture, continuation и неизменности мира | Продолжать согласование с владельцами первого consumer. Конкретные зависимости runtime уточняются по сценарию |
 
 Предложения новых bindings в этих планах не меняют hard-edge реестр автоматически. Исторические команды §9.3 для приёмки I1/B, preflight P1-A и проектирования уже принятой карты Physics заменены этой очередью.
@@ -833,5 +836,17 @@ flowchart TD
 | Spatial / World Pack | SP-P2W, проектирование | Атомарная активация V2 и удержание manifest с дочерними refs. | Согласовать ownership и cold resolution, затем проверить ACTIVE + CAS + retention + terminal в одном CommitScope и rollback после CAS. |
 | Time | T3-A / T3-C, подготовка T4 проверена | Арифметика, календарь, World settings, чтение через закреплённые тестовые источники. | Внутри Time открыта политика STANDARD для 1–3 часов. Production T4 ждёт SN-TIME-READ, T5 — SN-TIME-APPLY, ветвление — SN-TIME-BRANCH. |
 | Snapshot | 4D2 в работе | Общий metadata builder появился в рабочем дереве после реализации world/player CAS. | Полный validation, публичный apply и terminal/retry. Для интеграции T5 ещё требуется проверка Time handler и эффектов в одном commit. |
+| ERROR-CONTRACTS-1 | A0/C0 и подготовительные D0/D1 (документально) | Архитектура типов, текущие POJO/ошибки, precise shared API impact и контрактные варианты. | C1 только после A0/C0; D2 после C1 и конкретного D1. Не блокирует независимый GEO/SPATIAL/Snapshot шаг своим общим статусом. |
 
 API-1 ведёт пользователь. GEN-BAKE-READ после решения по D1–D7 переходит к проектированию R1/R2 по операциям.
+
+### 12.2. ERROR-CONTRACTS-1: горизонтальные gates (v6.12)
+
+| Локальный consumer-gate | Непосредственные prerequisite | Что не следует требовать |
+|---|---|---|
+| **EC-C1 shared core** | Принятые ERROR-CONTRACTS A0 (exact shared file map + direct-call impact) и C0 (generic contracts, runtime admission, Pydantic version strategy) | Завершённые GEO, SPATIAL, Snapshot, GEN-DAG или все D0 доменов. |
+| **EC-D2 конкретного домена** | C1 + принятое D0/D1 **этого** домена; D0/D1 можно документально подготовить параллельно C0/C1 | Новый POJO/enum при достаточном existing; повторный freeze POJO; завершённые D2 остальных доменов. |
+| **EC-quick-migrate после несовместимого C1** | Полный перечень непосредственно затронутых callers из A0 и готовые D1 для них | Временная V1-совместимость, вторая схема `FieldPathError`, долгоживущая промежуточная архитектура либо ожидание глобальной миграции. |
+| **EC-I0 затронутой границы** | D2 релевантных producer/consumer, реальные mapper/sink/DAG binding tests | Глобальный `ERROR-CONTRACTS-1 DONE`, когда независимые domain migrations ещё не требуются. |
+
+**Обратная ссылка и SoT:** этот раздел — навигация к [ERROR-CONTRACTS-1 §6](./error-contracts-1.md#6-порядок-согласования-и-реализации). Exact type mappings, status, договорённости о логах и критерии приёмки принадлежат только owning ERROR-CONTRACTS/D0/D1; граф не устанавливает новый порядок реализации независимых функций.
