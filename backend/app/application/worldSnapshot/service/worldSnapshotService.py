@@ -7,7 +7,7 @@ from app.application.patch.registry.sectionRegistry import SectionRegistry
 from app.application.worldSnapshot.contracts.commitScope import CommitScope
 from app.application.worldSnapshot.contracts.context import SnapshotApplyContext, SnapshotValidationContext
 from app.application.publication.errors import PublicationInfrastructureError
-from app.application.worldSnapshot.service.snapshotMetadataBuilder import SnapshotMetadataBuilder
+from app.application.worldSnapshot.service.snapshotMetadataBuilder import SnapshotMetadataBuilder, SnapshotMetadataFailure, metadata_field
 from app.application.worldSnapshot.storage.historyStore import ISnapshotHistoryStore
 from app.dataModel.worldSnapshot.metadata.envelope import CreatedAtUtc, SnapshotEnvelope
 from app.dataModel.artifacts.references import ArtifactRef
@@ -42,21 +42,35 @@ class WorldSnapshotService:
                                receipts: tuple[SectionApplyReceipt, ...],
                                retained: Mapping[SnapshotRef, tuple[ArtifactRef, ...]]) -> None:
         validation = context.validation
-        parents = (validation.expected_world.snapshot_head, *(p.expected_head for p in validation.expected_players))
+        field, world_parent = metadata_field(validation.expected_world, lambda p: p.snapshot_head)
+        parents: list[tuple[tuple[str | int, ...], SnapshotRef | None]] = [
+            (("validation", "expected_world", field), world_parent)]
+        for i, head in enumerate(validation.expected_players):
+            field, parent = metadata_field(head, lambda p: p.expected_head)
+            parents.append((("validation", "expected_players", i, field), parent))
         bases: dict[SnapshotRef, SnapshotEnvelope] = {}
-        errors = ValidatorAggregationHelper()
-        for i, ref in enumerate(parents):
-            if ref is not None:
-                metadata = await self._history.read(ref, scope=context.scope.read_scope)
-                if metadata is None:
-                    path = (("validation", "expected_world", "snapshot_head") if i == 0 else
-                            ("validation", "expected_players", i - 1, "expected_head"))
-                    errors.add(FieldPathError(path, f"missing pinned snapshot {ref.snapshot_id}",
+        missing: list[FieldPathError] = []
+        for path, ref in parents:
+            if ref is None:
+                continue
+            metadata = await self._history.read(ref, scope=context.scope.read_scope)
+            if metadata is None:
+                missing.append(FieldPathError(path, f"missing pinned snapshot {ref.snapshot_id}",
                                               code="snapshot.metadata.missing_persisted_base"))
-                else:
-                    bases[ref] = metadata
-        errors.raise_if_any(PublicationInfrastructureError)
-        for envelope in SnapshotMetadataBuilder.build(context, turn_id, created_at, receipts, bases, retained):
+            else:
+                bases[ref] = metadata
+        try:
+            envelopes = SnapshotMetadataBuilder.build(context, turn_id, created_at, receipts, bases, retained)
+        except SnapshotMetadataFailure as error:
+            if not missing:
+                raise
+            errors = ValidatorAggregationHelper()
+            for issue in (*missing, *error.diagnostics):
+                if issue.code != "snapshot.metadata.missing_base":
+                    errors.add(issue)
+            errors.raise_if_any(PublicationInfrastructureError)
+            raise
+        for envelope in envelopes:
             await self._history.append(context.scope, envelope, receipts)
 
     @asynccontextmanager

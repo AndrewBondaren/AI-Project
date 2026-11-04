@@ -334,3 +334,35 @@ class SectionRegistryTests(unittest.TestCase):
             ("snapshot.metadata.foreign_history", ("receipts", 0, "history_refs", 0, "snapshot")),
             ("snapshot.metadata.noop_state", ("receipts", 0, "state_refs", 0, "snapshot")),
         ])
+
+        def diagnostics(call):
+            with self.assertRaises(SnapshotMetadataFailure) as failure:
+                call()
+            return [(issue.code.removeprefix("snapshot.metadata."), issue.path)
+                    for issue in failure.exception.diagnostics]
+
+        self.assertEqual(diagnostics(lambda: build((), {world: (artifact, artifact), player: (artifact, artifact)},
+                                                   {parent: base})),
+                         [("duplicate_artifact", ("retained", "tick", 1)),
+                          ("duplicate_artifact", ("retained", "player", 1))])
+        for assigned, codes in (((), ["missing_player"]),
+                                ((player.model_copy(update={"player_uid": "guest"}),), ["unexpected_player", "missing_player"])):
+            direct = replace(ctx, player_snapshots=assigned)
+            self.assertEqual([code for code, _ in diagnostics(
+                lambda: SnapshotMetadataBuilder.build(direct, 2, STAMP, (), {parent: base}, {}))], codes)
+
+        self_parent = replace(ctx, validation=replace(validation, expected_world=expected.model_copy(
+            update={"snapshot_head": world})))
+        self.assertEqual(diagnostics(lambda: SnapshotMetadataBuilder.build(self_parent, 2, STAMP, (),
+            {world: base.model_copy(update={"ref": world})}, {})), [("self_parent", ("parents", "tick"))])
+        previous = parent.model_copy(update={"timeline_id": "previous"})
+        inherited = old.model_copy(update={"snapshot": previous})
+        mixed = receipt.model_copy(update={"state_refs": (inherited, state)})
+        self.assertEqual(diagnostics(lambda: build((mixed,), {player: (artifact,)},
+            {parent: base.model_copy(update={"state_refs": (inherited,)})})),
+            [("superseded_state", ("receipts", 0, "state_refs", 0))])
+        corrupt = receipt.model_copy(update={"retained_artifacts": (None,),
+            "history_refs": (event.model_copy(update={"snapshot": parent}),)})
+        self.assertEqual(diagnostics(lambda: build((corrupt,), {}, {parent: base})),
+                         [("invalid_receipt", ("receipts", 0, "retained_artifacts", 0)),
+                          ("foreign_history", ("receipts", 0, "history_refs", 0, "snapshot"))])

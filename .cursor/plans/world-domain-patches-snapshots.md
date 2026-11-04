@@ -2964,6 +2964,8 @@ Evidence гонок получено на отдельных соединени�
 
 #### 4D2 — metadata builder и scoped append, 2026-11-04
 
+**Независимое ревью — CHANGES REQUIRED** на HEAD `d031508e`. Четыре блокера касаются агрегации диагностик и проверки состава участников при прямом вызове builder. [Отчёт с контрпримерами, критериями закрытия и результатами прогонов](world-domain-4d2-metadata-builder-review.md).
+
 В `backend/app/application/worldSnapshot/service/snapshotMetadataBuilder.py` SnapshotMetadataBuilder строит world/player envelopes для назначенных участников из typed receipts и точных pinned bases, заменяет state по ключу секции и сохраняет прежние refs остальных секций. History относится только к текущему snapshot. Builder отвергает новые state refs у no-op receipt, недостижимые refs, посторонние history и расхождение родителей; переиспользуется validate_receipt_provenance. WorldSnapshotService._append_metadata читает родителей по ID через read capability текущего writer scope и передаёт все envelopes одному history store в исходном scope. Transaction завершает внешний owner.
 
 Граница retention: аргумент retained задаёт явные destinations, включая необходимые inherited artifacts. Каждый retained artifact текущих receipts должен иметь destination. Плоский receipt со state refs одновременно для world и player и с одним artifact не задаёт, кто из них должен получить hold. Выбор этой карты внешним owner и handoff предстоят; builder не приписывает такой BLOB всем участникам по умолчанию.
@@ -2973,6 +2975,10 @@ Evidence гонок получено на отдельных соединени�
 Из backend `../.venv/Scripts/python.exe -B -m unittest tests.snapshotCore.contracts.test_registry tests.snapshotCore.storage.publication.test_atomicity.AssignedPublicationTests tests.snapshotCore.contracts.test_typing` — 15 OK (18.992 s). Полный unittest discover -s tests/snapshotCore — 167 тестов OK (1 skipped, 131.126 s). Адресный Pyright по builder и service — 0 ошибок.
 
 **Уточнение ошибок metadata (2026-11-04).** Builder собирает независимые нарушения через ValidatorAggregationHelper в SnapshotMetadataFailure.diagnostics (FieldPathError с кодом snapshot.metadata.* и путём к полю или элементу). Для вложенных полей receipt используются FieldRef и bind_field. Scoped read сообщает отсутствующие persisted parents как PublicationInfrastructureError с кортежем диагностик. Регрессия в test_registry.py одновременно проверяет четыре кода и пути в порядке обхода и отсутствие вызова следующей проверки provenance. Адресный прогон предыдущего блока — 15 OK, полный Snapshot discover — 167 тестов OK (1 skipped, 146.253 s), адресный Pyright по обоим сервисным файлам — 0 errors.
+
+**Исправления по четырём блокерам metadata review, 2026-11-04.** В worldSnapshotService и snapshotMetadataBuilder сервис собирает missing persisted parent с независимыми ошибками receipts до append, сохраняя PublicationInfrastructureError; имена полей ожидаемых heads получены типизированным селектором. Прямой builder проверяет состав игроков, self-parent, дубли retained artifacts и вытесненный inherited state. Ошибка поля receipt допускает проверку корректных соседних полей. В test_registry и test_atomicity добавлены регрессии по контрпримерам отчёта, в том числе настоящий SQLite read с одним и двумя отсутствующими родителями и проверка нуля вызовов append. Подмена обхода receipts на receipts[:1] в отдельном процессе воспроизвела ожидаемый провал по отсутствующей диагностике второй секции.
+
+Из backend адресная команда по test_registry, AssignedPublicationTests и test_typing — 16 OK (19.489 s). Полный Snapshot discover — 168 тестов OK (1 skipped, 124.703 s). Адресный Pyright по builder/service и scoped git diff --check прошли. Исправления предъявлены на повторное независимое ревью.
 
 ## Контракты Snapshot для интеграции Time (2026-11-03)
 

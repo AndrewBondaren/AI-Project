@@ -537,3 +537,47 @@ class AssignedPublicationTests(unittest.TestCase):
                 self.assertEqual(await peer[2].read("w1"), ctx.next_publication)
                 self.assertEqual(await peer[3].read(parent.player_uid), player)
         run_async(check())
+
+    def test_missing_persisted_bases_preserve_independent_receipt_diagnostics(self):
+        from unittest.mock import AsyncMock
+        from app.application.patch.registry.sectionRegistry import SectionRegistry
+        from app.application.publication.errors import PublicationInfrastructureError
+        from app.application.worldSnapshot.contracts.context import SnapshotApplyContext, SnapshotValidationContext
+        from app.application.worldSnapshot.service.worldSnapshotService import WorldSnapshotService
+        from app.dataModel.patch.results.sectionResult import SectionApplyReceipt
+        from app.dataModel.worldSnapshot.identity.refs import WorldSnapshotRef, PlayerSnapshotRef
+        from app.dataModel.worldSnapshot.identity.publication import PlayerHeadExpectation
+        from app.dataModel.worldSnapshot.sections.refs import SectionHistoryRef
+        from tests.snapshotCore.support.artifactFixtures import descriptor
+        from tests.snapshotCore.support.fixtures import STAMP
+
+        async def check():
+            async with live_database() as bundle:
+                _, commits, world_store, player_store, history, _ = bundle
+                active = await live_started(bundle)
+                old = WorldSnapshotRef(world_uid="w1", timeline_id="t1", snapshot_id="old")
+                new = old.model_copy(update={"snapshot_id": "new"})
+                player = PlayerSnapshotRef(player_uid="p1", snapshot_id="p-new")
+                expected = active.model_copy(update={"snapshot_head": old})
+                target = active.model_copy(update={"snapshot_head": new, "publication_id": "q"})
+                service = WorldSnapshotService(SectionRegistry(), world_store, player_store, history)
+                a = SectionApplyReceipt(section_key="a", changed=(), state_refs=(), retained_artifacts=(),
+                    history_refs=(SectionHistoryRef(snapshot=old, section_key="a", format_version=1),))
+                b = SectionApplyReceipt(section_key="b", changed=(), state_refs=(), history_refs=(),
+                                        retained_artifacts=(descriptor(),))
+                for player_parent in (None, player.model_copy(update={"snapshot_id": "p-old"})):
+                    heads = (PlayerHeadExpectation(player_uid="p1", expected_head=player_parent),)
+                    async with commits.transaction("candidate") as scope:
+                        ctx = SnapshotApplyContext(SnapshotValidationContext("candidate", expected, heads, (), scope.read_scope),
+                                                   new, (player,), scope, target)
+                        with patch.object(history, "append", new_callable=AsyncMock) as append:
+                            with self.assertRaises(PublicationInfrastructureError) as caught:
+                                await service._append_metadata(ctx, 2, STAMP, (a, b), {})
+                            append.assert_not_awaited()
+                    issues = [("missing_persisted_base", ("validation", "expected_world", "snapshot_head"))]
+                    if player_parent:
+                        issues.append(("missing_persisted_base", ("validation", "expected_players", 0, "expected_head")))
+                    self.assertEqual([(i.code.removeprefix("snapshot.metadata."), i.path) for i in caught.exception.args[0]],
+                                     issues + [("foreign_history", ("receipts", 0, "history_refs", 0, "snapshot")),
+                                               ("unassigned_artifact", ("receipts", 1, "retained_artifacts", 0))])
+        run_async(check())
