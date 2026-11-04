@@ -16024,3 +16024,15 @@ GEO-I9.1 принят в границах authored geometry. G10-A и итого
 **Независимое ревью GEO-I11.1 — FAIL.** Передача точных constraints I10.1 подтверждена на всех трёх стратегиях. Для READY admission с положительным приоритетом и `behavior=None` адаптер выпустил обычный `ValueError`.
 
 **Исправление P2 предъявлено на повторное ревью.** Адаптер сравнивает `decision.behavior` со стратегией контекста. Регрессионный тест на CONTINENTAL_NOISE воспроизвёл исходный отказ до правки. После правки тот же вход даёт один `WATER_DESIGN_INVALID_PREPARATION_INPUT` в `PlanBuildFailure` по пути `('water_source', 'source', 'admission', 'decision', 'behavior')`. Геометрия не вызывается. Прошли все 23 теста пакета `coastline_source`.
+
+**Приёмка GEO-I11.1 — 2026-11-05.** Повторное ревью прошло без замечаний (PASS). P2 по обработке READY admission без выбранной стратегии закрыт. Пользователь принял передачу fine coastline constraints в native strategy input для всех трёх процедурных стратегий.
+
+### GEO-I11.2. Процедурное поле на полном fine-окне W
+
+`ContinentalFieldComposer.build_native` принимает результат `CoastlineWaterSourceAdapter.prepare_native`, повторно проверяет связи admission input и возвращает `FineContinentalField`. Результат содержит полный `pre_hydrology_ref`, исходный рецепт, выборки в порядке `W.surface_z` и notices раскладки плит. Для каждой FineXY оценка берётся в центре клетки W. Noise использует memo на одну fine-строку, plate строит одну раскладку на поле, смешанный рецепт с нулевым весом пропускает noise. Ограничения I10.1 привязаны к тому же W. Их применение при отборе клеток относится к следующему шагу.
+
+Точка проверки — `backend/tests/geo1/coastline_source/test_native_field.py`. Для трёх стратегий сравнить полный порядок координат с W и значения двух соседних fine-клеток одной coarse-клетки с точечным sample. Проверить точный ref и рецепт, нулевой вес, отклонение переставленных и недостающих выборок. Подмена валидного output fingerprint в constraints должна вернуть `WATER_DESIGN_INVALID_PREPARATION_INPUT` по пути `continental_field.constraints.pre_hydrology_ref` до первого sample.
+
+Удаление по GEO-LEGACY-56/57 остаётся открытым. После подключения fine draft и ranking снять coarse `NoiseFieldGenerator.build`, `PlateFieldGenerator.build`, `ContinentalFieldComposer.combine`, тип `ContinentalField` с `SurfaceGridCoord` и ссылку на него в `ProceduralWaterDesignDraft.field`. Владельцы точечной математики `sample` и `layout` нужны fine-пути. Следующий срез связывает поле с fine draft и floor recipe до передачи в placement. Wet membership и final bed требуют downstream fine P2.
+
+**Статус GEO-I11.2 — предъявлен на независимое ревью.** Прошли 907 тестов GEO. После упрощения ветки композиции повторно прошли три теста native field. Pyright для генераторов поля и модели результата завершился без замечаний.

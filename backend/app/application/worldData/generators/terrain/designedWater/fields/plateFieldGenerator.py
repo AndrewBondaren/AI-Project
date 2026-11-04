@@ -1,5 +1,6 @@
 """Seeded plate permutation and normalized topology-distance blending."""
 
+from collections.abc import Iterator
 from math import exp, fsum, gcd, isfinite
 from typing import Literal
 
@@ -11,6 +12,7 @@ from app.dataModel.terrain.designedWater.fields.field import (
 from app.dataModel.terrain.designedWater.fields.plateLayout import PlateCenter, PlateLayout
 from app.dataModel.terrain.designedWater.input import PlateWaterDesignInput, PlateNoiseWaterDesignInput
 from app.dataModel.terrain.designedWater.strategyKind import WaterDesignIssueCode
+from app.dataModel.terrain.sampling.fineSurfaceWindow import SurfaceSamples
 from app.dataModel.topology.topologyGeometry import dist2
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.ids import UidKind, seeded_u01
@@ -70,6 +72,10 @@ class PlateFieldGenerator:
             return ContinentalField(recipe=recipe, samples=samples, notices=layout.notices)
         except (ValueError, OverflowError) as error:
             raise self._failure("build", error) from error
+
+    def fine_values(self, layout: PlateLayout, surface: SurfaceSamples) -> Iterator[ContinentalFieldValue]:
+        for (x, y), _ in surface:
+            yield self._sample(layout, x + 0.5, y + 0.5)
 
     def sample(self, layout: PlateLayout, *, x: float, y: float) -> ContinentalFieldValue:
         """Sample a real fine position using an explicitly captured immutable layout."""

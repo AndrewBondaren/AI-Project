@@ -563,6 +563,8 @@ class AssignedPublicationTests(unittest.TestCase):
                 service = WorldSnapshotService(SectionRegistry(), world_store, player_store, history)
                 a = SectionApplyReceipt(section_key="a", changed=(), state_refs=(), retained_artifacts=(),
                     history_refs=(SectionHistoryRef(snapshot=old, section_key="a", format_version=1),))
+                a = a.model_copy(update={"history_refs": (a.history_refs[0].model_dump(),),
+                                         "retained_artifacts": (None,)})
                 b = SectionApplyReceipt(section_key="b", changed=(), state_refs=(), history_refs=(),
                                         retained_artifacts=(descriptor(),))
                 for player_parent in (None, player.model_copy(update={"snapshot_id": "p-old"})):
@@ -578,6 +580,7 @@ class AssignedPublicationTests(unittest.TestCase):
                     if player_parent:
                         issues.append(("missing_persisted_base", ("validation", "expected_players", 0, "expected_head")))
                     self.assertEqual([(i.code.removeprefix("snapshot.metadata."), i.path) for i in caught.exception.args[0]],
-                                     issues + [("foreign_history", ("receipts", 0, "history_refs", 0, "snapshot")),
+                                     issues + [("invalid_receipt", ("receipts", 0, "retained_artifacts", 0)),
+                                               ("foreign_history", ("receipts", 0, "history_refs", 0, "snapshot")),
                                                ("unassigned_artifact", ("receipts", 1, "retained_artifacts", 0))])
         run_async(check())

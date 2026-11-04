@@ -6,7 +6,8 @@ from typing import Annotated, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, field_validator, model_validator
 
 from app.dataModel.identity.uid import EntityUid
-from app.dataModel.spatial.grid.coordinateTypes import SurfaceGridCoord
+from app.dataModel.planning.identity.planRef import PlanRef
+from app.dataModel.spatial.grid.coordinateTypes import FineXY, SurfaceGridCoord
 from app.dataModel.terrain.designedWater.settings.continentalNoisePolicy import ContinentalNoisePolicy
 from app.dataModel.terrain.designedWater.settings.fieldCompositionPolicy import FieldCompositionPolicy
 from app.dataModel.terrain.designedWater.settings.plateGenerationPolicy import PlateGenerationPolicy
@@ -70,6 +71,7 @@ type WaterFieldRecipe = Annotated[NoiseRecipe | PlateRecipe | PlateNoiseRecipe, 
 type ContinentalFieldValue = Annotated[StrictFloat, Field(ge=-1, le=1, allow_inf_nan=False)]
 
 
+# GEO-LEGACY-56/57: Retire the coarse sample contract with ProceduralWaterDesignDraft.field.
 class ContinentalField(BaseModel, frozen=True):
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True, revalidate_instances="always")
 
@@ -84,4 +86,27 @@ class ContinentalField(BaseModel, frozen=True):
             raise ValueError("field samples require unique coordinates in row-major order")
         validate_immutable(self)
         # Canonical coarse membership requires the input boundary's grid scale.
+        return self
+
+
+class FineContinentalField(BaseModel, frozen=True):
+    """Signed samples over one complete admitted fine window, before selection."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, revalidate_instances="always")
+
+    pre_hydrology_ref: PlanRef
+    recipe: WaterFieldRecipe
+    samples: tuple[tuple[FineXY, ContinentalFieldValue], ...]
+    notices: tuple[FieldPathError, ...] = ()
+
+    @model_validator(mode="after")
+    def complete_window(self) -> Self:
+        bounds = self.recipe.topology.bounds
+        if len(self.samples) != bounds.width * bounds.height:
+            raise ValueError("field must cover the complete fine window")
+        for index, (cell, _) in enumerate(self.samples):
+            row, column = divmod(index, bounds.width)
+            if cell != (bounds.x_min + column, bounds.y_min + row):
+                raise ValueError("field requires canonical row-major fine coordinates")
+        validate_immutable(self)
         return self

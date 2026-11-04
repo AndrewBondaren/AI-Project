@@ -361,6 +361,19 @@ class SectionRegistryTests(unittest.TestCase):
         self.assertEqual(diagnostics(lambda: build((mixed,), {player: (artifact,)},
             {parent: base.model_copy(update={"state_refs": (inherited,)})})),
             [("superseded_state", ("receipts", 0, "state_refs", 0))])
+        self.assertEqual(diagnostics(lambda: build((mixed,), {player: (artifact,)}, {})),
+                         [("missing_base", ("bases", "old")),
+                          ("superseded_state", ("receipts", 0, "state_refs", 0))])
+        empty_heads = replace(ctx, validation=replace(validation,
+            expected_world=expected.model_copy(update={"snapshot_head": None})))
+        cross_owner = receipt.model_copy(update={"state_refs": (inherited, state.model_copy(update={"snapshot": player}))})
+        self.assertEqual(diagnostics(lambda: SnapshotMetadataBuilder.build(
+            empty_heads, 2, STAMP, (cross_owner,), {}, {player: (artifact,)})),
+            [("unreachable_state", ("receipts", 0, "state_refs", 0, "snapshot"))])
+        partial = receipt.model_copy(update={"history_refs": (None, event.model_copy(update={"snapshot": parent}))})
+        self.assertEqual(diagnostics(lambda: build((partial,), {player: (artifact,)}, {parent: base})),
+                         [("invalid_receipt", ("receipts", 0, "history_refs", 0)),
+                          ("foreign_history", ("receipts", 0, "history_refs", 1, "snapshot"))])
         corrupt = receipt.model_copy(update={"retained_artifacts": (None,),
             "history_refs": (event.model_copy(update={"snapshot": parent}),)})
         self.assertEqual(diagnostics(lambda: build((corrupt,), {}, {parent: base})),

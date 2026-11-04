@@ -2980,6 +2980,14 @@ Evidence гонок получено на отдельных соединени�
 
 Из backend адресная команда по test_registry, AssignedPublicationTests и test_typing — 16 OK (19.489 s). Полный Snapshot discover — 168 тестов OK (1 skipped, 124.703 s). Адресный Pyright по builder/service и scoped git diff --check прошли. Исправления предъявлены на повторное независимое ревью.
 
+**Повторное ревью metadata builder — CHANGES REQUIRED на `ca159fc6`.** До исправления составной SQLite-тест завершился `ValueError("field reference must refer to a POJO model")`. Прямой вызов builder при отсутствующей базе вернул только `missing_base` и пропустил конфликт двух world refs.
+
+В `backend/app/application/worldSnapshot/service/snapshotMetadataBuilder.py` после отказа валидации receipt каждый пригодный элемент tuple проходит строгую валидацию своей моделью и сохраняет исходный индекс. Замещение state определяется по виду владельца, его UID и ключу секции. Доступ к pinned base нужен для отдельной проверки достижимости. В `backend/tests/snapshotCore/contracts/test_registry.py` проверены индекс 1 после повреждённого history ref, разные владельцы с пустыми heads и один владелец с отсутствующей базой. В `backend/tests/snapshotCore/storage/publication/test_atomicity.py` реальный SQLite read и вызов сервиса с двумя receipts проверяют тип исключения, полный упорядоченный список кодов с путями и ноль вызовов append. Путь с отказом заканчивается до записи metadata. Граница проверки — builder и внутренний вызов сервиса в writer scope.
+
+Из `backend` команда `../.venv/Scripts/python.exe -B -m unittest tests.snapshotCore.contracts.test_registry tests.snapshotCore.storage.publication.test_atomicity.AssignedPublicationTests tests.snapshotCore.contracts.test_typing` — 16 тестов, OK (32.181 с). Из корня `node node_modules/pyright/index.js -p backend/tests/typing/snapshotCore/pyrightconfig.valid.json backend/app/application/worldSnapshot/service/snapshotMetadataBuilder.py backend/app/application/worldSnapshot/service/worldSnapshotService.py` — 0 ошибок и предупреждений.
+
+Полный прогон из `backend` командой `../.venv/Scripts/python.exe -B -m unittest discover -s tests/snapshotCore -p "test_*.py"` — 168 тестов, OK (1 пропущен, 159.817 с). `git diff --check` прошёл. Исправления предъявлены для независимого повторного ревью.
+
 ## Контракты Snapshot для интеграции Time (2026-11-03)
 
 Входящий запрос из [Time §§14.2, 34, 37, 44–46, 48](./time-domain.md). Ниже три отдельных результата с владельцем Snapshot. Статус каждого — OPEN до согласования контракта и проверки соответствующего пути. Эти работы лежат вне среза leases 4C3-C.

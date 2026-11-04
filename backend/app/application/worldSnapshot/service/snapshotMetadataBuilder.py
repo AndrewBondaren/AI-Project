@@ -12,7 +12,9 @@ from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.application.worldSnapshot.contracts.context import SnapshotApplyContext
 from app.application.worldSnapshot.validation.receiptProvenance import validate_receipt_provenance
 from app.dataModel.artifacts.references import ArtifactRef
+from app.dataModel.patch.changes.header import PatchRef
 from app.dataModel.patch.results.sectionResult import SectionApplyReceipt
+from app.dataModel.worldSnapshot.sections.refs import SectionHistoryRef, SectionStateRef
 from app.dataModel.worldSnapshot.identity.refs import SnapshotRef, WorldSnapshotRef
 from app.dataModel.worldSnapshot.metadata.envelope import (
     CreatedAtUtc, PlayerSnapshotMetadata, SnapshotEnvelope, WorldSnapshotMetadata,
@@ -32,6 +34,24 @@ def metadata_field[M: BaseModel, T](model: M, select: Callable[[M], T]) -> tuple
     ref = FieldRef(lambda: type(model), select)
     return bind_field(ref).field, ref.select(model)
 
+
+def _indexed_items[T: BaseModel](values: tuple[T, ...], model: type[T], *,
+                                 validated: bool) -> tuple[tuple[int, T], ...]:
+    if validated:
+        return tuple(enumerate(values))
+    # Whole-receipt validation already reported malformed items at their original paths.
+    items: list[tuple[int, T]] = []
+    if isinstance(values, tuple):
+        for index, value in enumerate(values):
+            try:
+                items.append((index, model.model_validate(value, strict=True)))
+            except ValidationError:
+                continue
+    return tuple(items)
+
+
+def _owner(ref: SnapshotRef) -> tuple[str, str]:
+    return ref.kind, ref.world_uid if isinstance(ref, WorldSnapshotRef) else ref.player_uid
 
 
 class SnapshotMetadataBuilder:
@@ -110,40 +130,46 @@ class SnapshotMetadataBuilder:
         for i, raw in enumerate(receipts if isinstance(receipts, tuple) else ()):
             path = ("receipts", i)
             invalid_fields = set()
+            valid = True
             try:
                 receipt = SectionApplyReceipt.model_validate(raw, strict=True)
             except ValidationError as error:
+                valid = False
                 for issue in error.errors():
                     loc = issue["loc"]
                     report((*path, *loc), "invalid_receipt", issue["msg"])
-                    if loc:
+                    if loc and isinstance(loc[0], str):
                         invalid_fields.add(loc[0])
                 if not isinstance(raw, SectionApplyReceipt):
                     continue
-                # Continue independent checks on the fields whose types were verified.
-                receipt = raw.model_copy(update={field: () for field in invalid_fields})
-
-            validated.append(receipt)
+                missing_fields = {field: () for field in invalid_fields if not hasattr(raw, field)}
+                receipt = raw.model_copy(update=missing_fields)
+            else:
+                validated.append(receipt)
             key_name, key = metadata_field(receipt, lambda r: r.section_key)
-            if "section_key" not in invalid_fields and key in seen_sections:
-                report((*path, key_name), "duplicate_section", "duplicate section receipt")
-            seen_sections.add(key)
+            if key_name not in invalid_fields:
+                if key in seen_sections:
+                    report((*path, key_name), "duplicate_section", "duplicate section receipt")
+                seen_sections.add(key)
             changed_name, changed = metadata_field(receipt, lambda r: r.changed)
-            for j, patch in enumerate(changed):
+            for j, patch in _indexed_items(changed, PatchRef, validated=valid):
                 op_name, op = metadata_field(patch, lambda p: p.operation_id)
                 if op != context.validation.operation_id:
                     report((*path, changed_name, j, op_name), "foreign_operation", "patch belongs to another operation")
             name, refs = metadata_field(receipt, lambda r: r.retained_artifacts)
-            for j, artifact in enumerate(refs):
+            for j, artifact in _indexed_items(refs, ArtifactRef, validated=valid):
                 if artifact not in artifacts:
                     report((*path, name, j), "unassigned_artifact", "receipt artifact has no metadata destination")
             history_name, histories = metadata_field(receipt, lambda r: r.history_refs)
-            for j, entry in enumerate(histories):
+            for j, entry in _indexed_items(histories, SectionHistoryRef, validated=valid):
                 field, snapshot = metadata_field(entry, lambda r: r.snapshot)
                 if snapshot not in parents:
                     report((*path, history_name, j, field), "foreign_history", "history must target an assigned snapshot")
             state_name, states = metadata_field(receipt, lambda r: r.state_refs)
-            for j, state_ref in enumerate(states):
+            indexed_states = _indexed_items(states, SectionStateRef, validated=valid)
+            replacements = {(_owner(entry.snapshot), entry.section_key) for _, entry in indexed_states
+                            if entry.snapshot in parents}
+            for j, state_ref in indexed_states:
                 field, snapshot = metadata_field(state_ref, lambda r: r.snapshot)
                 if snapshot in parents:
                     if "changed" not in invalid_fields and not receipt.changed:
@@ -155,11 +181,10 @@ class SnapshotMetadataBuilder:
                     else:
                         owner_present = snapshot.player_uid in players
                         parent = players.get(snapshot.player_uid)
-                    if owner_present and parent is not None and (parent not in bases or bases[parent].ref != parent):
-                        continue  # The diagnostic for this missing/invalid base already identifies the cause.
-                    if any(other.snapshot in parents and other.section_key == state_ref.section_key
-                           and parents[other.snapshot] == parent for other in states):
+                    if (_owner(snapshot), state_ref.section_key) in replacements:
                         report((*path, state_name, j), "superseded_state", "receipt also replaces this inherited state")
+                    if owner_present and parent is not None and (parent not in bases or bases[parent].ref != parent):
+                        continue  # Reachability depends on the pinned base.
                     if not owner_present or parent is None or state_ref not in bases[parent].state_refs:
                         report((*path, state_name, j, field), "unreachable_state", "state is not reachable from pinned base")
         field, pack = metadata_field(context.next_publication, lambda p: p.pack_hash)

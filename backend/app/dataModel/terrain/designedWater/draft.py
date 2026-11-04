@@ -65,6 +65,7 @@ class AuthoredWaterDesignDraft(_WaterDesignDraft, frozen=True):
 
 class ProceduralWaterDesignDraft(_WaterDesignDraft, frozen=True):
     kind: Literal[WaterDesignDraftKind.PROCEDURAL] = WaterDesignDraftKind.PROCEDURAL
+    # GEO-LEGACY-56/57: Migrate this coarse field when procedural draft consumers switch to W.
     field: ContinentalField
     floor_profile: FieldFloorProfile
 

@@ -1,5 +1,6 @@
 """Seeded value noise on world-fine planar, torus and sphere embeddings."""
 
+from collections.abc import Iterator
 from itertools import product
 from math import cos, floor, fsum, isfinite, pi, prod, sin
 
@@ -7,6 +8,7 @@ from app.application.planning.service.planningService import PlanBuildFailure
 from app.dataModel.terrain.designedWater.fields.field import ContinentalField, ContinentalFieldValue, FieldChannel, NoiseRecipe
 from app.dataModel.terrain.designedWater.input import NoiseWaterDesignInput, PlateNoiseWaterDesignInput
 from app.dataModel.terrain.designedWater.strategyKind import WaterDesignIssueCode
+from app.dataModel.terrain.sampling.fineSurfaceWindow import SurfaceSamples
 from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode
 from app.dataModel.topology.worldTopology import WorldTopology
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
@@ -42,6 +44,15 @@ class NoiseFieldGenerator:
         except (ValueError, OverflowError) as error:
             raise PlanBuildFailure((FieldPathError(("noise_field",), str(error),
                 code=WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value),)) from error
+
+    def fine_values(self, recipe: NoiseRecipe, surface: SurfaceSamples) -> Iterator[ContinentalFieldValue]:
+        memo: _LatticeMemo = {}
+        previous_y = None
+        for (x, y), _ in surface:
+            if y != previous_y:
+                memo.clear()
+                previous_y = y
+            yield self._sample(recipe, x + 0.5, y + 0.5, memo)
 
     def sample(self, recipe: NoiseRecipe, *, x: float, y: float) -> ContinentalFieldValue:
         """Sample a real world-fine position; callers supply centers, including fine cells."""
