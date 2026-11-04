@@ -51,6 +51,25 @@ class CoastlineSourceAdapterTests(TestCase):
                     with self.assertRaises(PlanBuildFailure):
                         CoastlineWaterSourceAdapter().prepare_native(**(args | {"expected_window": stale}))
 
+    def test_native_ready_admission_without_behavior_reports_field_before_geometry(self):
+        window, _, topology = fine_window(hills=False)
+        value = capture(strategy=Strategy.CONTINENTAL_NOISE)
+        legacy = value.geometry_request
+        request = AuthoredWaterGeometryRequest(source=legacy.source, pre_hydrology=window, topology=topology,
+            grid=physical_inputs(topology).grid, seed_root=legacy.seed_root, anchors=(), seas=legacy.seas,
+            z_min=legacy.z_min)
+        decision = value.admission.decision.model_copy(update={"behavior": None})
+        args = dict(vars(value), geometry_request=request, expected_window=window.ref,
+                    field_policy=value.field_policy.model_copy(update={"topology": topology}),
+                    admission=value.admission.model_copy(update={"decision": decision}))
+        with patch.object(CoastlineConstraintPreparer, "prepare_native") as geometry:
+            with self.assertRaises(PlanBuildFailure) as caught:
+                CoastlineWaterSourceAdapter().prepare_native(**args)
+        geometry.assert_not_called()
+        self.assertEqual([(issue.path, issue.code) for issue in caught.exception.issues], [
+            (("water_source", value.source.location_uid, "admission", "decision", "behavior"),
+             "WATER_DESIGN_INVALID_PREPARATION_INPUT")])
+
     def test_native_recipe_reports_all_independent_mismatches_before_geometry(self):
         window, _, topology = fine_window(hills=False)
         value = capture(strategy=Strategy.CONTINENTAL_NOISE)

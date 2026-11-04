@@ -73,7 +73,7 @@ def _ready_mode(source: DeclaredCoastline, request: AuthoredWaterGeometryRequest
 
     if decision.state is not PolicyState.READY:
         report(decision, lambda d: d.state, "coastline requires ready admission", "admission", "decision")
-    elif decision.require_behavior() is not context.strategy:
+    elif decision.behavior is not context.strategy:
         report(decision, lambda d: d.behavior, "admission strategy must match the resolved context", "admission", "decision")
     if generation.state is not PolicyState.READY:
         report(generation, lambda g: g.state, "coastline requires ready generation", "generation")

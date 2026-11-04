@@ -16020,3 +16020,7 @@ GEO-I9.1 принят в границах authored geometry. G10-A и итого
 После admission полного W вызывающая сторона передаёт его expected_window в CoastlineWaterSourceAdapter.prepare_native вместе с AuthoredWaterGeometryRequest и captured policy/region/metadata. Адаптер проверяет полный ref, READY-решения, источник, стратегию, AUTORESOLVE и seed/topology рецепта до вызова CoastlineConstraintPreparer.prepare_native. Результат NativeCoastlineStrategyInput связывает constraints с теми же source, grid и W.ref. Координаты coverage и constraints проверяются непосредственно относительно fine topology W.
 
 Тесты покрывают noise, plate и plate-noise, отказ до геометрии при подмене expected_window и отказ при повторной валидации constraints с чужим ref. Следующий срез — исполнение procedural field build по fine-клеткам W. GEO-I11.1 предъявлен на независимое ревью.
+
+**Независимое ревью GEO-I11.1 — FAIL.** Передача точных constraints I10.1 подтверждена на всех трёх стратегиях. Для READY admission с положительным приоритетом и `behavior=None` адаптер выпустил обычный `ValueError`.
+
+**Исправление P2 предъявлено на повторное ревью.** Адаптер сравнивает `decision.behavior` со стратегией контекста. Регрессионный тест на CONTINENTAL_NOISE воспроизвёл исходный отказ до правки. После правки тот же вход даёт один `WATER_DESIGN_INVALID_PREPARATION_INPUT` в `PlanBuildFailure` по пути `('water_source', 'source', 'admission', 'decision', 'behavior')`. Геометрия не вызывается. Прошли все 23 теста пакета `coastline_source`.
