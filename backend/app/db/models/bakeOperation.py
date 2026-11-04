@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from operator import attrgetter
 
 from app.dataModel.world.bakeOperation.record import BakeError, BakeResult, BakeStatus, DeliveryStatus, PublicationOperationId
 from app.dataModel.world.bakeOperation.request import BakeKind
@@ -21,13 +20,13 @@ class BakeOperation:
     fence: int
     lease_until: float
     result: BakeResult | None = field(metadata={
-        "col": "result_blob", "to_db": BakeResult.model_dump_json, "from_db": BakeResult.model_validate_json,
+        "col": "result_blob", "to_db": BakeResult.encode, "from_db": BakeResult.model_validate_json,
     })
     error: BakeError | None = field(metadata={
         "to_db": BakeError.encode, "from_db": BakeError.decode,
     })
     publication_operation_id: PublicationOperationId | None = field(metadata={
-        "to_db": attrgetter("value"), "from_db": PublicationOperationId,
+        "to_db": PublicationOperationId.encode, "from_db": PublicationOperationId,
     })
 
     def __post_init__(self) -> None:

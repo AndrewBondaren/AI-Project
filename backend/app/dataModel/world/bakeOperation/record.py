@@ -14,6 +14,10 @@ _uid = TypeAdapter[str](EntityUid)
 
 @dataclass(frozen=True, slots=True)
 class PublicationOperationId:
+    @classmethod
+    def encode(cls, value: object) -> str:
+        return cls.require(value).value
+
     value: str
 
     def __post_init__(self) -> None:
@@ -79,10 +83,22 @@ class BakeResult(BaseModel):
     model_config = ConfigDict(frozen=True, strict=True, extra="forbid")
     result_ref: EntityUid
 
+    @staticmethod
+    def encode(value: object) -> str:
+        if not isinstance(value, BakeResult):
+            raise TypeError("expected a BakeResult")
+        return value.model_dump_json()
+
 
 @dataclass(frozen=True)
 class RolledBack:
     reason: str
+
+    @classmethod
+    def require(cls, value: object) -> Self:
+        if not isinstance(value, cls):
+            raise TypeError("expected RolledBack evidence")
+        return value
 
 
 @dataclass(frozen=True)

@@ -391,7 +391,7 @@ revision 2
 
 Валидный PublicationOperationId("pub-1") через async stage дал SUCCEEDED, снятый claim и publish=1. Прямой publishing перевёл операцию в PUBLISHING. По отдельности проверены "pub-1", пустая строка, пробелы, None, bytes, чужой StrEnum и посторонний объект с полем value. Все семь значений через stage дали FAILED с ошибкой «expected a PublicationOperationId», снятым claim и publish=0. Прямой publishing во всех семи случаях выбросил TypeError, сохранив RUNNING и claim.
 
-require вернул исходный экземпляр для готового ID и выбросил TypeError для строки. Конструктор отклонил ForeignEnum.X с TypeError. У готового ID type(value) is str, isinstance(id, str) и id == "pub-1" ложны. Присваивание value вызвало FrozenInstanceError. Аннотация str у обычной функции send_text сама по себе вызов в Python не блокирует.
+require вернул исходный экземпляр для готового ID и выбросил TypeError для строки. Конструктор отклонил ForeignEnum.X с TypeError. Для `id = PublicationOperationId("pub-1")` выражение `type(id.value) is str` дало True. Выражения `isinstance(id, str)` и `id == "pub-1"` дали False. Присваивание value вызвало FrozenInstanceError. Аннотация str у обычной функции send_text сама по себе вызов в Python не блокирует.
 
 При чтении BakeRequest из JSON пропущенная version и целое 1 дали int со значением 1. Для true, 1.0, "1" и null получен ValidationError с «version must be an integer», для 0 и 2 — «Input should be 1».
 
@@ -402,3 +402,15 @@ require вернул исходный экземпляр для готового
 **Прогоны.** До правки reconcile первые попытки внутри sandbox прерваны на Windows asyncio socketpair. Вне sandbox R6 прошёл 14/14, полный §9 дал 387/388 с OwnershipConflict в test_slow_effect_retains_one_second_lease. Изолированный повтор прошёл 1/1, полный повтор — 388/388. После правки reconcile профильный набор прошёл 15/15 за 55,557 с, полный — 389/389 за 118,805 с. В отдельном повторном ревью полный набор прошёл с первого запуска, 389/389 за 104,777 с.
 
 Проверка конкретной цели scope остаётся в builder R7. Для тестовых БД принят reset, upgrade не требуется. Принудительный kill процесса и физический обрыв соединения не воспроизводились.
+
+## Ревью R6 на 42e7f6e0 от 2026-11-04
+
+**CHANGES REQUIRED.** Проверен HEAD `42e7f6e029656bbd5a274435ff23b59628a93542`. Три открытые находки воспроизведены через нетипизированный Python и SQLite.
+
+| Находка | Воспроизведение и наблюдаемый эффект | Критерий закрытия |
+|---|---|---|
+| **P1 · OPEN** · [operationStore.py, строки 157–158](../../backend/app/db/repositories/sqlite/bakeOperations/operationStore.py#L157) | После takeover callback восстановления вернул `SimpleNamespace(reason="unverified")`. Второе соединение увидело FAILED с причиной PUBLICATION_ROLLED_BACK и снятый world claim. Следующий admit того же мира вернул Started. | Только явный RolledBack подтверждает откат. При неизвестном типе результата операция сохраняет claim. |
+| **P2 · OPEN** · [bakeOperation.py, строка 24](../../backend/app/db/models/bakeOperation.py#L24) | В SUCCEEDED-строке заменили result на `BakeError(kind=BakeErrorKind.LEGACY, message="oops")`. INSERT значений из to_row сохранил JSON ошибки в result_blob. После commit оба пути чтения, SQLiteBakeOperations.read и from_row, дали ValidationError. | Сериализатор принимает ненулевой результат только типа BakeResult и отклоняет чужую модель до записи. |
+| **P2 · OPEN** · [bakeOperation.py, строка 30](../../backend/app/db/models/bakeOperation.py#L30) | Для `publication_operation_id = SimpleNamespace(value="foreign")` mapper извлёк строку и INSERT прошёл. Оба пути чтения вернули `PublicationOperationId("foreign")`. Прямой publishing отклоняет такой объект. | Общий mapper проверяет тип ненулевого ID перед извлечением value. Допустимый SQL NULL сохраняется. |
+
+Контрольная строка с корректными BakeResult и PublicationOperationId прошла INSERT и оба пути чтения. Штатный Pyright завершился без диагностик. Первый полный DAG-прогон по §9 дал **389/390 за 144,376 с** с одним `OwnershipConflict('lease')` при checkpoint. Контрольный прогон 16 тестов R6 и двух lease-тестов дал **18/18 за 64,741 с**. Связь сбоя аренды с находками R6 не установлена. В пробе takeover Windows выдала предупреждение при очистке временной БД после проверки результата.

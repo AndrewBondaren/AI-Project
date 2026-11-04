@@ -134,7 +134,7 @@ class SQLiteBakeOperations:
 
     def _terminal(self, token: BakeOwner, result: BakeResult | None, error: BakeError | None) -> None:
         self.db.execute("UPDATE bake_operations SET status=?,result_blob=?,error=? WHERE operation_id=?",
-                        (BakeStatus.SUCCEEDED if result else BakeStatus.FAILED, result.model_dump_json() if result else None,
+                        (BakeStatus.SUCCEEDED if result is not None else BakeStatus.FAILED, BakeResult.encode(result) if result is not None else None,
                          BakeError.encode(error) if error is not None else None, token.operation_id))
         self.db.execute("DELETE FROM bake_world_claims WHERE operation_id=?", (token.operation_id,))
 
@@ -155,4 +155,5 @@ class SQLiteBakeOperations:
             elif isinstance(outcome, BakeResult):
                 self._terminal(token, outcome, None)
             else:
-                self._terminal(token, None, BakeError(kind=BakeErrorKind.PUBLICATION_ROLLED_BACK, message=outcome.reason))
+                rollback = RolledBack.require(outcome)
+                self._terminal(token, None, BakeError(kind=BakeErrorKind.PUBLICATION_ROLLED_BACK, message=rollback.reason))

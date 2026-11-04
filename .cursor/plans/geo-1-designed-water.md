@@ -16012,3 +16012,11 @@ GEO-I9.1 принят в границах authored geometry. G10-A и итого
 **Повторное независимое ревью GEO-I10.1 — PASS.** На исходном входе `probe` с путём `[(4,0),(5,0)]` метод `prepare_native` вернул `WATER_DESIGN_CONSTRAINT_CONFLICT` с путём `('coastline_constraints', 'probe')`. Прямой вызов геометрии I9.1 сохранил `WATER_PLACEMENT_GEOMETRY`. Прежний P2 устранён.
 
 Повторно прошли все 35 тестов трёх запрошенных модулей. Отдельные пробы при `fine_span=16` подтвердили точные allowed/required для открытой линии и кольца через шов в WRAPPED и SPHERE, перенос W.ref/grid/source/notices, конфликт при частичном покрытии линии и сохранение ошибки геометрии при выходе пути за планарную границу. Правка не затронула coarse entry и сериализуемую модель ограничений.
+
+**Приёмка GEO-I10.1 — 2026-11-04.** Пользователь принял срез после повторного независимого PASS и закрытия P2. Приняты построение fine-маски и обязательной полосы для water-source coastline на полном W и диагностика конфликта при отсутствии допустимого соседа. Следующий шаг — передать принятые ограничения из CoastlineWaterSourceAdapter в native strategy input той же ревизии W.
+
+### GEO-I11.1. Передача fine coastline constraints в procedural strategy input
+
+После admission полного W вызывающая сторона передаёт его expected_window в CoastlineWaterSourceAdapter.prepare_native вместе с AuthoredWaterGeometryRequest и captured policy/region/metadata. Адаптер проверяет полный ref, READY-решения, источник, стратегию, AUTORESOLVE и seed/topology рецепта до вызова CoastlineConstraintPreparer.prepare_native. Результат NativeCoastlineStrategyInput связывает constraints с теми же source, grid и W.ref. Координаты coverage и constraints проверяются непосредственно относительно fine topology W.
+
+Тесты покрывают noise, plate и plate-noise, отказ до геометрии при подмене expected_window и отказ при повторной валидации constraints с чужим ref. Следующий срез — исполнение procedural field build по fine-клеткам W. GEO-I11.1 предъявлен на независимое ревью.

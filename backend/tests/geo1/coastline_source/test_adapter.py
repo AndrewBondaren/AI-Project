@@ -8,6 +8,10 @@ from pydantic import TypeAdapter
 from app.application.planning.service.planningService import PlanBuildFailure
 from app.application.policy.policyResolver import PolicyResolver
 from app.application.worldData.generators.terrain.designedWater.preparation.coastlineConstraintPreparer import CoastlineConstraintPreparer
+from app.application.worldData.generators.terrain.designedWater.preparation.coastlineWaterSourceAdapter import CoastlineWaterSourceAdapter
+from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometryRequest
+from tests.geo1.fine_water.test_fill import source as fine_window
+from tests.geo1.fine_water.fixtures import physical_inputs
 from app.application.worldData.generators.terrain.designedWater.coverage.waterCoverageBudgetPolicy import WaterCoverageBudgetPolicy
 from app.dataModel.hydrology.declaredCoastline import CoastlinePurpose
 from app.dataModel.hydrology.sources.waterDesignSource import CoastlineWaterSource
@@ -23,6 +27,46 @@ TARGET = "app.application.worldData.generators.terrain.designedWater.preparation
 
 
 class CoastlineSourceAdapterTests(TestCase):
+    def test_native_procedural_strategies_bind_exact_window_and_constraints(self):
+        window, _, topology = fine_window(hills=False)
+        for strategy in (Strategy.CONTINENTAL_NOISE, Strategy.PLATE, Strategy.PLATE_NOISE):
+            with self.subTest(strategy=strategy):
+                value = capture(strategy=strategy)
+                legacy = value.geometry_request
+                req = AuthoredWaterGeometryRequest(source=legacy.source, pre_hydrology=window, topology=topology,
+                    grid=physical_inputs(topology).grid, seed_root=legacy.seed_root, anchors=(), seas=legacy.seas,
+                    z_min=legacy.z_min)
+                args = dict(vars(value), geometry_request=req, expected_window=window.ref,
+                    field_policy=value.field_policy.model_copy(update={"topology": topology}))
+                result = CoastlineWaterSourceAdapter().prepare_native(**args)
+                self.assertEqual(result.constraints, CoastlineConstraintPreparer().prepare_native(req))
+                self.assertEqual(result.pre_hydrology_ref, result.constraints.pre_hydrology_ref)
+                self.assertEqual(result.topology, topology)
+                self.assertEqual(result.strategy, strategy)
+                stale = window.ref.model_copy(update={"output_fingerprint": "0" * 32})
+                bad = result.constraints.model_copy(update={"pre_hydrology_ref": stale})
+                with self.assertRaises(ValueError):
+                    type(result).model_validate(result.model_copy(update={"constraints": bad}))
+                with patch.object(CoastlineConstraintPreparer, "prepare_native", side_effect=AssertionError("geometry")):
+                    with self.assertRaises(PlanBuildFailure):
+                        CoastlineWaterSourceAdapter().prepare_native(**(args | {"expected_window": stale}))
+
+    def test_native_recipe_reports_all_independent_mismatches_before_geometry(self):
+        window, _, topology = fine_window(hills=False)
+        value = capture(strategy=Strategy.CONTINENTAL_NOISE)
+        legacy = value.geometry_request
+        request = AuthoredWaterGeometryRequest(source=legacy.source, pre_hydrology=window, topology=topology,
+            grid=physical_inputs(topology).grid, seed_root=legacy.seed_root, anchors=(), seas=legacy.seas,
+            z_min=legacy.z_min)
+        recipe = capture(strategy=Strategy.PLATE).field_policy.model_copy(update={"seed_root": "other-seed"})
+        args = dict(vars(value), geometry_request=request, expected_window=window.ref, field_policy=recipe)
+        with patch.object(CoastlineConstraintPreparer, "prepare_native", side_effect=AssertionError("geometry")):
+            with self.assertRaises(PlanBuildFailure) as caught:
+                CoastlineWaterSourceAdapter().prepare_native(**args)
+        self.assertEqual([issue.path for issue in caught.exception.issues],
+                         [("water_source", value.source.location_uid, "field_policy", field)
+                          for field in ("strategy", "seed_root", "topology")])
+
     def test_each_strategy_keeps_exact_source_metadata_context_and_budget(self):
         for strategy,model in ((Strategy.AUTHORED_REGION,AuthoredWaterDesignInput),
                                (Strategy.CONTINENTAL_NOISE,NoiseWaterDesignInput),

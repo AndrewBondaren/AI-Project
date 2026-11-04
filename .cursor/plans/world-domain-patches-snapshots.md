@@ -2617,7 +2617,7 @@ Concrete 4C3 adapters в checkout отсутствуют: SQL integration и п�
 | 4C4 | **ПРИНЯТ**, 2026-11-01, изолированный ContentAddressedBlobBackend | Concrete 4C3 integration и SN-CORE |
 | 4D1 / 4D1-L | **ПРИНЯТЫ**, включая concrete integration 2026-11-04 | Production composition — 4E2 |
 | 4C3 / SN-CORE | **ПРИНЯТЫ** в объёме storage core 4C2–4C4. 4C3-D принят 2026-11-04 после повторного PASS | Полный crash takeover остаётся OPEN вне freeze |
-| 4D2 | **НАЧАТ**, типизирован target publication для handler apply | Runtime service, CAS и end-to-end rollback/retry предстоят |
+| 4D2 | **В РАБОТЕ**. Приняты assigned Q → handlers → world CAS и player CAS в той же транзакции | Открыты публичный apply(), полный validation, общий metadata builder и terminal/retry |
 
 SN-STAGE, SN-RUNTIME и Snapshot B-2 остаются OPEN до соответствующих producer/consumer evidence.
 
@@ -2957,6 +2957,10 @@ Evidence гонок получено на отдельных соединени�
 Три подмены сервиса только в памяти дали ожидаемые отказы тестов. Поздняя обработка world mismatch вызвала два запрещённых player CAS; удаление проверки участников привело к запрещённому dispatch во всех четырёх случаях; превращение исключений второго player CAS в mismatch подменило обе ошибки доменным отказом. Отмена инъецирована на границе вызова второго CAS. Поведение SQLite worker при отмене во время SQL этой проверкой не измеряется.
 
 Из backend: `../.venv/Scripts/python.exe -B -m unittest tests.snapshotCore.storage.publication.test_atomicity.AssignedPublicationTests tests.snapshotCore.contracts.test_typing` — 3 OK (20.794 s). `../.venv/Scripts/python.exe -B -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — 165 тестов OK (1 skipped, 138.795 s). Срез предъявлен на повторное ревью.
+
+#### Приёмка 4D2 player CAS — 2026-11-04
+
+Пользователь принял срез player CAS после [повторного независимого ревью](world-domain-4d2-player-cas-review.md#повторное-ревью-после-исправлений). На HEAD `73994eae` вердикт **PASS**, все три блокера закрыты. Ревьюер подтвердил отказ при неверном составе участников до dispatch, отсутствие player CAS при конфликте мира и полный rollback при исключении из CAS второго игрока. В повторном ревью адресный прогон с typing gate — 3 OK, полный Snapshot suite — 165 тестов OK (1 skipped). Приёмка охватывает world и player CAS во внешней транзакции; общий 4D2 остаётся в работе.
 
 ## Контракты Snapshot для интеграции Time (2026-11-03)
 

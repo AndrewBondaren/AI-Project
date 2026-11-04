@@ -267,7 +267,23 @@ class BakeOperationsTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(TypeError):
             BakeError.encode("untyped")
 
+    async def test_foreign_rollback_evidence_keeps_claim_after_takeover(self):
+        from types import SimpleNamespace
+        old = self.first.admit(self.request, self.waiter).owner_token
+        self.first.begin(old)
+        self.first.publishing(old, PublicationOperationId("pub-1"))
+        self.expire()
+        self.binding.evidence = SimpleNamespace(reason="unverified")
+        with self.assertRaisesRegex(TypeError, "RolledBack"):
+            await BakeWorker(self.second, self.binding).run(self.second.recover())
+        saved = self.first.read(old.operation_id)
+        self.assertIs(saved.status, BakeStatus.RECOVERY_REQUIRED)
+        self.assertIsNone(saved.error)
+        self.assertIsInstance(self.first.admit(self.request, self.other), Joined)
+
     def test_generic_mapper_restores_bake_domain_types(self):
+        from dataclasses import replace
+        from types import SimpleNamespace
         from app.db.mapper import from_row, to_row
         from app.db.models.bakeOperation import BakeOperation, BakeWaiter
         from app.dataModel.world.bakeOperation.record import DeliveryStatus
@@ -290,6 +306,10 @@ class BakeOperationsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(published.result, result)
         columns, values = to_row(published)
         self.assertEqual(values[columns.index("result_blob")], result.model_dump_json())
+        with self.assertRaisesRegex(TypeError, "BakeResult"):
+            to_row(replace(published, result=BakeError(kind=BakeErrorKind.LEGACY, message="oops")))
+        with self.assertRaisesRegex(TypeError, "PublicationOperationId"):
+            to_row(replace(published, publication_operation_id=SimpleNamespace(value="foreign")))
         waiter = from_row(BakeWaiter, self.b.execute("SELECT * FROM bake_waiters").fetchone())
         self.assertIs(waiter.delivery_status, DeliveryStatus.SUBSCRIBED)
 

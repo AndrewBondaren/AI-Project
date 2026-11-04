@@ -22,11 +22,12 @@ from app.dataModel.terrain.designedWater.coverage.budget import BodyCoverageAllo
 from app.dataModel.terrain.designedWater.draft import (
     AuthoredWaterDesignDraft, ProceduralWaterDesignDraft, WaterDesignDraft,
 )
-from app.dataModel.terrain.designedWater.fields.field import NoiseRecipe, PlateRecipe, PlateNoiseRecipe
-from app.dataModel.terrain.designedWater.geometry.waterDesignConstraints import WaterDesignConstraints
+from app.dataModel.terrain.designedWater.fields.field import NoiseRecipe, PlateRecipe, PlateNoiseRecipe, WaterFieldRecipe
+from app.dataModel.terrain.designedWater.geometry.waterDesignConstraints import FineWaterDesignConstraints, WaterDesignConstraints
 from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometry, AuthoredWaterSource
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind as Strategy
 from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
+from app.dataModel.terrain.sampling.fineSurfaceWindow import FineSurfaceWindow
 from app.dataModel.terrain.regions.coverageGeometry import RegionCoverage
 from app.dataModel.terrain.regions.terrainRegionExtent import TerrainRegionExtent
 from app.dataModel.terrain.relief.bathymetry.floorProfile import FieldFloorProfile
@@ -45,7 +46,12 @@ ProceduralSourceT = TypeVar("ProceduralSourceT", bound=ProceduralWaterDesignSour
                             default=ProceduralWaterDesignSource, covariant=True)
 
 
-class WaterDesignInput(BaseModel, Generic[SourceT], frozen=True):
+SurfaceT = TypeVar("SurfaceT", bound=TerrainPlan | FineSurfaceWindow, default=TerrainPlan)
+ConstraintsT = TypeVar("ConstraintsT", bound=WaterDesignConstraints | FineWaterDesignConstraints,
+                       default=WaterDesignConstraints)
+
+
+class _WaterDesignContext(BaseModel, Generic[SourceT, SurfaceT, ConstraintsT], frozen=True):
     """Common ready inputs, preserving the caller's exact source type.
 
     Consumers dispatch through WaterStrategyInput, whose concrete variants also
@@ -63,9 +69,9 @@ class WaterDesignInput(BaseModel, Generic[SourceT], frozen=True):
     topology: WorldTopology
     grid: SurfaceGridSettings
     # GEO-LEGACY-41: Replace TerrainPlan and coarse frame checks with the admitted fine W.
-    pre_hydrology: PlanEnvelope[TerrainPlan]
+    pre_hydrology: PlanEnvelope[SurfaceT]
     region_coverage: RegionCoverage
-    constraints: WaterDesignConstraints | None = None
+    constraints: ConstraintsT | None = None
 
     @property
     def pre_hydrology_ref(self) -> PlanRef:
@@ -98,7 +104,7 @@ class WaterDesignInput(BaseModel, Generic[SourceT], frozen=True):
             if constraints.source != source or constraints.pre_hydrology_ref != self.pre_hydrology_ref or constraints.grid != self.grid:
                 raise ValueError("constraints must match full source, terrain revision and grid")
             if any(self.topology.canonicalize(*cell) != cell for cell in constraints.allowed_cells):
-                raise ValueError("constraints require canonical coarse coordinates")
+                raise ValueError("constraints require canonical coordinates")
         value = source.value
         uid = source.value.source_uid if isinstance(source, ProceduralSource) else source.value.location_uid
         if uid != metadata.source_uid or source.kind != metadata.source_kind or value.liquid != metadata.liquid:
@@ -121,14 +127,23 @@ class WaterDesignInput(BaseModel, Generic[SourceT], frozen=True):
             raise ValueError("coverage area mismatch")
         if self.budget.requested_fine2 > self.region.generation_area_fine2:
             raise ValueError("request exceeds generation area")
-        fine_bounds = fine_topology(self.topology, self.grid.fine_span).bounds
+        surface = self.pre_hydrology.payload
+        fine_bounds = (self.topology if isinstance(surface, FineSurfaceWindow)
+                       else fine_topology(self.topology, self.grid.fine_span)).bounds
         if any(not fine_bounds.contains(s.x0, s.y) or not fine_bounds.contains(s.x1 - 1, s.y)
                for s in self.region_coverage.spans):
             raise ValueError("coverage must use canonical world fine coordinates")
-        bounds, bbox = self.topology.bounds, self.pre_hydrology.payload.bbox
-        if (bbox.x_min, bbox.x_max, bbox.y_min, bbox.y_max) != (
-                bounds.x_min, bounds.x_max, bounds.y_min, bounds.y_max):
-            raise ValueError("pre-hydrology surface must match the coarse topology")
+        bounds = self.topology.bounds
+        if isinstance(surface, FineSurfaceWindow):
+            if surface.topology != self.topology or len(surface.surface_z) != bounds.width * bounds.height:
+                raise ValueError("native design requires the complete fine window")
+            if any(d.ref.key.scope != self.pre_hydrology_ref.key.scope for d in self.pre_hydrology.dependencies):
+                raise ValueError("native window dependencies must share its scope")
+        else:
+            bbox = surface.bbox
+            if (bbox.x_min, bbox.x_max, bbox.y_min, bbox.y_max) != (
+                    bounds.x_min, bounds.x_max, bounds.y_min, bounds.y_max):
+                raise ValueError("pre-hydrology surface must match the coarse topology")
         key = self.pre_hydrology_ref.key
         if isinstance(key.scope, RegionPlanScope) and key.scope.region_uid != self.region.region_uid:
             raise ValueError("pre-hydrology ref belongs to another region")
@@ -140,6 +155,8 @@ class WaterDesignInput(BaseModel, Generic[SourceT], frozen=True):
         validate_immutable(self)
         return self
 
+
+class WaterDesignInput(_WaterDesignContext[SourceT, TerrainPlan, WaterDesignConstraints], Generic[SourceT]):
     def validate_draft(self, draft: WaterDesignDraft) -> WaterDesignDraft:
         """Check a returned draft against this input without preparing any candidates."""
         draft = _DRAFT.validate_python(draft, strict=True)
@@ -172,6 +189,21 @@ class WaterDesignInput(BaseModel, Generic[SourceT], frozen=True):
                 raise ValueError("procedural floor must preserve captured world z_min and metadata depth")
         validate_immutable(draft)
         return draft
+
+
+class NativeCoastlineStrategyInput(_WaterDesignContext[CoastlineWaterSource, FineSurfaceWindow, FineWaterDesignConstraints]):
+    constraints: FineWaterDesignConstraints
+    field_policy: WaterFieldRecipe
+    z_min: Annotated[FineZ, Field(strict=True)]
+
+    @model_validator(mode="after")
+    def bound_recipe(self) -> Self:
+        if (not self.context.autoresolve or self.field_policy.strategy != self.strategy
+                or self.field_policy.topology != self.topology or self.field_policy.seed_root != self.seed_root):
+            raise ValueError("native coastline requires its admitted procedural recipe in the fine frame")
+        if self.metadata.level <= self.z_min or any(z < self.z_min for _, z in self.pre_hydrology.payload.surface_z):
+            raise ValueError("native coastline floor requires the captured lower bound")
+        return self
 
 
 class AuthoredWaterDesignInput(WaterDesignInput[AuthoredSourceT], Generic[AuthoredSourceT], frozen=True):
