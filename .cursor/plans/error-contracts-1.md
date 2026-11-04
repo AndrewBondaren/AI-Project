@@ -1,6 +1,6 @@
 # ERROR-CONTRACTS-1 — типизированные ошибки, проверки и диагностика
 
-**Статус:** архитектурные решения по разделению семейств, размещению `<...>TypeError`, варианту B для `FieldPathError`, обязательным типизированным аргументам, политике логирования и продуктовой политике отказов **ЗАФИКСИРОВАНЫ владельцем 2026-11-04**. Обязательная последовательность **архитектура и размещение → реализация общего ядра → домены после ревью существующих POJO и ошибок и принятия необходимых контрактов** уточнена владельцем 2026-11-04. Повторное ревью от 2026-11-04 добавило requirements немедленной прямой миграции callers после C1 (без переходных состояний), семантики outcome vs transport, технологии runtime admission, policy emit/silent/aggregate, nullable paths и bounded batch. Не требуется повторный freeze неизменяемых существующих доменных POJO; конкретные новые/изменяемые error/enum/argument/path contracts, generator dispositions и полный реестр остаются DRAFT/OPEN. Изменения production-кода не разрешены этим документом.
+**Статус:** архитектурные решения по разделению семейств, размещению `<...>TypeError`, варианту B для `FieldPathError`, обязательным типизированным аргументам, политике логирования и продуктовой политике отказов **ЗАФИКСИРОВАНЫ владельцем 2026-11-04**. Обязательная последовательность **архитектура и размещение → реализация общего ядра → домены после ревью существующих POJO и ошибок и принятия необходимых контрактов** уточнена владельцем 2026-11-04. Повторное ревью от 2026-11-04 добавило requirements немедленной прямой миграции callers после C1 (без переходных состояний), семантики outcome vs transport, технологии runtime admission, policy emit/silent/aggregate, nullable paths и bounded batch. Не требуется повторный freeze неизменяемых существующих доменных POJO; конкретные новые/изменяемые error/enum/argument/path contracts, generator dispositions и полный реестр остаются DRAFT/OPEN. **Точная файловая карта A0-PROPOSAL §0.1.1–0.1.3 подготовлена на 2026-11-04, но владельцем ещё не принята; C0/C1 заблокированы до A0 acceptance.** Изменения production-кода не разрешены этим документом.
 
 **Срез аудита:** `AndrewBondaren/AI-Project`, `master`, commit [`fa48c082`](https://github.com/AndrewBondaren/AI-Project/commit/fa48c082fb0883bed68ca9f60de83953538eb2f3), 2026-11-04; адресная перепроверка `FieldRef`, `FieldPathError`, Water Input и нового Snapshot builder на [`d031508e`](https://github.com/AndrewBondaren/AI-Project/commit/d031508ee225727be6a0f03231712c81c20df4c6). Перечень ниже фиксирует проверенные точки **накопления, передачи и преобразования** ошибок. Это первичная инвентаризация, а не доказательство полноты по всем файлам: поиск `FieldPathError(` уже достигает лимита 100 результатов. Полный реестр всех производителей диагностик — отдельный обязательный gate до массовой миграции.
 
@@ -13,15 +13,125 @@
 | Ответственность | Существующее место / целевой принцип размещения | Решение архитектурного этапа |
 | --- | --- | --- |
 | Нормативный план разработки | Канонический путь в репозитории: `.cursor/plans/error-contracts-1.md`; cross-cutting навигационная связь с [WORLD-PLAN-GRAPH-1](./world-generation-plan-dependency-graph.md) отражает только затронутые gates, не блокирует все owning-планы. | Поддерживать двустороннюю навигацию и per-domain gates D0/D1/D2/I0; не создавать вторую конкурирующую спецификацию. |
-| Общее поле-диагностическое ядро | Existing `backend/app/dataModel/validation/diagnostics/fieldPathError.py`, reusable validators/helpers в `dataModel/validation` | Утвердить переиспользуемые базовые модели и точные новые/изменяемые файлы **без доменных enum и правил**. Не создавать параллельный `FieldPathError` в другом пакете. |
-| Typed field selectors / nested path | Existing `backend/app/dataModel/cascade/cascadeSpec.py` (`FieldRef`) и `cascadeGraph.py` (`bind_field`); neutral placement checked path **OPEN** | Проверить dependency direction: общий validation-механизм не должен зависеть от конкретных Cascade rules. Выбрать reuse/refactor/extraction и согласовать exact package/imports до кода. |
-| Накопление ошибок | Existing `backend/app/core/validatorAggregationHelper.py`, `InputIssues` и иные локальные collectors | Выбрать единый reusable generic-механизм и его owner; доменные issue types остаются доменными. Не внедрять общую бизнес-классификацию в helper. |
+| Общее поле-диагностическое ядро | Existing `backend/app/dataModel/validation/diagnostics/fieldPathError.py`; target generic issue остаётся **в этом же файле**. Для immutable checks reuse `dataModel/validation/immutableValue.py`. | A0-PROPOSAL §0.1.1: reuse/refactor generic `FieldPathError[CodeT]` без второй модели и без Cascade dependency; реальную schema/stdlib dataclass vs Pydantic решить в C0. |
+| Typed field selectors / nested path | Existing `backend/app/dataModel/cascade/cascadeSpec.py` (`FieldRef`) и `cascadeGraph.py` (`BoundField`/`bind_field`); ими уже пользуются Policy, Encoding, Hydrology, Climate и другие. | A0-PROPOSAL §0.1.1: единый neutral `backend/app/dataModel/fields/` с `fieldRef.py`, `fieldBinding.py`, `checkedPath.py`, `validatedFieldPath.py`; удалить исходные определения в Cascade после быстрой миграции, не делать alias/re-export. |
+| Накопление ошибок | Existing `backend/app/core/validatorAggregationHelper.py`, `InputIssues` и другие локальные collectors. | A0-PROPOSAL §0.1.1: **переместить** единственный generic `ValidatorAggregationHelper[IssueT]` в `backend/app/dataModel/validation/diagnostics/validatorAggregationHelper.py`, старый файл в `core` удалить после direct D2; доменные specialized collectors — D0/D1. |
 | Доменная ошибка и её аргументы | **Тот же `backend/app/dataModel/<domain>/...` пакет, что owning POJO**, соседний файл при необходимости | Сначала инвентаризировать существующие ошибки и enum. Новый `<...>TypeError`/`<...>Arguments`/enum создаётся **только при доказанной нехватке**; существующий подходящий контракт переиспользуется. |
 | DAG declared errors / runtime | Existing `backend/app/dataModel/engine/dag/errors/nodeError.py`, `backend/app/application/engine/runtime/` | Сохранить самостоятельный `NodeError[E]`, gate/error policy в application binding, явные адаптеры домена; не перемещать domain POJO в engine. |
 | Логирование / транскрипт | Existing `backend/app/core/loggingConfig.py`, `generationLogging.py`, доменные emitter/helpers | Повторно использовать фасад и sinks `docs/tz_logging.md`; exact event ownership и typed safe args фиксируются по операциям, без новой инфраструктуры logger. |
 | Pydantic, wire, API, persistence boundary | Existing `backend/app/application/jsonValidation/`, `backend/app/api/errorMapping.py` и domain codecs | Архитектурно назначить владельца каждого typed mapper и его место до изменения; внешние строки допустимы только на boundary. |
 
-**Артефакт A0 (architecture accepted):** схема зависимостей без циклов, **матрица F01–F09 §2.4 с подходом для каждого типа**, обоснованные reuse/refactor/new и **точная карта пакетов/файлов общего ядра**, правила размещения будущих доменных error contracts, ownership generic/домен/engine/logging, границы публичных API и интеграционные gates. Дополнительно составить **impact ledger прямых потребителей изменяемых shared interfaces** (`FieldPathError`, collector, checked path) и порядок **немедленной миграции**: после C1 без искусственной промежуточной архитектуры последовательно исправить все затронутые call sites, прогнать targeted tests и только после этого считать совместный кодовый срез завершённым. Не создавать временные V1-адаптеры, вторую модель `FieldPathError` или отдельный долгоживущий compatibility phase. **A0 не предрешает, какие конкретные новые доменные классы/файлы нужны:** это устанавливается после D0-review в D1. Согласовать A0 до любых production-правок. Названные выше существующие пути — evidence; новые пути не объявляются созданными без отдельного утверждения.
+### 0.1.1. Точная целевая карта общего ядра — A0-PROPOSAL (на приёмку владельца)
+
+**Основание:** `master` @ `d31ceed42e2b29ef4e88608c52270413ff2253d8`; проверены директории и исходные `FieldRef` / `bind_field` / `BoundField` / `FieldPathError` / `ValidatorAggregationHelper`. Это **точное предложение пакетов и файлов**, но ещё **не A0 ACCEPTED**: владелец утверждает placement до C0 и любого production-кода. Новые *доменные* error/enum/argument POJO и их имена здесь умышленно не предрешаются — только D0/D1.
+
+| Точный путь от корня репозитория | Решение A0-PROPOSAL | Владелец / содержимое |
+| --- | --- | --- |
+| `backend/app/dataModel/fields/__init__.py` | **NEW** | Нейтральный пакет идентичности полей без Cascade/domain/business-кодов. |
+| `backend/app/dataModel/fields/fieldRef.py` | **EXTRACT** из `dataModel/cascade/cascadeSpec.py` | Единственный `FieldRef[ModelT, ValueT]`, deferred model supplier + direct selector. Исходный класс из Cascade удаляется; не делать re-export/alias/копию. |
+| `backend/app/dataModel/fields/fieldBinding.py` | **EXTRACT** из `dataModel/cascade/cascadeGraph.py` | Единственные `BoundField`, `_FieldProbe` и `bind_field`; runtime проверка прямого поля/модели/computed-field admission. Без imports из `cascade`. |
+| `backend/app/dataModel/fields/checkedPath.py` | **NEW** | Construction-time `CheckedPath[RootT, CurrentT]`: `field/item/key/variant/nullable` + связь с типом валидируемого `ValueT`; не хранит domain codes или callable в output. Exact API/typing — C0. |
+| `backend/app/dataModel/fields/validatedFieldPath.py` | **NEW** | Immutable canonical `ValidatedFieldPath` и закрытые path-segment models/identities для root/field/index/key/branch; пригодность cold restore и версия identity — C0. Не второй FieldRef. |
+| `backend/app/dataModel/validation/diagnostics/fieldPathError.py` | **MODIFY IN PLACE** | Единственный generic field issue `FieldPathError[CodeT]`, schema strictness/deep immutability. Исходный stdlib dataclass: сохранить или обоснованно refactor в C0. Доменный `ReferenceIssueReason/Context` и specialized fields требуют D0/D1 ownership review; их нельзя объявлять обязательными полями нейтрального generic. |
+| `backend/app/dataModel/validation/diagnostics/validatorAggregationHelper.py` | **MOVE** из `app/core/validatorAggregationHelper.py` | Единственный generic `ValidatorAggregationHelper[ConcreteIssueT]` с typed admission и immutable ordered snapshot. Mutable состояние строго request-local; никакой общей классификации F01–F07. |
+| `backend/app/dataModel/validation/immutableValue.py` | **REUSE** | Действующая recursive `validate_immutable` для dataclass/BaseModel/tuple; не создавать аналог в `fields` или `core`. |
+| `backend/app/dataModel/validation/diagnostics/runtimeIssueContext.py` | **REUSE** | Существующий typed runtime provenance; сохранять лишь семантически применимые контексты, без принудительного расширения generic field issue. |
+| `backend/app/dataModel/cascade/cascadeSpec.py` | **MODIFY** | Оставить `Cascade`, `CascadeChannel`, `CascadeLink`, `CascadeDefault`, `ScopeAxis` и прочую декларацию; импортировать тот же `FieldRef` из `dataModel.fields.fieldRef`. Удалить локальное определение FieldRef. |
+| `backend/app/dataModel/cascade/cascadeGraph.py` | **MODIFY** | Оставить Cascade introspection/graph/order; импортировать `BoundField`/`bind_field` из `dataModel.fields.fieldBinding`; удалить собственные реализации и probe. |
+| `backend/app/dataModel/cascade/cascadeVerify.py` | **MODIFY IMPORTS** | Cascade verifier сохраняет свои правила; прямые imports neutral binding исправить без нового verifier. |
+| `backend/app/core/validatorAggregationHelper.py` | **REMOVE AFTER DIRECT MIGRATION** | После C1 и немедленного D2 всех прямых users не оставлять compatibility wrapper, re-export или параллельный collector. |
+| `backend/app/dataModel/engine/dag/errors/nodeError.py` и `backend/app/application/engine/runtime/` | **REUSE / NO MOVE** | F04 node error и F05/F06 runtime остаются собственностью DAG, доменные причины переводятся только node binding adapter. |
+| `backend/app/core/loggingConfig.py`, `backend/app/core/generationLogging.py` | **REUSE / NO MOVE** | EC-10 только через существующий facade, sinks и transcript; event schema / safe mapper принадлежит конкретной операции после D1. |
+| `backend/app/application/jsonValidation/`, `backend/app/api/errorMapping.py`, domain codecs | **REUSE / DOMAIN D1** | F09 Pydantic/wire/API/persistence mappers остаются на действующих boundary. Новые конкретные adapter-файлы — только если D0/D1 докажет отсутствие подходящего. |
+
+**Запрещённые альтернативные центры:** не создавать `app/core/errorContracts`, `app/dataModel/errors`, второй `FieldPathError`, generic domain-error registry или новый logger. Общие типы полей принадлежат `dataModel/fields`, диагностика/collector — `dataModel/validation/diagnostics`, domain variants — своему owning `dataModel/<domain>/...` после D0/D1.
+
+**Тестовые места C1 (точные target paths, типы/фикстуры после C0):** `backend/tests/test_error_contracts_core.py`, `backend/tests/typing/error_contracts_valid.py`, `backend/tests/typing/error_contracts_invalid.py`, `pyrightconfig.error-contracts.json`; существующие `backend/tests/test_location_context_contract.py`, `backend/tests/typing/cascade_fields_valid.py`, `cascade_fields_invalid.py`, `pyrightconfig.cascade.json`, `backend/tests/snapshotCore/` и GEO/Policy tests — regression gates после extraction. Способ проверки negative typing cases выбирается на C0 по текущему `scripts/check-cascade-types.cjs`; новый runner не создавать без доказанной нужды.
+
+### 0.1.2. Направление импортов и размещение семейств F01–F09
+
+Стрелка означает разрешённую **зависимость по импортам/контрактам**, не runtime-вызов и не новый orchestration pipeline.
+
+```mermaid
+flowchart TD
+    B["Engine node binding"] --> A["application domain API"]
+    A --> D["dataModel domain POJO"]
+    A --> L["core logging facade"]
+    D --> V["validation diagnostics"]
+    D --> C["dataModel cascade"]
+    D --> F["dataModel fields"]
+    V --> F
+    C --> F
+```
+
+| Семейство | Физический owner / механизм | Запрещённая обратная зависимость |
+| --- | --- | --- |
+| F01 field issue | `dataModel/fields` + `dataModel/validation/diagnostics`, concrete domain issue рядом с owning POJO | `fields/validation → cascade/domain/application/engine` |
+| F02 contract/admission | owning domain `dataModel`, checked related fields через `dataModel/fields` по необходимости | Общий `FieldPathError` как фиктивная model-level ошибка |
+| F03 domain operation | owning domain error/result POJO и application operation | Domain POJO → DAG `NodeError` |
+| F04 DAG declared E | `dataModel/engine/dag/errors/nodeError.py`, runtime/binding в `application/engine` | Domain → engine imports |
+| F05 infrastructure fault | существующий runtime/infra owner и `ExecutionDiagnostic`; конкретная transport policy в D1 | `FieldPathError` как маска IO/SQL |
+| F06 control outcome | owning operation/engine lifecycle contracts, существующие typed results/exceptions после D0 | Универсальный обязательный `OperationOutcome` wrapper |
+| F07 nonfatal diagnostic | существующие `dataModel/planning/diagnostics/planDiagnostic.py` или owning domain models | Все warning → `FieldPathError`/`NodeError` |
+| F08 batch/import | нейтральный generic collector в `validation/diagnostics`; domain batch/report остаётся у владельца | Общая доменная таблица причин в collector |
+| F09 wire/API/persistence/log | существующие `application/jsonValidation`, `api/errorMapping`, domain codecs, `core/loggingConfig` | Wire mapper → source of truth внутреннего кода, logger → domain POJO |
+
+**Допустимое направление:** `application/engine binding → application/domain → dataModel/domain → dataModel/validation/diagnostics → dataModel/fields`. `dataModel/cascade → dataModel/fields`. `app/core/loggingConfig` получает только safe projection и не импортирует доменные error-POJO. `FieldRef` не import-ится из Cascade после extraction; `dataModel/fields` никогда не импортирует Cascade или приложение. Удаление старых symbol owners и исправление всех импортов выполняются быстро после C1 без промежуточного re-export.
+
+### 0.1.3. Impact ledger перемещений и быстрый C1 → D2 cutover
+
+**Скан GitHub Code Search на `master` @ `d31ceed` (2026-11-04):** `FieldRef` — 52 файла (24 `backend/app`, 14 tests), `bind_field` — 22 (16 `backend/app`, 2 tests), `BoundField` — 10 (5 `backend/app`), `ValidatorAggregationHelper` — 8 (4 `backend/app`, 1 test). `FieldPathError` — 197 файлов по индексу поиска (126 `backend/app`, 38 tests, 33 docs/other): **это упоминания, не доказательство 197 direct constructors**. Набор ниже — точные найденные app-файлы для переезда field symbols/collector, не окончательный реестр всех F01 issues.
+
+Обозначения: **F** = `FieldRef`, **B** = `bind_field`, **D** = `BoundField`, **C** = `ValidatorAggregationHelper`. Владельцы определений включены в таблицу.
+
+| Точный app-файл с найденным символом | Символы |
+| --- | --- |
+| `backend/app/application/cascade/contextResolver.py` | B |
+| `backend/app/application/jsonValidation/declaredRegions.py` | B |
+| `backend/app/application/policy/declarations/verify.py` | F, D |
+| `backend/app/application/worldData/generators/hydrology/policy/hydrologyGenerationBinding.py` | B |
+| `backend/app/application/worldData/generators/hydrology/sources/proceduralSourceAdmission.py` | B |
+| `backend/app/application/worldData/generators/terrain/designedWater/preparation/coastlineWaterSourceAdapter.py` | F, B, C |
+| `backend/app/application/worldData/generators/terrain/landcover/planning/capturedSources.py` | F, B |
+| `backend/app/application/worldData/masks/regionIdentity.py` | B |
+| `backend/app/application/worldData/regions/declaredRegionEdit.py` | B |
+| `backend/app/application/worldData/registries/worldService.py` | B |
+| `backend/app/application/worldSnapshot/service/snapshotMetadataBuilder.py` | F, B, C |
+| `backend/app/application/worldSnapshot/service/worldSnapshotService.py` | C |
+| `backend/app/core/validatorAggregationHelper.py` | C |
+| `backend/app/dataModel/cascade/cascadeGraph.py` | F, B, D |
+| `backend/app/dataModel/cascade/cascadeSpec.py` | F |
+| `backend/app/dataModel/cascade/cascadeVerify.py` | B |
+| `backend/app/dataModel/climate/planning/inputs/climateBaseInput.py` | F, B |
+| `backend/app/dataModel/encoding/decodeLimits.py` | F, B, D |
+| `backend/app/dataModel/hydrology/generation/categorySource.py` | F |
+| `backend/app/dataModel/hydrology/generation/waterGenerationSettings.py` | F |
+| `backend/app/dataModel/hydrology/pack/root.py` | F |
+| `backend/app/dataModel/hydrology/pack/shard.py` | F |
+| `backend/app/dataModel/hydrology/policy/hydrologyPlacementPolicy.py` | F |
+| `backend/app/dataModel/locations/context/cascadeParams.py` | F |
+| `backend/app/dataModel/locations/namedLocation/bundleNamedLocation.py` | F |
+| `backend/app/dataModel/locations/settlement/settlement/settlementPayload.py` | F |
+| `backend/app/dataModel/locations/structure/building/plotLayoutTemplate.py` | F |
+| `backend/app/dataModel/policy/declarations/policyIdentity.py` | D |
+| `backend/app/dataModel/policy/objectAdmissionPolicyDefinition.py` | F |
+| `backend/app/dataModel/policy/policyReferences.py` | F, B, D |
+| `backend/app/dataModel/terrain/designedWater/inputValidation.py` | F, B |
+| `backend/app/dataModel/terrain/planning/inputs/geoWaterPlacementInput.py` | F |
+| `backend/app/dataModel/terrain/relief/surfaceCoating/surfaceCoatingPolicyDefinition.py` | F |
+| `backend/app/dataModel/terrainMasks/regions/specs.py` | F |
+| `backend/app/dataModel/terrainMasks/worldTerrainMasks.py` | F |
+
+**Перед C1 (обязательный impact acceptance):** повторить полный `rg` в актуальном checkout по imports, constructors `FieldPathError(`, `ValidationError.from_exception_data`, `errors/issues` collectors, `ReferenceIssueContext`, `BoundField`, persistence/wire restore и static tests. Сверить результаты с этим ledger, зафиксировать точный набор **прямо ломаемых** consumers и D0/D1 owning contracts для них. Поисковый индекс GitHub и перечень §4 не заменяют эту проверку.
+
+**Порядок без промежуточной архитектуры:** (1) подготовить доменные D0/D1 документально до/во время C0/C1; (2) первым кодом сделать общее ядро C1 по принятой файловой карте; (3) **сразу** заменить imports и contracts всех непосредственно затронутых consumers D2, удалить старые определение/collector, не держать re-export/bridge; (4) прогнать typing/runtime `cascade`, Policy, decode limits, Water Input, Hydrology Pack, Snapshot и JSON boundary smoke; (5) закончить срез только после прохождения целевых регрессий. Независимые домены не обязаны ждать полного ERROR-CONTRACTS-1 DONE.
+
+**Документационный handoff после C1/D2:** обновить `.cursor/rules/cascade-pojo.mdc`, `docs/tz_cascade_context.md`, typing configs и тестовые imports, чтобы они не называли `cascadeSpec.FieldRef` и `cascadeGraph.bind_field` каноническими после extraction. Семантика Cascade и текущие проверки не пересоздаются.
+
+**D0/D1, а не A0**, определяет конкретные новые/изменённые файлы `ReferenceIssueReason`/`ReferenceIssueContext`, `WaterDesign...TypeError`, `Planning...TypeError` и прочие domain errors/arguments. Их нельзя заранее складывать в общий `fields`, `validation/diagnostics` или `core`; если existing error POJO подходит, новый файл не создаётся.
+
+
+**Артефакт A0 (требует согласования владельцем):** схема зависимостей без циклов, **матрица F01–F09 §2.4 с подходом для каждого типа**, обоснованные reuse/refactor/new и **точная карта пакетов/файлов общего ядра из A0-PROPOSAL §0.1.1–0.1.3 после её утверждения**, правила размещения будущих доменных error contracts, ownership generic/домен/engine/logging, границы публичных API и интеграционные gates. Дополнительно составить **impact ledger прямых потребителей изменяемых shared interfaces** (`FieldPathError`, collector, checked path) и порядок **немедленной миграции**: после C1 без искусственной промежуточной архитектуры последовательно исправить все затронутые call sites, прогнать targeted tests и только после этого считать совместный кодовый срез завершённым. Не создавать временные V1-адаптеры, вторую модель `FieldPathError` или отдельный долгоживущий compatibility phase. **A0 не предрешает, какие конкретные новые доменные классы/файлы нужны:** это устанавливается после D0-review в D1. Согласовать A0 до любых production-правок. Названные выше существующие пути — evidence; новые пути не объявляются созданными без отдельного утверждения.
 
 ### 0.2. Непереопределение существующих POJO
 
@@ -325,7 +435,7 @@
 
 | Gate / этап | Содержание | Выход и разрешение следующей работы |
 | --- | --- | --- |
-| **A0 — Architecture first** | Проверить текущие механизмы, **пройти F01–F09 §2.4 по каждому типу**, dependency direction, владельцев. Для каждого типа выбрать свой подход к данным, накоплению, исполнению, boundary/logging; составить **точную карту пакетов/файлов общего ядра**, правила размещения доменных контрактов и core reuse/refactor/new. **Не утверждать перечень новых доменных классов без D0.** Отделить общий механизм от доменных правил, DAG и logging. Составить impact ledger **всех прямых consumers изменяемых общих API** и короткую последовательность их непосредственной миграции после C1; D0/D1 этих доменов можно подготовить документально параллельно C0/C1. | Матрица per-family approaches, архитектура ядра, правила размещения и объём быстрого direct-consumer cutover согласованы владельцем; **до A0 production-код запрещён**. |
+| **A0 — Architecture first** | Проверить текущие механизмы, **пройти F01–F09 §2.4 по каждому типу**, dependency direction, владельцев. Для каждого типа выбрать свой подход к данным, накоплению, исполнению, boundary/logging; проверить и утвердить **точную предложенную карту пакетов/файлов общего ядра §0.1.1–0.1.3**, правила размещения доменных контрактов и core reuse/refactor/new. **Не утверждать перечень новых доменных классов без D0.** Отделить общий механизм от доменных правил, DAG и logging. Составить impact ledger **всех прямых consumers изменяемых общих API** и короткую последовательность их непосредственной миграции после C1; D0/D1 этих доменов можно подготовить документально параллельно C0/C1. | Матрица per-family approaches, архитектура ядра, правила размещения и объём быстрого direct-consumer cutover согласованы владельцем; **до A0 production-код запрещён**. |
 | **C0 — Контракты ядра** | Исследовать существующие `FieldPathError` (**stdlib dataclass**), `FieldRef`/`bind_field`, collectors, Pydantic/runtime validation и existing helpers. Определить ровно необходимые новые/изменяемые generic contracts, API, `CodeT`, nullable/union checked paths и typed-value binding, immutable projection и error boundaries. Выбрать dataclass/Pydantic/другой доказанный runtime admission подход; **для Pydantic выбрать pin/lock или проверяемый диапазон версий** (`requirements.txt` сейчас `>=2.7.0`) и его typing/runtime tests. Не дублировать existing types. | Приняты только **контракты общего ядра** и version/test matrix, не требуется повторный freeze доменных POJO. Нет заранее навязанного BaseModel вместо пригодного existing dataclass. |
 | **C1 — Реализация архитектурного ядра** | **Первый кодовый этап:** реализовать/переработать generic typed issues, field path, нейтральную поддержку typed arguments, collector/admission, нужные нейтральные boundary primitives и их тесты **на изолированных test fixtures**. Конкретные связи `DomainCode ↔ DomainArguments`, доменные схемы и product policies — только D1/D2; не подмешивать Water/Planning/Placement enum в ядро. При несовместимом изменении действующего общего API **сразу после C1 переходить к D2 всех прямых затронутых consumers**, без отдельного переходного контракта, параллельной версии модели, временного адаптера или долгого удержания сломанного состояния. | Ядро первым проходит свои runtime/static typing tests; **C1 — не конечная точка совместного кодового среза**. Следующее действие без организационной паузы — миграция затронутых D2 и targeted regression. Только после исправления всех direct call sites считать объединённый срез рабочим. |
 | **D0 — Ревью конкретного домена до кода** | Прочитать действующие domain POJO (поля, вложенность, инварианты, идентичности), текущие validators/issues/failures/enums/arguments, генераторы ошибок, **всех прямых consumers** и логирование. Исследовать возможные нарушения и независимые проверки, включая nullable/union и F08 объёмы/источники. Классифицировать каждую причину по F01–F07, обозначить F08/F09, если применимы. | Заполнен доменный review ledger с per-type классификацией, impact для C1 cutover и условиями полноты batch; неизменённые исходные POJO остаются действующими без нового freeze. |
