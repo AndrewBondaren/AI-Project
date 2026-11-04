@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Self
 
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 
@@ -11,12 +12,20 @@ from app.dataModel.world.bakeOperation.request import BakeRequest
 _uid = TypeAdapter[str](EntityUid)
 
 
-class PublicationOperationId(str):
-    def __new__(cls, value: str) -> "PublicationOperationId":
-        if isinstance(value, StrEnum):
-            raise TypeError("publication operation ID cannot be a StrEnum")
-        return super().__new__(cls, _uid.validate_python(value, strict=True))
+@dataclass(frozen=True, slots=True)
+class PublicationOperationId:
+    value: str
 
+    def __post_init__(self) -> None:
+        if isinstance(self.value, StrEnum):
+            raise TypeError("publication operation ID cannot be a StrEnum")
+        _uid.validate_python(self.value, strict=True)
+
+    @classmethod
+    def require(cls, value: object) -> Self:
+        if not isinstance(value, cls):
+            raise TypeError("expected a PublicationOperationId")
+        return value
 
 class BakeStatus(StrEnum):
     PENDING = "PENDING"

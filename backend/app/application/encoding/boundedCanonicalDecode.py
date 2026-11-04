@@ -119,12 +119,12 @@ class _Reader:
                 if previous is not None and previous >= current:
                     raise CanonicalEncodingError("unordered or duplicate canonical set")
                 previous = current
-            if self.build:
+            if values is not None:
                 values.append(value)
             count += 1
         if count < low or (fixed and count != len(args)):
             raise CanonicalEncodingError("invalid canonical collection width")
-        if self.build:
+        if values is not None:
             return owner(values)
 
     def typed(self, tag, end, depth, options):
@@ -170,10 +170,10 @@ class _Reader:
                 raise CanonicalEncodingError("missing, extra or reordered record field")
             value = self.value(pair_end, depth + 4, annotation, self.sizes.get((owner, name)))
             self.require_end(pair_end)
-            if self.build:
+            if values is not None:
                 values[name] = value
         self.require_end(end)
-        if self.build:
+        if values is not None:
             return owner.model_validate(values, strict=True) if issubclass(owner, BaseModel) else owner(**values)
 
 

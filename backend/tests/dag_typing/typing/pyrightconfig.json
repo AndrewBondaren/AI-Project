@@ -1,5 +1,9 @@
 {
   "include": [
+    "../../../../backend/app/application/worldData/bakeOperations",
+    "../../../../backend/app/dataModel/world/bakeOperation",
+    "../../../../backend/app/db/repositories/sqlite/bakeOperations",
+    "../../../../backend/app/db/models/bakeOperation.py",
     "valid.py",
     "../../../../backend/app/application/engine/contracts/invocation",
     "../../../../backend/app/application/engine/runtime/invocations",
@@ -73,6 +77,10 @@
   "pythonVersion": "3.12",
   "typeCheckingMode": "basic",
   "strict": [
+    "../../../../backend/app/application/worldData/bakeOperations",
+    "../../../../backend/app/dataModel/world/bakeOperation",
+    "../../../../backend/app/db/repositories/sqlite/bakeOperations",
+    "../../../../backend/app/db/models/bakeOperation.py",
     "valid.py",
     "../../../../backend/app/application/engine/contracts/invocation",
     "../../../../backend/app/application/engine/runtime/invocations",

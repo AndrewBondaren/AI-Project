@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from operator import attrgetter
 
 from app.dataModel.world.bakeOperation.record import BakeStatus, DeliveryStatus, PublicationOperationId
 from app.dataModel.world.bakeOperation.request import BakeKind
@@ -21,7 +22,13 @@ class BakeOperation:
     lease_until: float
     result_blob: str | None
     error: str | None
-    publication_operation_id: PublicationOperationId | None
+    publication_operation_id: PublicationOperationId | None = field(metadata={
+        "to_db": attrgetter("value"), "from_db": PublicationOperationId,
+    })
+
+    def __post_init__(self) -> None:
+        self.kind = BakeKind(self.kind)
+        self.status = BakeStatus(self.status)
 
 
 @dataclass
@@ -43,3 +50,6 @@ class BakeWaiter:
     invocation_id: str
     step_index: int
     delivery_status: DeliveryStatus
+
+    def __post_init__(self) -> None:
+        self.delivery_status = DeliveryStatus(self.delivery_status)

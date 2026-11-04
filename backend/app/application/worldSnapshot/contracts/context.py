@@ -24,3 +24,18 @@ class SnapshotApplyContext:
     world_snapshot: WorldSnapshotRef
     player_snapshots: tuple[PlayerSnapshotRef, ...]
     scope: CommitScope
+    next_publication: WorldPublicationRef
+
+    def __post_init__(self) -> None:
+        target = self.next_publication
+        if not isinstance(target, WorldPublicationRef):
+            raise TypeError("next_publication requires a WorldPublicationRef")
+        WorldPublicationRef.model_validate(target, strict=True)
+        expected = self.validation.expected_world
+        if (target.world_uid != expected.world_uid or target.snapshot_head != self.world_snapshot
+                or target.publication_id == expected.publication_id):
+            raise ValueError("target must be a new publication for the assigned world snapshot")
+        if (not expected.gameplay_started or target.pack_hash != expected.pack_hash
+                or target.active_timeline_id != expected.active_timeline_id
+                or target.active_timeline_id != self.world_snapshot.timeline_id):
+            raise ValueError("runtime tick must preserve the active pack and timeline")

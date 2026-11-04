@@ -2617,7 +2617,7 @@ Concrete 4C3 adapters в checkout отсутствуют: SQL integration и п�
 | 4C4 | **ПРИНЯТ**, 2026-11-01, изолированный ContentAddressedBlobBackend | Concrete 4C3 integration и SN-CORE |
 | 4D1 / 4D1-L | **ПРИНЯТЫ**, включая concrete integration 2026-11-04 | Production composition — 4E2 |
 | 4C3 / SN-CORE | **ПРИНЯТЫ** в объёме storage core 4C2–4C4. 4C3-D принят 2026-11-04 после повторного PASS | Полный crash takeover остаётся OPEN вне freeze |
-| 4D2 | **PREFLIGHT**, runtime apply | Требуется решение по target publication в handler context ниже |
+| 4D2 | **НАЧАТ**, типизирован target publication для handler apply | Runtime service, CAS и end-to-end rollback/retry предстоят |
 
 SN-STAGE, SN-RUNTIME и Snapshot B-2 остаются OPEN до соответствующих producer/consumer evidence.
 
@@ -2917,6 +2917,12 @@ Evidence гонок получено на отдельных соединени�
 **Порядок FK для обсуждения с Time.** Handler пишет новые snapshot-bound строки до metadata, а publication-bound строки могут предшествовать CAS. Для будущих доменных таблиц с такими ссылками предложены `DEFERRABLE INITIALLY DEFERRED` owner FKs внутри одного CommitScope. Существующие таблицы core остаются под своими действующими constraints. Это предложение касается будущей схемы Time и требует отдельной проверки DDL у её владельца.
 
 **Проверка после согласования.** Два handler получают одну Q; независимое соединение после commit наблюдает Q с head S. При отказе второго handler или несовпадении CAS отсутствуют обе доменные записи, S и Q. Повтор с тем же fingerprint возвращает тот же terminal без вызова handlers. Пустой tick создаёт новую metadata и Q. Отдельная проверка будущей интеграции Time — чтение закреплённой P после Q.
+
+#### 4D2 — принят и реализован typed target в apply-контексте, 2026-11-04
+
+Обязательное поле `SnapshotApplyContext.next_publication: WorldPublicationRef` содержит Q. При построении проверяются тип и строгая модель Q, принадлежность ожидаемому миру, новый publication_id, точное совпадение head с assigned snapshot, сохранение pack и активного timeline runtime tick. Scope и validation context сохраняют свои прежние роли. Registry contract test передаёт Q при dispatch. Negative Pyright fixture отдельно проверяет отказ WorldSnapshotRef вместо WorldPublicationRef. Решение по DDL Time остаётся отдельным.
+
+Изменены context.py, tests/snapshotCore/contracts/test_registry.py и tests/typing/snapshotCore/invalid.py. Первый positive Pyright также выявил четыре диагностики в общем application/encoding/boundedCanonicalDecode.py: связь между build и optional list/dict не сужала тип. Проверка самого накопителя на None устранила диагностики без изменения wire format. Из backend `../.venv/Scripts/python.exe -B -m unittest tests.snapshotCore.contracts.test_registry tests.snapshotCore.contracts.test_typing tests.spatial_pack.test_bounded_decode` — 20 OK, включая typing gate. Полный Snapshot discover — 163 теста, OK (1 skipped), 108.470 s. Producer WorldSnapshotService и передача Q до реального CAS — следующий код 4D2.
 
 ## Контракты Snapshot для интеграции Time (2026-11-03)
 

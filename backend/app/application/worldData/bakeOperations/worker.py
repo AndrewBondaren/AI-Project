@@ -49,7 +49,8 @@ class BakeWorker:
             self.store.publication(owner, self.binding.publish)
         except Exception:
             # The publishing checkpoint survives even if the commit result could not be read.
-            self.store.uncertain(owner)
+            if self.store.uncertain(owner, publication) == BakeStatus.SUCCEEDED:
+                return
             raise
 
     async def _prepare(self, owner: BakeOwner, request: BakeRequest) -> PublicationOperationId | None:
@@ -57,9 +58,7 @@ class BakeWorker:
             result = self.binding.ready(request)
             if result is None:
                 publication = await self.binding.stage(owner, request)
-                if not isinstance(publication, PublicationOperationId):
-                    raise TypeError("stage must return a PublicationOperationId")
-                return publication
+                return PublicationOperationId.require(publication)
         except Exception as exc:
             self.store.prepared_terminal(owner, None, str(exc) or type(exc).__name__)
             return None

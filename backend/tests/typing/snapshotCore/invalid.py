@@ -159,8 +159,9 @@ def wrong_scope_capabilities(read: CommitReadScope, binding: IDomainCommitBindin
 
 def wrong_context_capabilities(validation: SnapshotValidationContext, player: PlayerSnapshotRef,
                                world: WorldSnapshotRef, scope: CommitScope, read: CommitReadScope) -> None:
-    SnapshotApplyContext(validation=validation, world_snapshot=player, player_snapshots=(), scope=scope)  # EXPECT: reportArgumentType
-    SnapshotApplyContext(validation=validation, world_snapshot=world, player_snapshots=(), scope=read)  # EXPECT: reportArgumentType
+    SnapshotApplyContext(validation=validation, next_publication=validation.expected_world, world_snapshot=player, player_snapshots=(), scope=scope)  # EXPECT: reportArgumentType
+    SnapshotApplyContext(validation=validation, next_publication=validation.expected_world, world_snapshot=world, player_snapshots=(), scope=read)  # EXPECT: reportArgumentType
+    SnapshotApplyContext(validation=validation, next_publication=world, world_snapshot=world, player_snapshots=(), scope=scope)  # EXPECT: reportArgumentType
 
 
 async def wrong_history_scope(history: ISnapshotHistoryStore, read: CommitReadScope,

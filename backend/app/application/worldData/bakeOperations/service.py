@@ -21,7 +21,13 @@ class BakeService:
         if not task.cancelled() and (error := task.exception()) is not None:
             task.get_loop().call_exception_handler({"message": "bake worker failed", "exception": error, "task": task})
 
+    @staticmethod
+    def _validate_submission(request: object, waiter: object) -> None:
+        if not isinstance(request, BakeRequest) or not isinstance(waiter, Waiter):
+            raise TypeError("submit requires a BakeRequest and a Waiter")
+
     def submit(self, request: BakeRequest, waiter: Waiter) -> BakeAdmission | BakeResult:
+        self._validate_submission(request, waiter)
         self.worker.binding.authorize(request, waiter, None)
         ready = self.worker.binding.ready(request)
         if ready is not None:

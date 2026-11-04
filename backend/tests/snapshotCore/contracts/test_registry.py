@@ -74,13 +74,27 @@ class SectionRegistryTests(unittest.TestCase):
         self.assertEqual(decoded, self.section)
         self.assertEqual(decoded.patches[0].prepared.values, (1, 2, 3))
         self._complete(bound.validate(self.section, self.context))
-        apply_context = SnapshotApplyContext(validation=self.context,
-            world_snapshot=WorldSnapshotRef(world_uid="world", timeline_id="timeline", snapshot_id="tick"),
-            player_snapshots=(), scope=self.scope)
+        snapshot = WorldSnapshotRef(world_uid="world", timeline_id="timeline", snapshot_id="tick")
+        target = self.publication.model_copy(update={"publication_id": "q", "snapshot_head": snapshot})
+        apply_context = SnapshotApplyContext(validation=self.context, world_snapshot=snapshot,
+            player_snapshots=(), scope=self.scope, next_publication=target)
+        self.assertIs(apply_context.next_publication, target)
         receipt = self._complete(bound.apply(self.section, apply_context))
         self.assertEqual(receipt.section_key, self.key)
         self.assertEqual(self.handler.calls, ["encode", "decode", "validate", "apply"])
         self.assertEqual(bound.manifest, self.manifest)
+
+    def test_runtime_target_must_match_assigned_snapshot_and_pinned_base(self):
+        snapshot = WorldSnapshotRef(world_uid="world", timeline_id="timeline", snapshot_id="tick")
+        target = self.publication.model_copy(update={"publication_id": "q", "snapshot_head": snapshot})
+        context = SnapshotApplyContext(self.context, snapshot, (), self.scope, target)
+        foreign = snapshot.model_copy(update={"world_uid": "another"})
+        for changes in ({"publication_id": "p"}, {"snapshot_head": None}, {"pack_hash": "b" * 64},
+                        {"active_timeline_id": "another"}, {"world_uid": "another", "snapshot_head": foreign}):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                replace(context, next_publication=target.model_copy(update=changes))
+        with self.assertRaises(TypeError):
+            replace(context, next_publication=snapshot)
 
     def test_duplicate_wrong_binding_models_keys_and_versions_fail_before_handler(self) -> None:
         registry = SectionRegistry()

@@ -19,7 +19,10 @@ from app.db.repositories.sqlite.bakeOperations.operationStore import BakeFenceLo
 
 class BakeRequestTests(unittest.TestCase):
     def test_publication_id_rejects_foreign_enum_with_valid_text(self):
-        self.assertIs(type(PublicationOperationId("RUNNING")), PublicationOperationId)
+        identifier = PublicationOperationId("RUNNING")
+        self.assertEqual(identifier.value, "RUNNING")
+        self.assertNotIsInstance(identifier, str)
+        self.assertNotEqual(identifier, "RUNNING")
         with self.assertRaises(TypeError):
             PublicationOperationId(BakeStatus.RUNNING)
 
@@ -182,7 +185,7 @@ class BakeOperationsTests(unittest.IsolatedAsyncioTestCase):
         self.second.publishing(current, PublicationOperationId("publish-1"))
 
         def publish(db, record):
-            db.execute("INSERT INTO test_publications VALUES(?,?)", (record.publication_operation_id, "tile-pack"))
+            db.execute("INSERT INTO test_publications VALUES(?,?)", (record.publication_operation_id.value, "tile-pack"))
             return BakeResult(result_ref="tile-pack")
 
         with self.assertRaises(BakeFenceLost):
@@ -220,6 +223,63 @@ class BakeOperationsTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.service.cancel_operation(next_op.operation_ref))
         with self.assertRaises(BakeFenceLost):
             self.first.begin(next_op.owner_token)
+
+    def test_submit_rejects_missing_models_before_readiness(self):
+        from unittest.mock import patch
+        for cached in (None, BakeResult(result_ref="cached")):
+            with patch.object(self.binding, "ready", return_value=cached) as ready:
+                for request, waiter in ((None, self.waiter), (self.request, None)):
+                    with self.assertRaises(TypeError):
+                        self.service.submit(request, waiter)
+                ready.assert_not_called()
+        self.assertEqual(self.a.execute("SELECT count(*) FROM bake_operations").fetchone()[0], 0)
+
+    def test_generic_mapper_restores_bake_domain_types(self):
+        from app.db.mapper import from_row, to_row
+        from app.db.models.bakeOperation import BakeOperation, BakeWaiter
+        from app.dataModel.world.bakeOperation.record import DeliveryStatus
+        token = self.first.admit(self.request, self.waiter).owner_token
+        self.first.begin(token)
+        self.first.publishing(token, PublicationOperationId("pub-1"))
+        self.b.row_factory = sqlite3.Row
+        row = from_row(BakeOperation, self.b.execute("SELECT * FROM bake_operations").fetchone())
+        self.assertIs(row.kind, BakeKind.FULL)
+        self.assertIs(row.status, BakeStatus.PUBLISHING)
+        self.assertIs(type(row.publication_operation_id), PublicationOperationId)
+        columns, values = to_row(row)
+        self.assertEqual(values[columns.index("publication_operation_id")], "pub-1")
+        waiter = from_row(BakeWaiter, self.b.execute("SELECT * FROM bake_waiters").fetchone())
+        self.assertIs(waiter.delivery_status, DeliveryStatus.SUBSCRIBED)
+
+    async def test_lost_reply_after_publication_commit_returns_success(self):
+        from unittest.mock import patch
+        class LoseReply(sqlite3.Connection):
+            lose_reply = False
+
+            def __exit__(self, *args):
+                result = super().__exit__(*args)
+                if self.lose_reply:
+                    self.lose_reply = False
+                    raise sqlite3.OperationalError("lost commit reply")
+                return result
+
+        db = sqlite3.connect(self.path, factory=LoseReply)
+        self.addCleanup(db.close)
+        db.execute("CREATE TABLE effects(id TEXT PRIMARY KEY)")
+        store = SQLiteBakeOperations(db)
+        owner = store.admit(self.request, self.waiter).owner_token
+        self.binding.finish.set()
+        def publish(conn, record):
+            conn.execute("INSERT INTO effects VALUES(?)", (record.publication_operation_id.value,))
+            db.lose_reply = True
+            return BakeResult(result_ref="confirmed")
+
+        with patch.object(self.binding, "publish", side_effect=publish) as callback:
+            await BakeWorker(store, self.binding).run(owner)
+            callback.assert_called_once()
+        self.assertEqual(self.second.read(owner.operation_id).result, BakeResult(result_ref="confirmed"))
+        self.assertEqual(self.b.execute("SELECT count(*) FROM effects").fetchone()[0], 1)
+        self.assertEqual(self.b.execute("SELECT count(*) FROM bake_world_claims").fetchone()[0], 0)
 
     async def test_recovery_rejects_missing_publication_id_before_reconcile(self):
         from unittest.mock import patch

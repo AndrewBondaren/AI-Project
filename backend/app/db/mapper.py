@@ -53,6 +53,8 @@ def _col_name(f: dataclasses.Field) -> str:
 
 
 def _serialize(f: dataclasses.Field, value: Any) -> Any:
+    if "to_db" in f.metadata:
+        return f.metadata["to_db"](value) if value is not None else None
     db_type = f.metadata.get("db_type")
     if db_type == "json":
         return json.dumps(value, ensure_ascii=False) if value is not None else None
@@ -66,6 +68,8 @@ def _serialize(f: dataclasses.Field, value: Any) -> Any:
 
 
 def _deserialize(f: dataclasses.Field, value: Any) -> Any:
+    if "from_db" in f.metadata:
+        return f.metadata["from_db"](value) if value is not None else None
     db_type = f.metadata.get("db_type")
     if db_type == "json":
         if value is not None:
