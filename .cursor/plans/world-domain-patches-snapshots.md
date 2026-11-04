@@ -2972,6 +2972,8 @@ Evidence гонок получено на отдельных соединени�
 
 Из backend `../.venv/Scripts/python.exe -B -m unittest tests.snapshotCore.contracts.test_registry tests.snapshotCore.storage.publication.test_atomicity.AssignedPublicationTests tests.snapshotCore.contracts.test_typing` — 15 OK (18.992 s). Полный unittest discover -s tests/snapshotCore — 167 тестов OK (1 skipped, 131.126 s). Адресный Pyright по builder и service — 0 ошибок.
 
+**Уточнение ошибок metadata (2026-11-04).** Builder собирает независимые нарушения через ValidatorAggregationHelper в SnapshotMetadataFailure.diagnostics (FieldPathError с кодом snapshot.metadata.* и путём к полю или элементу). Для вложенных полей receipt используются FieldRef и bind_field. Scoped read сообщает отсутствующие persisted parents как PublicationInfrastructureError с кортежем диагностик. Регрессия в test_registry.py одновременно проверяет четыре кода и пути в порядке обхода и отсутствие вызова следующей проверки provenance. Адресный прогон предыдущего блока — 15 OK, полный Snapshot discover — 167 тестов OK (1 skipped, 146.253 s), адресный Pyright по обоим сервисным файлам — 0 errors.
+
 ## Контракты Snapshot для интеграции Time (2026-11-03)
 
 Входящий запрос из [Time §§14.2, 34, 37, 44–46, 48](./time-domain.md). Ниже три отдельных результата с владельцем Snapshot. Статус каждого — OPEN до согласования контракта и проверки соответствующего пути. Эти работы лежат вне среза leases 4C3-C.

@@ -255,6 +255,10 @@ class SectionRegistryTests(unittest.TestCase):
                         emitter = source.relative_to(root).as_posix() in {
                             "worldSnapshot/logging/snapshotLog.py", "artifacts/logging/artifactLog.py",
                         }
+                        if (source.relative_to(root).as_posix() in {"worldSnapshot/service/snapshotMetadataBuilder.py",
+                                                               "worldSnapshot/service/worldSnapshotService.py"}
+                                and name == "app.core.validatorAggregationHelper"):
+                            continue
                         if emitter and name in ("logging", "app.core.logLevel"):
                             continue
                         self.assertFalse(any(name == prefix or name.startswith(prefix + ".")
@@ -315,3 +319,18 @@ class SectionRegistryTests(unittest.TestCase):
             build((receipt,), {}, {parent: base})
         with self.assertRaises(ValueError):
             build((), {}, {})
+
+        from unittest.mock import patch
+        from app.application.worldSnapshot.service.snapshotMetadataBuilder import SnapshotMetadataFailure
+
+        bad = receipt.model_copy(update={"changed": (), "history_refs": (event.model_copy(update={"snapshot": parent}),)})
+        with patch("app.application.worldSnapshot.service.snapshotMetadataBuilder.validate_receipt_provenance") as next_stage:
+            with self.assertRaises(SnapshotMetadataFailure) as caught:
+                build((bad,), {}, {})
+            next_stage.assert_not_called()
+        self.assertEqual([(issue.code, issue.path) for issue in caught.exception.diagnostics], [
+            ("snapshot.metadata.missing_base", ("bases", "old")),
+            ("snapshot.metadata.unassigned_artifact", ("receipts", 0, "retained_artifacts", 0)),
+            ("snapshot.metadata.foreign_history", ("receipts", 0, "history_refs", 0, "snapshot")),
+            ("snapshot.metadata.noop_state", ("receipts", 0, "state_refs", 0, "snapshot")),
+        ])

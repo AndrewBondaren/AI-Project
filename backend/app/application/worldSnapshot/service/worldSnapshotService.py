@@ -2,6 +2,7 @@
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 
+from app.core.validatorAggregationHelper import ValidatorAggregationHelper
 from app.application.patch.registry.sectionRegistry import SectionRegistry
 from app.application.worldSnapshot.contracts.commitScope import CommitScope
 from app.application.worldSnapshot.contracts.context import SnapshotApplyContext, SnapshotValidationContext
@@ -43,12 +44,18 @@ class WorldSnapshotService:
         validation = context.validation
         parents = (validation.expected_world.snapshot_head, *(p.expected_head for p in validation.expected_players))
         bases: dict[SnapshotRef, SnapshotEnvelope] = {}
-        for ref in parents:
+        errors = ValidatorAggregationHelper()
+        for i, ref in enumerate(parents):
             if ref is not None:
                 metadata = await self._history.read(ref, scope=context.scope.read_scope)
                 if metadata is None:
-                    raise PublicationInfrastructureError("missing pinned snapshot metadata")
-                bases[ref] = metadata
+                    path = (("validation", "expected_world", "snapshot_head") if i == 0 else
+                            ("validation", "expected_players", i - 1, "expected_head"))
+                    errors.add(FieldPathError(path, f"missing pinned snapshot {ref.snapshot_id}",
+                                              code="snapshot.metadata.missing_persisted_base"))
+                else:
+                    bases[ref] = metadata
+        errors.raise_if_any(PublicationInfrastructureError)
         for envelope in SnapshotMetadataBuilder.build(context, turn_id, created_at, receipts, bases, retained):
             await self._history.append(context.scope, envelope, receipts)
 
