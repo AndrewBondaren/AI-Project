@@ -281,6 +281,34 @@ class BakeOperationsTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(saved.error)
         self.assertIsInstance(self.first.admit(self.request, self.other), Joined)
 
+    def test_terminal_subclasses_round_trip_as_declared_contracts(self):
+        from app.db.mapper import from_row
+        from app.db.models.bakeOperation import BakeOperation
+
+        class DetailedResult(BakeResult):
+            detail: str
+
+        class DetailedError(BakeError):
+            detail: str
+
+        self.b.row_factory = sqlite3.Row
+        for status in (BakeStatus.SUCCEEDED, BakeStatus.FAILED):
+            with self.subTest(status=status):
+                owner = self.first.admit(self.request, self.waiter).owner_token
+                self.first.begin(owner)
+                if status == BakeStatus.SUCCEEDED:
+                    self.first.publishing(owner, PublicationOperationId("pub"))
+                    self.first.publication(owner, lambda *_: DetailedResult(result_ref="pack", detail="private"))
+                    expected = (BakeResult(result_ref="pack"), None)
+                else:
+                    error = DetailedError(kind=BakeErrorKind.PREPARATION_FAILED, message="failed", detail="private")
+                    self.first.prepared_terminal(owner, None, error)
+                    expected = (None, BakeError(kind=error.kind, message=error.message))
+                row = self.b.execute("SELECT * FROM bake_operations WHERE operation_id=?", (owner.operation_id,)).fetchone()
+                for record in (self.second.read(owner.operation_id), from_row(BakeOperation, row)):
+                    self.assertIs(record.status, status)
+                    self.assertEqual((record.result, record.error), expected)
+
     def test_generic_mapper_restores_bake_domain_types(self):
         from dataclasses import replace
         from types import SimpleNamespace

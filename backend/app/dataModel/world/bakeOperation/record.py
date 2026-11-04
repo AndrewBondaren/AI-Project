@@ -69,7 +69,7 @@ class BakeError(BaseModel):
     def encode(value: object) -> bytes:
         if not isinstance(value, BakeError):
             raise TypeError("expected a BakeError")
-        return value.model_dump_json().encode("utf-8")
+        return BakeError(kind=value.kind, message=value.message).model_dump_json().encode("utf-8")
 
     @classmethod
     def decode(cls, stored: bytes | str) -> Self:
@@ -87,7 +87,7 @@ class BakeResult(BaseModel):
     def encode(value: object) -> str:
         if not isinstance(value, BakeResult):
             raise TypeError("expected a BakeResult")
-        return value.model_dump_json()
+        return BakeResult(result_ref=value.result_ref).model_dump_json()
 
 
 @dataclass(frozen=True)

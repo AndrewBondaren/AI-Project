@@ -2988,6 +2988,13 @@ Evidence гонок получено на отдельных соединени�
 
 Полный прогон из `backend` командой `../.venv/Scripts/python.exe -B -m unittest discover -s tests/snapshotCore -p "test_*.py"` — 168 тестов, OK (1 пропущен, 159.817 с). `git diff --check` прошёл. Исправления предъявлены для независимого повторного ревью.
 
+**Итог независимого ревью 4D2 «metadata builder и scoped append» — PASS, 2026-11-05.** Проверено рабочее дерево с исправлениями поверх HEAD `ca159fc6b9b7729d3a759a2e20b4b292f1b43a53`. Оба замечания закрыты.
+
+- При отсутствующей SQLite-базе и частично повреждённом receipt сервис вернул `PublicationInfrastructureError` с четырьмя диагностиками в порядке `missing_persisted_base`, `invalid_receipt`, `foreign_history`, `unassigned_artifact`. При двух отсутствующих родителях сохранены оба пути к expected heads. Вызовов `history.append` в этих случаях — 0. Прямой builder сохранил исходные индексы повреждённого и чужого history ref — 0 и 1.
+- При пустых heads у мира и игрока builder вернул для старого world state только `unreachable_state`. Для конкурирующих refs одной секции одного владельца при отсутствующей базе получены обе диагностики — `missing_base` и `superseded_state`.
+
+Подмена builder версией из HEAD в отдельном процессе воспроизвела оба падения регрессионных тестов. На исправленном рабочем дереве адресный прогон из `backend` (`test_registry`, `AssignedPublicationTests`, `test_typing`) — 16 тестов, OK, 27,271 с. Полный `snapshotCore` discover — 168 тестов, OK, 1 пропущен, 138,458 с.
+
 ## Контракты Snapshot для интеграции Time (2026-11-03)
 
 Входящий запрос из [Time §§14.2, 34, 37, 44–46, 48](./time-domain.md). Ниже три отдельных результата с владельцем Snapshot. Статус каждого — OPEN до согласования контракта и проверки соответствующего пути. Эти работы лежат вне среза leases 4C3-C.
