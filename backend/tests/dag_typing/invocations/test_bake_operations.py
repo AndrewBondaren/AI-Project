@@ -9,7 +9,7 @@ import unittest
 from app.application.worldData.bakeOperations.service import BakeService
 from app.application.worldData.bakeOperations.worker import BakeWorker
 from app.dataModel.world.bakeOperation.admission import BakeConflict, Joined, Started
-from app.dataModel.world.bakeOperation.record import BakeResult, BakeStatus, Waiter
+from app.dataModel.world.bakeOperation.record import BakeResult, BakeStatus, Waiter, PublicationOperationId
 from app.dataModel.world.bakeOperation.request import BakeKind, BakeRequest
 from app.db.repositories.sqlite.bakeOperations.operationStore import BakeFenceLost, SQLiteBakeOperations
 
@@ -29,11 +29,11 @@ class Binding:
     def ready(self, request):
         return self.current
 
-    async def stage(self, token, request):
+    async def stage(self, token, request) -> PublicationOperationId:
         self.stages += 1
         self.started.set()
         await self.finish.wait()
-        return token.operation_id
+        return PublicationOperationId(token.operation_id)
 
     def publish(self, db, record):
         self.publishes += 1
@@ -159,7 +159,7 @@ class BakeOperationsTests(unittest.IsolatedAsyncioTestCase):
         self.expire()
         current = self.second.recover()
         self.second.begin(current)
-        self.second.publishing(current, "publish-1")
+        self.second.publishing(current, PublicationOperationId("publish-1"))
 
         def publish(db, record):
             db.execute("INSERT INTO test_publications VALUES(?,?)", (record.publication_operation_id, "tile-pack"))
@@ -174,7 +174,9 @@ class BakeOperationsTests(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(db.close)
         restarted = BakeService(BakeWorker(SQLiteBakeOperations(db), self.binding))
         for _ in range(2):
-            self.assertEqual(restarted.poll(current.operation_id, self.waiter).result, BakeResult(result_ref="tile-pack"))
+            record = restarted.poll(current.operation_id, self.waiter)
+            self.assertIs(type(record.publication_operation_id), PublicationOperationId)
+            self.assertEqual(record.result, BakeResult(result_ref="tile-pack"))
         restarted.acknowledge(current.operation_id, self.waiter)
         self.assertIsNone(restarted.poll(current.operation_id, self.waiter))
         self.assertEqual(db.execute("SELECT * FROM test_publications").fetchall(), [("publish-1", "tile-pack")])
@@ -202,7 +204,7 @@ class BakeOperationsTests(unittest.IsolatedAsyncioTestCase):
     async def test_unknown_publication_holds_claim_and_recovery_fences_stale_worker(self):
         old = self.first.admit(self.request, self.waiter).owner_token
         self.first.begin(old)
-        self.first.publishing(old, "publication")
+        self.first.publishing(old, PublicationOperationId("publication"))
         self.expire()
         replacement = self.second.recover()
         self.assertEqual(replacement.operation_id, old.operation_id)

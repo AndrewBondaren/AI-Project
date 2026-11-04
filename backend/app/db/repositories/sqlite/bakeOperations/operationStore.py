@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from uuid import uuid4
 
 from app.dataModel.world.bakeOperation.admission import BakeAdmission, BakeConflict, Joined, Started
-from app.dataModel.world.bakeOperation.record import BakeOwner, BakeRecord, BakeResult, BakeStatus, RolledBack, Waiter
+from app.dataModel.world.bakeOperation.record import BakeOwner, BakeRecord, BakeResult, BakeStatus, RolledBack, Waiter, PublicationOperationId
 from app.dataModel.world.bakeOperation.request import BakeRequest
 from app.db.repositories.sqlite.bakeOperations.waiterStore import SQLiteBakeWaiters
 
@@ -57,7 +57,8 @@ class SQLiteBakeOperations:
         if row is None:
             raise KeyError(operation)
         return BakeRecord(BakeRequest.model_validate_json(row[0]), BakeStatus(row[1]),
-                          BakeResult.model_validate_json(row[2]) if row[2] else None, row[3], row[4])
+                          BakeResult.model_validate_json(row[2]) if row[2] else None, row[3],
+                          PublicationOperationId(row[4]) if row[4] is not None else None)
 
     def cancel_preparation(self, operation: str) -> bool:
         with self.transaction():
@@ -104,7 +105,9 @@ class SQLiteBakeOperations:
                 raise ValueError("this fence already started preparation")
             return record
 
-    def publishing(self, token: BakeOwner, publication: str) -> None:
+    def publishing(self, token: BakeOwner, publication: PublicationOperationId) -> None:
+        if not isinstance(publication, PublicationOperationId):
+            raise TypeError("publishing requires a PublicationOperationId")
         with self.transaction():
             if self._guard(token).status != BakeStatus.RUNNING:
                 raise ValueError("publication requires a running bake")

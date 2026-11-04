@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from app.dataModel.world.bakeOperation.record import BakeStatus, DeliveryStatus
+from app.dataModel.world.bakeOperation.record import BakeStatus, DeliveryStatus, PublicationOperationId
 from app.dataModel.world.bakeOperation.request import BakeKind
 
 
@@ -21,7 +21,7 @@ class BakeOperation:
     lease_until: float
     result_blob: str | None
     error: str | None
-    publication_operation_id: str | None
+    publication_operation_id: PublicationOperationId | None
 
 
 @dataclass

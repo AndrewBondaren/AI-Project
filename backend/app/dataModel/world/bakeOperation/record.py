@@ -1,11 +1,19 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 from app.dataModel.engine.dag.identity import ExecutionIdValue, InvocationIdValue, Ordinal
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.world.bakeOperation.request import BakeRequest
+
+
+_uid = TypeAdapter[str](EntityUid)
+
+
+class PublicationOperationId(str):
+    def __new__(cls, value: str) -> "PublicationOperationId":
+        return super().__new__(cls, _uid.validate_python(value, strict=True))
 
 
 class BakeStatus(StrEnum):
@@ -54,4 +62,4 @@ class BakeRecord:
     status: BakeStatus
     result: BakeResult | None
     error: str | None
-    publication_operation_id: str | None
+    publication_operation_id: PublicationOperationId | None

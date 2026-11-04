@@ -3,14 +3,14 @@ import sqlite3
 from typing import Protocol
 
 from app.application.worldData.bakeOperations.store import BakeStore
-from app.dataModel.world.bakeOperation.record import BakeOwner, BakeRecord, BakeResult, BakeStatus, RolledBack, Waiter
+from app.dataModel.world.bakeOperation.record import BakeOwner, BakeRecord, BakeResult, BakeStatus, RolledBack, Waiter, PublicationOperationId
 from app.dataModel.world.bakeOperation.request import BakeRequest
 
 
 class BakeBinding(Protocol):
     def authorize(self, request: BakeRequest, waiter: Waiter | None, operation: str | None) -> None: ...
     def ready(self, request: BakeRequest) -> BakeResult | None: ...
-    async def stage(self, owner: BakeOwner, request: BakeRequest) -> str:
+    async def stage(self, owner: BakeOwner, request: BakeRequest) -> PublicationOperationId:
         """Write only private staging for this operation and fence. Return the publication operation ID."""
         ...
     def publish(self, db: sqlite3.Connection, record: BakeRecord) -> BakeResult:
@@ -52,11 +52,14 @@ class BakeWorker:
             self.store.uncertain(owner)
             raise
 
-    async def _prepare(self, owner: BakeOwner, request: BakeRequest) -> str | None:
+    async def _prepare(self, owner: BakeOwner, request: BakeRequest) -> PublicationOperationId | None:
         try:
             result = self.binding.ready(request)
             if result is None:
-                return await self.binding.stage(owner, request)
+                publication = await self.binding.stage(owner, request)
+                if not isinstance(publication, PublicationOperationId):
+                    raise TypeError("stage must return a PublicationOperationId")
+                return publication
         except Exception as exc:
             self.store.prepared_terminal(owner, None, str(exc) or type(exc).__name__)
             return None
