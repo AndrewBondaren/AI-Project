@@ -10,7 +10,7 @@ from collections.abc import Mapping, Sequence
 from types import NoneType, UnionType
 from typing import Annotated, Any, Generic, TypeVar, Union, cast, get_args, get_origin, overload
 
-from pydantic import BaseModel, TypeAdapter, ValidationError
+from pydantic import AliasChoices, BaseModel, TypeAdapter, ValidationError
 
 from app.dataModel.annotationPolicy import unwrap_wire_type
 from app.dataModel.fields.fieldBinding import bind_field
@@ -47,6 +47,25 @@ def _strip(annotation: Any) -> Any:
     while get_origin(current) is Annotated:
         current = unwrap_wire_type(get_args(current)[0])
     return current
+
+
+def _wire_names(name: str, info: Any) -> set[str]:
+    names = {name}
+    if isinstance(info.alias, str):
+        names.add(info.alias)
+    alias = info.validation_alias
+    if isinstance(alias, str):
+        names.add(alias)
+    elif isinstance(alias, AliasChoices):
+        names.update(choice for choice in alias.choices if isinstance(choice, str))
+    return names
+
+
+def _field_for_wire_name(model: type[BaseModel], element: str) -> str:
+    matches = [name for name, info in model.model_fields.items() if element in _wire_names(name, info)]
+    if len(matches) != 1:
+        raise CheckedPathError("loc field is not declared or is ambiguous")
+    return matches[0]
 
 
 def _union_members(annotation: Any) -> tuple[Any, ...]:
@@ -159,10 +178,11 @@ class CheckedPath(Generic[RootT, CurrentT]):
                 raise CheckedPathError("ambiguous union in loc")
             return CheckedPath(self._root, present[0], self._segments)._resolve_loc(element)
         if isinstance(current, type) and issubclass(current, BaseModel):
-            if not isinstance(element, str) or element not in current.model_fields:
+            if not isinstance(element, str):
                 raise CheckedPathError("loc field is not declared")
-            annotation = _strip(current.model_fields[element].annotation)
-            return self._step(annotation, FieldSegment(owner=ModelIdentity.of(current), name=element))
+            name = _field_for_wire_name(current, element)
+            annotation = _strip(current.model_fields[name].annotation)
+            return self._step(annotation, FieldSegment(owner=ModelIdentity.of(current), name=name))
         origin = get_origin(current)
         if origin in _SEQUENCES and isinstance(element, int):
             return cast(Any, self).item(element)

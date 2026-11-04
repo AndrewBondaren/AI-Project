@@ -4,7 +4,7 @@ import unittest
 from enum import StrEnum
 from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import AliasChoices, AliasPath, BaseModel, ConfigDict, Field, ValidationError
 
 from app.dataModel.fields.checkedPath import CheckedPath, CheckedPathError
 from app.dataModel.fields.fieldRef import FieldRef
@@ -128,6 +128,24 @@ class CheckedPathTests(unittest.TestCase):
         for loc in (("scores", 4), ("pair", -3), ("leaves", -1), ("pair", 7), ("positive", -2)):
             with self.subTest(loc=loc):
                 self.assertIsNone(CheckedPath.from_pydantic_loc(Root, loc))
+
+    def test_pydantic_loc_maps_wire_aliases_to_fields(self) -> None:
+        class Aliased(BaseModel):
+            leaf_uid: str = Field(alias="leafUid")
+            score: int = Field(validation_alias=AliasChoices("points", "pts"))
+            nested: str = Field(validation_alias=AliasPath("a", 0))
+            clash: str = Field(alias="other")
+            other: str = ""
+
+        def names(loc: tuple[str | int, ...]) -> tuple[str, ...] | None:
+            path = CheckedPath.from_pydantic_loc(Aliased, loc)
+            return None if path is None else tuple(s.name for s in path.segments if isinstance(s, FieldSegment))
+
+        self.assertEqual(names(("leafUid",)), ("leaf_uid",))
+        self.assertEqual(names(("leaf_uid",)), ("leaf_uid",))
+        self.assertEqual(names(("pts",)), ("score",))
+        self.assertIsNone(names(("a",)))
+        self.assertIsNone(names(("other",)))
 
     def test_annotated_element_type_is_navigable(self) -> None:
         expected = ("children", 0, "uid")
