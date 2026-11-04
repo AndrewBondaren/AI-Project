@@ -1,5 +1,12 @@
 # Независимое ревью 4D2 — metadata builder и scoped append
 
+**PASS по закоммиченной версии, 2026-11-05.** Проверен HEAD `7b6104d71763d314ecf4f3b1e5e11e330a91e98b` с исправлениями из `e49d3c4f`. Оба замечания закрыты.
+
+- При отсутствующей SQLite-базе и повреждённом receipt сервис вернул `PublicationInfrastructureError` с диагностиками `missing_persisted_base`, `invalid_receipt`, `foreign_history` и `unassigned_artifact` в этом порядке. Вызовов `history.append` — 0. Прямой builder сохранил индексы повреждённого элемента `history_refs[0]` и чужого snapshot в `history_refs[1].snapshot`.
+- При пустых heads мира и игрока старый world state и новый player state одной секции дали только `unreachable_state`. Для конкурирующих refs одного владельца при отсутствующей базе builder вернул `missing_base` и `superseded_state`.
+
+При подмене builder версией из `ca159fc6` в отдельном процессе сервисный тест упал на прежнем `ValueError`, контрактный — на отсутствии `superseded_state`. На проверенном HEAD адресный прогон — 16 тестов, OK, 24,851 с. Полный `snapshotCore` discover — 168 тестов, OK, 1 пропущен, 130,032 с.
+
 **Итог повторного ревью от 2026-11-05 — PASS.** Ревьюер проверил рабочее дерево с исправлениями поверх `ca159fc6`. Оба замечания повторного ревью закрыты. [Контрпримеры, результаты прогонов и границы проверки в разделе 4D2](world-domain-patches-snapshots.md#L2991).
 
 ## Исходное ревью
