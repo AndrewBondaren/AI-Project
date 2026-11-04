@@ -2,9 +2,9 @@
 
 import unittest
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Any
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from app.dataModel.fields.checkedPath import CheckedPath, CheckedPathError
 from app.dataModel.fields.fieldRef import FieldRef
@@ -49,6 +49,10 @@ class Foreign(StrEnum):
 
 
 class RootTypeError(FieldPathError[Code]):
+    pass
+
+
+class ForeignTypeError(FieldPathError[Foreign]):
     pass
 
 
@@ -151,6 +155,31 @@ class FieldPathErrorTests(unittest.TestCase):
         for kind in (FieldPathError, FieldPathError[Code]):
             with self.subTest(kind=kind), self.assertRaises(TypeError):
                 kind(code=Code.MISSING, path=_name_path(), message="x")
+
+    def test_base_carrier_keeps_concrete_class_and_rejects_forgery(self) -> None:
+        class AnyHolder(BaseModel):
+            model_config = ConfigDict(frozen=True, strict=True, revalidate_instances="always")
+            issue: FieldPathError[Any]
+            issues: tuple[FieldPathError, ...] = ()
+
+        class TypedHolder(BaseModel):
+            model_config = ConfigDict(strict=True, revalidate_instances="always")
+            issue: FieldPathError[Code]
+
+        first = RootTypeError(code=Code.MISSING, path=_name_path(), message="a")
+        other = ForeignTypeError(code=Foreign.MISSING, path=_name_path(), message="b")
+        holder = AnyHolder(issue=first, issues=(other, first))
+        self.assertIs(type(holder.issue), RootTypeError)
+        self.assertEqual(tuple(type(item) for item in holder.issues), (ForeignTypeError, RootTypeError))
+        self.assertIs(type(TypedHolder(issue=first).issue), RootTypeError)
+        forged = first.model_copy(update={"code": Foreign.MISSING})
+        rejected: tuple[Any, ...] = (
+            forged, {"code": Code.MISSING, "path": _name_path(), "message": "a"}, _name_path())
+        for value in rejected:
+            with self.subTest(value=type(value).__name__), self.assertRaises((ValidationError, TypeError)):
+                AnyHolder(issue=value)
+        with self.assertRaises(ValidationError):
+            TypedHolder(issue=other)  # type: ignore[arg-type]
 
     def test_copy_bypass_is_rejected_by_strict_carrier(self) -> None:
         class Carrier(BaseModel):

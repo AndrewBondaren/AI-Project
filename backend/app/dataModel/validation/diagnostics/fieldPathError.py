@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from enum import Enum, StrEnum
 from typing import Any, Generic, TypeVar
 
-from pydantic import BaseModel, ConfigDict, StrictStr
+from pydantic import BaseModel, ConfigDict, ModelWrapValidatorHandler, StrictStr, model_validator
 
 from app.dataModel.fields.validatedFieldPath import ValidatedFieldPath
 
@@ -47,7 +47,33 @@ class FieldPathError(BaseModel, Generic[CodeT]):
     path: ValidatedFieldPath
     message: StrictStr
 
-    def model_post_init(self, context: Any, /) -> None:
-        metadata = type(self).__pydantic_generic_metadata__
-        if type(self) is FieldPathError or metadata["origin"] is not None or metadata["parameters"]:
+    @model_validator(mode="wrap")
+    @classmethod
+    def _validate_carrier(cls, value: Any, handler: ModelWrapValidatorHandler[Any]) -> Any:
+        """Base/parameterized annotations admit concrete subclasses, revalidated by their own schema."""
+        if not _is_carrier(cls):
+            return handler(value)
+        if not isinstance(value, FieldPathError):
             raise TypeError("FieldPathError requires a named concrete domain subclass")
+        kind = type(value)
+        if _is_carrier(kind):
+            raise ValueError("FieldPathError carrier needs a named concrete domain subclass instance")
+        if not _admits(cls, kind):
+            raise ValueError(f"{kind.__qualname__} does not match carrier {cls.__qualname__}")
+        return kind.model_validate(value, strict=True)
+
+    def model_post_init(self, context: Any, /) -> None:
+        if _is_carrier(type(self)):
+            raise TypeError("FieldPathError requires a named concrete domain subclass")
+
+
+def _is_carrier(kind: type[BaseModel]) -> bool:
+    metadata = kind.__pydantic_generic_metadata__
+    return kind is FieldPathError or metadata["origin"] is not None or bool(metadata["parameters"])
+
+
+def _admits(carrier: type[BaseModel], kind: type[BaseModel]) -> bool:
+    args = carrier.__pydantic_generic_metadata__["args"]
+    if carrier is FieldPathError or all(arg is Any for arg in args):
+        return True
+    return issubclass(kind, carrier)
