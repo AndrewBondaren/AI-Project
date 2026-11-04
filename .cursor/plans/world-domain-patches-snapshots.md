@@ -2950,6 +2950,14 @@ Evidence гонок получено на отдельных соединени�
 
 Проверки рабочего дерева с реализацией player CAS: AssignedPublicationTests + contracts.test_typing — 2 OK (16,909 с), полный snapshotCore — 164 теста, OK (1 skipped, 121,960 с). Адресный Pyright для worldSnapshotService.py — 0 errors, 0 warnings.
 
+#### 4D2 player CAS — исправления по независимому ревью, 2026-11-04
+
+[Исходный вердикт CHANGES REQUIRED](world-domain-4d2-player-cas-review.md). В `backend/tests/snapshotCore/storage/publication/test_atomicity.py` усилены AssignedPublicationTests. При несовпадении world head у запроса теперь два игрока, явно проверяется отсутствие player CAS. Для недостающего, лишнего, повторного ref и повторного expectation проверяются ValueError до dispatch и metadata и отсутствие обоих CAS. При инъекции PublicationInfrastructureError или CancelledError на втором player CAS проверяется ранее записанный head первого игрока внутри UOW и выход исходного объекта исключения. Второе соединение подтверждает откат world/player heads, metadata и всех маркеров handlers.
+
+Три подмены сервиса только в памяти дали ожидаемые отказы тестов. Поздняя обработка world mismatch вызвала два запрещённых player CAS; удаление проверки участников привело к запрещённому dispatch во всех четырёх случаях; превращение исключений второго player CAS в mismatch подменило обе ошибки доменным отказом. Отмена инъецирована на границе вызова второго CAS. Поведение SQLite worker при отмене во время SQL этой проверкой не измеряется.
+
+Из backend: `../.venv/Scripts/python.exe -B -m unittest tests.snapshotCore.storage.publication.test_atomicity.AssignedPublicationTests tests.snapshotCore.contracts.test_typing` — 3 OK (20.794 s). `../.venv/Scripts/python.exe -B -m unittest discover -s tests/snapshotCore -p 'test_*.py'` — 165 тестов OK (1 skipped, 138.795 s). Срез предъявлен на повторное ревью.
+
 ## Контракты Snapshot для интеграции Time (2026-11-03)
 
 Входящий запрос из [Time §§14.2, 34, 37, 44–46, 48](./time-domain.md). Ниже три отдельных результата с владельцем Snapshot. Статус каждого — OPEN до согласования контракта и проверки соответствующего пути. Эти работы лежат вне среза leases 4C3-C.

@@ -360,7 +360,7 @@ class AssignedPublicationTests(unittest.TestCase):
                 service = WorldSnapshotService(registry, world, player_store)
                 player_refs = ()
                 expectations = ()
-                if mode in ("players", "player_conflict"):
+                if mode in ("players", "conflict", "player_conflict", "player_error", "player_cancel"):
                     async with db.transaction():
                         await db.conn.execute("INSERT INTO character_sheet(character_uid,character_type,display_name,"
                                               "world_uid,created_at) VALUES ('p2','player','p2','w1',?)", (STAMP,))
@@ -384,7 +384,9 @@ class AssignedPublicationTests(unittest.TestCase):
                     conflict = SectionRefused(category=SnapshotApplyOutcomeKind.CONFLICT,
                         diagnostics=(FieldPathError(path=("expected_players", "p2"), message="player publication changed"),))
                 faults = {"metadata_error": PublicationInfrastructureError("after append"),
-                          "metadata_cancel": asyncio.CancelledError("after append")}
+                          "metadata_cancel": asyncio.CancelledError("after append"),
+                          "player_error": PublicationInfrastructureError("second player CAS"),
+                          "player_cancel": asyncio.CancelledError("second player CAS")}
 
                 async def apply(section, ctx):
                     self.assertIs(ctx.scope, outer_scope)
@@ -417,11 +419,19 @@ class AssignedPublicationTests(unittest.TestCase):
                                 await history.append(scope, PlayerSnapshotMetadata(ref=ref, parent=None, operation_id=op,
                                     turn_id=1, created_at=STAMP, envelope_format_version=1, state_refs=(),
                                     history_refs=(), retained_artifacts=()), receipts)
-                            if mode in faults:
+                            if mode in ("metadata_error", "metadata_cancel"):
                                 raise faults[mode]
 
+                compare_player = player_store.compare_append
+                async def compare_or_fail(scope, head, ref, operation_id):
+                    if mode in ("player_error", "player_cancel") and head.player_uid == "p2":
+                        # Observe p1's real new head inside the still-uncommitted writer transaction.
+                        self.assertEqual(await player_store.read("p1", scope=scope.read_scope), player_refs[1])
+                        raise faults[mode]
+                    return await compare_player(scope, head, ref, operation_id)
+
                 with (patch.object(world, "compare_append", wraps=world.compare_append) as cas,
-                      patch.object(player_store, "compare_append", wraps=player_store.compare_append) as player_cas):
+                      patch.object(player_store, "compare_append", side_effect=compare_or_fail) as player_cas):
                     if committed:
                         await execute()
                     elif mode in faults:
@@ -436,13 +446,16 @@ class AssignedPublicationTests(unittest.TestCase):
                     self.assertTrue(all(target is targets[0] for target in targets))
                     if mode == "refuse":
                         handlers[2].apply.assert_not_awaited()
-                    if mode == "refuse" or mode in faults:
+                    if mode in ("refuse", "metadata_error", "metadata_cancel"):
                         cas.assert_not_awaited()
                     else:
                         self.assertIs(cas.await_args.args[2], targets[0])
+                    if mode == "conflict":
+                        player_cas.assert_not_awaited()
                     by_uid = {ref.player_uid: ref for ref in player_refs}
                     self.assertEqual([call.args for call in player_cas.await_args_list],
-                                     [(outer_scope, head, by_uid[head.player_uid], op) for head in expectations])
+                                     [(outer_scope, head, by_uid[head.player_uid], op) for head in expectations]
+                                     if mode != "conflict" else [])
                 for ref in player_refs:
                     self.assertEqual(await peer[3].read(ref.player_uid), ref if committed else None)
                     self.assertEqual((await peer[4].read(ref)) is not None, committed)
@@ -454,6 +467,43 @@ class AssignedPublicationTests(unittest.TestCase):
                                                 "WHERE operation_id LIKE 'marker-%' ORDER BY operation_id") as cur:
                     self.assertEqual([row[0] for row in await cur.fetchall()],
                                      ["marker-one", "marker-three", "marker-two"] if committed else [])
-        for mode in ("success", "refuse", "conflict", "metadata_error", "metadata_cancel", "players", "player_conflict"):
+        for mode in ("success", "refuse", "conflict", "metadata_error", "metadata_cancel", "players", "player_conflict",
+                     "player_error", "player_cancel"):
             with self.subTest(mode=mode):
                 run_async(check(mode))
+
+    def test_invalid_participants_refused_before_handlers_metadata_or_cas(self):
+        from unittest.mock import AsyncMock, Mock
+        from app.application.patch.registry.sectionRegistry import SectionRegistry
+        from app.application.worldSnapshot.contracts.context import SnapshotValidationContext
+        from app.application.worldSnapshot.service.worldSnapshotService import WorldSnapshotService
+        from app.dataModel.worldSnapshot.identity.publication import PlayerHeadExpectation
+        from app.dataModel.worldSnapshot.identity.refs import PlayerSnapshotRef, WorldSnapshotRef
+
+        async def check():
+            async with live_database() as bundle:
+                base = await live_started(bundle)
+                registry = Mock(spec=SectionRegistry)
+                registry.resolve.side_effect = AssertionError("invalid participants reached handler dispatch")
+                p1 = PlayerSnapshotRef(player_uid="p1", snapshot_id="s1")
+                p2 = PlayerSnapshotRef(player_uid="p2", snapshot_id="s2")
+                h1 = PlayerHeadExpectation(player_uid="p1", expected_head=None)
+                h2 = PlayerHeadExpectation(player_uid="p2", expected_head=None)
+                snapshot = WorldSnapshotRef(world_uid="w1", timeline_id="t1", snapshot_id="assigned")
+                service = WorldSnapshotService(registry, bundle[2], bundle[3])
+                with (patch.object(bundle[2], "compare_append", new_callable=AsyncMock) as world_cas,
+                      patch.object(bundle[3], "compare_append", new_callable=AsyncMock) as player_cas):
+                    for case, heads, refs in (
+                        ("missing", (h1, h2), (p1,)), ("extra", (h1,), (p1, p2)),
+                        ("duplicate ref", (h1,), (p1, p1)), ("duplicate expectation", (h1, h1), (p1,)),
+                    ):
+                        with self.subTest(case=case):
+                            async with bundle[1].transaction("candidate") as scope:
+                                ctx = SnapshotValidationContext("candidate", base, heads, (), scope.read_scope)
+                                with self.assertRaisesRegex(ValueError, "expected participants"):
+                                    async with service._apply_to_target(scope, ctx, (Mock(),), snapshot, refs):
+                                        self.fail("invalid participants reached metadata block")
+                            registry.resolve.assert_not_called()
+                            world_cas.assert_not_awaited()
+                            player_cas.assert_not_awaited()
+        run_async(check())

@@ -11,6 +11,7 @@ from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
 from app.dataModel.hydrology.declaredLake import DeclaredLake
 from app.dataModel.hydrology.enums.basinKind import BasinKind
 from app.dataModel.hydrology.enums.waterSide import WaterSide
+from app.dataModel.hydrology.hydrologyWaypoint import HydrologyWaypoint
 from app.dataModel.hydrology.sources.waterDesignSource import AuthoredLakeSource, CoastlineWaterSource
 from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
 from app.dataModel.spatial.regionShape import AnchorRadiusShape, BboxShape
@@ -94,3 +95,16 @@ class NativeAuthoredGeometryTests(TestCase):
             preparer.prepare_native(request())
         with self.assertRaises(ValueError):
             preparer.prepare_native(AuthoredWaterGeometryRequest(**self.args))
+
+    def test_empty_water_side_has_constraint_specific_diagnostic(self):
+        line = CoastlineWaterSource(value=DeclaredCoastline(location_uid="probe", kind=BasinKind.SEA,
+            path=(HydrologyWaypoint(x=4, y=0), HydrologyWaypoint(x=5, y=0))))
+        req = AuthoredWaterGeometryRequest(**(self.args | {"source": line}))
+        for operation, path, code in (
+            (prepare_native_water_geometry, "authored_geometry", "WATER_PLACEMENT_GEOMETRY"),
+            (CoastlineConstraintPreparer().prepare_native, "coastline_constraints", "WATER_DESIGN_CONSTRAINT_CONFLICT"),
+        ):
+            with self.subTest(operation=operation), self.assertRaises(PlanBuildFailure) as caught:
+                operation(req)
+            issue, = caught.exception.issues
+            self.assertEqual((issue.path, issue.code), ((path, "probe"), code))

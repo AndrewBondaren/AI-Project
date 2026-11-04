@@ -2,7 +2,7 @@
 
 from app.application.planning.service.planningService import PlanBuildFailure
 from app.application.worldData.generators.hydrology.geom.polylineRasterize import rasterize_segments
-from app.application.worldData.placement.adapters.coastlineShape import coastline_segments
+from app.application.worldData.placement.adapters.coastlineShape import EmptyCoastlineWaterSide, coastline_segments
 from app.application.worldData.placement.adapters.water import prepare_authored_water_geometry
 from app.application.worldData.placement.adapters.waterGeometry.nativeGeometry import prepare_native_water_geometry
 from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
@@ -43,7 +43,13 @@ class CoastlineConstraintPreparer:
         request = AuthoredWaterGeometryRequest.model_validate(request, strict=True)
         if not isinstance(request.source, CoastlineWaterSource):
             raise ValueError("coastline constraints require a water-source line")
-        geometry = prepare_native_water_geometry(request)
+        try:
+            geometry = prepare_native_water_geometry(request)
+        except PlanBuildFailure as error:
+            if not isinstance(error.__cause__, EmptyCoastlineWaterSide):
+                raise
+            raise PlanBuildFailure((FieldPathError(("coastline_constraints", request.source.value.location_uid),
+                str(error.__cause__), code=WaterDesignIssueCode.CONSTRAINT_CONFLICT.value),)) from error
         allowed = frozenset(cell for part in geometry.footprints for cell in part)
         required = self._strip(request.source.value, request.pre_hydrology.payload.topology, allowed)
         return FineWaterDesignConstraints(source=request.source, pre_hydrology_ref=geometry.pre_hydrology_ref,

@@ -19,6 +19,10 @@ from app.dataModel.topology import topologyGeometry as geometry
 from app.dataModel.topology.worldTopology import Coord, WorldTopology
 
 
+class EmptyCoastlineWaterSide(WaterGeometryError):
+    """The coastline has no reachable water-side candidate cells."""
+
+
 def cell_neighbors(topology: WorldTopology, cell: Coord):
     return iter(geometry.canonical_neighbors4(topology, cell))
 
@@ -128,5 +132,5 @@ def coastline_cells(entry: DeclaredCoastline, context: WaterGeometryView,
             if neighbor not in visited and side.contains(neighbor, bounded=False):
                 heapq.heappush(frontier, (distance + 1, neighbor[1], neighbor[0]))
     if not cells:
-        raise WaterGeometryError("coastline has no reachable water-side candidate cells")
+        raise EmptyCoastlineWaterSide("coastline has no reachable water-side candidate cells")
     return frozenset(cells), capped
