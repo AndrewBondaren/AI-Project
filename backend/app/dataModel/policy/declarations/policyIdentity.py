@@ -7,7 +7,7 @@ from math import isfinite
 
 from pydantic import BaseModel
 
-from app.dataModel.cascade.cascadeGraph import BoundField
+from app.dataModel.fields.fieldBinding import BoundField
 from app.dataModel.policy.declarations.policyDeclaration import PolicyOwner, validate_policy_owner
 from app.dataModel.policy.policyFacts import _policy_value
 from app.dataModel.policy.policyEnums import PolicyRuleId

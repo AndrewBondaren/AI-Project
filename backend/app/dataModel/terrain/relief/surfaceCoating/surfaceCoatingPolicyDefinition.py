@@ -4,7 +4,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.materials.enums.materialSubstrateKind import MaterialSubstrateKind
 from app.dataModel.policy.declarations.fieldPolicy import SelectByValue, ValueCase
 from app.dataModel.policy.declarations.policyCases import PolicyCaseDeclaration

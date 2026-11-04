@@ -6,8 +6,9 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
 
 from app.dataModel.annotationPolicy import DefaultEnumWhenMissing, DefaultWhenMissing
 from app.dataModel.cascade.cascadeSpec import (
-    Cascade, CascadeChannel, CascadeDefault, CascadeLink, ChannelKind, DefaultPolicy, FieldRef,
+    Cascade, CascadeChannel, CascadeDefault, CascadeLink, ChannelKind, DefaultPolicy,
 )
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationScope as Scope
 from app.dataModel.hydrology.generation.waterGenerationDefaults import WaterFraction, WaterGenerationDefaults
 from app.dataModel.hydrology.generation.legacySettings import normalize_seas_generation, normalize_lakes_generation

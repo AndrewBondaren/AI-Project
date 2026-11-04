@@ -4,7 +4,7 @@ from app.application.jsonValidation.resolve import ResolveContext, report_issues
 from app.application.jsonValidation.types import FieldPathError
 from app.application.jsonValidation.worldSlices import slice_column_key
 from app.application.worldData.masks.regionIdentity import declared_region_identity
-from app.dataModel.cascade.cascadeGraph import bind_field
+from app.dataModel.fields.fieldBinding import bind_field
 from app.dataModel.terrainMasks import WorldTerrainMasks
 from app.dataModel.terrainMasks.worldTerrainMasks import DECLARED_REGIONS
 from app.dataModel.terrainMasks.regions.specs import REGION_NAME

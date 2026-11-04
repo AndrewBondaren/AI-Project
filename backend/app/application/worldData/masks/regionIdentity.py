@@ -9,7 +9,7 @@ from app.application.jsonValidation.types import FieldPathError
 from app.dataModel.spatial.regionShape import AnchorRadiusShape
 from app.dataModel.terrainMasks.regions import RegionSpecBase
 from app.dataModel.terrainMasks.regions.specs import REGION_NAME
-from app.dataModel.cascade.cascadeGraph import bind_field
+from app.dataModel.fields.fieldBinding import bind_field
 from app.ids.deterministicIds import state_fingerprint
 from app.ids.regionIdentity import region_uid
 

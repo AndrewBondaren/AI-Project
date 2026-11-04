@@ -801,6 +801,8 @@ flowchart TD
 | C0-7 | Static typing gate | Valid/invalid фикстуры `backend/tests/typing/error_contracts_{valid,invalid}.py` + `pyrightconfig.error-contracts.json`. `scripts/check-cascade-types.cjs` параметризуется списком пар (config, invalid fixture), а не копируется. `dataModel/fields/*.py` добавляются в include. | Повторное использование runner (§0.1.1). Каждый positive-кейс имеет negative (§7.1). |
 | C0-8 | Pydantic `errors()` → domain issue (§3.5) | В ядре — только `CheckedPath.from_pydantic_loc`. Таблица `type` → `DomainCode` и typed boundary failure для неизвестного `type`/`loc` — у owning домена (D1), на пинованной 2.14.2. | Без центральной таблицы доменных кодов (§0.1.1 запрет). TC-06, TC-07. |
 
+**C1 — ядро реализовано локально 2026-11-04 (не опубликовано):** `dataModel/fields/{fieldRef,fieldBinding,validatedFieldPath,checkedPath}.py`, generic `FieldPathError[CodeT]`, `validation/diagnostics/validatorAggregationHelper.py` (старый `core/` удалён), импорты FieldRef/bind_field/BoundField переписаны без re-export, пин `pydantic==2.14.2`, тесты `tests/errorContracts/`, typing-фикстуры `tests/typing/errorContracts/`. Отклонение от C0-3: `VariantSegment(branch: ModelIdentity)` без строкового tag. Публикация — только после D2 всех прямых потребителей (домены по списку §0.1.4).
+
 **Состав файлов `dataModel/fields/`:** `__init__.py`, `fieldRef.py`, `fieldBinding.py`, `checkedPath.py`, `validatedFieldPath.py` — 5 файлов, лимит folder-composition не превышен. **Принято владельцем 2026-11-04:** C0-1…C0-8 целиком (C0-4 — инвариантный `CurrentT` + overload по видам контейнеров; C0-6 — пин `pydantic==2.14.2` применяется в C1).
 
 ## 4. Инвентаризация мест сбора и преобразования

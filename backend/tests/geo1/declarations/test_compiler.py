@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, StrictBool
 from app.application.policy.declarations.compiler import compile_admission_policy, compile_value_policy
 from app.application.policy.policyResolver import PolicyResolver
 from app.dataModel.annotationPolicy import DefaultWhenMissing
-from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.hydrology.enums.planning.hydrologyExecutionMode import HydrologyExecutionMode as HydroMode
 from app.dataModel.hydrology.policy.hydrologyGenerationDecision import WaterPolicyReason
 from app.dataModel.policy.declarations.fieldPolicy import EnabledFor, SelectByValue, ValueCase

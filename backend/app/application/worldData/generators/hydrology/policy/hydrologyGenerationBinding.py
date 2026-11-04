@@ -7,7 +7,7 @@ from app.application.cascade.contextResolver import extend
 from app.application.policy.declarations.compiler import compile_value_policy
 from app.application.planning.service.planningService import PlanBuildControl
 from app.application.policy.policyResolver import PolicyResolver
-from app.dataModel.cascade.cascadeGraph import bind_field
+from app.dataModel.fields.fieldBinding import bind_field
 from app.dataModel.hydrology.enums.planning.hydrologyExecutionMode import HydrologyExecutionMode
 from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationScope as Scope
 from app.dataModel.hydrology.generation.generationContext import WaterGenerationContext

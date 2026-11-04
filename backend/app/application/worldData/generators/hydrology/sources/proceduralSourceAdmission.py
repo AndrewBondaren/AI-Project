@@ -8,7 +8,7 @@ from app.application.policy.policyResolver import PolicyResolver
 from app.application.worldData.generators.hydrology.policy.hydrologyGenerationBinding import bind_hydrology_generation_policy
 from app.application.worldData.generators.hydrology.policy.hydrologyPlacementBinding import bind_hydrology_placement_policy
 from app.dataModel.cascade.runtimeContext import freeze_resolved_context
-from app.dataModel.cascade.cascadeGraph import bind_field
+from app.dataModel.fields.fieldBinding import bind_field
 from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationCategory as Category, WaterGenerationScope
 from app.dataModel.hydrology.generation.generationContext import ResolvedWaterGenerationContext, WaterGenerationContext
 from app.dataModel.hydrology.generation.waterGenerationSettings import WorldHydrologyGenerationFields

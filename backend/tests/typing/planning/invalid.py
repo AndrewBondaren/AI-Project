@@ -314,7 +314,7 @@ def invalid_surface_working(working: SurfaceWorkingMaps, gx: GridX, gy: GridY) -
 
 
 from tests.typing.planning.valid.policy import OtherPolicyMode, OtherPolicyReason, PolicyDefaults, PolicyFacts, PolicyMode, PolicyReasonKind, PolicySettings
-from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.policy.objectAdmissionPolicyDefinition import EnabledGate
 from app.dataModel.policy.policyDecision import ObjectAdmissionDecision, ValueSelectionDecision
 from app.dataModel.policy.policyEnums import PolicyOperation, PolicyRuleId, PolicyStage, RulePrecedence

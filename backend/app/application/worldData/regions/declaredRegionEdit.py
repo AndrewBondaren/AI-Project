@@ -13,7 +13,7 @@ from app.application.worldData.regions.regionFacts import DeclarationFacts
 from app.application.worldData.regions.stateChange.consumer import StateChangeConsumer
 from app.application.worldData.regions.stateChange.contracts import RegionEvaluation
 from app.dataModel.terrainMasks import WorldTerrainMasks
-from app.dataModel.cascade.cascadeGraph import bind_field
+from app.dataModel.fields.fieldBinding import bind_field
 from app.dataModel.terrainMasks.worldTerrainMasks import DECLARED_REGIONS
 from app.dataModel.terrainMasks.regions.specs import REGION_NAME
 from app.dataModel.terrainMasks.regions import RegionSpecBase

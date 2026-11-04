@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, ValidationError
 from pydantic_core import InitErrorDetails
 
-from app.dataModel.cascade.cascadeGraph import bind_field
-from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.fields.fieldBinding import bind_field
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.hydrology.enums.basinKind import BasinKind
 from app.dataModel.hydrology.sources.waterDesignSource import AuthoredBasinSource, AuthoredLakeSource, CoastlineWaterSource, ProceduralSource
 from app.dataModel.planning.identity.planKey import RegionPlanScope

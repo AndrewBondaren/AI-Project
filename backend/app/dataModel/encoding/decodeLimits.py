@@ -4,8 +4,8 @@ from typing import get_origin
 
 from pydantic import BaseModel
 
-from app.dataModel.cascade.cascadeGraph import BoundField, bind_field
-from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.fields.fieldBinding import BoundField, bind_field
+from app.dataModel.fields.fieldRef import FieldRef
 
 
 @dataclass(frozen=True, init=False)

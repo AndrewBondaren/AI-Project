@@ -10,8 +10,8 @@ from typing import Annotated, Generic, TypeVar, Union, get_args, get_origin
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 
 from app.dataModel.annotationPolicy import unwrap_wire_type
-from app.dataModel.cascade.cascadeGraph import BoundField
-from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.fields.fieldBinding import BoundField
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.policy.declarations.fieldPolicy import EnabledFor, SelectByValue, ValueCase
 from app.dataModel.policy.declarations.policyDeclaration import AdmissionPolicy, PolicyDescriptor
 from app.dataModel.policy.declarations.policyIdentity import PolicyScalar

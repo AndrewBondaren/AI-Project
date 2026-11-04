@@ -8,10 +8,10 @@ the import instead of silently degrading to inherit/default
 from app.dataModel.cascade.cascadeSpec import (
     Cascade,
     CascadeDefault,
-    FieldRef,
     ChannelKind,
     DefaultPolicy,
 )
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.context.locationCascadeDefaults import LocationCascadeDefaults
 from app.dataModel.shared.ranges import EconomicTierRange

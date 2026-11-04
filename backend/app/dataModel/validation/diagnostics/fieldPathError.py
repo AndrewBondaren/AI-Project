@@ -1,11 +1,19 @@
-"""Pure issue records moved from application.jsonValidation.types."""
+"""Generic typed field issue and reference issue records.
+
+Plan: ``.cursor/plans/error-contracts-1.md`` §3.9 C0-1/C0-2. Only named
+concrete subclasses (``class XTypeError(FieldPathError[XCode])``) declared
+in the owning domain ``dataModel`` are constructible.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
+from enum import Enum, StrEnum
+from typing import Any, Generic, TypeVar
 
-from app.dataModel.validation.diagnostics.runtimeIssueContext import RuntimeIssueContext
+from pydantic import BaseModel, ConfigDict, StrictStr
+
+from app.dataModel.fields.validatedFieldPath import ValidatedFieldPath
 
 
 class ReferenceIssueReason(StrEnum):
@@ -29,11 +37,17 @@ class ReferenceIssueContext:
     selected_default: str | None = None
 
 
-@dataclass(frozen=True)
-class FieldPathError:
-    path: tuple[str | int, ...]
-    message: str
-    schema_id: str | None = None
-    code: str | None = None
-    reference: ReferenceIssueContext | None = None
-    runtime_context: RuntimeIssueContext[StrEnum, StrEnum] | None = None
+CodeT = TypeVar("CodeT", bound=Enum)
+
+
+class FieldPathError(BaseModel, Generic[CodeT]):
+    model_config = ConfigDict(frozen=True, strict=True, extra="forbid", revalidate_instances="always")
+
+    code: CodeT
+    path: ValidatedFieldPath
+    message: StrictStr
+
+    def model_post_init(self, context: Any, /) -> None:
+        metadata = type(self).__pydantic_generic_metadata__
+        if type(self) is FieldPathError or metadata["origin"] is not None or metadata["parameters"]:
+            raise TypeError("FieldPathError requires a named concrete domain subclass")
