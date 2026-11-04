@@ -3,7 +3,7 @@ from dataclasses import replace
 from unittest import TestCase
 from unittest.mock import patch
 
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, ValidationError
 
 from app.application.planning.service.planningService import PlanBuildFailure
 from app.application.policy.policyResolver import PolicyResolver
@@ -80,6 +80,16 @@ class CoastlineSourceAdapterTests(TestCase):
                     field_policy=value.field_policy.model_copy(update={"topology": topology}))
         prefix = ("water_source", value.source.location_uid)
         with patch.object(CoastlineConstraintPreparer, "prepare_native", side_effect=AssertionError("geometry")):
+            with self.assertRaises(PlanBuildFailure) as joined:
+                CoastlineWaterSourceAdapter().prepare_native(**(args | {
+                    "budget": value.budget.model_copy(update={"source_uid": "other"}),
+                    "region_coverage": value.region_coverage.model_copy(update={"region_uid": "other"}),
+                    "expected_window": window.ref.model_copy(update={"output_fingerprint": "0" * 32}),
+                    "metadata": value.metadata.model_copy(update={"source_kind": WaterDesignSourceKind.LAKE})}))
+            self.assertEqual([(i.path, i.code) for i in joined.exception.issues],
+                             [(prefix + path, "WATER_DESIGN_INVALID_PREPARATION_INPUT") for path in (
+                                 ("expected_window",), ("metadata", "source_kind"), ("budget", "source_uid"),
+                                 ("region_coverage", "region_uid"))])
             with self.assertRaises(PlanBuildFailure) as caught:
                 CoastlineWaterSourceAdapter().prepare_native(**(args | {
                     "metadata": value.metadata.model_copy(update={"default_depth": 0}),
@@ -112,6 +122,17 @@ class CoastlineSourceAdapterTests(TestCase):
             self.assertEqual(value.geometry_request.model_dump_json(),before)
             adapter = TypeAdapter(CoastlineWaterDesignInput)
             self.assertEqual(adapter.validate_json(adapter.dump_json(result)),result)
+
+    def test_design_model_reports_independent_semantic_locations(self):
+        model = prepare(capture())
+        invalid = model.model_copy(update={
+            "budget": model.budget.model_copy(update={"source_uid": "other"}),
+            "region_coverage": model.region_coverage.model_copy(update={"region_uid": "other"}),
+        })
+        with self.assertRaises(ValidationError) as caught:
+            type(model).model_validate(invalid)
+        self.assertEqual([detail["loc"] for detail in caught.exception.errors()],
+                         [("budget", "source_uid"), ("region_coverage", "region_uid")])
 
     def test_declared_only_closed_ring_preserves_authored_geometry(self):
         result = prepare(capture(strategy=Strategy.AUTHORED_REGION,closed=True,auto=False))

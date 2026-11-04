@@ -114,40 +114,45 @@ class CoastlineWaterSourceAdapter:
             field_policy: WaterFieldRecipe) -> NativeCoastlineStrategyInput:
         if not isinstance(source, DeclaredCoastline) or not isinstance(geometry_request, AuthoredWaterGeometryRequest):
             raise TypeError("native coastline join requires a typed source and fine geometry request")
+        uid = source.location_uid
+        code = WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value
+        errors = ValidatorAggregationHelper()
+        with _validation_path(uid, "geometry_request"):
+            request = AuthoredWaterGeometryRequest.model_validate(geometry_request, strict=True)
+        if request.pre_hydrology.ref != expected_window:
+            errors.add(FieldPathError(("water_source", uid, "expected_window"),
+                "coastline request must match the expected fine window revision", code=code))
+
+        with _validation_path(uid, "source"):
+            wrapped = CoastlineWaterSource(value=source)
+        admission_paths = set()
         try:
-            with _validation_path(source.location_uid, "geometry_request"):
-                request = AuthoredWaterGeometryRequest.model_validate(geometry_request, strict=True)
-            if request.pre_hydrology.ref != expected_window:
-                raise ValueError("coastline request must match the expected fine window revision")
-            with _validation_path(source.location_uid, "source"):
-                wrapped = CoastlineWaterSource(value=source)
             mode = _ready_mode(source, request, context, admission, generation, metadata)
             if mode is not HydrologyExecutionMode.AUTORESOLVE:
-                raise ValueError("native coastline requires ready AUTORESOLVE before preparation")
-            with _validation_path(source.location_uid, "field_policy"):
-                recipe = _RECIPE.validate_python(field_policy, strict=True)
-            errors = ValidatorAggregationHelper()
+                errors.add(FieldPathError(("water_source", uid, "generation", "behavior"),
+                    "native coastline requires ready AUTORESOLVE before preparation", code=code))
+        except PlanBuildFailure as failure:
+            for issue in failure.issues:
+                errors.add(issue)
+                admission_paths.add(issue.path)
 
-            def check_field[T](select: Callable[[WaterFieldRecipe], T], expected: T, message: str) -> None:
-                if select(recipe) != expected:
-                    field = bind_field(FieldRef(lambda: type(recipe), select)).field
-                    errors.add(FieldPathError(("water_source", source.location_uid, "field_policy", field),
-                        message, code=WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value))
-
-            check_field(lambda r: r.strategy, context.strategy, "recipe must match the admitted strategy")
-            check_field(lambda r: r.seed_root, request.seed_root, "recipe must match the captured seed")
-            check_field(lambda r: r.topology, request.topology, "recipe must use the captured fine topology")
+        try:
+            captured = NativeCoastlineStrategyContext(strategy=context.strategy, source=wrapped, metadata=metadata,
+                context=context, region=region, budget=budget, seed_root=request.seed_root, topology=request.topology,
+                grid=request.grid, pre_hydrology=request.pre_hydrology, region_coverage=region_coverage,
+                field_policy=field_policy, z_min=request.z_min)
+        except ValidationError as error:
+            for detail in error.errors(include_input=False, include_context=False, include_url=False):
+                path = ("water_source", uid, *detail["loc"])
+                if path not in admission_paths:
+                    errors.add(FieldPathError(path, detail["msg"], code=code))
             errors.raise_if_any(PlanBuildFailure)
-            with _validation_path(source.location_uid):
-                captured = NativeCoastlineStrategyContext(strategy=context.strategy, source=wrapped, metadata=metadata,
-                    context=context, region=region, budget=budget, seed_root=request.seed_root, topology=request.topology,
-                    grid=request.grid, pre_hydrology=request.pre_hydrology, region_coverage=region_coverage,
-                    field_policy=recipe, z_min=request.z_min)
-                constraints = CoastlineConstraintPreparer().prepare_native(request)
-                return NativeCoastlineStrategyInput.model_validate(dict(captured, constraints=constraints), strict=True)
-        except ValueError as error:
-            raise PlanBuildFailure((FieldPathError(("water_source", source.location_uid), str(error),
-                code=WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value),)) from error
+            raise
+
+        errors.raise_if_any(PlanBuildFailure)
+        with _validation_path(uid):
+            constraints = CoastlineConstraintPreparer().prepare_native(request)
+            return NativeCoastlineStrategyInput.model_validate(dict(captured, constraints=constraints), strict=True)
 
     # GEO-LEGACY-22: Replace the legacy coastline request.
     def prepare_source(

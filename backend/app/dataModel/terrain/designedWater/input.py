@@ -5,7 +5,6 @@ from typing_extensions import TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
-from app.dataModel.hydrology.enums.basinKind import BasinKind
 from app.dataModel.hydrology.generation.generationContext import ResolvedWaterGenerationContext
 from app.dataModel.hydrology.sources.waterDesignSource import (
     AuthoredBasinSource, AuthoredLakeSource, CoastlineWaterSource, ProceduralSource, WaterDesignSource,
@@ -14,7 +13,6 @@ from app.dataModel.hydrology.sources.waterSourceMetadata import WaterSourceMetad
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
 from app.dataModel.planning.identity.planRef import PlanRef
-from app.dataModel.planning.identity.planKey import RegionPlanScope
 from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
 from app.dataModel.spatial.grid.coordinateTypes import FineZ
 from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
@@ -25,6 +23,9 @@ from app.dataModel.terrain.designedWater.draft import (
 from app.dataModel.terrain.designedWater.fields.field import NoiseRecipe, PlateRecipe, PlateNoiseRecipe, WaterFieldRecipe
 from app.dataModel.terrain.designedWater.geometry.waterDesignConstraints import FineWaterDesignConstraints, WaterDesignConstraints
 from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometry, AuthoredWaterSource
+from app.dataModel.terrain.designedWater.inputValidation import (
+    InputIssues, check_constraints, check_native_recipe, check_region, check_source, check_window,
+)
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind as Strategy
 from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
 from app.dataModel.terrain.sampling.fineSurfaceWindow import FineSurfaceWindow
@@ -82,81 +83,42 @@ class _WaterDesignContext(BaseModel, Generic[SourceT, SurfaceT, ConstraintsT], f
     def revalidate_topology(cls, value: object) -> object:
         return value.model_dump(warnings=False) if isinstance(value, WorldTopology) else value
 
-    @model_validator(mode="after")
-    def coherent_inputs(self) -> Self:
-        source, metadata = self.source, self.metadata
-        if not isinstance(source, (AuthoredBasinSource, AuthoredLakeSource, CoastlineWaterSource, ProceduralSource)):
-            raise ValueError("water input requires a supported typed water source")
+    def _check_strategy_source(self, issues: InputIssues) -> None:
+        source = self.source
         # Runtime validation remains authoritative even if callers explicitly
         # parameterize a generic with a source outside its static bound.
         if isinstance(self, AuthoredWaterDesignInput):
             if not isinstance(source, (AuthoredBasinSource, AuthoredLakeSource, CoastlineWaterSource)):
-                raise ValueError("authored strategy requires an authored water source")
+                issues.report(self, lambda v: v.source, "authored strategy requires an authored water source")
+            if self.constraints is not None:
+                issues.report(self, lambda v: v.constraints, "authored input already carries its geometry")
         elif isinstance(self, (NoiseWaterDesignInput, PlateWaterDesignInput, PlateNoiseWaterDesignInput)):
             if not isinstance(source, (ProceduralSource, CoastlineWaterSource)):
-                raise ValueError("procedural strategy requires a procedural or coastline water source")
-        constraints = self.constraints
-        if isinstance(self, AuthoredWaterDesignInput) and constraints is not None:
-            raise ValueError("authored input already carries its geometry")
-        if isinstance(self, (NoiseWaterDesignInput, PlateWaterDesignInput, PlateNoiseWaterDesignInput)) and isinstance(source, CoastlineWaterSource) and constraints is None:
-            raise ValueError("procedural coastline requires captured terrain constraints")
-        if constraints is not None:
-            if constraints.source != source or constraints.pre_hydrology_ref != self.pre_hydrology_ref or constraints.grid != self.grid:
-                raise ValueError("constraints must match full source, terrain revision and grid")
-            if any(self.topology.canonicalize(*cell) != cell for cell in constraints.allowed_cells):
-                raise ValueError("constraints require canonical coordinates")
-        value = source.value
-        uid = source.value.source_uid if isinstance(source, ProceduralSource) else source.value.location_uid
-        if uid != metadata.source_uid or source.kind != metadata.source_kind or value.liquid != metadata.liquid:
-            raise ValueError("source and metadata identity/liquid mismatch")
-        kind = BasinKind.LAKE if isinstance(source, AuthoredLakeSource) else source.value.kind
-        if kind != metadata.body_kind:
-            raise ValueError("source and metadata body kind mismatch")
-        if isinstance(source, (AuthoredBasinSource, ProceduralSource)):
-            if source.value.z_water_level is not None and source.value.z_water_level != metadata.level:
-                raise ValueError("metadata must preserve explicit source water level")
-        if self.context.strategy != self.strategy:
-            raise ValueError("resolved context and effective strategy mismatch")
-        if self.budget.source_uid != uid or self.budget.generation_region_uid != self.region.region_uid:
-            raise ValueError("allocation identity mismatch")
-        if isinstance(source, ProceduralSource) and source.value.generation_region_uid != self.region.region_uid:
-            raise ValueError("procedural region binding mismatch")
-        if self.region_coverage.region_uid != self.region.region_uid:
-            raise ValueError("coverage identity mismatch")
-        if sum(s.x1 - s.x0 for s in self.region_coverage.spans) != self.region.generation_area_fine2:
-            raise ValueError("coverage area mismatch")
-        if self.budget.requested_fine2 > self.region.generation_area_fine2:
-            raise ValueError("request exceeds generation area")
-        surface = self.pre_hydrology.payload
-        fine_bounds = (self.topology if isinstance(surface, FineSurfaceWindow)
-                       else fine_topology(self.topology, self.grid.fine_span)).bounds
-        if any(not fine_bounds.contains(s.x0, s.y) or not fine_bounds.contains(s.x1 - 1, s.y)
-               for s in self.region_coverage.spans):
-            raise ValueError("coverage must use canonical world fine coordinates")
-        bounds = self.topology.bounds
-        if isinstance(surface, FineSurfaceWindow):
-            if surface.topology != self.topology or len(surface.surface_z) != bounds.width * bounds.height:
-                raise ValueError("native design requires the complete fine window")
-            if any(d.ref.key.scope != self.pre_hydrology_ref.key.scope for d in self.pre_hydrology.dependencies):
-                raise ValueError("native window dependencies must share its scope")
-        else:
-            bbox = surface.bbox
-            if (bbox.x_min, bbox.x_max, bbox.y_min, bbox.y_max) != (
-                    bounds.x_min, bounds.x_max, bounds.y_min, bounds.y_max):
-                raise ValueError("pre-hydrology surface must match the coarse topology")
-        key = self.pre_hydrology_ref.key
-        if isinstance(key.scope, RegionPlanScope) and key.scope.region_uid != self.region.region_uid:
-            raise ValueError("pre-hydrology ref belongs to another region")
-        if any(d.ref.key.world_uid != key.world_uid for d in self.pre_hydrology.dependencies):
-            raise ValueError("pre-hydrology dependencies belong to another world")
+                issues.report(self, lambda v: v.source, "procedural strategy requires a procedural or coastline water source")
+            if isinstance(source, CoastlineWaterSource) and self.constraints is None:
+                issues.report(self, lambda v: v.constraints, "procedural coastline requires captured terrain constraints")
+
+    @model_validator(mode="after")
+    def coherent_inputs(self) -> Self:
+        issues = InputIssues()
+        self._check_strategy_source(issues)
+        check_constraints(self, issues)
+        check_source(self, issues)
+        check_region(self, issues)
+        check_window(self, issues)
         if isinstance(self, (NoiseWaterDesignInput, PlateWaterDesignInput, PlateNoiseWaterDesignInput)):
-            if self.field_policy.seed_root != self.seed_root or self.field_policy.topology != fine_topology(self.topology, self.grid.fine_span):
-                raise ValueError("recipe must match seed and world fine topology")
+            if self.field_policy.seed_root != self.seed_root:
+                issues.report(self.field_policy, lambda p: p.seed_root, "recipe seed mismatch", "field_policy")
+            if self.field_policy.topology != fine_topology(self.topology, self.grid.fine_span):
+                issues.report(self.field_policy, lambda p: p.topology, "recipe topology mismatch", "field_policy")
+        if isinstance(self, NativeCoastlineStrategyContext):
+            check_native_recipe(self, issues)
+        issues.raise_if_any(type(self).__name__)
         validate_immutable(self)
         return self
 
 
-class WaterDesignInput(_WaterDesignContext[SourceT, TerrainPlan, WaterDesignConstraints], Generic[SourceT]):
+class WaterDesignInput(_WaterDesignContext[SourceT, TerrainPlan, WaterDesignConstraints], Generic[SourceT], frozen=True):
     def validate_draft(self, draft: WaterDesignDraft) -> WaterDesignDraft:
         """Check a returned draft against this input without preparing any candidates."""
         draft = _DRAFT.validate_python(draft, strict=True)
@@ -191,22 +153,13 @@ class WaterDesignInput(_WaterDesignContext[SourceT, TerrainPlan, WaterDesignCons
         return draft
 
 
-class NativeCoastlineStrategyContext(_WaterDesignContext[CoastlineWaterSource, FineSurfaceWindow, FineWaterDesignConstraints]):
+class NativeCoastlineStrategyContext(_WaterDesignContext[CoastlineWaterSource, FineSurfaceWindow, FineWaterDesignConstraints], frozen=True):
     field_policy: WaterFieldRecipe
     z_min: Annotated[FineZ, Field(strict=True)]
 
-    @model_validator(mode="after")
-    def bound_recipe(self) -> Self:
-        if (not self.context.autoresolve or self.field_policy.strategy != self.strategy
-                or self.field_policy.topology != self.topology or self.field_policy.seed_root != self.seed_root):
-            raise ValueError("native coastline requires its admitted procedural recipe in the fine frame")
-        if self.metadata.level <= self.z_min or any(z < self.z_min for _, z in self.pre_hydrology.payload.surface_z):
-            raise ValueError("native coastline floor requires the captured lower bound")
-        return self
 
-
-class NativeCoastlineStrategyInput(NativeCoastlineStrategyContext):
-    constraints: FineWaterDesignConstraints
+class NativeCoastlineStrategyInput(NativeCoastlineStrategyContext, frozen=True):
+    constraints: FineWaterDesignConstraints = Field(...)
 
 
 class AuthoredWaterDesignInput(WaterDesignInput[AuthoredSourceT], Generic[AuthoredSourceT], frozen=True):
