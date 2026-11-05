@@ -148,14 +148,21 @@ class SourceConsumerTests(unittest.TestCase):
     def test_preflight_retains_errors_from_independent_consumer_context(self):
         from app.application.jsonValidation.bundle.preflight import validate_rows
         from app.application.jsonValidation.resolve import reject_unresolved
-        from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+        from app.dataModel.validation.importIssues.jsonValidationCode import JsonValidationCode
+        from app.dataModel.validation.importIssues.wireShapeIssue import WireShapeIssue
+
+        independent = ResolveContext(validate_only=True).child("field")
+        issue = WireShapeIssue(location=independent.location, message="invalid",
+                               code=JsonValidationCode.DOMAIN_RANGE)
+
         def prepare(row):
-            reject_unresolved(ResolveContext(validate_only=True),
-                              [FieldPathError(("field",), "invalid", code="TEST")])
+            reject_unresolved(independent, [issue])
+
         ctx = ResolveContext(validate_only=True)
-        with self.assertRaises(UnresolvedModelError):
+        with self.assertRaises(UnresolvedModelError) as caught:
             validate_rows([{}], prepare, ctx=ctx)
-        self.assertEqual(len(ctx.errors), 1)
+        self.assertEqual(ctx.errors, [issue])
+        self.assertEqual(caught.exception.issues, [issue])
 
     def test_object_relief_policy_only_none_means_absent(self):
         self.assertIsNone(parse_object_relief_pick_policy(None))

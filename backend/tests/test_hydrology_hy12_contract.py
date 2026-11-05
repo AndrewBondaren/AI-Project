@@ -6,6 +6,7 @@ import unittest
 
 from pydantic import ValidationError
 
+from app.application.jsonValidation.types import wire_loc
 from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.types import ImportValidationError
 from app.application.worldData.generators.hydrology.basins.seaLevelPolicy import is_land, resolve_z_sea
@@ -152,7 +153,7 @@ class BasinContractTests(unittest.TestCase):
         duplicates = [e for e in failure.exception.errors
                       if e.code == "WATER_IDENTITY_DUPLICATE"]
         self.assertEqual(len(duplicates), 2)
-        self.assertEqual({error.path[:2] for error in duplicates},
+        self.assertEqual({wire_loc(error)[:2] for error in duplicates},
                          {("hydrology", "declared_basins"), ("hydrology", "declared_coastlines")})
         self.assertTrue(all("loc-geo-ocean-west-004" in error.message for error in duplicates))
         self.assertTrue(all("declared_basins" in error.message and "declared_coastlines" in error.message
@@ -171,7 +172,7 @@ class BasinContractTests(unittest.TestCase):
         }}
         with self.assertRaises(ImportValidationError) as failure:
             normalize_world(raw)
-        paths = {error.path for error in failure.exception.errors
+        paths = {wire_loc(error) for error in failure.exception.errors
                  if error.code == "WATER_IDENTITY_DUPLICATE"}
         self.assertEqual(paths, {("hydrology", "declared_basins", 0),
                                  ("hydrology", "declared_lakes", 0)})

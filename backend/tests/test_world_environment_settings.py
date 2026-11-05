@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 from pydantic import ValidationError
 
+from app.application.jsonValidation.types import wire_loc
 from app.application.jsonValidation.index.validate import validate_ref_w
 from app.application.jsonValidation.worldRow import world_environment
 from app.application.jsonValidation.worldSlices import slice_column_key
@@ -68,7 +69,7 @@ class WorldEnvironmentSettingsTest(unittest.TestCase):
         issues = validate_ref_w(world_wire, partial=False)
         self.assertTrue(any(
             issue.code == "REF_W_UNKNOWN"
-            and issue.path == ("world_environment", "atmosphere", "composition", 0, "system_material")
+            and wire_loc(issue) == ("world_environment", "atmosphere", "composition", 0, "system_material")
             for issue in issues
         ), issues)
         world_wire["world_environment"]["atmosphere"] = _mixture(("air", 1.0))

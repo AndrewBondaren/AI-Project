@@ -1,14 +1,15 @@
-"""``connection_nodes`` / ``connection_edges`` bundle import rows — JV-0b."""
+"""``connection_nodes`` / ``connection_edges`` bundle import rows вЂ” JV-0b."""
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.validation.importIssues.wireLocation import WireLocation
-from app.application.jsonValidation.resolve import ResolveContext, ResolveMode, resolve_model
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.dataModel.validation.importIssues.jsonValidationCode import JsonValidationCode
+from app.dataModel.validation.importIssues.wireShapeIssue import WireShapeIssue
+from app.application.jsonValidation.resolve import ResolveContext, ResolveMode, _field_issue, report_issues, resolve_result
 from app.application.jsonValidation.types import ImportValidationError
 from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictEnumOnWire, StrictOnWire
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
@@ -20,7 +21,7 @@ from app.dataModel.worldBundle.bundleSections import BundleSection
 
 
 class ConnectionNodeImportRow(BaseModel):
-    """Wire row for ``connection_nodes`` — CONN-1 keeps ``node_type`` key."""
+    """Wire row for ``connection_nodes`` вЂ” CONN-1 keeps ``node_type`` key."""
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
@@ -41,7 +42,7 @@ class ConnectionNodeImportRow(BaseModel):
 
 
 class ConnectionEdgeImportRow(BaseModel):
-    """Wire row for ``connection_edges`` — ``connection_type`` is N1-W (REF-W-CONN)."""
+    """Wire row for ``connection_edges`` вЂ” ``connection_type`` is N1-W (REF-W-CONN)."""
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
@@ -91,46 +92,33 @@ def _normalize_rows(
     entry_cls: type[BaseModel],
     schema_id: str,
     section: str,
+    allowed: set[str] | None = None,
     ctx: ResolveContext,
 ) -> list[dict[str, Any]]:
-    if not rows:
-        return []
+    section_ctx = replace(ctx.child(section), schema_id=schema_id)
     if not isinstance(rows, list):
-        ctx.errors.append(FieldPathError(
-            path=(section,),
-            message="expected list",
-            schema_id=schema_id,
-            code="EXPECTED_LIST",
-        ))
+        report_issues(ctx, [WireShapeIssue(location=section_ctx.location, message="expected list",
+                                           code=JsonValidationCode.EXPECTED_LIST)])
         return []
 
     out: list[dict[str, Any]] = []
     for index, item in enumerate(rows):
+        row_ctx = section_ctx.child(index)
         if not isinstance(item, dict):
-            ctx.errors.append(FieldPathError(
-                path=(section, index),
-                message="expected object",
-                schema_id=schema_id,
-                code="EXPECTED_OBJECT",
-            ))
+            report_issues(ctx, [WireShapeIssue(location=row_ctx.location, message="expected object",
+                                               code=JsonValidationCode.EXPECTED_OBJECT)])
             continue
-        before_errors = len(ctx.errors)
-        row_ctx = ResolveContext(
-            mode=ctx.mode,
-            validate_only=ctx.validate_only,
-            partial=ctx.partial,
-            location=WireLocation(parts=(section, index)),
-            report=ctx.report,
-            schema_id=schema_id,
-        )
-        resolved = resolve_model(
-            entry_cls,
-            item,
-            label=f"{section}[{index}]",
-            ctx=row_ctx,
-        )
-        if len(ctx.errors) > before_errors:
+        resolved = resolve_result(entry_cls, item, ctx=row_ctx).value
+        if resolved is None:
             continue
+        if isinstance(resolved, ConnectionEdgeImportRow) and allowed is not None:
+            if resolved.connection_type not in allowed:
+                report_issues(ctx, [_field_issue(
+                    row_ctx, entry_cls, ("connection_type",),
+                    f"unknown REF-W-CONN target: {resolved.connection_type!r}",
+                    JsonValidationCode.REF_W_UNKNOWN,
+                )])
+                continue
         out.append(resolved.model_dump(mode="json"))
     return out
 
@@ -155,56 +143,10 @@ def normalize_connection_edges(
     world_wire: dict[str, Any],
     ctx: ResolveContext,
 ) -> list[dict[str, Any]]:
-    allowed = _allowed_connection_types(world_wire)
-    if not rows:
-        return []
-    if not isinstance(rows, list):
-        ctx.errors.append(FieldPathError(
-            path=(BundleSection.CONNECTION_EDGES,),
-            message="expected list",
-            schema_id=ConnectionEdgeImportRow.SCHEMA_ID,
-            code="EXPECTED_LIST",
-        ))
-        return []
-
-    out: list[dict[str, Any]] = []
-    for index, item in enumerate(rows):
-        if not isinstance(item, dict):
-            ctx.errors.append(FieldPathError(
-                path=(BundleSection.CONNECTION_EDGES, index),
-                message="expected object",
-                schema_id=ConnectionEdgeImportRow.SCHEMA_ID,
-                code="EXPECTED_OBJECT",
-            ))
-            continue
-        before_errors = len(ctx.errors)
-        row_ctx = ResolveContext(
-            mode=ctx.mode,
-            validate_only=ctx.validate_only,
-            partial=ctx.partial,
-            location=WireLocation(parts=(BundleSection.CONNECTION_EDGES, index)),
-            report=ctx.report,
-            schema_id=ConnectionEdgeImportRow.SCHEMA_ID,
-        )
-        resolved = resolve_model(
-            ConnectionEdgeImportRow,
-            item,
-            label=f"{BundleSection.CONNECTION_EDGES}[{index}]",
-            ctx=row_ctx,
-        )
-        if len(ctx.errors) > before_errors:
-            continue
-        conn_type = resolved.connection_type
-        if conn_type not in allowed:
-            ctx.errors.append(FieldPathError(
-                path=(BundleSection.CONNECTION_EDGES, index, "connection_type"),
-                message=f"unknown REF-W-CONN target: {conn_type!r}",
-                schema_id=ConnectionEdgeImportRow.SCHEMA_ID,
-                code="REF_W_UNKNOWN",
-            ))
-            continue
-        out.append(resolved.model_dump(mode="json"))
-    return out
+    return _normalize_rows(
+        rows, entry_cls=ConnectionEdgeImportRow, schema_id=ConnectionEdgeImportRow.SCHEMA_ID,
+        section=BundleSection.CONNECTION_EDGES, allowed=_allowed_connection_types(world_wire), ctx=ctx,
+    )
 
 
 def normalize_bundle_connections(data: dict[str, Any], *, ctx: ResolveContext | None = None) -> dict[str, Any]:

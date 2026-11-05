@@ -1,4 +1,4 @@
-"""REF-W semantic checks on normalized ``worlds`` wire — import only."""
+"""REF-W semantic checks on normalized ``worlds`` wire вЂ” import only."""
 
 from __future__ import annotations
 
@@ -6,10 +6,15 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from pydantic import BaseModel
+
 from app.application.jsonValidation.index.build import build_world_registry_index
 from app.application.jsonValidation.index.refKinds import RefKind
 from app.application.jsonValidation.index.worldRegistryIndex import WorldRegistryIndex
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.application.jsonValidation.resolve import ResolveContext, _field_issue
+from app.application.jsonValidation.types import ImportIssue
+from app.dataModel.validation.importIssues.jsonValidationCode import JsonValidationCode
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.dataModel.climate.worldClimateScalars import WorldClimateScalars
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.dataModel.materials.worldMaterialRegistry import WorldMaterialRegistry
@@ -21,36 +26,30 @@ from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
 @dataclass(frozen=True)
 class RefCheck:
     ref_kind: RefKind
-    schema_id: str
-    path: tuple[str, ...]
+    model: type[BaseModel]
+    path: tuple[str | int, ...]
     value_getter: Callable[[dict[str, Any]], str | None]
     registry_present_key: str | None = None
 
 
-def _ref_error(
-    *,
-    schema_id: str,
-    path: tuple[str, ...],
-    ref_kind: RefKind,
-    value: str,
-) -> FieldPathError:
-    return FieldPathError(
-        path=path,
-        message=f"unknown {ref_kind.value} target: {value!r}",
-        schema_id=schema_id,
-        code="REF_W_UNKNOWN",
-    )
+def _index_issue(*, model: type[BaseModel], path: tuple[str | int, ...],
+                 message: str, code: JsonValidationCode) -> ImportIssue:
+    # Climate scalars live directly on the world row. Other slices are nested
+    # under their column name, outside the validated POJO.
+    offset = 0 if model is WorldClimateScalars else 1
+    ctx = ResolveContext(location=WireLocation(parts=path[:offset]), schema_id=getattr(model, "SCHEMA_ID"))
+    return _field_issue(ctx, model, path[offset:], message, code)
 
 
 def _check_ref(
     index: WorldRegistryIndex,
     *,
-    schema_id: str,
-    path: tuple[str, ...],
+    model: type[BaseModel],
+    path: tuple[str | int, ...],
     ref_kind: RefKind,
     value: str | None,
     registry_available: bool,
-) -> FieldPathError | None:
+) -> ImportIssue | None:
     if value is None or value == "":
         return None
     if not registry_available:
@@ -60,7 +59,8 @@ def _check_ref(
         return None
     if value in allowed:
         return None
-    return _ref_error(schema_id=schema_id, path=path, ref_kind=ref_kind, value=value)
+    return _index_issue(model=model, path=path, message=f"unknown {ref_kind.value} target: {value!r}",
+                        code=JsonValidationCode.REF_W_UNKNOWN)
 
 
 def _climate_scalar_checks(normalized: dict[str, Any], partial: bool) -> list[RefCheck]:
@@ -69,7 +69,7 @@ def _climate_scalar_checks(normalized: dict[str, Any], partial: bool) -> list[Re
         checks.append(
             RefCheck(
                 ref_kind=RefKind.LIQUID,
-                schema_id=WorldClimateScalars.SCHEMA_ID,
+                model=WorldClimateScalars,
                 path=("precipitation_liquid",),
                 value_getter=lambda data: data.get("precipitation_liquid"),
                 registry_present_key="material_registry",
@@ -79,7 +79,7 @@ def _climate_scalar_checks(normalized: dict[str, Any], partial: bool) -> list[Re
         checks.append(
             RefCheck(
                 ref_kind=RefKind.CLIMATE,
-                schema_id=WorldClimateScalars.SCHEMA_ID,
+                model=WorldClimateScalars,
                 path=("default_climate_zone",),
                 value_getter=lambda data: data.get("default_climate_zone"),
                 registry_present_key="climate_zone_registry",
@@ -98,7 +98,7 @@ def _atmosphere_checks(normalized: dict[str, Any], partial: bool) -> list[RefChe
     return [
         RefCheck(
             ref_kind=RefKind.GAS,
-            schema_id=WorldEnvironmentSettings.SCHEMA_ID,
+            model=WorldEnvironmentSettings,
             path=("world_environment", "atmosphere", "composition", index, "system_material"),
             value_getter=lambda _data, gas=component: gas.get("system_material"),
             registry_present_key="material_registry",
@@ -117,12 +117,12 @@ def _landcover_checks(normalized: dict[str, Any]) -> list[RefCheck]:
         if "system_terrain" in override:
             values.append((("terrain_masks", "default_landcover", "terrain_policies", key, "system_terrain"),
                            override["system_terrain"]))
-    return [RefCheck(ref_kind=RefKind.TERRAIN, schema_id=WorldTerrainMasks.SCHEMA_ID,
+    return [RefCheck(ref_kind=RefKind.TERRAIN, model=WorldTerrainMasks,
         path=path, value_getter=lambda data, target=value: target,
         registry_present_key="terrain_registry") for path, value in values]
 
 
-def _nested_dict(root: dict[str, Any], path: tuple[str, ...]) -> dict[str, Any] | None:
+def _nested_dict(root: dict[str, Any], path: tuple[str | int, ...]) -> dict[str, Any] | None:
     cur: Any = root
     for key in path:
         if not isinstance(cur, dict):
@@ -150,14 +150,14 @@ def _shore_ref_checks(
     return [
         RefCheck(
             ref_kind=RefKind.TERRAIN,
-            schema_id=WorldHydrology.SCHEMA_ID,
+            model=WorldHydrology,
             path=prefix + ("system_terrain",),
             value_getter=lambda _data, blob=shore: blob.get("system_terrain"),
             registry_present_key="terrain_registry",
         ),
         RefCheck(
             ref_kind=RefKind.MATERIAL,
-            schema_id=WorldHydrology.SCHEMA_ID,
+            model=WorldHydrology,
             path=prefix + ("system_material",),
             value_getter=lambda _data, blob=shore: blob.get("system_material"),
             registry_present_key="material_registry",
@@ -181,7 +181,7 @@ def _hydrology_checks(normalized: dict[str, Any], partial: bool) -> list[RefChec
         for index, entry in enumerate(hydrology.get(category, [])):
             checks.append(RefCheck(
                 ref_kind=RefKind.LIQUID,
-                schema_id=WorldHydrology.SCHEMA_ID,
+                model=WorldHydrology,
                 path=("hydrology", category, index, "liquid"),
                 value_getter=lambda _data, row=entry: row.get("liquid"),
                 registry_present_key="material_registry",
@@ -189,7 +189,7 @@ def _hydrology_checks(normalized: dict[str, Any], partial: bool) -> list[RefChec
     return checks
 
 
-def _shore_class_errors(normalized: dict[str, Any], partial: bool) -> list[FieldPathError]:
+def _shore_class_errors(normalized: dict[str, Any], partial: bool) -> list[ImportIssue]:
     """Category ``.shore.system_terrain`` must be an R34 shore class (not legacy ``shore``)."""
     if partial and "hydrology" not in normalized:
         return []
@@ -197,7 +197,7 @@ def _shore_class_errors(normalized: dict[str, Any], partial: bool) -> list[Field
     if not isinstance(hydrology, dict):
         return []
 
-    errors: list[FieldPathError] = []
+    errors: list[ImportIssue] = []
     for path in _CATEGORY_SHORE_PATHS:
         shore = _nested_dict(hydrology, path)
         if shore is None:
@@ -212,14 +212,14 @@ def _shore_class_errors(normalized: dict[str, Any], partial: bool) -> list[Field
             terrain = None
         if terrain is None or not terrain.is_shore_class():
             errors.append(
-                FieldPathError(
+                _index_issue(
                     path=("hydrology",) + path + ("system_terrain",),
                     message=(
                         "shore class must be shore_river / shore_mountain_river "
                         f"/ shore_lake / shore_sea, got {key!r}"
                     ),
-                    schema_id=WorldHydrology.SCHEMA_ID,
-                    code="SHORE_CLASS_UNKNOWN",
+                    model=WorldHydrology,
+                    code=JsonValidationCode.SHORE_CLASS_UNKNOWN,
                 ),
             )
     return errors
@@ -228,7 +228,7 @@ def _shore_class_errors(normalized: dict[str, Any], partial: bool) -> list[Field
 _DECLARED_WATER_COLLECTIONS = ("declared_basins", "declared_coastlines", "declared_lakes")
 
 
-def _declared_water_identity_errors(normalized: dict[str, Any], partial: bool) -> list[FieldPathError]:
+def _declared_water_identity_errors(normalized: dict[str, Any], partial: bool) -> list[ImportIssue]:
     """``location_uid`` must be unique across declared water sources; runtime merges it."""
     if partial and "hydrology" not in normalized:
         return []
@@ -244,18 +244,18 @@ def _declared_water_identity_errors(normalized: dict[str, Any], partial: bool) -
             uid = entry.get("location_uid")
             if isinstance(uid, str) and uid:
                 seen.setdefault(uid, []).append((category, index))
-    errors: list[FieldPathError] = []
+    errors: list[ImportIssue] = []
     for uid, refs in seen.items():
         if len(refs) < 2:
             continue
         declared_at = ", ".join(f"{category}[{index}]" for category, index in refs)
         for category, index in refs:
             errors.append(
-                FieldPathError(
+                _index_issue(
                     path=("hydrology", category, index),
                     message=f"duplicate declared water location_uid {uid!r}: declared at {declared_at}",
-                    schema_id=WorldHydrology.SCHEMA_ID,
-                    code="WATER_IDENTITY_DUPLICATE",
+                    model=WorldHydrology,
+                    code=JsonValidationCode.WATER_IDENTITY_DUPLICATE,
                 ),
             )
     return errors
@@ -279,7 +279,7 @@ def _material_tier_checks(normalized: dict[str, Any], partial: bool) -> list[Ref
         checks.append(
             RefCheck(
                 ref_kind=RefKind.ECON_TIER,
-                schema_id=WorldMaterialRegistry.SCHEMA_ID,
+                model=WorldMaterialRegistry,
                 path=("material_registry", index, "economic_tier"),
                 value_getter=lambda _data, tier=tier: tier,
                 registry_present_key="economic_tier_registry",
@@ -292,7 +292,7 @@ def validate_ref_w(
     normalized: dict[str, Any],
     *,
     partial: bool,
-) -> list[FieldPathError]:
+) -> list[ImportIssue]:
     """Run REF-W rules after ``merge_facade_slices`` (import / CRUD write)."""
     index = build_world_registry_index(normalized, partial=partial)
     checks = [
@@ -303,7 +303,7 @@ def validate_ref_w(
         *_landcover_checks(normalized),
     ]
 
-    errors: list[FieldPathError] = []
+    errors: list[ImportIssue] = []
     for check in checks:
         value = check.value_getter(normalized)
         registry_available = (
@@ -313,7 +313,7 @@ def validate_ref_w(
         )
         issue = _check_ref(
             index,
-            schema_id=check.schema_id,
+            model=check.model,
             path=check.path,
             ref_kind=check.ref_kind,
             value=value,
