@@ -135,6 +135,7 @@ class LibraryPacks4dTests(_ServiceCase):
                 await self.bundle.import_bundle(data)
             self.assertEqual(len(await self.worlds.get_all()), 1)
             token = first.exception.outcome.preview_token
+            continuation = self.bundle._copy_import._tokens.decode(token)["context"]
             revised = deepcopy(data)
             revised["world"]["name"] = "Changed source"
             with self.assertRaises(LibraryPackPolicyRequiredError) as stale:
@@ -144,6 +145,8 @@ class LibraryPacks4dTests(_ServiceCase):
             _, failed = await self.bundle.import_bundle(data, preview_token=token)
             self.assertFalse(failed)
             self.assertEqual(len(await self.worlds.get_all()), 2)
+            copy_uid = continuation["uid_map"]["source"]
+            self.assertEqual((await self.worlds.get_by_id(copy_uid)).created_at, continuation["created_at"])
         with self.assertRaisesRegex(Exception, "token"):
             await self.bundle.import_bundle(data, preview_token=token[:-4] + "aaaa")
 

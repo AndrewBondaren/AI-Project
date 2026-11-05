@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.application.jsonValidation.resolve import ResolveContext, log_issues, report_issues, resolve_model
+from app.application.jsonValidation.resolve import ResolveContext, ResolveMode, report_continuation, resolve_model
 from app.dataModel.fields.checkedPath import CheckedPath
 from app.dataModel.spatial.regionShape import AnchorRadiusShape
 from app.dataModel.terrainMasks.regions import RegionSpecBase
@@ -45,8 +45,5 @@ def declared_region_identity(
             schema_id=active.schema_id,
             message=f"landcover | degraded_identity | region_uid={uid}; declared region has no name",
         )
-        if active.validate_only or active.collect_only:
-            report_issues(active, [issue])
-        else:
-            log_issues([issue])
+        report_continuation(active, issue, same_wire_cause=active.mode is ResolveMode.IMPORT)
     return RegionIdentity(uid, state_fingerprint(spec.model_dump(mode="json")))

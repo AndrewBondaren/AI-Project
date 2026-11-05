@@ -33,7 +33,7 @@ class RefCheck:
     registry_present_key: str | None = None
 
 
-def _index_issue(*, model: type[BaseModel], path: tuple[str | int, ...],
+def _index_issue(location: WireLocation, *, model: type[BaseModel], path: tuple[str | int, ...],
                  message: str, code: JsonValidationCode) -> ImportIssue:
     world_slice = slice_for_pojo(model)
     if world_slice is None:
@@ -42,12 +42,13 @@ def _index_issue(*, model: type[BaseModel], path: tuple[str | int, ...],
     offset = 0 if world_slice.wire_kind == "multi_column" else 1
     if offset and path[:1] != world_slice.world_keys[:1]:
         raise RuntimeError(f"{model.__name__} issue path {path!r} is outside {world_slice.world_keys[0]!r}")
-    ctx = ResolveContext(location=WireLocation(parts=path[:offset]), schema_id=world_slice.schema_id)
+    ctx = ResolveContext(location=location.child(*path[:offset]), schema_id=world_slice.schema_id)
     return field_issue(ctx, model, path[offset:], message, code)
 
 
 def _check_ref(
     index: WorldRegistryIndex,
+    location: WireLocation,
     *,
     model: type[BaseModel],
     path: tuple[str | int, ...],
@@ -64,7 +65,7 @@ def _check_ref(
         return None
     if value in allowed:
         return None
-    return _index_issue(model=model, path=path, message=f"unknown {ref_kind.value} target: {value!r}",
+    return _index_issue(location, model=model, path=path, message=f"unknown {ref_kind.value} target: {value!r}",
                         code=JsonValidationCode.REF_W_UNKNOWN)
 
 
@@ -194,7 +195,7 @@ def _hydrology_checks(normalized: dict[str, Any], partial: bool) -> list[RefChec
     return checks
 
 
-def _shore_class_errors(normalized: dict[str, Any], partial: bool) -> list[ImportIssue]:
+def _shore_class_errors(normalized: dict[str, Any], partial: bool, location: WireLocation) -> list[ImportIssue]:
     """Category ``.shore.system_terrain`` must be an R34 shore class (not legacy ``shore``)."""
     if partial and "hydrology" not in normalized:
         return []
@@ -218,6 +219,7 @@ def _shore_class_errors(normalized: dict[str, Any], partial: bool) -> list[Impor
         if terrain is None or not terrain.is_shore_class():
             errors.append(
                 _index_issue(
+                    location,
                     path=("hydrology",) + path + ("system_terrain",),
                     message=(
                         "shore class must be shore_river / shore_mountain_river "
@@ -233,7 +235,7 @@ def _shore_class_errors(normalized: dict[str, Any], partial: bool) -> list[Impor
 _DECLARED_WATER_COLLECTIONS = ("declared_basins", "declared_coastlines", "declared_lakes")
 
 
-def _declared_water_identity_errors(normalized: dict[str, Any], partial: bool) -> list[ImportIssue]:
+def _declared_water_identity_errors(normalized: dict[str, Any], partial: bool, location: WireLocation) -> list[ImportIssue]:
     """``location_uid`` must be unique across declared water sources; runtime merges it."""
     if partial and "hydrology" not in normalized:
         return []
@@ -257,6 +259,7 @@ def _declared_water_identity_errors(normalized: dict[str, Any], partial: bool) -
         for category, index in refs:
             errors.append(
                 _index_issue(
+                    location,
                     path=("hydrology", category, index),
                     message=f"duplicate declared water location_uid {uid!r}: declared at {declared_at}",
                     model=WorldHydrology,
@@ -297,6 +300,7 @@ def validate_ref_w(
     normalized: dict[str, Any],
     *,
     partial: bool,
+    location: WireLocation = WireLocation(),
 ) -> list[ImportIssue]:
     """Run REF-W rules after ``merge_facade_slices`` (import / CRUD write)."""
     index = build_world_registry_index(normalized, partial=partial)
@@ -318,6 +322,7 @@ def validate_ref_w(
         )
         issue = _check_ref(
             index,
+            location,
             model=check.model,
             path=check.path,
             ref_kind=check.ref_kind,
@@ -326,6 +331,6 @@ def validate_ref_w(
         )
         if issue is not None:
             errors.append(issue)
-    errors.extend(_shore_class_errors(normalized, partial))
-    errors.extend(_declared_water_identity_errors(normalized, partial))
+    errors.extend(_shore_class_errors(normalized, partial, location))
+    errors.extend(_declared_water_identity_errors(normalized, partial, location))
     return errors

@@ -27,7 +27,7 @@ async def edit_declared_region(world_uid: str, operation: DeclaredRegionEdit,
             world_uid, operation, validate_only=validate_only)
     except ImportValidationError as exc:
         if validate_only:
-            return JSONResponse(content=ImportValidationReport(issues=exc.errors).to_dict())
+            return JSONResponse(content=ImportValidationReport(issues=tuple(exc.errors)).to_dict())
         raise HTTPException(status_code=422, detail=import_validation_http_detail(exc)) from exc
     if validate_only:
         return JSONResponse(content=ImportValidationReport().to_dict())

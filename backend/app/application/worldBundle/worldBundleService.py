@@ -112,7 +112,7 @@ class WorldBundleService:
     ) -> tuple[dict[str, ImportResult], bool] | ImportValidationReport:
         ctx = ResolveContext.for_import(validate_only=validate_only)
         try:
-            data = self._prepare_bundle(data, level=level, ctx=ctx)
+            data, created_at = self._prepare_bundle(data, level=level, ctx=ctx)
         except ImportValidationError as exc:
             if validate_only:
                 return ImportValidationReport(tuple(exc.errors))
@@ -120,10 +120,11 @@ class WorldBundleService:
         if validate_only:
             return ImportValidationReport()
 
-        return await self._copy_import.run(data, level=level, decisions=decisions,
+        return await self._copy_import.run(data, created_at=created_at, world_ctx=ctx.child(BundleSection.WORLD),
+                                         level=level, decisions=decisions,
                                          preview_token=preview_token)
 
-    def _prepare_bundle(self, data: dict, *, level: ImportLevel, ctx: ResolveContext):
+    def _prepare_bundle(self, data: dict, *, level: ImportLevel, ctx: ResolveContext) -> tuple[dict, str]:
         """Shared pipeline. This phase has no repository/Pack/task access."""
         world_ctx = ctx.child(BundleSection.WORLD)
         if not isinstance(data.get(BundleSection.WORLD), dict):
@@ -174,13 +175,13 @@ class WorldBundleService:
                 packs, consumed = import_libraries(data)
                 self._archives.validate_bodies(packs, world)
             except ImportValidationError as exc:
-                ctx.errors.extend(exc.errors)
+                report_issues(ctx, (issue for issue in exc.errors if issue not in ctx.errors))
                 consumed = LIBRARY_CONSUMED_SECTIONS
             except (ValueError, LibraryPackValidationError) as exc:
-                ctx.errors.append(WireShapeIssue(
+                report_issues(ctx, [WireShapeIssue(
                     location=ctx.location.child(BundleSection.LIBRARY_PACKS), message=str(exc),
                     code=JsonValidationCode.LIBRARY_INVALID,
-                ))
+                )])
                 consumed = LIBRARY_CONSUMED_SECTIONS
         for handler in self._handlers:
             if handler.key not in data or handler.key == BundleSection.WORLD or handler.key in consumed:
@@ -188,14 +189,17 @@ class WorldBundleService:
             section_ctx = ctx.child(handler.key)
             try:
                 handler.validate_section(world, data[handler.key], ctx=section_ctx)
-            except UnresolvedModelError:
-                continue
+            except UnresolvedModelError as exc:
+                report_issues(section_ctx, (issue for issue in exc.issues if issue not in ctx.errors))
+            except ImportValidationError as exc:
+                report_issues(section_ctx, (issue for issue in exc.errors if issue not in ctx.errors))
             except StrictFieldError as exc:
-                report_issues(section_ctx, [exc.issue])
+                if exc.issue not in ctx.errors:
+                    report_issues(section_ctx, [exc.issue])
             except (ValueError, ReliefValidationError) as exc:
                 report_issues(section_ctx, [WireShapeIssue(
                     location=section_ctx.location, message=str(exc), code=JsonValidationCode.VALIDATION_ERROR,
                 )])
         if ctx.errors:
             raise ImportValidationError(list(ctx.errors))
-        return data
+        return data, world.created_at

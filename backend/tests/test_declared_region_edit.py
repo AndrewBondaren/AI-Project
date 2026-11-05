@@ -14,10 +14,11 @@ from pydantic import TypeAdapter
 
 from app.api.deps import get_container
 from app.api.routes.worlds import router
-from app.application.jsonValidation.resolve import ResolveMode
-from app.application.jsonValidation.types import ImportValidationError
+from app.application.jsonValidation.resolve import ResolveContext, ResolveMode
+from app.application.jsonValidation.types import ImportValidationError, wire_loc
 from app.application.worldData.masks.regionIdentity import declared_region_identity
 from app.core.container import Container
+from app.dataModel.spatial.regionShape import RegionShapeKind
 from app.dataModel.terrainMasks.regions.edit import DeclaredRegionEdit
 from app.db.database import Database
 from app.db.repositories.sqlite.regionStateRepository import SqliteRegionStateRepository
@@ -79,20 +80,40 @@ class DeclaredRegionEditTests(unittest.IsolatedAsyncioTestCase):
                    wraps=declared_region_identity) as identity, \
              self.assertLogs("app.application.jsonValidation.resolve", level="WARNING") as logs:
             await self.import_world()
-        self.assertTrue(any("degraded_identity" in line for line in logs.output))
+        warnings = [line for line in logs.output if "degraded_identity" in line]
+        self.assertEqual(len(warnings), 1, logs.output)
         contexts = [call.kwargs["ctx"] for call in identity.call_args_list]
-        self.assertTrue(contexts)
-        region_path = ("terrain_masks", "declared_regions", 0)
-        self.assertEqual(contexts[0].location.parts, ("world", *region_path))
-        for ctx in contexts[1:]:
-            self.assertEqual(ctx.location.parts, region_path)
+        self.assertEqual(len(contexts), 2)  # source admission and validation of the remapped copy
+        region_path = ("world", "terrain_masks", "declared_regions", 0)
+        self.assertIn(str((*region_path, "name")), warnings[0])
         for ctx in contexts:
+            self.assertEqual(ctx.location.parts, region_path)
+            self.assertIs(ctx.report, contexts[0].report)
             self.assertIs(ctx.mode, ResolveMode.IMPORT)
             self.assertFalse(ctx.validate_only)
             self.assertEqual(ctx.report.issues, [])
         rows = await self.repo.get_by_world(self.uid)
         self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].region_uid, region_uid(self.uid, bbox_min=(5, 5), shape_kind=RegionShapeKind.ELLIPSE))
         self.assertEqual(rows[0].current_type, "forest")
+
+    async def test_world_import_collect_only_preserves_stored_uid_and_root_location(self):
+        data = self.bundle["world"]
+        data["terrain_masks"]["declared_regions"][0].pop("name")
+        saved_uids = []
+        for collect in (True, False):
+            ctx = ResolveContext.for_import()
+            ctx.collect_only = collect
+            with patch("app.application.jsonValidation.resolve.logger.warning") as warning:
+                result = await self.worlds.import_from_json(data, ctx=ctx)
+            self.assertEqual(result.succeeded, 1)
+            self.assertEqual(ctx.errors, [])
+            issue, = ctx.report.diagnostics
+            self.assertEqual(wire_loc(issue), ("terrain_masks", "declared_regions", 0, "name"))
+            self.assertEqual(warning.call_count, int(not collect))
+            row, = await self.repo.get_by_world(self.uid)
+            saved_uids.append(row.region_uid)
+        self.assertEqual(saved_uids[0], saved_uids[1])
 
     async def test_import_derives_world_uid_before_region_identity_check(self):
         self.bundle["world"].pop("world_uid")
@@ -113,8 +134,8 @@ class DeclaredRegionEditTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(report.valid)
             with self.assertRaises(ImportValidationError) as caught:
                 await self.container.world_bundle_service().import_bundle(copy.deepcopy(self.bundle))
-            self.assertEqual([(i.path, i.code) for i in report.issues],
-                             [(i.path, i.code) for i in caught.exception.errors])
+            self.assertEqual([(wire_loc(i), i.code) for i in report.issues],
+                             [(wire_loc(i), i.code) for i in caught.exception.errors])
         self.assertEqual(await self.worlds.get_all(), [])
 
     async def test_resize_type_rename_remove_readd(self):

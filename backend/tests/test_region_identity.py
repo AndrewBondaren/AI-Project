@@ -76,7 +76,8 @@ class RegionIdentityTests(unittest.TestCase):
         ctx = replace(self.ctx, collect_only=True)
         with self.assertNoLogs(LOG, level="WARNING"):
             identity = declared_region_identity(self.world_uid, ForestSpec(shape=self.shape), ctx=ctx)
-        issue, = ctx.errors
+        self.assertEqual(ctx.errors, [])
+        issue, = ctx.report.diagnostics
         self.assertEqual(issue.code.value, "REGION_DEGRADED_IDENTITY")
         self.assertEqual(wire_loc(issue), self.path + ("name",))
         self.assertIn(identity.region_uid, issue.message)

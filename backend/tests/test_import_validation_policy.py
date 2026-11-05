@@ -1,4 +1,5 @@
 """Production handler registry + isolated DB + HTTP: preview never writes."""
+import asyncio
 import copy
 import json
 import tempfile
@@ -172,6 +173,33 @@ class ImportValidationPolicyTests(unittest.IsolatedAsyncioTestCase):
         _, rolled_back = await self.service.import_bundle(fixture)
         self.assertFalse(rolled_back)
         self.assertEqual(len(await self.worlds.get_all()), 2)
+
+    async def test_remapped_world_rechecks_refs_after_allowed_source_degradation(self):
+        data = self.fixture("world_landcover_default")
+        data["world"]["terrain_masks"] = {"declared_regions": [{
+            "entry_type": "forest", "shape": {"kind": "ellipse", "cx": 10, "cy": 10, "rx": 5, "ry": 5},
+        }]}
+        remap = worldCopyImport.remap_bundle
+
+        def remap_with_bad_ref(*args, **kwargs):
+            copied = remap(*args, **kwargs)
+            copied["world"]["precipitation_liquid"] = "absent"
+            return copied
+
+        with patch.object(worldCopyImport, "remap_bundle", side_effect=remap_with_bad_ref):
+            with self.assertRaises(ImportValidationError) as caught:
+                await self.service.import_bundle(data)
+        issue, = caught.exception.errors
+        self.assertEqual((issue.code.value, wire_loc(issue)), ("REF_W_UNKNOWN", ("world", "precipitation_liquid")))
+        self.assertEqual(await self.worlds.get_all(), [])
+
+    async def test_cancel_or_storage_fault_during_world_write_rolls_back(self):
+        for failure in (asyncio.CancelledError(), OSError("storage failure")):
+            with self.subTest(kind=type(failure).__name__):
+                with patch.object(self.worlds._region_editor, "reconcile", side_effect=failure):
+                    with self.assertRaises(type(failure)):
+                        await self.service.import_bundle(self.fixture("world_defaults_test"))
+                self.assertEqual(await self.worlds.get_all(), [])
 
     async def test_ordinary_import_still_rolls_back_handler_failure(self):
         fixture = self.fixture()

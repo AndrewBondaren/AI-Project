@@ -52,7 +52,7 @@ class ResolveContext:
 
     @property
     def errors(self) -> list[ImportIssue]:
-        """Compatibility view for existing aggregators; the report owns facts."""
+        """Blocking issues. Continuations are available separately on the report."""
         return self.report.issues
 
     @classmethod
@@ -119,6 +119,13 @@ def reject_unresolved(ctx: ResolveContext, issues: Iterable[ImportIssue]) -> NoR
     failure = UnresolvedModelError(issues)
     report_issues(ctx, failure.issues)
     raise failure
+
+
+def report_continuation(ctx: ResolveContext, issue: ImportIssue, *, same_wire_cause: bool = False) -> None:
+    """Record a producer-authorized continuation without changing admission."""
+    if ctx.report.record_continuation(issue, same_wire_cause=same_wire_cause):
+        if not ctx.validate_only and not ctx.collect_only:
+            log_issues([issue])
 
 
 def _model_fields_schema(schema: dict, definitions: list[dict]) -> dict:

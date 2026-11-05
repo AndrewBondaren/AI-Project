@@ -69,7 +69,7 @@ def normalize_world(data: dict[str, Any], *, partial: bool = False,
         out["terrain_masks"] = landcover_patch_to_wire(out["terrain_masks"])
 
     if not ctx.errors:
-        report_issues(ctx, validate_ref_w(out, partial=partial))
+        report_issues(ctx, validate_ref_w(out, partial=partial, location=ctx.location))
 
     if ctx.errors:
         raise ImportValidationError(ctx.errors)

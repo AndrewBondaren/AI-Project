@@ -3,6 +3,7 @@ from dataclasses import replace
 
 from app.application.imports.result import ImportResult
 from app.application.worldBundle.copyTokens import WorldCopyTokens
+from app.application.worldBundle.entity.sections import WorldSectionHandler
 from app.application.worldBundle.worldLibraries import import_libraries
 from app.application.worldBundle.bundleRemapService import build_bundle_uid_map, remap_bundle
 from app.application.templateLibrary.packs.domainAdapters.remapRefs import (
@@ -25,7 +26,7 @@ class WorldCopyImport:
         self._db, self._worlds, self._handlers, self._archives = db, worlds, handlers, archives
         self._tokens = WorldCopyTokens()
 
-    async def run(self, data, *, level, decisions=(), preview_token=None):
+    async def run(self, data, *, created_at, world_ctx, level, decisions=(), preview_token=None):
         fingerprint = state_fingerprint({"source": data, "level": level})
         continuation = self._tokens.decode(preview_token) if preview_token else None
         stale = continuation is not None and continuation["context"]["source_hash"] != fingerprint
@@ -36,7 +37,7 @@ class WorldCopyImport:
                 if context is None:
                     context = {"source_hash": fingerprint, "uid_map": build_bundle_uid_map(data),
                         "version": await self._worlds.next_version_number(data["world"].get("name", "")),
-                        "created_at": self._worlds.prepare_import(data["world"]).created_at}
+                        "created_at": created_at}
                 copied = remap_bundle(data, context["version"], self._worlds.strip_version_suffix,
                                       uid_map=context["uid_map"])
                 copied["world"]["created_at"] = context["created_at"]
@@ -52,7 +53,10 @@ class WorldCopyImport:
                         imports, items = self._archives.sources(packs,
                             source_owner=source_owner, target_owner=uid)
                 world_handler = next(h for h in self._handlers if h.key == BundleSection.WORLD)
-                results["world"] = await world_handler.import_section(uid, copied["world"])
+                if isinstance(world_handler, WorldSectionHandler):
+                    results["world"] = await world_handler.import_section(uid, copied["world"], ctx=world_ctx)
+                else:
+                    results["world"] = await world_handler.import_section(uid, copied["world"])
                 if results["world"].failed:
                     raise ImportFailed()
                 library_token = ("stale" if stale else continuation["library_token"] if continuation else None)

@@ -49,12 +49,12 @@ class WorldService:
             async with self._region_editor.transaction():
                 yield
 
-    async def _save(self, world: World, method: Callable[[World], Awaitable[None]]) -> None:
+    async def _save(self, world: World, method: Callable[[World], Awaitable[None]], ctx: ResolveContext) -> None:
         async with self._write_scope():
             before = await self._repo.get_by_id(world.world_uid)
             await method(world)
             if self._region_editor is not None:
-                await self._region_editor.reconcile(before, world)
+                await self._region_editor.reconcile(before, world, ctx=ctx)
 
     async def edit_region(self, world_uid: str, operation: "DeclaredRegionEdit", *,
                           validate_only: bool = False) -> World:
@@ -75,7 +75,7 @@ class WorldService:
             self.prepare_import(normalize_world(merged, ctx=ctx), ctx=ctx)
             if validate_only:
                 return world
-            return (await self._update(world_uid, patch)).world
+            return (await self._update(world_uid, patch, ctx=ctx)).world
 
     # ------------------------------------------------------------------
     # CRUD
@@ -94,21 +94,22 @@ class WorldService:
         return await self._repo.get_by_id(world_uid)
 
     async def create(self, data: dict) -> World:
-        data = _normalize_world_data(with_default_created_at(data))
-        world = self.prepare_import(data)
-        await self._save(world, self._repo.create)
+        ctx = ResolveContext.for_import()
+        data = normalize_world(with_default_created_at(data), ctx=ctx)
+        world = self.prepare_import(data, ctx=ctx)
+        await self._save(world, self._repo.create, ctx)
         return world
 
     _IMMUTABLE = frozenset({"world_uid", "created_at"})
 
     async def update(self, world_uid: str, data: dict) -> WorldUpdateResult:
         async with self._write_scope():
-            return await self._update(world_uid, data)
+            return await self._update(world_uid, data, ctx=ResolveContext.for_import())
 
-    async def _update(self, world_uid: str, data: dict) -> WorldUpdateResult:
+    async def _update(self, world_uid: str, data: dict, *, ctx: ResolveContext) -> WorldUpdateResult:
         data = dict(data)
         force = bool(data.pop("force", False))
-        data = _normalize_world_data(data, partial=True)
+        data = normalize_world(data, partial=True, ctx=dataclasses.replace(ctx, partial=True))
         world = await self.get_by_id(world_uid)
         original = dataclasses.replace(world)  # snapshot before mutations
 
@@ -116,7 +117,7 @@ class WorldService:
                  if hasattr(world, key) and key not in self._IMMUTABLE}
         merged = merge_world_patch(world_wire_from_row(world), patch)
         try:
-            world = self.prepare_import(_normalize_world_data(merged))
+            world = self.prepare_import(normalize_world(merged, ctx=ctx), ctx=ctx)
         except WorldDataError:
             raise
         except ValueError as exc:
@@ -138,7 +139,7 @@ class WorldService:
                 requires_force=True,
             )
 
-        await self._save(world, self._repo.update)
+        await self._save(world, self._repo.update, ctx)
         return WorldUpdateResult(
             world=world,
             map_cells_invalidated=map_cells_invalidated,
@@ -158,19 +159,20 @@ class WorldService:
     # Import (режимы 1 и 3)
     # ------------------------------------------------------------------
 
-    async def import_from_json(self, data: dict) -> ImportResult:
-        data = _normalize_world_data(with_default_created_at(data))
+    async def import_from_json(self, data: dict, *, ctx: ResolveContext | None = None) -> ImportResult:
+        ctx = ctx if ctx is not None else ResolveContext.for_import()
+        data = normalize_world(with_default_created_at(data), ctx=ctx)
         try:
-            world = self.prepare_import(data)
-            await self._save(world, self._repo.upsert)
-            return ImportResult(total=1, succeeded=1, failed=0)
+            world = self.prepare_import(data, ctx=ctx)
         except WorldDataError:
             raise
-        except Exception as e:
+        except ValueError as e:
             return ImportResult(
                 total=1, succeeded=0, failed=1,
                 errors=[ImportError(index=0, message=str(e))],
             )
+        await self._save(world, self._repo.upsert, ctx)
+        return ImportResult(total=1, succeeded=1, failed=0)
 
     @classmethod
     def prepare_import(cls, data: dict, *, ctx: ResolveContext | None = None) -> World:
@@ -235,7 +237,3 @@ class WorldService:
         if not isinstance(depth, int) or isinstance(depth, bool) or depth < 0:
             raise WorldDataValidationError(
                 "map_subsurface_depth must be an integer >= 0")
-
-
-def _normalize_world_data(data: dict, *, partial: bool = False) -> dict:
-    return normalize_world(data, partial=partial)

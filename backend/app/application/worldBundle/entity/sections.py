@@ -30,10 +30,10 @@ class WorldSectionHandler:
         w = world or await self._worlds.get_by_id(world_uid)
         return asdict(w)
 
-    async def import_section(self, world_uid: str, data: Any) -> ImportResult:
+    async def import_section(self, world_uid: str, data: Any, *, ctx: ResolveContext | None = None) -> ImportResult:
         if not isinstance(data, dict):
             raise BundleValidationError("world section must be an object")
-        return await self._worlds.import_from_json(data)
+        return await self._worlds.import_from_json(data, ctx=ctx)
 
     def validate_section(self, world: World, data: Any, *, ctx: ResolveContext) -> None:
         self._worlds.prepare_import(data, ctx=ctx)

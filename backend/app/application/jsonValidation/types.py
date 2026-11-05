@@ -37,6 +37,21 @@ def validate_import_issues(issues: tuple[ImportIssue, ...]) -> tuple[ImportIssue
 class ResolveReport:
     """Request-local diagnostics; domain dependencies are supplied separately."""
     issues: list[ImportIssue] = field(default_factory=list)
+    _continuations: dict[object, ImportIssue] = field(default_factory=dict, init=False)
+
+    @property
+    def diagnostics(self) -> tuple[ImportIssue, ...]:
+        """Facts for which the producer returned a usable value."""
+        return tuple(self._continuations.values())
+
+    def record_continuation(self, issue: ImportIssue, *, same_wire_cause: bool) -> bool:
+        (fact,) = validate_import_issues((issue,))
+        # Bundle remap can change the derived UID in the message for the same source row.
+        key = (type(fact), wire_loc(fact), fact.code) if same_wire_cause else fact
+        if key in self._continuations:
+            return False
+        self._continuations[key] = fact
+        return True
 
 
 class ImportValidationError(Exception):
