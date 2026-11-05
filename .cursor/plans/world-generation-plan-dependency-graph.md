@@ -815,17 +815,17 @@ flowchart TD
 
 **Проверка v6.10:** добавлен draft LOD трек и обратные ссылки без изменения hard-edge реестра. Markdown/Mermaid/ссылки и static graph должны быть проверены; implementation/runtime evidence отсутствует, GRAPH-AC остаётся OPEN.
 
-## 12. Действующая очередь на 2026-11-05
+## 12. Действующая очередь на 2026-11-06
 
 **После завершения основной очереди:** [LEGACY-POST — поиск оставшихся legacy-путей](./world-generation-post-graph-legacy-audit.md). Трек отложен. При закрытии основных работ координатор фиксирует итоговую ревизию и передаёт её на аудит. LEGACY-POST не входит в условия закрытия основной очереди; локальные проверки legacy у владельцев выполняются в своих срезах.
 
 | Трек | Последнее решение и evidence | Следующая работа |
 |---|---|---|
-| [GEO](./geo-1-designed-water.md) | [D1 WATER_KIND_MISMATCH](./geo-water-kind-mismatch-d1.md) согласован. | Реализовать D2 Hydrology: typed issue, WaterBody.kind, FALLBACK, доставка и проверка codec. |
-| [Snapshot](./world-domain-patches-snapshots.md) | [Trace CAS реализован](./world-domain-snapshot-cas-trace.md), адресно 8 OK; обе прежние CAS-ошибки устранены. | По полному discover остались 7 ошибок cancel, 1 GC и 1 failure. Планировать отдельные scoped fixes. |
-| [Spatial](./spatial-distribution-domain.md) | §15.101: после release A и reopen общий shard доступен B, 3/3 OK. | F3 требует F1, F2 и принятой карты хранения pin/holder. |
+| [GEO](./geo-1-designed-water.md) | [D2 mismatch реализован](./geo-water-kind-mismatch-d2.md). Прежние 58 traceback исчезли; полный geo1: 894 теста, 229 errors, 2 failures. | Разобрать новый river-route digest failure, затем выбрать следующий scoped producer. |
+| [Snapshot](./world-domain-patches-snapshots.md) | [Независимое ревью](./world-domain-snapshot-cas-trace-review.md) подтвердило причину CAS и rollback в БД. Trace сохраняет applied без признака отката. | После подтверждения rollback явно отразить судьбу предыдущих шагов в trace для caller, проверить player_conflict. |
+| [Spatial](./spatial-distribution-domain.md) | Карта F3 предъявлена (§15.102). | До кода согласовать close receipt/pin binding, тип holder в journal и доверенную identity store до первого acquire. |
 | [Time](./time-domain.md) | Проверены изолированные T3 и подготовка T4. Выполнено ревью политики Time/World settings для validate и runtime. | Миграция диагностики и runtime resolver впереди. Production T4/T5 требуют соответствующих Snapshot gates. |
-| [Physics](./physics-spatial-dynamics.md) | [Исправление P2](./ps-error-1-d2-p2-fix-report.md) предъявлено, профиль 71/71. | Независимо перепроверить обе операции на int -1 и str "-1". |
+| [Physics](./physics-spatial-dynamics.md) | [Повторная проверка P2](./ps-error-1-d2-review.md) пройдена для обеих операций. 2/2 регрессии, профиль 71/71. | Предъявить D2 на отдельную пользовательскую приёмку. |
 | [API-1](./api-1-transport-boundary.md) | Проверено покрытие полей storage и wire. Climate C1 содержит девять scalars, десять после переноса lapse. | Сопоставить вход каждой операции с версией и выходом владельца, включая presence/aliases. |
 | [GEN-BAKE-READ](./generator-public-bake-reads.md) | Исправленный пакет D1–D7 предъявлен в §17.10.4 | Получить решение пользователя, затем R1/R2 отдельно по операциям. Handoff light, full L0+C23, named terrain и coordinate terrain описан в §17.10.3 |
 | [DAG invocation и bake admission](./dag-invocations-bake-admission.md) | Итог ревью R6 на 7b6104d7, полный набор 392/392. | Далее R7 по условиям owning-плана. |
@@ -838,19 +838,19 @@ flowchart TD
 
 | План | Номер трека | О чём трек | Следующий трек или внешняя зависимость |
 |---|---|---|---|
-| GEO | Water Input, D1 согласован | WaterKindMismatchIssue принадлежит Hydrology, путь указывает на WaterBody.kind. | D2: начать с fine_water.test_fill, затем три зависимых setup и полный geo1. |
-| Physics | PS-ERROR-1 D2 / P2 | Исправление в рабочем дереве, две регрессии прошли. | Независимое повторное ревью. |
-| Spatial / World Pack | SP-P2W / F3 | Retention общего shard подтверждён; F1/F2 проверены. | F3 требует принятой карты хранения pin/holder. Затем CLOSED и отдельный F4 finalized. |
+| GEO | Water Input, D2 реализован | Mismatch передаётся в fine-water envelope, старый отказ исчез. | Разбор изменившегося digest river route, затем следующий producer по диагностике geo1. |
+| Physics | PS-ERROR-1 D2 / P2 | P2 прошёл независимую перепроверку. | Отдельное решение по D2. |
+| Spatial / World Pack | SP-P2W / F3 | Карта хранения готова к согласованию (§15.102). | World Pack, Artifacts и DAG согласуют три решения перед кодом F3. |
 | DAG / Pack | F2 проверен | [Отчёт F2](./sp-p2w-f2-verification.md): финальный DAG-набор 401/401. | DAG-вход для F3 готов. До реализации Pack подтвердить карту хранения pin/holder. |
 | Time | T3-A / T3-C, подготовка T4 проверена | Арифметика, календарь, World settings, чтение через закреплённые тестовые источники. | Внутри Time открыта политика STANDARD для 1–3 часов. Production T4 ждёт SN-TIME-READ, T5 — SN-TIME-APPLY, ветвление — SN-TIME-BRANCH. |
-| Snapshot | 4D2 / CAS | Trace world/player реализован и предъявлен, полный snapshotCore: 170 тестов, 8 errors, 1 failure, 1 skip. | Отдельные producers cancel/GC и оставшийся typing gate; приёмка CAS отдельно. |
+| Snapshot | 4D2 / CAS | При конфликте p2 первые шаги world и p1 видны как applied, хотя вся транзакция откатилась. | Добавить в trace подтверждённый rollback и проверить выход caller вместе с состоянием второго соединения. |
 | ERROR-CONTRACTS-1 | D2 GEO / Snapshot / Physics | Пять GEO-сценариев и Snapshot metadata проверены. Physics D2 предъявлен. | Каждому срезу — своё ревью и отдельная приёмка. |
 
 API-1 ведёт пользователь. GEN-BAKE-READ после решения по D1–D7 переходит к проектированию R1/R2 по операциям.
 
 ### 12.2. ERROR-CONTRACTS-1: горизонтальные gates (v6.14)
 
-**Прикладные зависимости на 5 ноября.** Для GEO WATER_KIND_MISMATCH согласован D1, открыт D2. Snapshot CAS trace реализован. В протоколе CLOSED → finalized → release F1/F2 проверены; F3 требует согласованной карты хранения pin/holder.
+**Прикладные зависимости на 6 ноября.** GEO mismatch реализован; Snapshot CAS trace требует явной отметки rollback. F1/F2 проверены; для F3 нужна приёмка карты §15.102 и согласование store identity.
 
 | Локальный consumer-gate | Непосредственные prerequisite | Что не следует требовать |
 |---|---|---|
