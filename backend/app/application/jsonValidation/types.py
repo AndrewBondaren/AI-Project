@@ -17,6 +17,7 @@ from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.validation.immutableValue import validate_immutable
 from app.dataModel.validation.importIssues.jsonFieldError import JsonFieldError
 from app.dataModel.validation.importIssues.jsonValidationCode import JsonValidationCode
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.dataModel.validation.importIssues.wireShapeIssue import WireShapeIssue
 
 type ImportIssue = FieldPathError[Any] | WireShapeIssue
@@ -66,7 +67,8 @@ def wire_loc(issue: ImportIssue) -> tuple[str | int, ...]:
         return issue.location.parts
     if isinstance(issue, JsonFieldError):
         return (*issue.location.parts, *issue.wire_path)
-    flat: list[str | int] = []
+    location = getattr(issue, "location", None)
+    flat: list[str | int] = list(location.parts) if isinstance(location, WireLocation) else []
     for segment in issue.path.segments:
         if isinstance(segment, FieldSegment):
             flat.append(segment.name)
@@ -91,7 +93,8 @@ def _wire_detail(issues: Iterable[ImportIssue]) -> list[dict[str, object]]:
     detail: list[dict[str, object]] = []
     for issue in issues:
         item: dict[str, object] = {"loc": list(wire_loc(issue)), "msg": issue.message, "code": _wire_code(issue)}
-        if isinstance(issue, JsonFieldError) and issue.schema_id:
-            item["schema_id"] = issue.schema_id
+        schema_id = getattr(issue, "schema_id", None)
+        if schema_id:
+            item["schema_id"] = schema_id
         detail.append(item)
     return detail

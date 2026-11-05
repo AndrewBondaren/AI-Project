@@ -7,7 +7,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.application.jsonValidation.resolve import (
-    ResolveContext, UnresolvedModelError, field_issue, resolve_model, resolve_model_field,
+    ResolveContext, UnresolvedModelError, field_issue, report_issues, resolve_model, resolve_model_field,
 )
 from app.application.jsonValidation.types import ImportValidationError
 from app.dataModel.validation.importIssues.jsonValidationCode import JsonValidationCode
@@ -32,7 +32,7 @@ def resolve_world_column(key: str, raw: Any, ctx: ResolveContext,
     if world_slice is None or not world_slice.facade:
         issue = WireShapeIssue(code=JsonValidationCode.NOT_WRITABLE_WORLD_COLUMN, location=ctx.location.child(key),
                                message=f"world column {key!r} is not a writable facade slice")
-        ctx.report.issues.append(issue)
+        report_issues(ctx, [issue])
         raise ImportValidationError([issue])
     active = replace(ctx, partial=False, schema_id=world_slice.schema_id)
     raw = deepcopy(raw)
@@ -45,7 +45,7 @@ def resolve_world_column(key: str, raw: Any, ctx: ResolveContext,
                     issue = field_issue(active, pojo, (key,),
                         "current slice values required for a model invariant",
                         JsonValidationCode.WORLD_SLICE_CONTEXT_REQUIRED)
-                    active.report.issues.append(issue)
+                    report_issues(active, [issue])
                     raise ImportValidationError([issue])
                 assert world_slice.wire_from_mapping is not None
                 wire = deepcopy(world_slice.wire_from_mapping(existing))
@@ -61,5 +61,5 @@ def resolve_world_column(key: str, raw: Any, ctx: ResolveContext,
     except ValueError as exc:
         issue = field_issue(active, _pojo_of(world_slice.pojo_cls), (key,), str(exc),
                             JsonValidationCode.VALIDATION_ERROR)
-        active.report.issues.append(issue)
+        report_issues(active, [issue])
         raise ImportValidationError([issue]) from exc

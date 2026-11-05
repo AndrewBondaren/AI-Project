@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.application.jsonValidation.resolve import ResolveContext, ResolveMode
+from app.application.jsonValidation.resolve import ResolveContext, ResolveMode, report_issues
 from app.application.jsonValidation.index import validate_ref_w
 from app.dataModel.validation.importIssues.jsonValidationCode import JsonValidationCode
 from app.dataModel.validation.importIssues.wireShapeIssue import WireShapeIssue
-from app.application.jsonValidation.types import ImportIssue, ImportValidationError
+from app.application.jsonValidation.types import ImportValidationError
 from app.application.jsonValidation.worldSliceMerge import merge_facade_slices
 from app.application.jsonValidation.worldSlices import facade_world_slices
 
@@ -40,11 +40,13 @@ def normalize_world(data: dict[str, Any], *, partial: bool = False,
     out = dict(data)
     ctx = ctx if ctx is not None else ResolveContext(mode=ResolveMode.IMPORT, partial=partial)
     if "map_cell_size_m" in out:
-        raise ImportValidationError([WireShapeIssue(
+        issue = WireShapeIssue(
             location=ctx.location.child("map_cell_size_m"),
             message="map_cell_size_m was removed; use fine_cells_per_map_cell",
             code=JsonValidationCode.REMOVED_FROM_WIRE,
-        )])
+        )
+        report_issues(ctx, [issue])
+        raise ImportValidationError([issue])
 
     if partial and "terrain_masks" in out:
         from app.dataModel.terrainMasks.landcoverWire import normalize_landcover_wire
@@ -66,12 +68,11 @@ def normalize_world(data: dict[str, Any], *, partial: bool = False,
         from app.dataModel.terrainMasks.landcoverWire import landcover_patch_to_wire
         out["terrain_masks"] = landcover_patch_to_wire(out["terrain_masks"])
 
-    errors: list[ImportIssue] = list(ctx.errors)
-    if not errors:
-        errors.extend(validate_ref_w(out, partial=partial))
+    if not ctx.errors:
+        report_issues(ctx, validate_ref_w(out, partial=partial))
 
-    if errors:
-        raise ImportValidationError(errors)
+    if ctx.errors:
+        raise ImportValidationError(ctx.errors)
 
     if not partial and "terrain_masks" in out and "terrain_registry" in out:
         # Resolve alias hills before normalized canonical rows lose authored

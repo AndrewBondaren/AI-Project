@@ -5,6 +5,7 @@ Runtime resolve stays in ``worldSlices``; this module is write-path only.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 from app.application.jsonValidation.resolve import (
@@ -23,14 +24,7 @@ from app.application.jsonValidation.worldSlices import (
 
 
 def _slice_ctx(ctx: ResolveContext, world_slice: WorldSlice) -> ResolveContext:
-    return ResolveContext(
-        mode=ctx.mode,
-        validate_only=ctx.validate_only,
-        partial=ctx.partial,
-        location=ctx.location,
-        report=ctx.report,
-        schema_id=world_slice.schema_id,
-    )
+    return replace(ctx, schema_id=world_slice.schema_id)
 
 
 def _merge_multi_column(

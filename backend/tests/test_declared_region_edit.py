@@ -82,10 +82,13 @@ class DeclaredRegionEditTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any("degraded_identity" in line for line in logs.output))
         contexts = [call.kwargs["ctx"] for call in identity.call_args_list]
         self.assertTrue(contexts)
+        region_path = ("terrain_masks", "declared_regions", 0)
+        self.assertEqual(contexts[0].location.parts, ("world", *region_path))
+        for ctx in contexts[1:]:
+            self.assertEqual(ctx.location.parts, region_path)
         for ctx in contexts:
             self.assertIs(ctx.mode, ResolveMode.IMPORT)
             self.assertFalse(ctx.validate_only)
-            self.assertEqual(ctx.location.parts, ("terrain_masks", "declared_regions", 0))
             self.assertEqual(ctx.report.issues, [])
         rows = await self.repo.get_by_world(self.uid)
         self.assertEqual(len(rows), 1)
