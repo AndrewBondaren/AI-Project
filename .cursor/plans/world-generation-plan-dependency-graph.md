@@ -821,15 +821,15 @@ flowchart TD
 
 | Трек | Последнее решение и evidence | Следующая работа |
 |---|---|---|
-| [GEO](./geo-1-designed-water.md) | [Проверка №4/5](./geo-i11-3-notice-verification.md) дала PASS по обеим цепочкам. | Полный путь ждёт D1/D2 №1–3. |
-| [Snapshot](./world-domain-patches-snapshots.md) | Прямой handoff подтверждён. На e7a30e1b штатный путь падает до транзакции на старом импорте. | Согласовать scoped D1 для трёх типов причин metadata, затем мигрировать service и builder и повторить интеграцию. |
-| [Spatial](./spatial-distribution-domain.md) | §15.98: в одной SQLite проверка под guard дала 0 открытий после отзыва, контроль — 1. Обратный порядок подтвердил закрытие файла до release. 5/5 по отчёту. | Согласовать авторитетный отзыв DAG; для раздельных хранилищ нужен свой протокол. |
-| [Time](./time-domain.md) | Изолированные T3-A/T3-C, подготовка T4 и World settings проверены: 25 тестов, Pyright без ошибок по отчёту. | Политика STANDARD для суток в 1–3 часа открыта. Production T4 требует SN-TIME-READ и Time reader, T5 — SN-TIME-APPLY и handler, создание ветки — SN-TIME-BRANCH. |
-| [Physics](./physics-spatial-dynamics.md) | PS-CORE-1 P2: после FAIL прежнего варианта A восстановлены codec facade и регрессия. Последний отчёт фиксирует PASS P2, 18/18 профильных тестов. | Предъявить исправление отдельно от приёмки всего PS-CORE-1; широкий набор после восстановления не повторялся. |
+| [GEO](./geo-1-designed-water.md) | [Проверка D2](./geo-i11-3-d2-verification.md): пять сценариев прошли, 41 адресный тест OK. | Полный geo1: 892 теста, 1 failure и 245 errors. Локализовать остальные ошибки отдельно от результата D2. |
+| [Snapshot](./world-domain-patches-snapshots.md) | [Аудит producers](./world-domain-snapshot-producers-audit.md): после перевода fixtures осталось 10 TypeError вместо 36, один typing failure и один skip. | Согласовать D1 двух отказов CAS. Семь ошибок cancel и одна GC остаются отдельными. |
+| [Spatial](./spatial-distribution-domain.md) | §15.101: после release A и reopen общий shard доступен B, 3/3 OK. | F3 требует F1, F2 и принятой карты хранения pin/holder. |
+| [Time](./time-domain.md) | Проверены изолированные T3 и подготовка T4. Выполнено ревью политики Time/World settings для validate и runtime. | Миграция диагностики и runtime resolver впереди. Production T4/T5 требуют соответствующих Snapshot gates. |
+| [Physics](./physics-spatial-dynamics.md) | PS-ERROR-1: D1 принят, изолированный D2 реализован, 69/69 по отчёту. | Независимое ревью D2. I0 и runtime требуют отдельных bindings. |
 | [API-1](./api-1-transport-boundary.md) | Проверено покрытие полей storage и wire. Climate C1 содержит девять scalars, десять после переноса lapse. | Сопоставить вход каждой операции с версией и выходом владельца, включая presence/aliases. |
 | [GEN-BAKE-READ](./generator-public-bake-reads.md) | Исправленный пакет D1–D7 предъявлен в §17.10.4 | Получить решение пользователя, затем R1/R2 отдельно по операциям. Handoff light, full L0+C23, named terrain и coordinate terrain описан в §17.10.3 |
 | [DAG invocation и bake admission](./dag-invocations-bake-admission.md) | Итог ревью R6 на 7b6104d7, полный набор 392/392. | Далее R7 по условиям owning-плана. |
-| [ERROR-CONTRACTS-1](./error-contracts-1.md) | D1 №4/5 принят, проверка реализации PASS в границах отчёта. | По №1–3 требуется решение D1; Snapshot metadata имеет отдельный D1. |
+| [ERROR-CONTRACTS-1](./error-contracts-1.md) | GEO D1 №1–3 принят; Snapshot D1 metadata принят и реализован. | GEO предъявляет D2 evidence; другие Snapshot producers требуют отдельной миграции. |
 | [LOD](./lod-simulation-handoff.md) | §11 учитывает draft и открытые вопросы coherent capture, continuation и неизменности мира | Продолжать согласование с владельцами первого consumer. Конкретные зависимости runtime уточняются по сценарию |
 
 Предложения новых bindings в этих планах не меняют hard-edge реестр автоматически. Исторические команды §9.3 для приёмки I1/B, preflight P1-A и проектирования уже принятой карты Physics заменены этой очередью.
@@ -838,18 +838,18 @@ flowchart TD
 
 | План | Номер трека | О чём трек | Следующий трек или внешняя зависимость |
 |---|---|---|---|
-| GEO | I11.3 | №4 проверен до constraints, №5 до draft на явно собранном strategy input. | После D2 №1–3 проверить штатную цепочку трёх стратегий. |
-| Spatial / World Pack | SP-P2W §15.98 | Кандидат для общей SQLite проверен в обоих порядках admission/отзыва. | До production — авторитетный отзыв execution/children от DAG и решение о порядке admission при разных хранилищах. |
-| DAG / Pack | Окончательность execution | [Проверка terminal resume](./spatial-dag-execution-finality.md) воспроизвела RestoreFailure после удаления данных даже при сохранённом ответе COMPLETED. | Согласовать finalized и гарантию восстановления terminal без доступа к освобождённым данным, затем связывать release с этим событием. |
+| GEO | I11.3 D2 проверен | Пять сценариев прошли. | Разобрать красный полный geo1; приёмка D2 отдельно. |
+| Spatial / World Pack | SP-P2W §15.101 | Retention общего shard проверен после release A и reopen. | До F3 — F1, F2 и карта хранения. Реальный межхранилищный release требует отдельного доказательства. |
+| DAG / Pack | F1 в работе | В рабочем дереве меняются store и контракты durable intent. | После проверки F1 перейти к F2, затем F3 по карте хранения. |
 | Time | T3-A / T3-C, подготовка T4 проверена | Арифметика, календарь, World settings, чтение через закреплённые тестовые источники. | Внутри Time открыта политика STANDARD для 1–3 часов. Production T4 ждёт SN-TIME-READ, T5 — SN-TIME-APPLY, ветвление — SN-TIME-BRANCH. |
-| Snapshot | 4D2, scoped D1 на согласовании | Прямой handoff проверен, штатный сервис блокирует миграция metadata diagnostics. | После решения по D1 проверить handoff через сервис со второго соединения. |
-| ERROR-CONTRACTS-1 | D2 №4/5 проверен, D1 №1–3 предъявлен | Обе notices восстановлены с точным классом и значениями. | Решение по №1–3 открывает соответствующий D2. |
+| Snapshot | 4D2 / CAS | После миграции fixtures локализованы production producers CAS, GC и cancel. | Согласовать узкий D1 world/player MISMATCH перед реализацией. |
+| ERROR-CONTRACTS-1 | D2 GEO / Snapshot / Physics | Пять GEO-сценариев и Snapshot metadata проверены. Physics D2 предъявлен. | Каждому срезу — своё ревью и отдельная приёмка. |
 
 API-1 ведёт пользователь. GEN-BAKE-READ после решения по D1–D7 переходит к проектированию R1/R2 по операциям.
 
 ### 12.2. ERROR-CONTRACTS-1: горизонтальные gates (v6.14)
 
-**Прикладные зависимости на 5 ноября.** [Реестр GEO-I11.3](./geo-i11-3-review-defects.md) содержит пять P1. Для №4/5 приняты типы notices, поля и пути доставки. Для №1–3 требуется решение по предложению D1. Snapshot отдельно зависит от миграции импорта и вызова коллектора в WorldSnapshotService. Spatial может проверять гонку fencing/drain независимо.
+**Прикладные зависимости на 5 ноября.** [GEO D2](./geo-i11-3-d2-verification.md) проверен в пяти сценариях. Snapshot metadata handoff подтверждён, следующий scoped D1 относится к world/player CAS. Шаги F1–F6 принятого протокола CLOSED → finalized → release ведутся отдельно.
 
 | Локальный consumer-gate | Непосредственные prerequisite | Что не следует требовать |
 |---|---|---|

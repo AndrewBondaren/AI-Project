@@ -1,4 +1,5 @@
 from app.db.repositories.sqlite.snapshotCore.operations.terminalCodec import StoredTerminalCodec
+from tests.snapshotCore.support.diagnostics import TEST_ISSUE_SCHEMA
 from app.db.repositories.sqlite.snapshotCore.operations.publicationEvidence import SqlitePublicationEvidence
 from app.db.repositories.sqlite.artifacts.operationArtifacts import SqliteOperationArtifacts
 """Temporary SQLite fixtures only; no production adapter or Container binding."""
@@ -220,7 +221,7 @@ async def live_database(path=None, seed=True):
         world = SqliteWorldPublicationStore(commits, access)
         players = SqlitePlayerPublicationStore(commits, access)
         history = SqliteSnapshotHistoryStore(commits, access)
-        operations = SqliteOperationStore(commits, access, StoredTerminalCodec(),
+        operations = SqliteOperationStore(commits, access, StoredTerminalCodec(TEST_ISSUE_SCHEMA),
             SqlitePublicationEvidence(commits, world, players, access), SqliteOperationArtifacts(access))
         yield db, commits, world, players, history, operations
     finally:

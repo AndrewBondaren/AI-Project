@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from app.dataModel.engine.dag.identity import ExecutionId, WaitId
-from app.dataModel.engine.dag.invocations.record import ExecutionCheckpointStatus, InvocationGraph
+from app.dataModel.engine.dag.invocations.record import ExecutionCheckpointStatus, ExecutionStopIntent, InvocationGraph, StopOutcome
 
 
 class OwnershipConflict(RuntimeError):
@@ -25,6 +25,14 @@ class Checkpoint:
     revision: int
     status: ExecutionCheckpointStatus
     blob: bytes
+    stop_intent: ExecutionStopIntent | None = None
+
+    def replay_stop(self, revision: int, outcome: StopOutcome) -> ExecutionStopIntent:
+        intent = self.stop_intent
+        if (intent is None or self.revision != intent.stop_revision
+                or intent.stop_revision != revision + 1 or intent.outcome != outcome):
+            raise OwnershipConflict("conflicting stop intent or revision")
+        return intent
 
     def with_cancelled_child(self, wait_id: WaitId) -> "Checkpoint":
         graph = InvocationGraph.model_validate_json(self.blob)
@@ -40,6 +48,7 @@ class ExecutionStore(Protocol):
     async def create(self, execution_id: ExecutionId, blob: bytes) -> None: ...
     async def load(self, execution_id: ExecutionId) -> Checkpoint: ...
     async def claim(self, execution_id: ExecutionId, owner_id: str, seconds: int) -> Claim: ...
+    async def record_stop_intent(self, claim: Claim, revision: int, outcome: StopOutcome) -> ExecutionStopIntent: ...
     async def checkpoint(self, claim: Claim, revision: int, status: ExecutionCheckpointStatus, blob: bytes) -> int: ...
     async def cancel_child(self, execution_id: ExecutionId, revision: int, wait_id: WaitId) -> bool:
         """Publish a single validated wait cancellation by revision CAS, preserving the current lease."""

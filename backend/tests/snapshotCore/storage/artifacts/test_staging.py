@@ -27,7 +27,7 @@ from app.dataModel.artifacts.events import ArtifactLogActivity
 from app.dataModel.worldSnapshot.results.apply import SnapshotApplyResult
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
 from app.dataModel.registryKey import RegistryKey
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from tests.snapshotCore.support.diagnostics import target_issue
 from app.storage.artifacts.blobBackend import ContentAddressedBlobBackend
 from tests.snapshotCore.support.fakeSection import FakePrepared
 from tests.snapshotCore.support.artifactFixtures import adapters, descriptor
@@ -124,7 +124,7 @@ class LifecycleFixture:
         await self.drained.wait()
         for holders in self.holds.values():
             holders.discard(OperationHolder(lease=self.lease))
-        self.terminal = OperationCancelled(operation_id="op", reason=FieldPathError(path=(), message="cancelled"))
+        self.terminal = OperationCancelled(operation_id="op", reason=target_issue("cancelled"))
         return self.record(OperationPhase.TERMINAL)
 
 
@@ -319,7 +319,7 @@ class ArtifactStagingTests(unittest.TestCase):
             refusal = terminal.model_copy(update={"publication_fingerprint": "b" * 64,
                 "terminal": SnapshotApplyResult(operation_id="op", request_fingerprint="b" * 64,
                     category=SnapshotApplyOutcomeKind.REJECTED, committed=None,
-                    diagnostics=(FieldPathError(path=(), message="refused"),))})
+                    diagnostics=(target_issue("refused"),))})
             with patch.object(self.ledger, "cancel", return_value=refusal):
                 await self.service.cancel("op", 1)
             self.log.emit.assert_not_called()
@@ -392,6 +392,9 @@ class SqliteBlobLifecycleTests(unittest.TestCase):
                         cancel = asyncio.create_task(b.service.cancel("op", 1))
                         async with asyncio.timeout(5):
                             while True:
+                                if cancel.done():
+                                    await cancel
+                                    self.fail("cancel completed while the placement still held a writer")
                                 try:
                                     await a.leases.assert_writable(lease)
                                 except ValueError:
@@ -405,6 +408,10 @@ class SqliteBlobLifecycleTests(unittest.TestCase):
                         self.assertEqual((await b.service.collect("gc", (ref,))).retained, (ref,))
                         self.assertFalse(cancel.done())
                         self.assertFalse(stage.done())
+                    except BaseException:
+                        release.set()
+                        await asyncio.gather(stage, return_exceptions=True)
+                        raise
                     finally:
                         release.set()
                     with self.assertRaises(asyncio.CancelledError):

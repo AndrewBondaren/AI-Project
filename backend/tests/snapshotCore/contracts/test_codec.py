@@ -28,7 +28,8 @@ from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
 from app.dataModel.worldSnapshot.metadata.envelope import WorldSnapshotMetadata, PlayerSnapshotMetadata
 from app.dataModel.worldSnapshot.results.apply import SnapshotApplyResult
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError, ReferenceIssueContext, ReferenceIssueReason
+from app.dataModel.validation.diagnostics.fieldPathError import ReferenceIssueContext, ReferenceIssueReason
+from tests.snapshotCore.support.diagnostics import diagnostic_roundtrip, target_issue
 from app.dataModel.validation.diagnostics.runtimeIssueContext import RuntimeIssueContext
 from app.dataModel.spatial.facing import Facing
 from tests.snapshotCore.support.fakeSection import (
@@ -299,11 +300,13 @@ class CanonicalRequestCodecTests(unittest.TestCase):
         runtime = RuntimeIssueContext(world_uid="w", snapshot_uid=None, content_revision=None, source_uid=None,
             body_uids=(), cell=None, face=next(iter(Facing)),
             fallback_action=ReferenceIssueReason.DEFAULT_APPLIED, fallback_reason=ReferenceIssueReason.UNKNOWN_TEMPLATE)
-        diagnostic = FieldPathError(path=("target", 1), message="refused",
-            reference=ReferenceIssueContext(reason=ReferenceIssueReason.UNKNOWN_TEMPLATE, domain="test"), runtime_context=runtime)
+        diagnostic = target_issue("refused")
         result = SnapshotApplyResult(category=SnapshotApplyOutcomeKind.REJECTED, operation_id="o",
             request_fingerprint="a" * 64, committed=None, diagnostics=(diagnostic,))
-        self.assertEqual(decode(encode(result, SNAPSHOT_CORE_SCHEMA), SnapshotApplyResult, SNAPSHOT_CORE_SCHEMA), result)
+        self.assertEqual(diagnostic_roundtrip(result), result)
+        self.assertEqual(decode(encode(runtime, SNAPSHOT_CORE_SCHEMA), RuntimeIssueContext, SNAPSHOT_CORE_SCHEMA), runtime)
+        reference = ReferenceIssueContext(reason=ReferenceIssueReason.UNKNOWN_TEMPLATE, domain="test")
+        self.assertEqual(decode(encode(reference, SNAPSHOT_CORE_SCHEMA), ReferenceIssueContext, SNAPSHOT_CORE_SCHEMA), reference)
         class DomainReason(StrEnum):
             MISSING = "missing"
         unknown = replace(runtime, fallback_reason=DomainReason.MISSING)

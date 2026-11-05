@@ -3,6 +3,7 @@
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, TypeAdapter, model_validator
+from pydantic_core import PydanticCustomError
 
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest
 from app.dataModel.identity.uid import EntityUid
@@ -41,6 +42,13 @@ class WorldPhysicsSettingsView(BaseModel):
 
     @model_validator(mode="after")
     def matching_content(self) -> Self:
-        if self.ref != settings_ref(self.ref.world_uid, self.settings):
-            raise ValueError("settings view content or schema version does not match its ref")
+        if self.ref.schema_version != self.settings.SCHEMA_VERSION:
+            raise PydanticCustomError("physics_settings_schema", "settings schema mismatch", {
+                "expected_version": self.settings.SCHEMA_VERSION, "observed_version": self.ref.schema_version,
+            })
+        computed = settings_ref(self.ref.world_uid, self.settings)
+        if self.ref != computed:
+            raise PydanticCustomError("physics_settings_content", "settings content mismatch", {
+                "declared": self.ref, "computed": computed,
+            })
         return self

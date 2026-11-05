@@ -3,6 +3,7 @@
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic_core import PydanticCustomError
 
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.physics.settings.settingsCapture import WorldPhysicsSettingsRef, WorldPhysicsSettingsView
@@ -18,7 +19,9 @@ class WorldPhysicsSettingsReplace(BaseModel):
     @model_validator(mode="after")
     def matching_world(self) -> Self:
         if self.world_uid != self.expected_ref.world_uid:
-            raise ValueError("settings expectation belongs to another world")
+            raise PydanticCustomError("physics_settings_world", "settings world mismatch", {
+                "expected_world_uid": self.world_uid, "observed_world_uid": self.expected_ref.world_uid,
+            })
         return self
 
 
@@ -30,7 +33,9 @@ class WorldPhysicsSettingsReset(BaseModel):
     @model_validator(mode="after")
     def matching_world(self) -> Self:
         if self.world_uid != self.expected_ref.world_uid:
-            raise ValueError("settings expectation belongs to another world")
+            raise PydanticCustomError("physics_settings_world", "settings world mismatch", {
+                "expected_world_uid": self.world_uid, "observed_world_uid": self.expected_ref.world_uid,
+            })
         return self
 
 
@@ -44,8 +49,15 @@ class PreparedPhysicsSettingsChange(BaseModel):
     @model_validator(mode="after")
     def matching_refs(self) -> Self:
         if not self.world_uid == self.expected_ref.world_uid == self.proposed_ref.world_uid:
-            raise ValueError("settings change contains another world")
+            observed = (self.expected_ref.world_uid if self.expected_ref.world_uid != self.world_uid
+                        else self.proposed_ref.world_uid)
+            raise PydanticCustomError("physics_settings_world", "settings world mismatch", {
+                "expected_world_uid": self.world_uid, "observed_world_uid": observed,
+            })
         if self.expected_ref.schema_version != self.proposed_ref.schema_version:
-            raise ValueError("settings preparation cannot migrate schema versions")
+            raise PydanticCustomError("physics_settings_schema", "settings schema mismatch", {
+                "expected_version": self.expected_ref.schema_version,
+                "observed_version": self.proposed_ref.schema_version,
+            })
         WorldPhysicsSettingsView(settings=self.proposed, ref=self.proposed_ref)
         return self

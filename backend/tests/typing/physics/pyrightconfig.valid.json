@@ -1,0 +1,7 @@
+{
+  "extends": "../../../../pyrightconfig.cascade.json",
+  "venvPath": "../../..",
+  "venv": ".venv",
+  "pythonVersion": "3.14",
+  "include": ["valid.py", "../../../app/dataModel/physics/settings", "../../../app/application/physics/settings"]
+}

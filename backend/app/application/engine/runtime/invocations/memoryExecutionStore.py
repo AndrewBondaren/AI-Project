@@ -1,9 +1,10 @@
 from dataclasses import dataclass
 from time import monotonic
+from uuid import uuid4
 
 from app.application.engine.contracts.invocation.executionStore import Checkpoint, Claim, OwnershipConflict
 from app.dataModel.engine.dag.identity import ExecutionId, WaitId
-from app.dataModel.engine.dag.invocations.record import ExecutionCheckpointStatus, InvocationStatus
+from app.dataModel.engine.dag.invocations.record import ExecutionCheckpointStatus, ExecutionStopIntent, InvocationStatus, StopOutcome
 
 
 @dataclass
@@ -16,6 +17,7 @@ class _Entry:
 
 class MemoryExecutionStore:
     def __init__(self) -> None:
+        self._store_id = uuid4()
         self._entries: dict[ExecutionId, _Entry] = {}
 
     async def create(self, execution_id: ExecutionId, blob: bytes) -> None:
@@ -41,9 +43,23 @@ class MemoryExecutionStore:
             raise OwnershipConflict(claim.execution_id)
         return entry
 
+    async def record_stop_intent(self, claim: Claim, revision: int, outcome: StopOutcome) -> ExecutionStopIntent:
+        entry = self._owned(claim)
+        saved = entry.snapshot
+        if entry.lease_until <= monotonic():
+            raise OwnershipConflict(claim.execution_id)
+        if saved.stop_intent is not None:
+            return saved.replay_stop(revision, outcome)
+        if saved.revision != revision:
+            raise OwnershipConflict(claim.execution_id)
+        intent = ExecutionStopIntent(store_id=self._store_id, execution_id=claim.execution_id,
+                                     stop_revision=revision + 1, outcome=outcome)
+        entry.snapshot = Checkpoint(revision + 1, saved.status, saved.blob, intent)
+        return intent
+
     async def checkpoint(self, claim: Claim, revision: int, status: ExecutionCheckpointStatus, blob: bytes) -> int:
         entry = self._owned(claim)
-        if entry.snapshot.revision != revision or entry.lease_until <= monotonic():
+        if entry.snapshot.stop_intent is not None or entry.snapshot.revision != revision or entry.lease_until <= monotonic():
             raise OwnershipConflict(claim.execution_id)
         entry.snapshot = Checkpoint(revision + 1, status, blob)
         return revision + 1
@@ -56,14 +72,14 @@ class MemoryExecutionStore:
 
     async def cancel_child(self, execution_id: ExecutionId, revision: int, wait_id: WaitId) -> bool:
         entry = self._entries[execution_id]
-        if entry.snapshot.revision != revision:
+        if entry.snapshot.stop_intent is not None or entry.snapshot.revision != revision:
             return False
         entry.snapshot = entry.snapshot.with_cancelled_child(wait_id)
         return True
 
     async def cancel(self, execution_id: ExecutionId, revision: int, blob: bytes) -> bool:
         entry = self._entries[execution_id]
-        if entry.snapshot.revision != revision:
+        if entry.snapshot.stop_intent is not None or entry.snapshot.revision != revision:
             return False
         entry.snapshot = Checkpoint(revision + 1, InvocationStatus.CANCELLED, blob)
         entry.fence += 1

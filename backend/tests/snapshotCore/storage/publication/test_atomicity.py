@@ -11,7 +11,7 @@ from app.dataModel.artifacts.lifecycle.operation.kinds import OperationPhase, Op
 from app.dataModel.artifacts.lifecycle.operation.claim import PublicationTerminal
 from app.dataModel.worldSnapshot.results.apply import SnapshotApplyResult
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from tests.snapshotCore.support.diagnostics import target_issue
 from app.db.mapper import from_row, to_row
 from tests.snapshotCore.support.fixtures import (
     CORE_MODELS, new_database, started, tick, stage, operation, insert, snapshot_values,
@@ -166,7 +166,7 @@ class AtomicSnapshotCommitTests(unittest.TestCase):
                 async with bundle[0].conn.execute("SELECT count(*) FROM world_snapshots") as cursor:
                     self.assertEqual((await cursor.fetchone())[0], 0)
                 refusal = SnapshotApplyResult(category=SnapshotApplyOutcomeKind.CONFLICT, operation_id="failed",
-                    request_fingerprint="b" * 64, committed=None, diagnostics=(FieldPathError(path=(), message="conflict"),))
+                    request_fingerprint="b" * 64, committed=None, diagnostics=(target_issue("conflict"),))
                 await bundle[-1].record_refusal(claims[0], refusal)
                 self.assertEqual((await bundle[-1].read("failed")).terminal, refusal)
                 claim, success = await live_tick(bundle)
@@ -209,7 +209,7 @@ class AtomicSnapshotCommitTests(unittest.TestCase):
                 with self.assertRaises(UnknownCommitOutcome):
                     await operations.record_refusal(claims[0], SnapshotApplyResult(category=SnapshotApplyOutcomeKind.REJECTED,
                         operation_id="tick", request_fingerprint="b" * 64, committed=None,
-                        diagnostics=(FieldPathError(path=(), message="must not replace unknown outcome"),)))
+                        diagnostics=(target_issue("must not replace unknown outcome"),)))
                 async with live_database(db.path, seed=False) as recovery:
                     result = (await recovery[-1].read("tick")).terminal
                     self.assertIs(result.category, SnapshotApplyOutcomeKind.COMMITTED)
@@ -377,12 +377,7 @@ class AssignedPublicationTests(unittest.TestCase):
 
                 outer_scope = None
                 refused = SectionRefused(category=SnapshotApplyOutcomeKind.REJECTED,
-                    diagnostics=(FieldPathError(path=("two",), message="refused"),))
-                conflict = SectionRefused(category=SnapshotApplyOutcomeKind.CONFLICT,
-                    diagnostics=(FieldPathError(path=(), message="world publication changed"),))
-                if mode == "player_conflict":
-                    conflict = SectionRefused(category=SnapshotApplyOutcomeKind.CONFLICT,
-                        diagnostics=(FieldPathError(path=("expected_players", "p2"), message="player publication changed"),))
+                    diagnostics=(target_issue("refused"),))
                 faults = {"metadata_error": PublicationInfrastructureError("after append"),
                           "metadata_cancel": asyncio.CancelledError("after append"),
                           "player_error": PublicationInfrastructureError("second player CAS"),
@@ -441,7 +436,13 @@ class AssignedPublicationTests(unittest.TestCase):
                     else:
                         with self.assertRaises(_ApplyRefused) as error:
                             await execute()
-                        self.assertEqual(error.exception.refusal, refused if mode == "refuse" else conflict)
+                        if mode == "refuse":
+                            self.assertEqual(error.exception.refusal, refused)
+                        else:
+                            self.assertIs(error.exception.refusal.category, SnapshotApplyOutcomeKind.CONFLICT)
+                            issue, = error.exception.refusal.diagnostics
+                            owner = "player" if mode == "player_conflict" else "world"
+                            self.assertEqual(issue.message, f"{owner} publication changed")
                     self.assertEqual(len(targets), 2 if mode == "refuse" else 3)
                     self.assertTrue(all(target is targets[0] for target in targets))
                     if mode == "refuse":

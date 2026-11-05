@@ -1,5 +1,7 @@
 from enum import StrEnum
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Literal
+from uuid import UUID
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 
 from app.dataModel.engine.dag.diagnostics import ExecutionDiagnostic
 from app.dataModel.engine.dag.identity import (
@@ -26,6 +28,42 @@ class ExecutionResponseStatus(StrEnum):
 
 
 type ExecutionCheckpointStatus = InvocationStatus | ExecutionResponseStatus
+
+
+class _ResolveResultWire(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    ok: bool
+    data: JsonValue = None
+    error: str | None = None
+
+
+class CompletedOutcome(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+    status: Literal["COMPLETED"] = "COMPLETED"
+    result_json: str
+
+    @field_validator("result_json")
+    @classmethod
+    def validate_result(cls, value: str) -> str:
+        _ResolveResultWire.model_validate_json(value)
+        return value
+
+
+class FailedOutcome(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+    status: Literal["FAILED"] = "FAILED"
+    diagnostic: str
+
+
+type StopOutcome = CompletedOutcome | FailedOutcome
+
+
+class ExecutionStopIntent(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+    store_id: UUID
+    execution_id: ExecutionIdValue
+    stop_revision: int = Field(gt=0)
+    outcome: StopOutcome = Field(discriminator="status")
 
 
 class InvocationRecord(BaseModel):

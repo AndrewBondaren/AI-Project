@@ -14,7 +14,7 @@ from app.dataModel.worldSnapshot.results.publication import CasDecision, PackAct
 from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
 from app.dataModel.artifacts.references import ArtifactRef, ArtifactKind, ArtifactFormatRegistry
 from app.dataModel.registryKey import RegistryKey
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from tests.snapshotCore.support.diagnostics import target_issue
 from app.db.mapper import model_columns
 from tests.snapshotCore.support.fixtures import (
     CORE_MODELS, new_database, validate_models, insert, operation, outcome, bootstrap, started, tick, snapshot_values,
@@ -196,7 +196,7 @@ class PublicationCasTests(unittest.TestCase):
                         if decision is CasDecision.MISMATCH:
                             await operations.record_refusal(claim, SnapshotApplyResult(category=SnapshotApplyOutcomeKind.CONFLICT,
                                 operation_id=name, request_fingerprint="b" * 64, committed=None,
-                                diagnostics=(FieldPathError(path=(), message="stale publication"),)))
+                                diagnostics=(target_issue("stale publication"),)))
                         return decision
                     decisions = await asyncio.gather(race(first, "race1", "c" * 64), race(second, "race2", "d" * 64))
                     self.assertEqual(decisions.count(CasDecision.APPLIED), 1)
@@ -283,7 +283,7 @@ class PublicationCasTests(unittest.TestCase):
                 self.assertEqual((await operations.read("prepared")).publication_fingerprint, "b" * 64)
                 bad = owner.model_copy(update={"lease": owner.lease.model_copy(update={"fence": 2})})
                 refusal = SnapshotApplyResult(category=SnapshotApplyOutcomeKind.REJECTED, operation_id="prepared",
-                    request_fingerprint="b" * 64, committed=None, diagnostics=(FieldPathError(path=(), message="stale"),))
+                    request_fingerprint="b" * 64, committed=None, diagnostics=(target_issue("stale"),))
                 with self.assertRaises(ValueError):
                     await operations.record_refusal(bad, refusal)
                 self.assertIsNone((await operations.read("prepared")).terminal)

@@ -324,6 +324,24 @@ class PolicyResolverTests(TestCase):
                     self.assertEqual(restored, result)
                     self.assertIs(type(restored.issues[0]), WaterDesignTypeError)
                     self.assertEqual(encode(restored, SURFACE_MANIFEST), encoded)
+                    if fallback:
+                        import subprocess
+                        import sys
+
+                        reader = """
+import sys
+from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_MANIFEST
+from app.dataModel.hydrology.policy.hydrologyGenerationDecision import WaterDesignDecision
+from app.dataModel.terrain.designedWater.waterDesignTypeError import WaterDesignTypeError
+from app.encoding.canonicalCodec import decode, encode
+
+decision = decode(sys.stdin.buffer.read(), WaterDesignDecision, SURFACE_MANIFEST)
+assert type(decision.issues[0]) is WaterDesignTypeError
+sys.stdout.buffer.write(encode(decision, SURFACE_MANIFEST))
+"""
+                        cold = subprocess.run([sys.executable, "-c", reader], input=encoded,
+                                              stdout=subprocess.PIPE, check=True, timeout=60)
+                        self.assertEqual(cold.stdout, encoded)
 
     def test_cold_read_rejects_unregistered_path_owner(self):
         from app.dataModel.fields.validatedFieldPath import ModelIdentity

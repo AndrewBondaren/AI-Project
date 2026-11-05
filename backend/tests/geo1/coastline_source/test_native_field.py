@@ -12,6 +12,9 @@ from app.application.worldData.generators.terrain.designedWater.strategies.proce
 from app.dataModel.hydrology.sources.waterDesignSource import WaterDesignSourceKind
 from app.dataModel.fields.validatedFieldPath import ModelIdentity
 from app.dataModel.terrain.designedWater.waterDesignTypeError import WaterDesignTypeError
+from app.dataModel.policy.policyTypeError import PolicyTypeError
+from app.dataModel.policy.policyEnums import PolicyIssueReason
+from app.dataModel.validation.diagnostics.validatorAggregationHelper import IssueAdmissionError, ValidatorAggregationHelper
 from app.dataModel.terrain.designedWater.draft import FineProceduralWaterDesignDraft
 from app.dataModel.terrain.designedWater.fields.plateCountAdjustedNotice import PlateCountAdjustedNotice
 from app.dataModel.terrain.designedWater.input import NativeCoastlineStrategyInput
@@ -39,6 +42,28 @@ class NativeFieldTests(TestCase):
             recipe = recipe.model_copy(update={"plate_policy": recipe.plate_policy.model_copy(update={"plate_count": plate_count})})
         return CoastlineWaterSourceAdapter().prepare_native(**dict(vars(value), geometry_request=request,
             expected_window=self.window.ref, field_policy=recipe))
+
+    def test_both_native_collectors_reject_foreign_issue(self):
+        collectors = []
+
+        def record_collector(admitted):
+            collector = ValidatorAggregationHelper(admitted)
+            collectors.append(collector)
+            self.assertEqual(admitted, (WaterDesignTypeError,))
+            return collector
+
+        module = CoastlineWaterSourceAdapter.__module__
+        with patch(module + ".ValidatorAggregationHelper", side_effect=record_collector):
+            native = self.admitted(Strategy.PLATE)
+        self.assertEqual(len(collectors), 2)
+        own = WaterDesignTypeError.at(type(native), ("metadata", "source_kind"), "test input",
+                                      operation="water_source", source_uid=native.metadata.source_uid)
+        foreign = PolicyTypeError(path=own.path, code=PolicyIssueReason.INVALID_INPUT, message="policy input")
+        for collector in collectors:
+            collector.add(own)
+            with self.assertRaises(IssueAdmissionError):
+                collector.add(foreign)
+            self.assertEqual(collector.snapshot(), (own,))
 
     def test_native_draft_binds_admitted_field_and_floor(self):
         for strategy in (Strategy.CONTINENTAL_NOISE, Strategy.PLATE, Strategy.PLATE_NOISE):

@@ -3,6 +3,7 @@
 from typing import Annotated, ClassVar, Self
 
 from pydantic import BaseModel, ConfigDict, Field, ModelWrapValidatorHandler, model_validator
+from pydantic_core import PydanticCustomError
 
 from app.dataModel.annotationPolicy import DefaultWhenMissing
 from app.dataModel.validation.immutableValue import validate_immutable
@@ -23,5 +24,8 @@ class WorldPhysicsSettings(BaseModel):
     def complete_existing_instance(cls, value: object, handler: ModelWrapValidatorHandler[Self]) -> Self:
         # Missing authoring fields may default; damaged existing POJOs may not.
         if isinstance(value, cls):
-            validate_immutable(value)
+            try:
+                validate_immutable(value)
+            except ValueError as exc:
+                raise PydanticCustomError("physics_settings_immutable", "incomplete or invalid immutable settings") from exc
         return handler(value)

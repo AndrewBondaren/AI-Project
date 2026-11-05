@@ -12,6 +12,7 @@ from app.dataModel.physics.settings.settingsChange import (
 )
 from app.dataModel.physics.settings.settingsCapture import WorldPhysicsSettingsView
 from app.dataModel.physics.settings.settingsResults import PhysicsSettingsChangeReason, PhysicsSettingsChangeRefused
+from app.dataModel.physics.settings.settingsIssues import PhysicsSettingsAdmissionFailure, SettingsWorldMismatch
 from app.dataModel.physics.settings.worldPhysicsSettings import WorldPhysicsSettings
 
 
@@ -52,12 +53,11 @@ class SettingsCoreTests(unittest.TestCase):
             view.model_copy(update={"settings": WorldPhysicsSettings.model_construct(gravity_acceleration_m_s2=True)}),
         )
         for bad in bad_views:
-            with self.subTest(bad=bad), self.assertRaises(ValueError):
-                prepare_reset_world_physics_settings(request, bad)
+            with self.subTest(bad=bad):
+                self.assertIsInstance(prepare_reset_world_physics_settings(request, bad), PhysicsSettingsAdmissionFailure)
         broken = WorldPhysicsSettings()
         object.__delattr__(broken, "gravity_acceleration_m_s2")
-        with self.assertRaises(ValueError):
-            build_settings_view("w", broken)
+        self.assertIsInstance(build_settings_view("w", broken), PhysicsSettingsAdmissionFailure)
 
     def test_replace_reset_are_pure_preparations_and_noop_keeps_revision(self):
         current = build_settings_view("w", WorldPhysicsSettings())
@@ -78,18 +78,23 @@ class SettingsCoreTests(unittest.TestCase):
         noop_reset = prepare_reset_world_physics_settings(WorldPhysicsSettingsReset(world_uid="w", expected_ref=current.ref), current)
         self.assertEqual(noop_reset.proposed_ref, current.ref)
 
-    def test_stale_or_other_world_expectations_never_produce_changes(self):
+    def test_mismatched_revisions_or_worlds_never_produce_changes(self):
         current = build_settings_view("w", WorldPhysicsSettings())
         stale = build_settings_view("w", WorldPhysicsSettings(gravity_acceleration_m_s2=2))
         operations = (
             (prepare_reset_world_physics_settings, WorldPhysicsSettingsReset(world_uid="w", expected_ref=stale.ref)),
             (prepare_replace_world_physics_settings, WorldPhysicsSettingsReplace(world_uid="w", expected_ref=stale.ref, value=current.settings)),
-            (prepare_reset_world_physics_settings, WorldPhysicsSettingsReset(world_uid="other", expected_ref=build_settings_view("other", current.settings).ref)),
         )
         for operation, request in operations:
             result = operation(request, current)
             self.assertIsInstance(result, PhysicsSettingsChangeRefused)
-            self.assertEqual(result.reason, PhysicsSettingsChangeReason.STALE_SETTINGS)
+            self.assertEqual(result.reason, PhysicsSettingsChangeReason.REVISION_MISMATCH)
+            self.assertEqual(result.expected_ref, stale.ref)
+            self.assertEqual(result.observed_ref, current.ref)
+        other = WorldPhysicsSettingsReset(world_uid="other", expected_ref=build_settings_view("other", current.settings).ref)
+        failure = prepare_reset_world_physics_settings(other, current)
+        self.assertIsInstance(failure, PhysicsSettingsAdmissionFailure)
+        self.assertIsInstance(failure.cause, SettingsWorldMismatch)
         with self.assertRaises(ValidationError):
             WorldPhysicsSettingsReset(world_uid="other", expected_ref=current.ref)
 

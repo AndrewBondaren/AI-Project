@@ -27,7 +27,7 @@ from app.dataModel.patch.preconditions.runtime import (
 from app.dataModel.patch.results.sectionResult import (
     SectionAccepted, SectionApplyReceipt, SectionRefused, SectionValidation,
 )
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from tests.snapshotCore.support.diagnostics import diagnostic_roundtrip, target_issue
 from app.dataModel.registryKey import RegistryKey
 from app.dataModel.worldSnapshot.identity.publication import PlayerHeadExpectation, WorldPublicationRef
 from app.dataModel.worldSnapshot.identity.refs import (
@@ -311,11 +311,11 @@ class CoreModelTests(unittest.TestCase):
             TargetVersionExpected(version=pack, presence="deleted")
 
     def test_section_refusal_is_typed_and_does_not_publish(self) -> None:
-        diagnostic = FieldPathError(path=("target",), message="stale target", code="arbitrary")
+        diagnostic = target_issue("stale target")
         adapter = TypeAdapter(SectionValidation)
         for record in (SectionAccepted(), *(SectionRefused(category=category, diagnostics=(diagnostic,))
                        for category in (SnapshotApplyOutcomeKind.CONFLICT, SnapshotApplyOutcomeKind.REJECTED))):
-            self.assertEqual(adapter.validate_json(record.model_dump_json()), record)
+            self.assertEqual(diagnostic_roundtrip(record), record)
         for changes in ({"category": SnapshotApplyOutcomeKind.COMMITTED}, {"category": "conflict"},
                         {"diagnostics": ()}, {"diagnostics": []}):
             with self.subTest(changes=changes), self.assertRaises(ValidationError):
@@ -393,7 +393,7 @@ class CoreModelTests(unittest.TestCase):
             PublishedSectionDependency(section_ref=state), pack, SnapshotTargetVersion(snapshot=self.player),
             TargetAbsent(), TargetVersionExpected(version=pack, presence=TargetPresence.PRESENT),
             SectionAccepted(), SectionRefused(category=SnapshotApplyOutcomeKind.REJECTED,
-                                              diagnostics=(FieldPathError(path=(), message="invalid"),)),
+                                              diagnostics=(target_issue("invalid"),)),
             SectionApplyReceipt(section_key=self.section_key, history_refs=(), state_refs=(),
                                 changed=(), retained_artifacts=()),
             PatchSet[DomainSection[PatchHeader]](
@@ -404,7 +404,10 @@ class CoreModelTests(unittest.TestCase):
         )
         for record in records:
             with self.subTest(model=type(record).__name__):
-                self.assertEqual(type(record).model_validate_json(record.model_dump_json()), record)
+                if isinstance(record, SectionRefused):
+                    self.assertEqual(diagnostic_roundtrip(record), record)
+                else:
+                    self.assertEqual(type(record).model_validate_json(record.model_dump_json()), record)
                 with self.assertRaises(ValidationError):
                     type(record).model_validate({**record.model_dump(), "unexpected": True})
                 if type(record).model_fields:
@@ -422,7 +425,7 @@ class CoreModelTests(unittest.TestCase):
         )
         commit = SnapshotCommitRefs(world_snapshot=self.world, player_snapshots=(self.player,),
                                     publication=publication)
-        diagnostic = FieldPathError(path=("target", 0), message="stale")
+        diagnostic = target_issue("stale")
         success = SnapshotApplyResult(category=SnapshotApplyOutcomeKind.COMMITTED, operation_id="op",
                                       request_fingerprint="b" * 64, committed=commit, diagnostics=())
         refusal = SnapshotApplyResult(category=SnapshotApplyOutcomeKind.CONFLICT, operation_id="op",
@@ -491,7 +494,7 @@ class CoreModelTests(unittest.TestCase):
                               and committed is None and bool(diagnostics)))
                     if valid:
                         record = SnapshotApplyResult.model_validate(values)
-                        self.assertEqual(SnapshotApplyResult.model_validate_json(record.model_dump_json()), record)
+                        self.assertEqual(diagnostic_roundtrip(record), record)
                     else:
                         with self.assertRaises(ValidationError):
                             SnapshotApplyResult.model_validate(values)
@@ -655,7 +658,10 @@ class CoreModelTests(unittest.TestCase):
         )
         for record in records:
             with self.subTest(model=type(record).__name__):
-                self.assertEqual(type(record).model_validate_json(record.model_dump_json()), record)
+                if record is refusal or isinstance(record, (OperationCancelled, GcReport)):
+                    self.assertEqual(diagnostic_roundtrip(record), record)
+                else:
+                    self.assertEqual(type(record).model_validate_json(record.model_dump_json()), record)
                 with self.assertRaises(ValidationError):
                     setattr(record, next(iter(type(record).model_fields)), None)
                 with self.assertRaises(ValidationError):

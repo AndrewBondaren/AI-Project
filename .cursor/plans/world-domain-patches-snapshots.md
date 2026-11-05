@@ -3048,6 +3048,8 @@ Evidence гонок получено на отдельных соединени�
 
 Профильная команда (AssignedPublicationTests, test_registry, test_typing) — 17 тестов, 9 ошибок в прежних сценариях с базовым FieldPathError, 1 failure typing gate. Полный `../.venv/Scripts/python.exe -B -m unittest discover -s tests/snapshotCore -p "test_*.py"` — 169 тестов, 36 TypeError создания базового FieldPathError, 1 failure typing gate, 1 skipped (162.013 с). Адресный Pyright с tests/typing/snapshotCore/pyrightconfig.valid.json для builder и обоих новых модулей — 0 диагностик. При включении worldSnapshotService.py — две диагностики reportCallIssue для старых отказов world/player CAS, вне принятого D1 metadata. Scoped diff --check прошёл.
 
+**Аудит оставшихся producers snapshotCore, 2026-11-05.** [Отчёт с группировкой падений, результатами migration fixtures и предложением D1 для world/player CAS](world-domain-snapshot-producers-audit.md).
+
 ## Контракты Snapshot для интеграции Time (2026-11-03)
 
 Входящий запрос из [Time §§14.2, 34, 37, 44–46, 48](./time-domain.md). Ниже три отдельных результата с владельцем Snapshot. Статус каждого — OPEN до согласования контракта и проверки соответствующего пути. Эти работы лежат вне среза leases 4C3-C.

@@ -298,7 +298,7 @@ class ConcreteLeaseTests(unittest.TestCase):
         from unittest.mock import patch
         from app.application.publication.service.operationLedger import OperationLedger
         from app.dataModel.artifacts.lifecycle.operation.record import OperationCancelled
-        from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+        from tests.snapshotCore.support.diagnostics import target_issue
 
         async def check():
             async with live_database() as first, live_database(first[0].path, seed=False) as second:
@@ -308,7 +308,7 @@ class ConcreteLeaseTests(unittest.TestCase):
                 await sealed(first, catalog, lease, ref)
                 await leases.finish_preparation(lease, (ref,))
                 op = lease.operation_id
-                outcome = OperationCancelled(operation_id=op, reason=FieldPathError(path=(), message="cancelled"))
+                outcome = OperationCancelled(operation_id=op, reason=target_issue("cancelled"))
                 operations = second[-1]
                 async with second[1].transaction(op) as scope:
                     with self.assertRaises(ValueError):
