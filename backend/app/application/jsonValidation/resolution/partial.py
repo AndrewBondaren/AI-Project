@@ -23,16 +23,17 @@ def _model_fields_schema(schema: dict, definitions: list[dict]) -> dict:
     return schema
 
 
-def _patch_fields(schema: dict, definitions: list[dict], *, aliases: bool) -> dict:
+def _patch_fields(schema: dict, definitions: list[dict], *, validate_by_alias: bool) -> dict:
     fields = {}
     for name, info in schema["fields"].items():
         options = {}
-        if aliases and "validation_alias" in info:
+        if "validation_alias" in info:
             options["validation_alias"] = info["validation_alias"]
         fields[name] = core_schema.typed_dict_field(
             _patch_field_schema(info["schema"], definitions), required=False, **options)
     return core_schema.typed_dict_schema(fields,
-        extra_behavior=schema.get("extra_behavior", "ignore"), config={"populate_by_name": True})
+        extra_behavior=schema.get("extra_behavior", "ignore"),
+        config={"validate_by_alias": validate_by_alias, "validate_by_name": True})
 
 
 def _contains_patch_model(schema: dict) -> bool:
@@ -54,7 +55,7 @@ def _patch_field_schema(schema: dict, definitions: list[dict]) -> dict:
     if kind == "model" and not schema.get("root_model"):
         fields = dict(_model_fields_schema(schema, definitions))
         fields["extra_behavior"] = schema.get("config", {}).get("extra_fields_behavior", "ignore")
-        return _patch_fields(fields, definitions, aliases=True)
+        return _patch_fields(fields, definitions, validate_by_alias=schema.get("config", {}).get("validate_by_alias", True))
     if kind == "definition-ref":
         target = next(item for item in definitions if item.get("ref") == schema["schema_ref"])
         return _patch_field_schema(target, definitions)
@@ -95,7 +96,7 @@ def _patch_validator(model_cls: type[BaseModel]) -> SchemaValidator:
     definitions = schema.get("definitions", []) if schema["type"] == "definitions" else []
     fields = dict(_model_fields_schema(schema, definitions))
     fields["extra_behavior"] = model_cls.model_config.get("extra", "ignore")
-    patch_schema = _patch_fields(fields, definitions, aliases=False)
+    patch_schema = _patch_fields(fields, definitions, validate_by_alias=model_cls.model_config.get("validate_by_alias", True))
     if definitions:
         patch_schema = core_schema.definitions_schema(patch_schema, definitions)
     return SchemaValidator(patch_schema)
@@ -136,46 +137,7 @@ def resolve_patch(model_cls: type[BaseModel], raw: dict[str, Any], *, ctx: Resol
     if not isinstance(raw, dict):
         reject_unresolved(ctx, [WireShapeIssue(code=JsonValidationCode.EXPECTED_OBJECT,
                                                location=ctx.location, message="expected object")])
-    supplied = {}
-    for name, info in model_cls.model_fields.items():
-        value, present = _read_wire_field(raw, name, info)
-        if present:
-            supplied[name] = value
-    known_keys = {key for name, info in model_cls.model_fields.items()
-                  for key in _wire_lookup_keys(name, info)}
-    supplied.update({key: value for key, value in raw.items() if key not in known_keys})
     try:
-        payload = _patch_validator(model_cls).validate_python(supplied)
+        return _patch_validator(model_cls).validate_python(raw, by_name=True)
     except ValidationError as exc:
-        reject_unresolved(ctx, pydantic_issues(ctx, model_cls, exc, raw=supplied))
-    return payload
-
-
-def _wire_lookup_keys(field_name: str, field_info: Any) -> tuple[str, ...]:
-    """Python field name plus Pydantic validation / serialization aliases."""
-    keys: list[str] = [field_name]
-    alias = getattr(field_info, "alias", None)
-    if isinstance(alias, str) and alias not in keys:
-        keys.append(alias)
-    validation_alias = getattr(field_info, "validation_alias", None)
-    if isinstance(validation_alias, str):
-        if validation_alias not in keys:
-            keys.append(validation_alias)
-    elif validation_alias is not None:
-        choices = getattr(validation_alias, "choices", None)
-        if choices:
-            for choice in choices:
-                if isinstance(choice, str) and choice not in keys:
-                    keys.append(choice)
-    return tuple(keys)
-
-
-def _read_wire_field(
-    raw: dict[str, Any],
-    field_name: str,
-    field_info: Any,
-) -> tuple[Any, bool]:
-    for key in _wire_lookup_keys(field_name, field_info):
-        if key in raw:
-            return raw[key], True
-    return None, False
+        reject_unresolved(ctx, pydantic_issues(ctx, model_cls, exc, raw=raw))

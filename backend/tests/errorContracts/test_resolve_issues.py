@@ -141,6 +141,38 @@ class ResolveIssuesTests(unittest.TestCase):
 
 
 class ReviewRegressionTests(unittest.TestCase):
+    def test_patch_prioritizes_alias_over_python_name(self):
+        class Amount(BaseModel):
+            amount: int = Field(alias="wire_amount", ge=0)
+
+        ctx = ResolveContext.for_import(validate_only=True)
+        data = {"wire_amount": -1, "amount": 2}
+        for resolve in (resolve_model, resolve_patch):
+            with self.subTest(resolve=resolve.__name__):
+                issue, = _issues(lambda: resolve(Amount, data, ctx=ctx))
+                detail, = import_validation_http_detail(ImportValidationError([issue]))
+                self.assertEqual((detail["loc"], detail["code"]), (["wire_amount"], "greater_than_equal"))
+        self.assertEqual(resolve_patch(Amount, {}, ctx=ctx), {})
+        self.assertEqual(resolve_patch(Amount, {"wire_amount": 1, "amount": 2}, ctx=ctx), {"amount": 1})
+
+    def test_patch_keeps_climate_alias_choice_in_error_location(self):
+        from app.dataModel.worldPack.wire.climateFieldWire import ClimateFieldWire
+
+        ctx = ResolveContext.for_import(validate_only=True)
+        issue, = _issues(lambda: resolve_patch(ClimateFieldWire, {"sample_step_m": 0}, ctx=ctx))
+        detail, = import_validation_http_detail(ImportValidationError([issue]))
+        self.assertEqual((detail["loc"], detail["code"]), (["sample_step_m"], "greater_than_equal"))
+        self.assertEqual(resolve_patch(ClimateFieldWire, {"sample_step_m": 2}, ctx=ctx), {"sample_step_fine": 2})
+
+    def test_patch_respects_models_that_disable_validation_aliases(self):
+        class Amount(BaseModel):
+            model_config = ConfigDict(validate_by_alias=False, validate_by_name=True)
+            amount: int = Field(alias="wire_amount")
+
+        raw = {"wire_amount": -1, "amount": 2}
+        ctx = ResolveContext.for_import(validate_only=True)
+        self.assertEqual(resolve_patch(Amount, raw, ctx=ctx), resolve_model(Amount, raw, ctx=ctx).model_dump())
+
     def test_http_loc_keeps_the_alias_choice_actually_used(self) -> None:
         for key in ("sample_step_fine", "sample_step_m"):
             with self.subTest(key=key):

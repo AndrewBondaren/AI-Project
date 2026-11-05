@@ -16,6 +16,30 @@ from app.dataModel.validation.importIssues.wireLocation import WireLocation
 
 
 class BundleIssueTests(unittest.TestCase):
+    def test_scalar_union_errors_point_to_value(self):
+        class Row(BaseModel):
+            value: int | float
+
+        ctx = ResolveContext.for_import(validate_only=True).child("rows")
+        with self.assertRaises(UnresolvedModelError) as caught:
+            validate_rows([{"value": "bad"}], Row.model_validate, ctx=ctx)
+        detail = import_validation_http_detail(ImportValidationError(caught.exception.issues))
+        self.assertEqual([(item["loc"], item["code"]) for item in detail], [
+            (["rows", 0, "value"], "int_parsing"), (["rows", 0, "value"], "float_parsing"),
+        ])
+
+    def test_union_branch_and_authored_key_can_have_the_same_name(self):
+        class Row(BaseModel):
+            value: int | dict[str, int]
+
+        ctx = ResolveContext.for_import(validate_only=True).child("rows")
+        with self.assertRaises(UnresolvedModelError) as caught:
+            validate_rows([{"value": {"int": "bad"}}], Row.model_validate, ctx=ctx)
+        detail = import_validation_http_detail(ImportValidationError(caught.exception.issues))
+        self.assertEqual([(item["loc"], item["code"]) for item in detail], [
+            (["rows", 0, "value"], "int_type"), (["rows", 0, "value", "int"], "int_parsing"),
+        ])
+
     def test_multi_column_index_requires_a_registered_world_key(self):
         def issue(key):
             return _index_issue(WireLocation(parts=("world",)), model=WorldClimateScalars,

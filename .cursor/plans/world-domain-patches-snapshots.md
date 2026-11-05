@@ -3023,6 +3023,8 @@ Evidence гонок получено на отдельных соединени�
 
 **Перепроверка на HEAD `6bcd4073`, 2026-11-05.** Коммит `8ce0ab50` уже содержит обе ветви проверки через второе соединение. На этом HEAD тест останавливается при импорте `WorldSnapshotService` из-за отсутствующего `app.core.validatorAggregationHelper`, до commit и чтения holders. Фактический состав держателей на этой ревизии подтвердить не удалось. Повтор команд из блока выше: профильные — 17 тестов (1 failure, 6 errors), полный `snapshotCore` — 169 тестов (1 failure, 33 errors, 1 skipped).
 
+**Holder handoff на `ed595334`, 2026-11-05.** В отдельном прогоне через `SqliteArtifactHolders.handoff` writer записал world/player metadata для `a`/`b` и передал только `a`. После commit второе SQLite-соединение подтвердило точные наборы: `a` — только world snapshot holder, `b` — player snapshot holder и исходный operation hold, `leftover` — только исходный operation hold. Штатный тест через сервис остановился до транзакции на импорте `app.core.validatorAggregationHelper`. Профильные: 17 тестов, 1 failure, 6 errors. Полный `snapshotCore`: 169 тестов, 1 failure, 33 errors, 1 skipped.
+
 ## Контракты Snapshot для интеграции Time (2026-11-03)
 
 Входящий запрос из [Time §§14.2, 34, 37, 44–46, 48](./time-domain.md). Ниже три отдельных результата с владельцем Snapshot. Статус каждого — OPEN до согласования контракта и проверки соответствующего пути. Эти работы лежат вне среза leases 4C3-C.

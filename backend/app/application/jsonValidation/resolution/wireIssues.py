@@ -63,10 +63,46 @@ def _input_loc(error: ErrorDetails, raw: Any) -> tuple[str | int, ...]:
     return tuple(parts)
 
 
+def _raw_row_loc(error: ErrorDetails, raw: Any) -> tuple[str | int, ...]:
+    """Union branch labels do not descend into the input; authored keys do."""
+    if raw is _NO_INPUT:
+        return error["loc"]
+    loc = error["loc"]
+    missing = error["type"] == "missing"
+    steps = loc[:-1] if missing else loc
+    matches: dict[tuple[int, int], tuple[str | int, ...] | None] = {}
+
+    def match(value: Any, start: int) -> tuple[str | int, ...] | None:
+        if value is error["input"]:
+            return loc[-1:] if missing else ()
+        state = (id(value), start)
+        if state in matches:
+            return matches[state]
+        best = None
+        # Match the authored suffix first: a branch named like a dictionary
+        # key precedes that key in Pydantic's loc.
+        for i in range(len(steps) - 1, start - 1, -1):
+            part = steps[i]
+            if isinstance(value, dict) and part in value:
+                child = value[part]
+            elif isinstance(value, (list, tuple)) and isinstance(part, int) and 0 <= part < len(value):
+                child = value[part]
+            else:
+                continue
+            tail = match(child, i + 1)
+            if tail is not None and (best is None or len(tail) + 1 > len(best)):
+                best = (part, *tail)
+        matches[state] = best
+        return best
+
+    path = match(raw, 0)
+    return _input_loc(error, raw) if path is None else path
+
+
 def _schema_issue(ctx: ResolveContext, root: type[BaseModel] | None, error: ErrorDetails,
                   prefix: tuple[str | int, ...], raw: Any) -> ImportIssue:
     kind = error["type"]
-    loc = prefix + _input_loc(error, raw)
+    loc = prefix + (_raw_row_loc(error, raw) if root is None else _input_loc(error, raw))
     if kind == "enum":
         return field_issue(ctx, root, loc, "unknown wire value; " + error["msg"],
                             JsonValidationCode.UNKNOWN_ENUM)
