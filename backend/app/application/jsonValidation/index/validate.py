@@ -1,4 +1,4 @@
-"""REF-W semantic checks on normalized ``worlds`` wire вЂ” import only."""
+"""REF-W semantic checks on normalized ``worlds`` wire — import only."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from app.application.jsonValidation.index.refKinds import RefKind
 from app.application.jsonValidation.index.worldRegistryIndex import WorldRegistryIndex
 from app.application.jsonValidation.resolve import ResolveContext, field_issue
 from app.application.jsonValidation.types import ImportIssue
+from app.application.jsonValidation.worldSlices import slice_for_pojo
 from app.dataModel.validation.importIssues.jsonValidationCode import JsonValidationCode
 from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.dataModel.climate.worldClimateScalars import WorldClimateScalars
@@ -34,10 +35,14 @@ class RefCheck:
 
 def _index_issue(*, model: type[BaseModel], path: tuple[str | int, ...],
                  message: str, code: JsonValidationCode) -> ImportIssue:
-    # Climate scalars live directly on the world row. Other slices are nested
-    # under their column name, outside the validated POJO.
-    offset = 0 if model is WorldClimateScalars else 1
-    ctx = ResolveContext(location=WireLocation(parts=path[:offset]), schema_id=getattr(model, "SCHEMA_ID"))
+    world_slice = slice_for_pojo(model)
+    if world_slice is None:
+        raise RuntimeError(f"no WorldSlice registered for {model.__name__}")
+    # multi_column POJO fields are world-row keys; other slices nest under their column.
+    offset = 0 if world_slice.wire_kind == "multi_column" else 1
+    if offset and path[:1] != world_slice.world_keys[:1]:
+        raise RuntimeError(f"{model.__name__} issue path {path!r} is outside {world_slice.world_keys[0]!r}")
+    ctx = ResolveContext(location=WireLocation(parts=path[:offset]), schema_id=world_slice.schema_id)
     return field_issue(ctx, model, path[offset:], message, code)
 
 

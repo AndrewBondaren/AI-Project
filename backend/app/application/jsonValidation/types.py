@@ -94,7 +94,7 @@ def _wire_detail(issues: Iterable[ImportIssue]) -> list[dict[str, object]]:
     for issue in issues:
         item: dict[str, object] = {"loc": list(wire_loc(issue)), "msg": issue.message, "code": _wire_code(issue)}
         schema_id = getattr(issue, "schema_id", None)
-        if schema_id:
+        if isinstance(schema_id, str) and schema_id:
             item["schema_id"] = schema_id
         detail.append(item)
     return detail

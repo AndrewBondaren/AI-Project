@@ -1,4 +1,4 @@
-"""``connection_nodes`` / ``connection_edges`` bundle import rows вЂ” JV-0b."""
+"""``connection_nodes`` / ``connection_edges`` bundle import rows — JV-0b."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from app.dataModel.worldBundle.bundleSections import BundleSection
 
 
 class ConnectionNodeImportRow(BaseModel):
-    """Wire row for ``connection_nodes`` вЂ” CONN-1 keeps ``node_type`` key."""
+    """Wire row for ``connection_nodes`` — CONN-1 keeps ``node_type`` key."""
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
@@ -42,7 +42,7 @@ class ConnectionNodeImportRow(BaseModel):
 
 
 class ConnectionEdgeImportRow(BaseModel):
-    """Wire row for ``connection_edges`` вЂ” ``connection_type`` is N1-W (REF-W-CONN)."""
+    """Wire row for ``connection_edges`` — ``connection_type`` is N1-W (REF-W-CONN)."""
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 

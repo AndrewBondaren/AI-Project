@@ -25,7 +25,6 @@ from app.application.jsonValidation.resolve import (
 from app.application.jsonValidation.types import ImportValidationError, ImportValidationReport
 from app.dataModel.validation.importIssues.jsonValidationCode import JsonValidationCode
 from app.dataModel.validation.importIssues.wireShapeIssue import WireShapeIssue
-from app.db.models.world import World
 from app.application.templateLibrary.reliefErrors import ReliefValidationError
 from pydantic import ValidationError
 from app.application.worldBundle.handler import IBundleSectionHandler
@@ -163,7 +162,7 @@ class WorldBundleService:
         except StrictFieldError as exc:
             raise ImportValidationError([exc.issue]) from exc
         except ValidationError as exc:
-            raise ImportValidationError(pydantic_issues(world_ctx, World, exc)) from exc
+            raise ImportValidationError(pydantic_issues(world_ctx, None, exc)) from exc
         except ValueError as exc:
             raise ImportValidationError([WireShapeIssue(
                 location=world_ctx.location, message=str(exc),

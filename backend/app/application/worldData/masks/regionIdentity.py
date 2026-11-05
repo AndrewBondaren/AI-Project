@@ -5,11 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.application.jsonValidation.resolve import ResolveContext, log_issues, report_issues, resolve_model
-from app.dataModel.terrainMasks.regions.identityIssue import RegionIdentityCode, RegionIdentityIssue
+from app.dataModel.fields.checkedPath import CheckedPath
 from app.dataModel.spatial.regionShape import AnchorRadiusShape
 from app.dataModel.terrainMasks.regions import RegionSpecBase
+from app.dataModel.terrainMasks.regions.identityIssue import RegionIdentityCode, RegionIdentityIssue
 from app.dataModel.terrainMasks.regions.specs import REGION_NAME
-from app.dataModel.fields.checkedPath import CheckedPath
 from app.ids.deterministicIds import state_fingerprint
 from app.ids.regionIdentity import region_uid
 
@@ -39,11 +39,11 @@ def declared_region_identity(
             x_min, y_min, _, _ = spec.shape.bbox()
             uid = region_uid(world_uid, bbox_min=(x_min, y_min), shape_kind=spec.shape.kind)
         issue = RegionIdentityIssue(
+            code=RegionIdentityCode.REGION_DEGRADED_IDENTITY,
             path=CheckedPath.root(RegionSpecBase).field(REGION_NAME).freeze(),
             location=active.location,
-            message=f"landcover | degraded_identity | region_uid={uid}; declared region has no name",
             schema_id=active.schema_id,
-            code=RegionIdentityCode.REGION_DEGRADED_IDENTITY,
+            message=f"landcover | degraded_identity | region_uid={uid}; declared region has no name",
         )
         if active.validate_only or active.collect_only:
             report_issues(active, [issue])
