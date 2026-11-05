@@ -21,6 +21,7 @@ from functools import lru_cache
 from typing import get_args
 
 from app.dataModel.fields.checkedPath import CheckedPath
+from app.dataModel.fields.validatedFieldPath import VariantSegment
 from app.dataModel.validation.importIssues.jsonFieldError import JsonFieldError
 from app.dataModel.validation.importIssues.jsonValidationCode import JsonValidationCode
 from app.dataModel.validation.importIssues.wireLocation import WireLocation
@@ -245,7 +246,7 @@ def _reference_issues(value: Any, ctx: ResolveContext, references: WorldRegistry
         root = root if root is not None else type(value)
         for name, info in type(value).model_fields.items():
             item = getattr(value, name)
-            field_loc = loc if isinstance(value, RootModel) else (*loc, name)
+            field_loc = loc if isinstance(value, RootModel) else (*loc, info.alias if isinstance(info.alias, str) else name)
             target = registry_key_target(info.annotation)
             if target is not None and item is not None:
                 keys = references.keys_for_registry(target)
@@ -356,12 +357,19 @@ def _field_issue(ctx: ResolveContext, root: type[BaseModel], loc: tuple[str | in
                  message: str, code: JsonValidationCode,
                  pydantic_type: ErrorType | None = None) -> ImportIssue:
     """F01 when loc is a declared field of root; otherwise F09 at the raw wire location."""
-    path = CheckedPath.from_pydantic_loc(root, ("root", *loc) if issubclass(root, RootModel) else loc)
+    is_root_model = issubclass(root, RootModel)
+    path = CheckedPath.from_pydantic_loc(root, ("root", *loc) if is_root_model else loc)
     if path is None:
         return WireShapeIssue(code=code, location=ctx.location.child(*loc),
                               message=message, pydantic_type=pydantic_type)
-    return JsonFieldError(code=code, path=path, location=ctx.location, schema_id=ctx.schema_id,
-                          pydantic_type=pydantic_type, message=message)
+    segments = path.segments[1:] if is_root_model else path.segments
+    wire_path = tuple(part for part, segment in zip(loc, segments, strict=True)
+                      if not isinstance(segment, VariantSegment))
+    if not wire_path:
+        return WireShapeIssue(code=code, location=ctx.location,
+                              message=message, pydantic_type=pydantic_type)
+    return JsonFieldError(code=code, path=path, location=ctx.location, wire_path=wire_path,
+                          schema_id=ctx.schema_id, pydantic_type=pydantic_type, message=message)
 
 
 def _schema_issue(ctx: ResolveContext, root: type[BaseModel], error: ErrorDetails) -> ImportIssue:

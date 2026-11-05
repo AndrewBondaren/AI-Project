@@ -6,15 +6,15 @@ appear only in ``import_validation_http_detail``.
 
 from __future__ import annotations
 
-import sys
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
-from pydantic import BaseModel, RootModel, TypeAdapter
+from pydantic import TypeAdapter
 
-from app.dataModel.fields.validatedFieldPath import FieldSegment, IndexSegment, KeySegment, ModelIdentity
+from app.dataModel.fields.validatedFieldPath import FieldSegment, IndexSegment, KeySegment
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.dataModel.validation.immutableValue import validate_immutable
 from app.dataModel.validation.importIssues.jsonFieldError import JsonFieldError
 from app.dataModel.validation.importIssues.jsonValidationCode import JsonValidationCode
 from app.dataModel.validation.importIssues.wireShapeIssue import WireShapeIssue
@@ -25,8 +25,11 @@ _ISSUES: TypeAdapter[tuple[ImportIssue, ...]] = TypeAdapter(tuple[ImportIssue, .
 
 
 def validate_import_issues(issues: tuple[ImportIssue, ...]) -> tuple[ImportIssue, ...]:
-    """Carrier admission for request-local issue containers."""
-    return _ISSUES.validate_python(issues, strict=True)
+    """Carrier admission plus EC-06 deep immutability for issue containers."""
+    admitted = _ISSUES.validate_python(issues, strict=True)
+    for issue in admitted:
+        validate_immutable(issue)
+    return admitted
 
 
 @dataclass
@@ -37,7 +40,7 @@ class ResolveReport:
 
 class ImportValidationError(Exception):
     def __init__(self, errors: Iterable[ImportIssue]) -> None:
-        self.errors: list[ImportIssue] = list(_ISSUES.validate_python(tuple(errors), strict=True))
+        self.errors: list[ImportIssue] = list(validate_import_issues(tuple(errors)))
         super().__init__("; ".join(f"{'.'.join(str(p) for p in wire_loc(e))}: {e.message}" for e in self.errors))
 
 
@@ -47,7 +50,7 @@ class ImportValidationReport:
     issues: tuple[ImportIssue, ...] = ()
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "issues", _ISSUES.validate_python(self.issues, strict=True))
+        object.__setattr__(self, "issues", validate_import_issues(self.issues))
 
     @property
     def valid(self) -> bool:
@@ -58,33 +61,20 @@ class ImportValidationReport:
                 "issues": import_validation_http_detail(ImportValidationError(self.issues))}
 
 
-def _model_of(identity: ModelIdentity) -> type[BaseModel]:
-    owner: Any = sys.modules[identity.module]
-    for name in identity.qualname.split("."):
-        owner = getattr(owner, name)
-    return owner
-
-
-def _wire_name(segment: FieldSegment) -> str:
-    alias = _model_of(segment.owner).model_fields[segment.name].alias
-    return alias if isinstance(alias, str) else segment.name
-
-
 def wire_loc(issue: ImportIssue) -> tuple[str | int, ...]:
     if isinstance(issue, WireShapeIssue):
         return issue.location.parts
+    if isinstance(issue, JsonFieldError):
+        return (*issue.location.parts, *issue.wire_path)
     flat: list[str | int] = []
     for segment in issue.path.segments:
         if isinstance(segment, FieldSegment):
-            if segment.name == "root" and issubclass(_model_of(segment.owner), RootModel):
-                continue
-            flat.append(_wire_name(segment))
+            flat.append(segment.name)
         elif isinstance(segment, IndexSegment):
             flat.append(segment.index)
         elif isinstance(segment, KeySegment):
             flat.append(segment.key)
-    prefix = issue.location.parts if isinstance(issue, JsonFieldError) else ()
-    return (*prefix, *flat)
+    return tuple(flat)
 
 
 def _wire_code(issue: ImportIssue) -> object:

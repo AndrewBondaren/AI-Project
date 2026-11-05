@@ -3,13 +3,17 @@
 import unittest
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, RootModel, field_validator
 from pydantic_core import PydanticCustomError
 
 from app.application.jsonValidation.resolve import (
     ResolveContext, StrictFieldError, UnresolvedModelError, report_issues, resolve_model, resolve_patch,
 )
-from app.application.jsonValidation.types import ImportValidationError, import_validation_http_detail
+from app.application.jsonValidation.types import (
+    ImportValidationError, ImportValidationReport, import_validation_http_detail,
+)
+from app.dataModel.fields.checkedPath import CheckedPath
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.validation.importIssues.jsonFieldError import JsonFieldError
 from app.dataModel.validation.importIssues.jsonValidationCode import JsonValidationCode
 from app.dataModel.validation.importIssues.wireLocation import WireLocation
@@ -43,6 +47,18 @@ class Lakes(RootModel[list[Lake]]):
     pass
 
 
+class Sampling(BaseModel):
+    step_fine: int = Field(gt=0, validation_alias=AliasChoices("sample_step_fine", "sample_step_m"))
+
+
+class ProbeCode(StrEnum):
+    BROKEN = "broken"
+
+
+class MutableProbeError(FieldPathError[ProbeCode]):
+    data: list[str]
+
+
 def _issues(call) -> list:
     try:
         call()
@@ -70,7 +86,8 @@ class ResolveIssuesTests(unittest.TestCase):
             (JsonValidationCode.VALIDATION_ERROR, None),
         })
         detail = import_validation_http_detail(ImportValidationError(issues))
-        self.assertEqual({(tuple(item["loc"]), item["code"]) for item in detail}  # type: ignore[arg-type], {
+        actual = {(tuple(item["loc"]), item["code"]) for item in detail}  # type: ignore[arg-type]
+        self.assertEqual(actual, {
             (("hydrology", "lakes", "banks", 0, "shore"), "UNKNOWN_ENUM"),
             (("hydrology", "lakes", "banks", 0, "width"), "missing"),
             (("hydrology", "lakes", "depth"), "VALIDATION_ERROR"),
@@ -105,6 +122,33 @@ class ResolveIssuesTests(unittest.TestCase):
         self.assertIs(StrictFieldError(issue).issue.code, JsonValidationCode.BUNDLE_INVALID)
         with self.assertRaises(Exception):
             WireShapeIssue(code=JsonValidationCode.SCHEMA_VIOLATION, location=WireLocation(), message="x")
+
+
+class ReviewRegressionTests(unittest.TestCase):
+    def test_http_loc_keeps_the_alias_choice_actually_used(self) -> None:
+        for key in ("sample_step_fine", "sample_step_m"):
+            with self.subTest(key=key):
+                (issue,) = _issues(lambda: resolve_model(Sampling, {key: 0}, ctx=ResolveContext(validate_only=True)))
+                self.assertIsInstance(issue, JsonFieldError)
+                self.assertEqual(issue.path.segments[0].name, "step_fine")  # type: ignore[union-attr]
+                detail = import_validation_http_detail(ImportValidationError([issue]))
+                self.assertEqual(detail[0]["loc"], [key])
+
+    def test_function_local_model_formats_without_module_lookup(self) -> None:
+        class Local(BaseModel):
+            depth: int
+
+        (issue,) = _issues(lambda: resolve_model(Local, {"depth": "x"}, ctx=ResolveContext(validate_only=True)))
+        self.assertEqual(str(ImportValidationError([issue])), "depth: Input should be a valid integer, unable to parse string as an integer")
+
+    def test_published_report_rejects_mutable_issue_state(self) -> None:
+        path = CheckedPath.from_pydantic_loc(Lake, ("depth",))
+        assert path is not None
+        issue = MutableProbeError(code=ProbeCode.BROKEN, path=path, message="m", data=["a"])
+        with self.assertRaises(ValueError):
+            ImportValidationReport((issue,))
+        with self.assertRaises(ValueError):
+            ImportValidationError([issue])
 
 
 if __name__ == "__main__":
