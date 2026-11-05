@@ -38,6 +38,39 @@ from tests.test_cascade_context_baseline import fixture
 
 
 class SourceConsumerTests(unittest.TestCase):
+    def test_scope_uses_normalized_range_from_unchecked_source(self):
+        world, _, _ = fixture()
+        bounds = {"min": "t1", "max": "t9"}
+        cases = (
+            (PlotLayoutTemplate(system_name="p", display_name="P"), ScopeLevel.DISTRICT,
+             lambda parent, obj: area_context(world, parent, obj, area_uid="p")),
+            (DistrictTemplateEntry(system_name="d", display_name="D", district_type="residential"),
+             ScopeLevel.SETTLEMENT, lambda parent, obj: district_context(world, parent, obj, district_uid="d")),
+        )
+        for source, level, build in cases:
+            with self.subTest(model=type(source).__name__):
+                parent = empty_location_chain(world, level)
+                before = parent.model_dump()
+                unchecked = source.model_copy(update={"economic_tier_range": bounds})
+                typed = type(source).model_validate({**source.model_dump(exclude_unset=True), "economic_tier_range": bounds})
+                expected = build(parent, typed)
+                actual = build(parent, unchecked)
+                self.assertEqual(actual.economic_tier, expected.economic_tier)
+                self.assertEqual(actual.provenance, expected.provenance)
+                self.assertEqual(parent.model_dump(), before)
+                self.assertIs(unchecked.economic_tier_range, bounds)
+                inherited = build(parent, source)
+                explicit_null = build(parent, source.model_copy(update={"economic_tier_range": None}))
+                self.assertEqual(explicit_null.economic_tier, inherited.economic_tier)
+                self.assertEqual(explicit_null.provenance, inherited.provenance)
+                for low, high, code in (("missing", "t9", "REF_W_UNKNOWN"), ("t9", "t1", "DOMAIN_RANGE")):
+                    invalid = source.model_copy(update={"economic_tier_range": {"min": low, "max": high}})
+                    with patch.object(locationScope, "extend") as extend:
+                        with self.assertRaises(UnresolvedModelError) as caught:
+                            build(parent, invalid)
+                        extend.assert_not_called()
+                    self.assertEqual(caught.exception.issue.code.value, code)
+
     def test_location_wire_policy_has_identical_facts_and_one_log(self):
         world, location, _ = fixture()
         for value, field in (("unknown", "system_economic_tier"),

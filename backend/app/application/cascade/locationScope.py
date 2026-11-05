@@ -64,11 +64,11 @@ def settlement_context(
     """World root + settlement links → resolved settlement-scope ctx."""
     sources = (named_location_pojo(settlement, world=world, resolve_ctx=resolve_ctx), settlement_payload(settlement, ctx=resolve_ctx),
                settlement_skeleton_pojo(settlement, ctx=resolve_ctx))
-    for source in sources:
-        validate_source(world, source, ctx=resolve_ctx if resolve_ctx is not None else ResolveContext(location=WireLocation(parts=("locations", settlement.location_uid))))
+    active_ctx = resolve_ctx if resolve_ctx is not None else ResolveContext(location=WireLocation(parts=("locations", settlement.location_uid)))
+    links = [Link(ScopeLevel.SETTLEMENT, validate_source(world, source, ctx=active_ctx)) for source in sources]
     return extend(
         root_context(world),
-        *(Link(ScopeLevel.SETTLEMENT, source) for source in sources),
+        *links,
         rng=scope_rng(world.world_uid, settlement.location_uid, "tier"),
     )
 
@@ -87,14 +87,12 @@ def district_context(
     The persisted/authored district NL is the first link when known —
     its ``system_economic_tier`` beats the template range.
     """
-    links = [Link(ScopeLevel.DISTRICT, template)]
+    active_ctx = resolve_ctx if resolve_ctx is not None else ResolveContext(location=WireLocation(parts=("districts", district_uid)))
+    links = []
     if district is not None:
-        links.insert(
-            0,
-            Link(ScopeLevel.DISTRICT, named_location_pojo(district, world=world, resolve_ctx=resolve_ctx)),
-        )
-    for link in links:
-        validate_source(world, link.obj, ctx=resolve_ctx if resolve_ctx is not None else ResolveContext(location=WireLocation(parts=("districts", district_uid))))
+        location = named_location_pojo(district, world=world, resolve_ctx=resolve_ctx)
+        links.append(Link(ScopeLevel.DISTRICT, validate_source(world, location, ctx=active_ctx)))
+    links.append(Link(ScopeLevel.DISTRICT, validate_source(world, template, ctx=active_ctx)))
     return extend(
         ctx,
         *links,
@@ -111,10 +109,11 @@ def area_context(
     resolve_ctx: ResolveContext | None = None,
 ) -> LocationContext:
     """District ctx + plot link → area-scope ctx."""
-    validate_source(world, plot, ctx=resolve_ctx if resolve_ctx is not None else ResolveContext(location=WireLocation(parts=("areas", area_uid))))
+    active_ctx = resolve_ctx if resolve_ctx is not None else ResolveContext(location=WireLocation(parts=("areas", area_uid)))
+    source = validate_source(world, plot, ctx=active_ctx)
     return extend(
         ctx,
-        Link(ScopeLevel.AREA, plot),
+        Link(ScopeLevel.AREA, source),
         rng=scope_rng(world.world_uid, area_uid, "tier"),
     )
 
@@ -127,7 +126,8 @@ def building_context(
 ) -> LocationContext:
     """Area ctx + building NL link → building-scope ctx."""
     source = named_location_pojo(building, world=world, resolve_ctx=resolve_ctx)
-    validate_source(world, source, ctx=resolve_ctx if resolve_ctx is not None else ResolveContext(location=WireLocation(parts=("locations", building.location_uid))))
+    active_ctx = resolve_ctx if resolve_ctx is not None else ResolveContext(location=WireLocation(parts=("locations", building.location_uid)))
+    source = validate_source(world, source, ctx=active_ctx)
     return extend(
         ctx,
         Link(ScopeLevel.BUILDING, source),
@@ -145,10 +145,10 @@ def room_context(
 ) -> LocationContext:
     """Building ctx + room_def link → room-scope ctx."""
     active_ctx = resolve_ctx if resolve_ctx is not None else ResolveContext(location=WireLocation(parts=("rooms", room_def.room_id)))
-    validate_source(world, room_def, ctx=active_ctx)
+    source = validate_source(world, room_def, ctx=active_ctx)
     return extend(
         ctx,
-        Link(ScopeLevel.ROOM, room_def),
+        Link(ScopeLevel.ROOM, source),
         rng=scope_rng(world.world_uid, room_uid, "tier"),
     )
 

@@ -52,3 +52,29 @@
 **Сохранение и версии.** Для этого среза подтвердить строгий dump/restore реальных владельцев: №4 — FineWaterDesignConstraints с непустым notice; №5 — FineProceduralWaterDesignDraft через вложенное field.notices. Сверить конкретный тип, enum, аргументы, W.ref владельца и равенство исходному результату. Отрицательные случаи — чужой код, потерянный UID, отсутствующий requested, effective > requested. По текущим прямым использованиям цепочка I11.3 заканчивается объектами в памяти. Отдельного опубликованного fine placement payload для этих notices в срезе не установлено. SURFACE_MANIFEST уже связывает ID 106 с FieldPathError. Этот ID сохраняет прежнее значение. Если downstream публикует notice в canonical payload, до подключения выбрать manifest владельца, выделить свежие IDs согласно его реестру, решить судьбу старых bytes и проверить encode/decode всего envelope с непустым notice на холодном и прогретом кэше.
 
 **Граница решения.** Предложение покрывает успешные исходы №4/5. Формы field causes для №1/2/3 и граничные union для прочих notices требуют отдельного решения владельцев. Ревью D1 не закрывает строки P1.
+
+**Решение D1 по №4/5, 2026-11-05.** Пользователь согласовал CoastlineCapNotice и PlateCountAdjustedNotice, указанные поля, цепочки доставки и проверки восстановления владельцев. Приёмка реализации остаётся открытой.
+
+## Предложение D1 по №1–3
+
+| Предмет решения | Предлагаемый контракт и приёмочная проба |
+|---|---|
+| №3, чтение отсутствующего факта | В `backend/app/dataModel/policy/policyTypeError.py` определить PolicyTypeError(FieldPathError[PolicyIssueReason]). Для UNKNOWN_FACT строить путь от модели и поля reference.bound_field. Проверить на штатном capture(strategy=PLATE): UnknownFact сохраняет concrete type, enum и тот же адрес поля после строгого dump/restore; policy reader сам не пишет событие в лог. |
+| №1, ошибки fine input | В `backend/app/dataModel/terrain/designedWater/waterDesignTypeError.py` определить WaterDesignTypeError(FieldPathError[WaterDesignIssueCode]). Для двух нарушений корнем служит NativeCoastlineStrategyInput. Сохранить порядок metadata.source_kind, metadata.level и код INVALID_PREPARATION_INPUT. Префикс continental_field добавляется при выводе. Транспорт — один PlanBuildFailure. Проверить все три стратегии, нулевые вызовы layout/sample, точные пути, коды и отсутствие дубликатов. |
+| №2, admission | Переиспользовать WaterDesignTypeError в обоих ValidatorAggregationHelper адаптера. При READY с behavior=None путь начинается от PlacementAdmissionInput и проходит decision.behavior. Контекст water_source и UID добавляются при выводе. Проверить успешный admission, отказ на чужом concrete type, накопление независимой ошибки metadata и единственность диагностики при совпадении причины из двух проверок. |
+
+Перед сужением PolicyProblem.issues, PolicyDecision.issues и PolicySupportFact.issues инвентаризировать транзитные причины от supports. Для нескольких владельцев согласовать точный закрытый union. Отдельно проверить model-level нарушения без адресуемого поля. Эти два случая открыты для решений по границам D2. Проверка завершения — пять штатных воспроизведений без подмен, полный GEO-прогон и независимое ревью. Предложение №1–3 ожидает согласования.
+
+### Матрица D1 по полям и режимам
+
+Сначала разрешить значение по контракту поля и виду входа (полная модель или PATCH), затем применить policy операции. В таблице режим — ResolutionMode policy resolver. ResolveMode импорта, validate_only вызывающей операции, collect_only и право записи проверяются отдельно. Основание: [ERROR-CONTRACTS-1, правила полей](error-contracts-1.md#L1033).
+
+| P1 / условие | VALIDATE_ONLY | RUNTIME | Проверка границы |
+|---|---|---|---|
+| №1. source_kind=LAKE у coastline и level ≤ z_min в принятом входе | Отказ с двумя упорядоченными причинами metadata.source_kind, metadata.level | Тот же отказ при вызове build с тем же входом | Один PlanBuildFailure; layout и sample не вызываются. |
+| №2. После policy передан корректный READY admission либо READY без behavior | Валидный вход проходит; отсутствующая стратегия даёт ошибку admission.decision.behavior | То же для того же admission | Для DISABLED или UNRESOLVED проверяется state; зависимую проверку behavior пропустить. Независимые нарушения metadata собрать. |
+| №3. UnknownFact для обязательного факта дошёл до PolicyResolution.failure | UNRESOLVED с причинами | DISABLED с ERROR_FALLBACK и provenance, только если для каждой причины есть правило disable_object и выбранные behavior совместимы; иначе UNRESOLVED | Прогнать одну spec с одинаковыми facts в обоих режимах, с подходящим fallback и без него. Проверить итог resolver и причины. Отдельно прогнать штатный capture: промежуточный UnknownFact при поиске приоритета сам по себе не определяет итог. |
+| №4. Валидная открытая линия достигает лимита | Если выполняется geometry — результат с CAP_REACHED и UID | При том же запросе тот же результат и notice | В полной модели seas отсутствующий max_area_fraction получает 0.25; проверить null, 0 и >1 как нарушения схемы до rasterizer. Достижение валидного лимита 0.04 — отдельная успешная проба. |
+| №5. Валидный plate_count=1025 на W из 1024 клеток | Если выполняется build — поле с PLATE_COUNT_ADJUSTED | Тот же результат, requested=1025 и effective=1024 | Полная модель: отсутствующее поле даёт 12; null, строка и 0 нарушают StrictInt > 0. На 1024 notice отсутствует. |
+
+При PATCH пропущенное поле не участвует в обновлении. Для validate-only/preview отдельно проверить отсутствие записи на границе вызывающей операции. При collect_only сохранить причины и disposition; меняется доставка. Для №4/5 локальная политика — silent return; сохранение notice в результате не требует локального emit. Пары прогонов выше — критерии будущего D2. Развилка №3 сверена статически с [PolicyResolution.failure](../../backend/app/application/policy/policyResolution.py); сквозной запуск до исправления P1 блокирует старый конструктор issue.

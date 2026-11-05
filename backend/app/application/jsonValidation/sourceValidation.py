@@ -74,7 +74,7 @@ def validate_reference_value(world, annotation, value, ctx, path, cache=None):
             validate_reference_value(world, info.annotation, getattr(value, name), ctx, path + (name,), cache)
 
 
-def validate_source(world, source: BaseModel, *, ctx: ResolveContext):
+def validate_source[SourceT: BaseModel](world, source: SourceT, *, ctx: ResolveContext) -> SourceT:
     """Validate all source channels, even if another channel overrides them."""
     # Typed instances can have come from model_copy/model_construct. Preserve
     # authored presence and recheck model invariants before entering the graph.
@@ -83,12 +83,12 @@ def validate_source(world, source: BaseModel, *, ctx: ResolveContext):
     if isinstance(source, BundleNamedLocation):
         from app.application.jsonValidation import location_types
         validation_context = {"location_type_registry": location_types(world)}
-    resolve_model(type(source), source.model_dump(mode="python", exclude_unset=True), ctx=ctx,
-                  validation_context=validation_context)
-    return validate_prepared_source(world, source, ctx=ctx)
+    resolved = resolve_model(type(source), source.model_dump(mode="python", exclude_unset=True), ctx=ctx,
+                             validation_context=validation_context)
+    return validate_prepared_source(world, resolved, ctx=ctx)
 
 
-def validate_prepared_source(world, source: BaseModel, *, ctx: ResolveContext):
+def validate_prepared_source[SourceT: BaseModel](world, source: SourceT, *, ctx: ResolveContext) -> SourceT:
     """Check channels on a POJO just validated by its domain preparer.
 
     Keeps the same registry/band/range checks without reconstructing authored

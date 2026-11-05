@@ -837,7 +837,7 @@ flowchart TD
 | План | Номер трека | О чём трек | Следующий трек или внешняя зависимость |
 |---|---|---|---|
 | GEO | I11.3, исправление | Процедурный draft с рецептом дна. | Повторить штатный путь после миграции диагностик. |
-| Spatial / World Pack | SP-P2W, проектирование | Проба replay и отмены выполнена (§§15.91–92). | Сверить с DAG owner окончательность release при next_pass и восстановление intent после очистки continuation. Доступно до SN-STAGE. |
+| Spatial / World Pack | SP-P2W, проектирование | Replay, отмена и два прохода с reopen проверены (§§15.91–93). | Согласовать с DAG/Pack owners удержание до COMPLETED execution и lookup по владельцу; проверить несколько чтений и поздний acquire. Доступно до SN-STAGE. |
 | Time | T3-A / T3-C, подготовка T4 проверена | Арифметика, календарь, World settings, чтение через закреплённые тестовые источники. | Внутри Time открыта политика STANDARD для 1–3 часов. Production T4 ждёт SN-TIME-READ, T5 — SN-TIME-APPLY, ветвление — SN-TIME-BRANCH. |
 | Snapshot | 4D2, holder handoff | Передача refs snapshot holder и сохранение operation hold. | Закрепить случай ref вне transferred, затем terminal/retry. |
 | ERROR-CONTRACTS-1 | D2 затронутых producers | Типизированные ошибки и admission коллектора в callers I11.3. | GEO повторяет интеграцию после правок owners. Остальные домены продолжают D0/D1 независимо. |

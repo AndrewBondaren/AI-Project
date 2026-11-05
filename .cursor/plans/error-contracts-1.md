@@ -1011,6 +1011,17 @@ flowchart TD
     - Мелкое: `field_issue(..., root=None)` стал штатным «нет POJO»; `sourceValidation._wire_issue` — второй способ того же.
   - **OPEN (вне ERROR-CONTRACTS-1):** `BundleSection` — `ClassVar[str]`, не enum; типизировать отдельной задачей по `type-kind-str-fields`. До неё секция в `WireLocation` остаётся wire-строкой.
 
+### Сквозное code review ERROR-CONTRACTS-1 от 2026-11-05
+
+Проверено рабочее дерево `master` поверх `255bb3ca`, включая разделение `resolve.py` в `280e0ded` и рабочую правку `sourceValidation.py`. Прошли все 136 тестов команды `/review-error-track`: 42 из `tests/errorContracts` и 94 из семи адресных модулей. Два дополнительных воспроизведения выявили следующие дефекты.
+
+- [ ] **R-J3c-6 · P2 · PATCH теряет приоритет и адрес alias.** `backend/app/application/jsonValidation/resolution/partial.py:139–150`. Для поля `amount: int = Field(alias="wire_amount", ge=0)` полная проверка входа `{"wire_amount":-1,"amount":2}` отклоняет `wire_amount` с кодом `greater_than_equal`. На том же входе `resolve_patch` принимает `{"amount":2}`. Отдельно для `ClimateFieldWire` PATCH с `{"sample_step_m":0}` даёт верный код, но HTTP-маппер указывает `sample_step_fine`. Критерий закрытия — PATCH следует приоритету ключей POJO при одновременной передаче alias и имени, а ошибка указывает на переданный ключ. Закрепить оба случая тестами.
+- [ ] **R-J3b-6 · P2 · Preflight добавляет метку ветки union в wire loc.** `backend/app/application/jsonValidation/bundle/preflight.py:41`, `resolution/wireIssues.py:47–63`. Вызов `validate_rows` для модели с `value: int | float`, контекста `rows` и входа `[{"value":"bad"}]` даёт в HTTP-маппере пути `["rows",0,"value","int"]` и `["rows",0,"value","float"]`. Оба указывают за пределы входного документа. Критерий закрытия — обе ошибки с кодами `int_parsing` и `float_parsing` указывают на `["rows",0,"value"]`, а реальные ключи словаря, похожие на служебные метки, сохраняются в пути.
+
+**Вердикт по срезам.** J3a — проверенные локальные пути прошли. Приёмка J3b и J3c открыта по замечаниям выше. По EC-11 подтверждено закрытие EC-11-R1–R3 и R-J4-1. Для J4 подтверждены ранние отказы, агрегация ошибок, повторная проверка после remap, откат SQLite при отмене и сбое записи, сохранение UID и времени при продолжении по подписанному token. Открытый R-J3b-6 затрагивает диагностику J4.
+
+**Границы проверки.** Дополнительные сценарии прошли через `resolve_patch`, `validate_rows` и HTTP-маппер. Отправка этих примеров через HTTP, нагрузка, сбой непосредственно при SQLite `COMMIT` и исполнение DAG отдельно не проверялись. Выбор tier от города до здания относится к отдельному ревью.
+
 ### EC-11. Где действует политика validate/runtime (D1 реализован; срез JSON/import проверен)
 
 Срез проверен по коду на `b3c23193`. Для каждой операции отдельно учитываются три вещи: какие данные она принимает, как доставляет диагностику и имеет ли право записывать результат. `ResolveContext.for_import` задаёт `ResolveMode.IMPORT` и для preview, и для обычного импорта. `validate_only=False` поэтому само по себе не означает runtime генератора. `collect_only` переключает доставку; его включение должно сохранять доменный результат при том же режиме.
