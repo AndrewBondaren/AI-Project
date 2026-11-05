@@ -22,6 +22,7 @@ from app.dataModel.planning.identity.planKey import PlanKey
 from app.dataModel.planning.identity.planRef import PlanRef
 from app.dataModel.planning.policy.planningExecutionPolicy import PlanningExecutionPolicy
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.dataModel.validation.immutableValue import validate_immutable
 
 
 class PlanContractFailureReason(StrEnum):
@@ -48,8 +49,15 @@ class PlanBuildFailure(Exception):
     def __init__(self, issues: tuple[FieldPathError[Any], ...]):
         if not issues:
             raise ValueError("PlanBuildFailure requires nonempty issues")
-        self.issues = _BUILD_ISSUES.validate_python(issues, strict=True)
+        admitted = _BUILD_ISSUES.validate_python(issues, strict=True)
+        for issue in admitted:
+            validate_immutable(issue)
+        self._issues = admitted
         super().__init__("plan build failed")
+
+    @property
+    def issues(self) -> tuple[FieldPathError[Any], ...]:
+        return self._issues
 
 
 class PlanProviderFault(Exception):
