@@ -7,6 +7,7 @@ import unittest
 from app.application.jsonValidation.resolve import UnresolvedModelError
 from app.application.jsonValidation import settlementSizeResolve
 from app.application.jsonValidation.settlementSizeResolve import resolve_settlement_size_key
+from app.application.jsonValidation.types import wire_loc
 from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
     WorldSettlementSizeRegistry,
 )
@@ -34,7 +35,7 @@ class TestSettlementSizeResolve(unittest.TestCase):
         for raw in ("hamlet", 12):
             with self.subTest(raw=raw), self.assertRaises(UnresolvedModelError) as caught:
                 resolve_settlement_size_key(self.sizes, raw, world_uid="w1")
-            self.assertEqual(caught.exception.path[-1], "system_city_size")
+            self.assertEqual(wire_loc(caught.exception.issue)[-1], "system_city_size")
 
 
 if __name__ == "__main__":

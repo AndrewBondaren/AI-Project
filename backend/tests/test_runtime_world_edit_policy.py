@@ -10,7 +10,7 @@ from app.application.jsonValidation.resolve import (
     resolve_result, resolve_root_list,
 )
 from app.application.jsonValidation.facade import normalize_world
-from app.application.jsonValidation.types import ImportValidationError
+from app.application.jsonValidation.types import ImportValidationError, wire_loc
 from app.application.cascade import locationScope
 from app.application.cascade.locationScope import empty_location_chain, room_context
 from app.application.jsonValidation import resolve as resolve_module
@@ -43,7 +43,7 @@ class RuntimeWorldEditPolicyTests(unittest.TestCase):
                 self.assertEqual(log.warning.called, mode == ResolveMode.RUNTIME)
                 facts.append(result.issues)
             self.assertEqual(facts[0], facts[1])
-            self.assertEqual(facts[0][0].path, ("terrain_masks", "default_landcover", "max_radius"))
+            self.assertEqual(wire_loc(facts[0][0]), ("terrain_masks", "default_landcover", "max_radius"))
 
     def test_nested_parent_must_not_replace_invalid_child(self):
         raw = {"default_landcover": {"max_radius": -1}}
@@ -64,7 +64,8 @@ class RuntimeWorldEditPolicyTests(unittest.TestCase):
             amount: DefaultWhenMissing[int] = Field(default=2, alias="wire_amount", ge=0)
         result = resolve_result(Aliased, {"wire_amount": -1})
         self.assertFalse(result.resolved)
-        self.assertEqual(result.issues[0].code, "greater_than_equal")
+        self.assertEqual(result.issues[0].pydantic_type, "greater_than_equal")
+        self.assertEqual(wire_loc(result.issues[0]), ("wire_amount",))
         self.assertEqual(resolve_result(Aliased, {"wire_amount": 3}).value.amount, 3)
 
     def test_collection_never_returns_partial_registry(self):
@@ -84,7 +85,7 @@ class RuntimeWorldEditPolicyTests(unittest.TestCase):
                     room_context(world, parent, _room("unknown"), room_uid="r1", resolve_ctx=ctx)
                 extend.assert_not_called()
             self.assertEqual(error.exception.issues[0].code, "REF_W_UNKNOWN")
-            self.assertEqual(error.exception.issues[0].path, ("rooms", "r1", "economic_tier"))
+            self.assertEqual(wire_loc(error.exception.issues[0]), ("rooms", "r1", "economic_tier"))
         for value in (None, "t2"):
             result = room_context(world, parent, _room(value), room_uid="r1")
             self.assertEqual(result.economic_tier, parent.economic_tier if value is None else value)
@@ -95,7 +96,7 @@ class RuntimeWorldEditPolicyTests(unittest.TestCase):
         raw["economic_tier"] = 123
         result = resolve_result(RoomDef, raw)
         self.assertFalse(result.resolved)
-        self.assertEqual(result.issues[0].path, ("economic_tier",))
+        self.assertEqual(wire_loc(result.issues[0]), ("economic_tier",))
 
     def test_room_defaults_preserve_authored_presence(self):
         raw = _room().model_dump(mode="json", exclude_unset=True)
@@ -121,7 +122,7 @@ class RuntimeWorldEditPolicyTests(unittest.TestCase):
     def test_report_is_shared_only_with_children(self):
         ctx = ResolveContext(mode=ResolveMode.IMPORT)
         resolve_result(LandcoverRegionsCategoryPolicy, {"seed_spacing": 1000, "max_radius": -1}, ctx=ctx.child("forest"))
-        self.assertEqual(ctx.errors[0].path, ("forest", "max_radius"))
+        self.assertEqual(wire_loc(ctx.errors[0]), ("forest", "max_radius"))
         self.assertFalse(ResolveContext().errors)
 
     def test_model_invariant_never_produces_unchecked_success(self):
@@ -140,7 +141,7 @@ class RuntimeWorldEditPolicyTests(unittest.TestCase):
         self.assertEqual(patch, {"lower": 5})
         result = resolve_result(Bounds, {"upper": 1, **patch}, ctx=ctx)
         self.assertFalse(result.resolved)
-        self.assertEqual(result.issues[0].path, ())
+        self.assertEqual(wire_loc(result.issues[0]), ())
 
 
 if __name__ == "__main__":

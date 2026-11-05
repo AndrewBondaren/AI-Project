@@ -8,7 +8,7 @@ import unittest
 from pydantic import TypeAdapter, ValidationError
 
 from app.application.jsonValidation.resolve import ResolveContext
-from app.application.jsonValidation.types import ImportValidationError
+from app.application.jsonValidation.types import ImportValidationError, wire_loc
 from app.application.jsonValidation.worldColumnResolve import resolve_world_column
 from app.dataModel.spatial.regionShape import (
     AnchorRadiusShape, BboxShape, CorridorShape, EllipseShape, PolygonShape, RegionShape,
@@ -89,7 +89,7 @@ class RegionWireTests(unittest.TestCase):
                 ctx = ResolveContext.for_import(validate_only=True)
                 with self.assertRaises(ImportValidationError) as raised:
                     resolve_world_column("terrain_masks", raw, ctx)
-                self.assertTrue(any(issue.path[-1] == "name" for issue in raised.exception.errors))
+                self.assertTrue(any(wire_loc(issue)[-1:] == ("name",) for issue in raised.exception.errors))
                 self.assertTrue(ctx.report.issues)
 
     def test_name_normalization_and_uniqueness_across_types(self):

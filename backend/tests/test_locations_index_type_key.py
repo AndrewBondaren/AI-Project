@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError, validate_contracts
 from app.application.jsonValidation.index.worldRegistryIndex import WorldRegistryIndex
+from app.application.jsonValidation.types import wire_loc
 from app.application.jsonValidation.sourceValidation import registry_vocabulary, validate_reference_value
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.structureGeneratorService import _room_to_named_location
@@ -79,7 +80,7 @@ class LocationsIndexTypeKeyTests(unittest.TestCase):
         with self.assertRaises(UnresolvedModelError) as caught:
             build_locations_index([self.location("absent-type")], world)
         self.assertEqual(caught.exception.issues[0].code, "REF_W_UNKNOWN")
-        self.assertEqual(caught.exception.issues[0].path,
+        self.assertEqual(wire_loc(caught.exception.issues[0]),
                          ("locations_index", "locations", 0, "system_location_type"))
 
     def test_worldless_builder_accepts_engine_key_and_rejects_unknown(self):
@@ -223,7 +224,7 @@ class LocationsIndexTypeKeyTests(unittest.TestCase):
         with self.assertRaises(UnresolvedModelError) as caught:
             validate_contracts(LocationTypeEntry, {**wire, "parent_types": [None, "unknown"]},
                                ctx=ctx, references=references)
-        self.assertEqual(caught.exception.issues[0].path, ("parent_types", 1))
+        self.assertEqual(wire_loc(caught.exception.issues[0]), ("parent_types", 1))
         self.assertEqual(caught.exception.issues[0].code, "REF_W_UNKNOWN")
         with self.assertRaises(UnresolvedModelError):
             validate_reference_value(None, annotation, [None, "unknown"], ctx, ("parent_types",), references)
@@ -238,7 +239,7 @@ class LocationsIndexTypeKeyTests(unittest.TestCase):
         with self.assertRaises(UnresolvedModelError) as caught:
             validate_contracts(BundleNamedLocation, {**wire, "system_location_type": "unknown"},
                                ctx=ctx, references=references)
-        self.assertEqual(caught.exception.issues[0].path, ("system_location_type",))
+        self.assertEqual(wire_loc(caught.exception.issues[0]), ("system_location_type",))
 
 
 if __name__ == "__main__":
