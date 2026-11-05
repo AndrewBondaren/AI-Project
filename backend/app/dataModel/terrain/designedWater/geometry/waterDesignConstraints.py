@@ -10,6 +10,7 @@ from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
 from app.dataModel.spatial.grid.coordinateTypes import FineXY
 from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
 from app.dataModel.topology.worldTopology import Coord
+from app.dataModel.placement.coastlineCapNotice import CoastlineCapNotice
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.validation.immutableValue import validate_immutable
 
@@ -26,7 +27,7 @@ class _Constraints(BaseModel, Generic[Cell], frozen=True):
     grid: SurfaceGridSettings
     allowed_cells: frozenset[Cell] = Field(min_length=1)
     required_cells: frozenset[Cell] = Field(min_length=1)
-    notices: tuple[FieldPathError, ...]
+    notices: tuple[CoastlineCapNotice | FieldPathError, ...]
 
     @model_validator(mode="after")
     def complete_constraints(self) -> Self:

@@ -14,6 +14,7 @@ from app.dataModel.terrain.designedWater.input import PlateWaterDesignInput, Pla
 from app.dataModel.terrain.designedWater.strategyKind import WaterDesignIssueCode
 from app.dataModel.terrain.sampling.fineSurfaceWindow import SurfaceSamples
 from app.dataModel.topology.topologyGeometry import dist2
+from app.dataModel.terrain.designedWater.fields.plateCountAdjustedNotice import PlateCountAdjustedNotice
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.ids import UidKind, seeded_u01
 
@@ -51,9 +52,7 @@ class PlateFieldGenerator:
                         channel=FieldChannel.PLATE_BUOYANCY, plate_index=index) - 1.0))
             notices = ()
             if count != requested:
-                notices = (FieldPathError(("plate_policy", "plate_count"),
-                    f"tiny-world plate count adjustment; requested={requested}, effective={count}, fine_cells={size}",
-                    code=WaterDesignIssueCode.PLATE_COUNT_ADJUSTED.value),)
+                notices = (PlateCountAdjustedNotice(requested=requested, effective=count),)
             return PlateLayout(recipe=recipe, multiplier=multiplier, offset=offset, centers=tuple(centers), notices=notices)
         except (ValueError, OverflowError) as error:
             raise self._failure("layout", error) from error

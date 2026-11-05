@@ -13,9 +13,10 @@ from app.application.worldData.placement.adapters.coastlineShape import coastlin
 from app.application.worldData.placement.adapters.lakeShape import lake_cells, lake_level
 from app.application.worldData.placement.adapters.waterShape import shape_cells
 from app.application.worldData.placement.adapters.waterGeometry.nativeGeometry import rasterize_authored_geometry
+from app.dataModel.placement.waterPreparationCode import WaterPreparationCode
 from app.application.worldData.placement.adapters.waterTypes import (
     AuthoredGeometryView, PreparedWaterEntry, WaterGeometryError, WaterPlacementContext, WaterPlacementPreparation,
-    WaterPreparationCode, WaterPreparationFailure,
+    WaterPreparationFailure,
 )
 from app.dataModel.hydrology.declaredBasin import DeclaredBasin
 from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline

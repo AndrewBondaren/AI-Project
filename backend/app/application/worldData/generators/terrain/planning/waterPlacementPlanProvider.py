@@ -6,7 +6,8 @@ from app.application.planning.providers.planRegistry import PlanDependencyReader
 from app.application.planning.service.planningService import PlanBuildControl, PlanBuildFailure
 from app.application.worldData.generators.coordinates.convert import fine_to_grid_xy
 from app.application.worldData.generators.hydrology.placement.waterPlacementPass import run_prepared_water_placement
-from app.application.worldData.placement.adapters.waterTypes import WaterPlacementContext, WaterPreparationCode
+from app.application.worldData.placement.adapters.waterTypes import WaterPlacementContext
+from app.dataModel.placement.waterPreparationCode import WaterPreparationCode
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.dataModel.locations.enums.geographicSubtype import GeographicSubtype
 from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult

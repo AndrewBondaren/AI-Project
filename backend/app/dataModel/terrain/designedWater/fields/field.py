@@ -13,7 +13,7 @@ from app.dataModel.terrain.designedWater.settings.fieldCompositionPolicy import 
 from app.dataModel.terrain.designedWater.settings.plateGenerationPolicy import PlateGenerationPolicy
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind as Strategy
 from app.dataModel.topology.worldTopology import WorldTopology
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.dataModel.terrain.designedWater.fields.plateCountAdjustedNotice import PlateCountAdjustedNotice
 from app.dataModel.validation.immutableValue import validate_immutable
 
 
@@ -77,7 +77,7 @@ class ContinentalField(BaseModel, frozen=True):
 
     recipe: WaterFieldRecipe
     samples: tuple[tuple[SurfaceGridCoord, ContinentalFieldValue], ...]
-    notices: tuple[FieldPathError, ...] = ()
+    notices: tuple[PlateCountAdjustedNotice, ...] = ()
 
     @model_validator(mode="after")
     def ordered_unique_samples(self) -> Self:
@@ -97,7 +97,7 @@ class FineContinentalField(BaseModel, frozen=True):
     pre_hydrology_ref: PlanRef
     recipe: WaterFieldRecipe
     samples: tuple[tuple[FineXY, ContinentalFieldValue], ...]
-    notices: tuple[FieldPathError, ...] = ()
+    notices: tuple[PlateCountAdjustedNotice, ...] = ()
 
     @model_validator(mode="after")
     def complete_window(self) -> Self:

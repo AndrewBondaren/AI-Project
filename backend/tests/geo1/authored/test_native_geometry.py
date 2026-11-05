@@ -14,6 +14,7 @@ from app.dataModel.hydrology.enums.waterSide import WaterSide
 from app.dataModel.hydrology.hydrologyWaypoint import HydrologyWaypoint
 from app.dataModel.hydrology.sources.waterDesignSource import AuthoredLakeSource, CoastlineWaterSource
 from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
+from app.dataModel.placement.coastlineCapNotice import CoastlineCapNotice
 from app.dataModel.spatial.regionShape import AnchorRadiusShape, BboxShape
 from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometryRequest
 from app.dataModel.terrain.planning.inputs.waterPlacementInput import WaterAnchorInput
@@ -68,7 +69,19 @@ class NativeAuthoredGeometryTests(TestCase):
         line = CoastlineWaterSource(value=DeclaredCoastline(location_uid="line", kind=BasinKind.SEA, path=ring()[:2]))
         capped = self.geometry(source=line, seas=replace(self.args["seas"], max_area_fraction=0.04))
         self.assertLessEqual(len(capped.footprints[0]), 40)
-        self.assertEqual(capped.notices[0].code, "WATER_PLACEMENT_CAP_REACHED")
+        expected = CoastlineCapNotice(source_uid="line")
+        req = AuthoredWaterGeometryRequest(**(self.args | dict(source=line, seas=replace(self.args["seas"], max_area_fraction=0.04))))
+        constraints = CoastlineConstraintPreparer().prepare_native(req)
+        self.assertEqual(constraints.allowed_cells, capped.footprints[0])
+        for owner in (capped, constraints):
+            restored = type(owner).model_validate(owner.model_dump(), strict=True)
+            self.assertEqual(restored, owner)
+            self.assertEqual(restored.pre_hydrology_ref, self.window.ref)
+            self.assertEqual(restored.notices, (expected,))
+            self.assertIs(type(restored.notices[0]), CoastlineCapNotice)
+        for invalid in ({"code": "other", "source_uid": "line"}, {}):
+            with self.assertRaises(ValidationError):
+                CoastlineCapNotice.model_validate(invalid)
 
     def test_rejects_partial_window_wrong_frame_and_coarse_request(self):
         partial = source(cells=coverage(0, 1, 0, 1), hills=False)[0]

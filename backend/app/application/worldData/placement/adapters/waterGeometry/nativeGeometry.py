@@ -4,7 +4,8 @@ from app.application.planning.service.planningService import PlanBuildFailure
 from app.application.worldData.placement.adapters.coastlineShape import coastline_cells
 from app.application.worldData.placement.adapters.lakeShape import lake_cells, lake_level
 from app.application.worldData.placement.adapters.waterShape import shape_cells
-from app.application.worldData.placement.adapters.waterTypes import AuthoredGeometryView, WaterPreparationCode
+from app.application.worldData.placement.adapters.waterTypes import AuthoredGeometryView
+from app.dataModel.placement.waterPreparationCode import WaterPreparationCode
 from app.dataModel.hydrology.declaredBasin import DeclaredBasin
 from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
 from app.dataModel.hydrology.declaredLake import DeclaredLake
@@ -13,6 +14,7 @@ from app.dataModel.spatial.grid.coordinateTypes import FineZ
 from app.dataModel.terrain.designedWater.geometry.authoredGeometry import (
     AuthoredWaterGeometry, AuthoredWaterGeometryRequest, LegacyAuthoredWaterGeometryRequest,
 )
+from app.dataModel.placement.coastlineCapNotice import CoastlineCapNotice
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 
@@ -27,8 +29,7 @@ def rasterize_authored_geometry(request: AuthoredWaterGeometryRequest | LegacyAu
     elif isinstance(source, DeclaredCoastline):
         cells, capped = coastline_cells(source, view, request.seas, seed_root=request.seed_root)
         if capped:
-            notices.append(FieldPathError(("authored_geometry", uid), "coastline reached geometry cap",
-                code=WaterPreparationCode.CAP_REACHED.value))
+            notices.append(CoastlineCapNotice(source_uid=uid))
     else:
         cells, degenerate = lake_cells(source, view, seed_root=request.seed_root)
         rim = FineZ(lake_level(cells, view))

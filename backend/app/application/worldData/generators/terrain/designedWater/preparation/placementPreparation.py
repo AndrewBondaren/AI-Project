@@ -24,6 +24,8 @@ from app.dataModel.terrain.designedWater.preparation.result import WaterDesignPr
 from app.dataModel.terrain.designedWater.settings.fieldSelectionPolicy import WaterFieldSelectionPolicy
 from app.dataModel.terrain.designedWater.strategyKind import WaterDesignIssueCode
 from app.dataModel.topology.worldTopology import Coord
+from app.dataModel.placement.coastlineCapNotice import CoastlineCapNotice
+from app.dataModel.terrain.designedWater.fields.plateCountAdjustedNotice import PlateCountAdjustedNotice
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 _INPUT = TypeAdapter(WaterStrategyInput)
@@ -92,7 +94,7 @@ class DesignedWaterPlacementPreparer:
             raise PlanBuildFailure((FieldPathError(("water_design", "preparation"), str(error),
                 code=WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value),)) from error
 
-        notices: tuple[FieldPathError, ...] = ()
+        notices: tuple[CoastlineCapNotice | PlateCountAdjustedNotice | FieldPathError, ...] = ()
         if isinstance(draft, AuthoredWaterDesignDraft):
             cells = frozenset(c for footprint in draft.footprints for c in footprint)
             space = draft.coordinate_space

@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 from app.dataModel.spatial.grid.coordinateTypes import FineXY
 from app.dataModel.terrain.designedWater.fields.field import ContinentalFieldValue, PlateRecipe
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.dataModel.terrain.designedWater.fields.plateCountAdjustedNotice import PlateCountAdjustedNotice
 from app.dataModel.validation.immutableValue import validate_immutable
 
 
@@ -28,7 +28,7 @@ class PlateLayout(BaseModel, frozen=True):
     multiplier: StrictInt = Field(ge=1)
     offset: StrictInt = Field(ge=0)
     centers: tuple[PlateCenter, ...] = Field(min_length=1)
-    notices: tuple[FieldPathError, ...]
+    notices: tuple[PlateCountAdjustedNotice, ...]
 
     @property
     def effective_count(self) -> int:

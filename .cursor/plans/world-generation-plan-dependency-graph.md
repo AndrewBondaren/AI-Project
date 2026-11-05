@@ -819,15 +819,15 @@ flowchart TD
 
 | Трек | Последнее решение и evidence | Следующая работа |
 |---|---|---|
-| [GEO](./geo-1-designed-water.md) | I11.3: реестр содержит пять P1, включая plate_count=1025. | После миграции callers проверить обе цепочки notices и штатные стратегии. |
-| [Snapshot](./world-domain-patches-snapshots.md) | Holder handoff прошёл повторное ревью. На 6bcd4073 импорт WorldSnapshotService останавливает тест до чтения holders. | Согласовать migration caller коллектора и повторить профильные и snapshotCore проверки. |
-| [Spatial](./spatial-distribution-domain.md) | §15.94: два чтения, cleanup по владельцу и поздний acquire проверены на fixture (5/5). | Определить окончательный FAILED execution, fencing worker и drain IO до release. |
+| [GEO](./geo-1-designed-water.md) | I11.3: обе notices №4/5 и тесты есть в рабочем дереве. | Для остальных трёх P1 требуется D1, затем D2 и повтор штатных сценариев. |
+| [Snapshot](./world-domain-patches-snapshots.md) | Прямой handoff подтверждён. На e7a30e1b штатный путь падает до транзакции на старом импорте. | Согласовать scoped D1 для трёх типов причин metadata, затем мигрировать service и builder и повторить интеграцию. |
+| [Spatial](./spatial-distribution-domain.md) | Принят §15.95: pin живёт до окончательного terminal execution, открытый BLOB защищён до закрытия файла. | Проверить конкуренцию child failure, shard IO, cleanup и позднего acquire. |
 | [Time](./time-domain.md) | Изолированные T3-A/T3-C, подготовка T4 и World settings проверены: 25 тестов, Pyright без ошибок по отчёту. | Политика STANDARD для суток в 1–3 часа открыта. Production T4 требует SN-TIME-READ и Time reader, T5 — SN-TIME-APPLY и handler, создание ветки — SN-TIME-BRANCH. |
 | [Physics](./physics-spatial-dynamics.md) | PS-CORE-1: P2 исправлен, 19 адресных проверок прошли. В широком прогоне до и после переноса совпали 40 неуспешных test IDs. | Независимая проверка P2. Production storage и интеграция остаются отдельными шагами. |
 | [API-1](./api-1-transport-boundary.md) | Проверено покрытие полей storage и wire. Climate C1 содержит девять scalars, десять после переноса lapse. | Сопоставить вход каждой операции с версией и выходом владельца, включая presence/aliases. |
 | [GEN-BAKE-READ](./generator-public-bake-reads.md) | Исправленный пакет D1–D7 предъявлен в §17.10.4 | Получить решение пользователя, затем R1/R2 отдельно по операциям. Handoff light, full L0+C23, named terrain и coordinate terrain описан в §17.10.3 |
 | [DAG invocation и bake admission](./dag-invocations-bake-admission.md) | Итог ревью R6 на 7b6104d7, полный набор 392/392. | Далее R7 по условиям owning-плана. |
-| [ERROR-CONTRACTS-1](./error-contracts-1.md) | D1 принят по GEO №4/5. Для №1–3 есть предложение с уточнением policy support. | D2 notices по принятому D1, согласование остальных причин отдельно. |
+| [ERROR-CONTRACTS-1](./error-contracts-1.md) | D2 №4/5 в рабочем дереве. Два профильных теста прошли при сверке графа. Предложение D1 №1–3 предъявлено. | Согласовать №1–3 до их D2; Snapshot metadata имеет отдельное решение. |
 | [LOD](./lod-simulation-handoff.md) | §11 учитывает draft и открытые вопросы coherent capture, continuation и неизменности мира | Продолжать согласование с владельцами первого consumer. Конкретные зависимости runtime уточняются по сценарию |
 
 Предложения новых bindings в этих планах не меняют hard-edge реестр автоматически. Исторические команды §9.3 для приёмки I1/B, preflight P1-A и проектирования уже принятой карты Physics заменены этой очередью.
@@ -836,11 +836,11 @@ flowchart TD
 
 | План | Номер трека | О чём трек | Следующий трек или внешняя зависимость |
 |---|---|---|---|
-| GEO | I11.3 | Пять воспроизводимых дефектов в реестре GEO. | Повторить штатные сценарии после D2 соответствующих callers. |
-| Spatial / World Pack | SP-P2W, §15.94 | Два логических чтения восстановлены, cleanup повторяем, поздний acquire отклонён. | Следующая проба: terminal во время IO, fencing старого worker и release после выхода из guard. |
+| GEO | I11.3 | Два адресных теста notices прошли на рабочем дереве. | Полная сверка трёх стратегий после D2 №1–3. |
+| Spatial / World Pack | SP-P2W §15.95 | Пользователь принял lifetime pins и порядок допуска IO. | Проверить гонку, reopen/повтор cleanup и сохранность общего shard версии B. |
 | Time | T3-A / T3-C, подготовка T4 проверена | Арифметика, календарь, World settings, чтение через закреплённые тестовые источники. | Внутри Time открыта политика STANDARD для 1–3 часов. Production T4 ждёт SN-TIME-READ, T5 — SN-TIME-APPLY, ветвление — SN-TIME-BRANCH. |
-| Snapshot | 4D2, holder handoff | Регрессия есть в 8ce0ab50. На текущем HEAD устаревший импорт блокирует проверку. | Адаптировать WorldSnapshotService к текущему collector API по scoped D1, затем повторить проверку обеих ветвей holds со второго соединения. |
-| ERROR-CONTRACTS-1 | D2 №4/5, D1 №1–3 | Одобрены CoastlineCapNotice и PlateCountAdjustedNotice. | Реализовать и проверить доставку и восстановление notices. По №1–3 сначала согласовать D1. |
+| Snapshot | 4D2, scoped D1 на согласовании | Прямой handoff проверен, штатный сервис блокирует миграция metadata diagnostics. | После решения по D1 проверить handoff через сервис со второго соединения. |
+| ERROR-CONTRACTS-1 | D2 №4/5 реализуется, D1 №1–3 предъявлен | Scope №1–3 включает два полевых типа, точный admission и перенос причин policy. | Решение по №1–3 открывает их D2; результат №4/5 предъявляется отдельно. |
 
 API-1 ведёт пользователь. GEN-BAKE-READ после решения по D1–D7 переходит к проектированию R1/R2 по операциям.
 

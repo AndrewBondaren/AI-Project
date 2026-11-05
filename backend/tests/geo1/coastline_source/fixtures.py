@@ -49,7 +49,7 @@ class Capture:
     field_policy: WaterFieldRecipe | None
 
 
-def capture(*, strategy=Strategy.CONTINENTAL_NOISE, closed=False, auto=True, priority=None,
+def capture_design_inputs(*, strategy=Strategy.CONTINENTAL_NOISE, closed=False, auto=True, priority=None,
             mode=WorldTopologyMode.PLANAR, resolution=ResolutionMode.VALIDATE_ONLY):
     source = DeclaredCoastline(location_uid="source", kind=BasinKind.SEA, closed=closed,
         water_side=WaterSide.INTERIOR if closed else None, path=ring() if closed else ring()[:2],
@@ -60,9 +60,6 @@ def capture(*, strategy=Strategy.CONTINENTAL_NOISE, closed=False, auto=True, pri
     working = context_for(root)
     context = freeze_resolved_context(working, ResolvedWaterGenerationContext)
     generation = resolve_generation(root,working,resolution)
-    decision = execute(bind(CoastlineWaterSource(value=source),strategy=strategy), resolution)
-    header = PlacementHeader(identity=PlacementIdentity(world_uid="world",source_uid="source",region_uid="water-region"),
-        mode=PlacementMode.ABSOLUTE, dependencies=(),permitted_overlaps=(),separations=())
     metadata = WaterSourceMetadata(source_uid="source",source_kind=req.source.kind,
         body_kind=source.kind,liquid=source.liquid,level=0,bands=req.seas.bands,
         source_path=("hydrology","declared_coastlines",0),default_depth=5)
@@ -78,9 +75,17 @@ def capture(*, strategy=Strategy.CONTINENTAL_NOISE, closed=False, auto=True, pri
     elif strategy is Strategy.PLATE_NOISE:
         recipe = PlateNoiseRecipe(seed_root=req.seed_root,topology=fine_topology(req.topology,grid.fine_span),
             plate_policy=PlateGenerationPolicy(),noise_policy=ContinentalNoisePolicy(),composition_policy=FieldCompositionPolicy())
-    return Capture(source,req,context,generation,extent,
-        BodyCoverageAllocation(source_uid="source",generation_region_uid="region",requested_fine2=extent.generation_area_fine2,allocated_fine2=36),
-        coverage,metadata,PlacementAdmissionInput(header=header,decision=decision),recipe)
+    return dict(source=source, geometry_request=req, context=context, generation=generation, region=extent,
+        budget=BodyCoverageAllocation(source_uid="source",generation_region_uid="region",requested_fine2=extent.generation_area_fine2,allocated_fine2=36),
+        region_coverage=coverage, metadata=metadata, field_policy=recipe)
+
+
+def capture(*, resolution=ResolutionMode.VALIDATE_ONLY, **options):
+    inputs = capture_design_inputs(resolution=resolution, **options)
+    decision = execute(bind(CoastlineWaterSource(value=inputs["source"]), strategy=inputs["context"].strategy), resolution)
+    header = PlacementHeader(identity=PlacementIdentity(world_uid="world",source_uid="source",region_uid="water-region"),
+        mode=PlacementMode.ABSOLUTE, dependencies=(),permitted_overlaps=(),separations=())
+    return Capture(**inputs, admission=PlacementAdmissionInput(header=header,decision=decision))
 
 
 def prepare(value):

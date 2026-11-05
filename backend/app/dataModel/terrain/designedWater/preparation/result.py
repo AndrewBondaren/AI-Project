@@ -13,6 +13,8 @@ from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
 from app.dataModel.spatial.grid.coordinateTypes import FineZ
 from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
 from app.dataModel.terrain.relief.bathymetry.floorProfile import BasinFloorProfile, FieldFloorProfile, SampledFloorProfile
+from app.dataModel.placement.coastlineCapNotice import CoastlineCapNotice
+from app.dataModel.terrain.designedWater.fields.plateCountAdjustedNotice import PlateCountAdjustedNotice
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.validation.immutableValue import validate_immutable
 
@@ -28,7 +30,7 @@ class WaterDesignPreparation(BaseModel, frozen=True):
     original_area: OriginalArea
     floor_z: Annotated[FineZ, Field(strict=True)]
     floor_profile: BasinFloorProfile | None
-    notices: tuple[FieldPathError, ...]
+    notices: tuple[CoastlineCapNotice | PlateCountAdjustedNotice | FieldPathError, ...]
 
     @model_validator(mode="after")
     def valid_geometry_result(self) -> Self:

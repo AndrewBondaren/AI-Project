@@ -17,6 +17,7 @@ from app.dataModel.terrain.planning.inputs.waterPlacementInput import WaterAncho
 from app.dataModel.terrain.planning.terrainPlan import TerrainPlan
 from app.dataModel.terrain.sampling.fineSurfaceWindow import FineSurfaceWindow
 from app.dataModel.topology.worldTopology import Coord, WorldTopology
+from app.dataModel.placement.coastlineCapNotice import CoastlineCapNotice
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.validation.immutableValue import validate_immutable
 
@@ -107,7 +108,7 @@ class AuthoredWaterGeometry(BaseModel, frozen=True):
     footprints: Annotated[tuple[frozenset[Coord], ...], Field(min_length=1)]
     rim_level: Annotated[FineZ, Field(strict=True)] | None
     z_min: Annotated[FineZ, Field(strict=True)]
-    notices: tuple[FieldPathError, ...]
+    notices: tuple[CoastlineCapNotice | FieldPathError, ...]
 
     @model_validator(mode="after")
     def world_geometry(self) -> Self:

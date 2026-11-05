@@ -41,8 +41,7 @@ class PlateFieldTests(TestCase):
         self.assertEqual(layout.centers[0].cell,(0,0))
         self.assertEqual(layout.centers[0].buoyancy,2*seeded_u01("seed",UidKind.WATER_FIELD,channel=FieldChannel.PLATE_BUOYANCY,plate_index=0)-1)
         self.assertEqual(layout.notices[0].code,Code.PLATE_COUNT_ADJUSTED.value)
-        self.assertEqual(layout.notices[0].path,("plate_policy","plate_count"))
-        self.assertIn("requested=12, effective=1",layout.notices[0].message)
+        self.assertEqual((layout.notices[0].requested, layout.notices[0].effective), (12, 1))
         self.assertEqual(value.model_dump_json(),before)
         self.assertEqual(PlateLayout.model_validate_json(layout.model_dump_json()),layout)
 

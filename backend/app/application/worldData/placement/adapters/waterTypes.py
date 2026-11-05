@@ -2,7 +2,6 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from enum import StrEnum
 from typing import Protocol
 
 from pydantic import TypeAdapter
@@ -17,16 +16,6 @@ from app.dataModel.placement import (
 )
 from app.dataModel.topology.worldTopology import Coord, WorldTopology
 from app.dataModel.planning.identity.planKey import OutputFingerprint
-
-
-class WaterPreparationCode(StrEnum):
-    SNAPSHOT = "WATER_PLACEMENT_SNAPSHOT"
-    GEOMETRY = "WATER_PLACEMENT_GEOMETRY"
-    FLOOR = "WATER_PLACEMENT_FLOOR"
-    CAP_REACHED = "WATER_PLACEMENT_CAP_REACHED"
-    KIND_MISMATCH = "WATER_PLACEMENT_KIND_MISMATCH"
-    DEGENERATE_RING = "WATER_PLACEMENT_DEGENERATE_RING"
-    MERGED_SOURCES = "WATER_PLACEMENT_MERGED_SOURCES"
 
 
 class WaterGeometryError(ValueError):

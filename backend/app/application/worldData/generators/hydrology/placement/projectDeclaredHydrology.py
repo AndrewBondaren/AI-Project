@@ -4,7 +4,7 @@ from pydantic import ValidationError
 
 from app.application.jsonValidation.resolve import ResolveContext, log_issues, report_issues
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
-from app.application.worldData.placement.adapters.waterTypes import WaterPreparationCode
+from app.dataModel.placement.waterPreparationCode import WaterPreparationCode
 from app.dataModel.hydrology.hydrologyWaypoint import HydrologyWaypoint
 from app.dataModel.hydrology.declaredBasin import DeclaredBasin
 from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline

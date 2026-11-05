@@ -1,7 +1,7 @@
 """Authored strategy: consume prepared geometry, preserve metadata and floor."""
 
 from app.application.planning.service.planningService import PlanBuildFailure
-from app.application.worldData.placement.adapters.waterTypes import WaterPreparationCode
+from app.dataModel.placement.waterPreparationCode import WaterPreparationCode
 from app.dataModel.hydrology.sources.waterDesignSource import AuthoredBasinSource
 from app.dataModel.spatial.grid.coordinateTypes import FineZ
 from app.dataModel.terrain.designedWater.draft import AuthoredWaterDesignDraft
