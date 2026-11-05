@@ -1,6 +1,7 @@
 """Policy, causal facts and integrity boundaries of Physics settings."""
 
 import asyncio
+from copy import deepcopy
 import unittest
 from unittest.mock import patch
 
@@ -29,6 +30,7 @@ from app.dataModel.physics.settings.settingsResults import PhysicsSettingsChange
 from app.dataModel.physics.settings.worldPhysicsSettings import STANDARD_GRAVITY_M_S2, WorldPhysicsSettings
 from app.dataModel.validation.importIssues.jsonValidationCode import JsonValidationCode
 from app.dataModel.validation.importIssues.wireLocation import WireLocation
+from app.dataModel.validation.importIssues.wireShapeIssue import WireShapeIssue
 from app.dataModel.fields.checkedPath import CheckedPath
 from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.physics.settings.settingsCapture import WorldPhysicsSettingsRef
@@ -37,6 +39,53 @@ LOG = "app.application.jsonValidation.resolve"
 
 
 class SettingsPolicyTests(unittest.TestCase):
+    def test_negative_integer_and_string_keys_return_typed_refusal(self):
+        for operation, validate in ((validate_world_physics_settings_input, True),
+                                    (resolve_world_physics_settings_input_runtime, False)):
+            for key in (-1, "-1"):
+                for prefix in ((), ("settings",)):
+                    results = []
+                    for collect_only in (False, True):
+                        with self.subTest(operation=operation.__name__, key=key,
+                                          prefix=prefix, collect_only=collect_only):
+                            raw = {key: 1}
+                            before = deepcopy(raw)
+                            ctx = ResolveContext(validate_only=validate, collect_only=collect_only,
+                                                 location=WireLocation(parts=prefix))
+                            with patch(f"{LOG}.logger.warning") as warning:
+                                result = operation(raw, ctx=ctx)
+                            self.assertIs(type(result), PhysicsSettingsInputRefused)
+                            self.assertEqual(len(result.issues), 1)
+                            issue = result.issues[0]
+                            self.assertIs(type(issue), WireShapeIssue)
+                            self.assertIs(issue.code, JsonValidationCode.VALIDATION_ERROR)
+                            self.assertEqual(issue.location.parts, prefix if key == -1 else (*prefix, "-1"))
+                            self.assertEqual(tuple(ctx.report.issues), result.issues)
+                            self.assertEqual(ctx.report.diagnostics, ())
+                            self.assertEqual(raw, before)
+                            self.assertIs(type(next(iter(raw))), type(key))
+                            self.assertEqual(ctx.location.parts, prefix)
+                            self.assertEqual(warning.call_count, int(not validate and not collect_only))
+                            results.append(result)
+                    if len(results) == 2:
+                        self.assertEqual(results[0], results[1])
+
+    def test_invalid_key_and_gravity_do_not_publish_a_fallback(self):
+        for operation, validate in ((validate_world_physics_settings_input, True),
+                                    (resolve_world_physics_settings_input_runtime, False)):
+            with self.subTest(operation=operation.__name__):
+                raw = {"gravity_acceleration_m_s2": None, -1: 1}
+                before = deepcopy(raw)
+                ctx = ResolveContext(validate_only=validate, collect_only=True)
+                with self.assertNoLogs(LOG):
+                    result = operation(raw, ctx=ctx)
+                self.assertIs(type(result), PhysicsSettingsInputRefused)
+                self.assertEqual(tuple(type(issue) for issue in result.issues),
+                                 (PhysicsGravityTypeError, WireShapeIssue))
+                self.assertEqual(tuple(ctx.report.issues), result.issues)
+                self.assertEqual(ctx.report.diagnostics, ())
+                self.assertEqual(raw, before)
+
     def view(self, value=STANDARD_GRAVITY_M_S2, world="w") -> WorldPhysicsSettingsView:
         result = build_settings_view(world, WorldPhysicsSettings(gravity_acceleration_m_s2=value))
         assert isinstance(result, WorldPhysicsSettingsView)

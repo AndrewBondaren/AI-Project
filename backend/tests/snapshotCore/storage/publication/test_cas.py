@@ -10,7 +10,7 @@ from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind, Ope
 from app.dataModel.artifacts.lifecycle.operation.claim import PublicationBusy, PublicationTerminal
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
 from app.dataModel.worldSnapshot.results.apply import SnapshotApplyResult
-from app.dataModel.worldSnapshot.results.publication import CasDecision, PackActivationResult, PackActivationDisposition
+from app.dataModel.worldSnapshot.results.publication import CasDecision, WorldCasMismatch, PackActivationResult, PackActivationDisposition
 from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
 from app.dataModel.artifacts.references import ArtifactRef, ArtifactKind, ArtifactFormatRegistry
 from app.dataModel.registryKey import RegistryKey
@@ -186,21 +186,28 @@ class PublicationCasTests(unittest.TestCase):
                         publication = WorldPublicationRef(world_uid="w1", publication_id=name + "-pub", pack_hash=digest,
                             snapshot_head=None, active_timeline_id=None, gameplay_started=False)
                         async with commits.transaction(name) as scope:
-                            decision = await world.compare_append(scope, expected, publication)
-                            if decision is CasDecision.APPLIED:
+                            result = await world.compare_append(scope, expected, publication)
+                            if result is CasDecision.APPLIED:
                                 artifact = ArtifactRef(kind=ArtifactKind.BLOB, format_key=RegistryKey[ArtifactFormatRegistry]("test.manifest"),
                                                        format_version=1, content_hash=digest, nbytes=0)
                                 await operations.record_terminal(scope, PackActivationResult(operation_id=name,
                                     request_fingerprint="b" * 64, manifest=artifact, disposition=PackActivationDisposition.ACTIVE,
                                     publication=publication))
-                        if decision is CasDecision.MISMATCH:
+                        if isinstance(result, WorldCasMismatch):
+                            self.assertEqual(result.expected, expected)
+                            self.assertEqual(result.operation_id, name)
+                            self.assertEqual(result.differing_fields, ("publication_id", "pack_hash"))
+                            self.assertEqual(result.observed, await world.read("w1"))
+                            self.assertEqual(result.publication.publication_id, result.observed.publication_id)
+                            winner = "race2" if name == "race1" else "race1"
+                            self.assertEqual(result.publication.operation_id, winner)
                             await operations.record_refusal(claim, SnapshotApplyResult(category=SnapshotApplyOutcomeKind.CONFLICT,
                                 operation_id=name, request_fingerprint="b" * 64, committed=None,
                                 diagnostics=(target_issue("stale publication"),)))
-                        return decision
+                        return result
                     decisions = await asyncio.gather(race(first, "race1", "c" * 64), race(second, "race2", "d" * 64))
                     self.assertEqual(decisions.count(CasDecision.APPLIED), 1)
-                    self.assertEqual(decisions.count(CasDecision.MISMATCH), 1)
+                    self.assertEqual(sum(isinstance(result, WorldCasMismatch) for result in decisions), 1)
                     for name in ("race1", "race2"):
                         self.assertIs((await first[-1].read(name)).phase, OperationPhase.TERMINAL)
         run_async(check())

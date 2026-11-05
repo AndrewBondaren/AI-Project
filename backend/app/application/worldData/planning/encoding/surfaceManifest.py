@@ -44,6 +44,7 @@ from app.dataModel.spatial.regionShape import EllipseShape as _MEllipseShape
 from app.dataModel.spatial.regionShape import PolygonShape as _MPolygonShape
 from app.dataModel.spatial.regionShape import AnchorRadiusShape as _MAnchorRadiusShape
 from app.dataModel.spatial.regionShape import CorridorShape as _MCorridorShape
+from app.dataModel.hydrology.waterKindMismatchIssue import HydrologyMaterializationCode, WaterKindMismatchIssue
 from app.dataModel.hydrology.enums.basinKind import BasinKind as _MBasinKind
 from app.dataModel.materials.worldMaterialRegistry import WorldMaterialRegistry as _MWorldMaterialRegistry
 from app.dataModel.materials.materialRegistryEntry import MaterialRegistryEntry as _MMaterialRegistryEntry
@@ -606,6 +607,8 @@ SURFACE_MANIFEST = CanonicalSchemaManifest(entries=tuple(
     (320, HydrologyProceduralExtentFacts, CanonicalTypeKind.RECORD),
     (321, NativeCoastlineStrategyInput, CanonicalTypeKind.RECORD),
     (322, NativeCoastlineStrategyContext, CanonicalTypeKind.RECORD),
+    (323, WaterKindMismatchIssue, CanonicalTypeKind.RECORD),
+    (324, HydrologyMaterializationCode, CanonicalTypeKind.ENUM),
 )))
 
 

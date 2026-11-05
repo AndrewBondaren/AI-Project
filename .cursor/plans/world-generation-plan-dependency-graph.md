@@ -821,11 +821,11 @@ flowchart TD
 
 | Трек | Последнее решение и evidence | Следующая работа |
 |---|---|---|
-| [GEO](./geo-1-designed-water.md) | [Проверка D2](./geo-i11-3-d2-verification.md): пять сценариев прошли, 41 адресный тест OK. | Полный geo1: 892 теста, 1 failure и 245 errors. Локализовать остальные ошибки отдельно от результата D2. |
-| [Snapshot](./world-domain-patches-snapshots.md) | [Аудит producers](./world-domain-snapshot-producers-audit.md): после перевода fixtures осталось 10 TypeError вместо 36, один typing failure и один skip. | Согласовать D1 двух отказов CAS. Семь ошибок cancel и одна GC остаются отдельными. |
+| [GEO](./geo-1-designed-water.md) | [D1 WATER_KIND_MISMATCH](./geo-water-kind-mismatch-d1.md) согласован. | Реализовать D2 Hydrology: typed issue, WaterBody.kind, FALLBACK, доставка и проверка codec. |
+| [Snapshot](./world-domain-patches-snapshots.md) | [Trace CAS реализован](./world-domain-snapshot-cas-trace.md), адресно 8 OK; обе прежние CAS-ошибки устранены. | По полному discover остались 7 ошибок cancel, 1 GC и 1 failure. Планировать отдельные scoped fixes. |
 | [Spatial](./spatial-distribution-domain.md) | §15.101: после release A и reopen общий shard доступен B, 3/3 OK. | F3 требует F1, F2 и принятой карты хранения pin/holder. |
 | [Time](./time-domain.md) | Проверены изолированные T3 и подготовка T4. Выполнено ревью политики Time/World settings для validate и runtime. | Миграция диагностики и runtime resolver впереди. Production T4/T5 требуют соответствующих Snapshot gates. |
-| [Physics](./physics-spatial-dynamics.md) | PS-ERROR-1: D1 принят, изолированный D2 реализован, 69/69 по отчёту. | Независимое ревью D2. I0 и runtime требуют отдельных bindings. |
+| [Physics](./physics-spatial-dynamics.md) | [Исправление P2](./ps-error-1-d2-p2-fix-report.md) предъявлено, профиль 71/71. | Независимо перепроверить обе операции на int -1 и str "-1". |
 | [API-1](./api-1-transport-boundary.md) | Проверено покрытие полей storage и wire. Climate C1 содержит девять scalars, десять после переноса lapse. | Сопоставить вход каждой операции с версией и выходом владельца, включая presence/aliases. |
 | [GEN-BAKE-READ](./generator-public-bake-reads.md) | Исправленный пакет D1–D7 предъявлен в §17.10.4 | Получить решение пользователя, затем R1/R2 отдельно по операциям. Handoff light, full L0+C23, named terrain и coordinate terrain описан в §17.10.3 |
 | [DAG invocation и bake admission](./dag-invocations-bake-admission.md) | Итог ревью R6 на 7b6104d7, полный набор 392/392. | Далее R7 по условиям owning-плана. |
@@ -838,18 +838,19 @@ flowchart TD
 
 | План | Номер трека | О чём трек | Следующий трек или внешняя зависимость |
 |---|---|---|---|
-| GEO | I11.3 D2 проверен | Пять сценариев прошли. | Разобрать красный полный geo1; приёмка D2 отдельно. |
-| Spatial / World Pack | SP-P2W §15.101 | Retention общего shard проверен после release A и reopen. | До F3 — F1, F2 и карта хранения. Реальный межхранилищный release требует отдельного доказательства. |
-| DAG / Pack | F1 в работе | В рабочем дереве меняются store и контракты durable intent. | После проверки F1 перейти к F2, затем F3 по карте хранения. |
+| GEO | Water Input, D1 согласован | WaterKindMismatchIssue принадлежит Hydrology, путь указывает на WaterBody.kind. | D2: начать с fine_water.test_fill, затем три зависимых setup и полный geo1. |
+| Physics | PS-ERROR-1 D2 / P2 | Исправление в рабочем дереве, две регрессии прошли. | Независимое повторное ревью. |
+| Spatial / World Pack | SP-P2W / F3 | Retention общего shard подтверждён; F1/F2 проверены. | F3 требует принятой карты хранения pin/holder. Затем CLOSED и отдельный F4 finalized. |
+| DAG / Pack | F2 проверен | [Отчёт F2](./sp-p2w-f2-verification.md): финальный DAG-набор 401/401. | DAG-вход для F3 готов. До реализации Pack подтвердить карту хранения pin/holder. |
 | Time | T3-A / T3-C, подготовка T4 проверена | Арифметика, календарь, World settings, чтение через закреплённые тестовые источники. | Внутри Time открыта политика STANDARD для 1–3 часов. Production T4 ждёт SN-TIME-READ, T5 — SN-TIME-APPLY, ветвление — SN-TIME-BRANCH. |
-| Snapshot | 4D2 / CAS | После миграции fixtures локализованы production producers CAS, GC и cancel. | Согласовать узкий D1 world/player MISMATCH перед реализацией. |
+| Snapshot | 4D2 / CAS | Trace world/player реализован и предъявлен, полный snapshotCore: 170 тестов, 8 errors, 1 failure, 1 skip. | Отдельные producers cancel/GC и оставшийся typing gate; приёмка CAS отдельно. |
 | ERROR-CONTRACTS-1 | D2 GEO / Snapshot / Physics | Пять GEO-сценариев и Snapshot metadata проверены. Physics D2 предъявлен. | Каждому срезу — своё ревью и отдельная приёмка. |
 
 API-1 ведёт пользователь. GEN-BAKE-READ после решения по D1–D7 переходит к проектированию R1/R2 по операциям.
 
 ### 12.2. ERROR-CONTRACTS-1: горизонтальные gates (v6.14)
 
-**Прикладные зависимости на 5 ноября.** [GEO D2](./geo-i11-3-d2-verification.md) проверен в пяти сценариях. Snapshot metadata handoff подтверждён, следующий scoped D1 относится к world/player CAS. Шаги F1–F6 принятого протокола CLOSED → finalized → release ведутся отдельно.
+**Прикладные зависимости на 5 ноября.** Для GEO WATER_KIND_MISMATCH согласован D1, открыт D2. Snapshot CAS trace реализован. В протоколе CLOSED → finalized → release F1/F2 проверены; F3 требует согласованной карты хранения pin/holder.
 
 | Локальный consumer-gate | Непосредственные prerequisite | Что не следует требовать |
 |---|---|---|

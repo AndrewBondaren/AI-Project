@@ -336,7 +336,7 @@ class AssignedPublicationTests(unittest.TestCase):
         from app.db.models.snapshotCore.operationRows import PublicationOperationRow
         from app.application.patch.registry.sectionRegistry import SectionRegistry, BoundSectionHandler
         from app.application.worldSnapshot.contracts.context import SnapshotValidationContext
-        from app.application.worldSnapshot.service.worldSnapshotService import WorldSnapshotService, _ApplyRefused
+        from app.application.worldSnapshot.service.worldSnapshotService import WorldSnapshotService, SnapshotCasConflict, _ApplyRefused
         from app.dataModel.patch.results.sectionResult import SectionApplyReceipt, SectionRefused
         from app.dataModel.patch.sections.section import SectionHeader
         from app.dataModel.registryKey import RegistryKey
@@ -433,16 +433,31 @@ class AssignedPublicationTests(unittest.TestCase):
                         with self.assertRaises(type(faults[mode])) as error:
                             await execute()
                         self.assertIs(error.exception, faults[mode])
-                    else:
+                    elif mode == "refuse":
                         with self.assertRaises(_ApplyRefused) as error:
                             await execute()
-                        if mode == "refuse":
-                            self.assertEqual(error.exception.refusal, refused)
+                        self.assertIs(error.exception.refusal, refused)
+                    else:
+                        with self.assertRaises(SnapshotCasConflict) as error:
+                            await execute()
+                        self.assertIs(error.exception.category, SnapshotApplyOutcomeKind.CONFLICT)
+                        trace = error.exception.trace
+                        mismatch = trace.mismatch
+                        self.assertEqual(mismatch.operation_id, op)
+                        self.assertEqual(trace.steps[0].target, targets[0])
+                        self.assertTrue(all(step.operation_id == op for step in trace.steps))
+                        if mode == "conflict":
+                            self.assertEqual([s.decision.value for s in trace.steps], ["mismatch"])
+                            self.assertEqual((mismatch.expected, mismatch.observed), (base, before))
+                            self.assertEqual(mismatch.differing_fields, ("publication_id",))
+                            self.assertEqual(mismatch.publication.publication_id, before.publication_id)
+                            self.assertEqual(mismatch.publication.operation_id, "start")
                         else:
-                            self.assertIs(error.exception.refusal.category, SnapshotApplyOutcomeKind.CONFLICT)
-                            issue, = error.exception.refusal.diagnostics
-                            owner = "player" if mode == "player_conflict" else "world"
-                            self.assertEqual(issue.message, f"{owner} publication changed")
+                            self.assertEqual([s.target for s in trace.steps[1:]], list(reversed(player_refs)))
+                            self.assertEqual([s.decision.value for s in trace.steps], ["applied", "applied", "mismatch"])
+                            self.assertEqual(mismatch.expected, expectations[1])
+                            self.assertIsNone(mismatch.observed)
+                            self.assertIsNone(mismatch.publication)
                     self.assertEqual(len(targets), 2 if mode == "refuse" else 3)
                     self.assertTrue(all(target is targets[0] for target in targets))
                     if mode == "refuse":
@@ -472,6 +487,49 @@ class AssignedPublicationTests(unittest.TestCase):
                      "player_error", "player_cancel"):
             with self.subTest(mode=mode):
                 run_async(check(mode))
+
+    def test_existing_player_conflict_keeps_competing_publication_after_head_moves(self):
+        from app.application.patch.registry.sectionRegistry import SectionRegistry
+        from app.application.worldSnapshot.contracts.context import SnapshotValidationContext
+        from app.application.worldSnapshot.service.worldSnapshotService import SnapshotCasConflict, WorldSnapshotService
+        from app.dataModel.worldSnapshot.identity.publication import PlayerHeadExpectation
+
+        async def check():
+            async with live_database() as bundle, live_database(bundle[0].path, seed=False) as peer:
+                _, commits, world, players, history, operations = bundle
+                await live_started(bundle)
+                _, prior = await live_tick(bundle)
+                base = prior.committed.publication
+                observed, = prior.committed.player_snapshots
+                async with peer[0].conn.execute(
+                    "SELECT publication_id, operation_id FROM player_publications WHERE player_snapshot_id=?",
+                    (observed.snapshot_id,),
+                ) as cursor:
+                    source = tuple(await cursor.fetchone())
+                op = "candidate"
+                target = observed.model_copy(update={"snapshot_id": "candidate-player"})
+                snapshot = base.snapshot_head.model_copy(update={"snapshot_id": "candidate-world"})
+                head = PlayerHeadExpectation(player_uid=observed.player_uid, expected_head=None)
+                await operations.claim_publication(OperationKind.SNAPSHOT_APPLY, op, "w1", "a"*64, "b"*64)
+                service = WorldSnapshotService(SectionRegistry(), world, players, history)
+                with self.assertRaises(SnapshotCasConflict) as error:
+                    async with commits.transaction(op) as scope:
+                        validation = SnapshotValidationContext(op, base, (head,), (), scope.read_scope)
+                        async with service._apply_to_target(scope, validation, (), snapshot, (target,)) as (ctx, receipts):
+                            # Only the tentative world CAS needs a persisted target.
+                            parent = await history.read(base.snapshot_head, scope=scope.read_scope)
+                            metadata = parent.model_copy(update={"ref": snapshot, "parent": base.snapshot_head,
+                                                                 "operation_id": op, "turn_id": 2})
+                            await history.append(scope, metadata, receipts)
+                trace = error.exception.trace
+                self.assertEqual(await peer[2].read("w1"), base)
+                self.assertIsNone(await peer[4].read(snapshot))
+                await live_tick(peer, "later")
+                self.assertNotEqual(await players.read(observed.player_uid), observed)
+                self.assertEqual((trace.mismatch.expected, trace.mismatch.observed), (head, observed))
+                self.assertEqual((trace.mismatch.publication.publication_id, trace.mismatch.publication.operation_id),
+                                 source)
+        run_async(check())
 
     def test_invalid_participants_refused_before_handlers_metadata_or_cas(self):
         from unittest.mock import AsyncMock, Mock

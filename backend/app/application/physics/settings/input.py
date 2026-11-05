@@ -49,7 +49,13 @@ def _read_full_input(raw: object, ctx: ResolveContext) -> PhysicsSettingsInputRe
                     arguments=PhysicsGravityArguments.model_validate({"pydantic_type": error["type"]}),
                     location=ctx.location, message="gravity must be a finite nonnegative number in m/s²",
                 ))
-            elif error["type"] in ("extra_forbidden", "invalid_key"):
+            elif error["type"] == "invalid_key":
+                # A malformed mapping key is not a field/index in WireLocation.
+                issues.append(WireShapeIssue(
+                    code=JsonValidationCode.VALIDATION_ERROR, location=ctx.location,
+                    message="Physics settings keys must be strings",
+                ))
+            elif error["type"] == "extra_forbidden":
                 mapped = field_issue(ctx, WorldPhysicsSettings, error["loc"], "unknown or invalid settings key",
                                      JsonValidationCode.REMOVED_FROM_WIRE
                                      if error["loc"] == ("g",) else JsonValidationCode.VALIDATION_ERROR)

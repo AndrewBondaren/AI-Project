@@ -6,7 +6,9 @@ from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
 from app.dataModel.worldSnapshot.identity.refs import WorldSnapshotRef
-from app.dataModel.worldSnapshot.results.publication import CasDecision
+from app.dataModel.worldSnapshot.results.publication import (
+    CasDecision, ObservedPublication, WorldCasMismatch, WorldCasResult,
+)
 from app.db.models.snapshotCore.publicationRows import WorldPublicationRow
 from app.db.mapper import from_row
 from app.db.repositories.sqlite.snapshotCore.commitScope import SqlitePublicationCommitStore
@@ -109,7 +111,7 @@ class SqliteWorldPublicationStore:
         return WorldPublicationRef(world_uid=world_uid, publication_id=publication_id, pack_hash=None,
                                    snapshot_head=None, active_timeline_id=None, gameplay_started=False)
 
-    async def compare_append(self, scope: CommitScope, expected: WorldPublicationRef, next_publication: WorldPublicationRef) -> CasDecision:
+    async def compare_append(self, scope: CommitScope, expected: WorldPublicationRef, next_publication: WorldPublicationRef) -> WorldCasResult:
         operation_id = self._registry.operation_id(scope)
         expected = WorldPublicationRef.model_validate(expected, strict=True)
         next_publication = WorldPublicationRef.model_validate(next_publication, strict=True)
@@ -118,8 +120,12 @@ class SqliteWorldPublicationStore:
         stored = await self._latest(expected.world_uid, scope)
         if stored is None:
             raise PublicationInfrastructureError("world publication is not initialized")
-        if await self._ref(stored, scope) != expected:
-            return CasDecision.MISMATCH
+        observed = await self._ref(stored, scope)
+        if observed != expected:
+            differing = tuple(name for name in WorldPublicationRef.model_fields
+                              if getattr(expected, name) != getattr(observed, name))
+            return WorldCasMismatch(operation_id, expected, observed,
+                ObservedPublication(stored["publication_id"], stored["operation_id"]), differing)
         await self._access.insert(scope, WorldPublicationRow(next_publication.publication_id, expected.world_uid,
             expected.publication_id, stored["publication_seq"] + 1, operation_id, next_publication.pack_hash,
             None if next_publication.snapshot_head is None else next_publication.snapshot_head.snapshot_id,

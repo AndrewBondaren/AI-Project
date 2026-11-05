@@ -75,6 +75,62 @@ class InputWaitTests(unittest.IsolatedAsyncioTestCase):
     async def start(self, db):
         return await self.engine(db).run(KEY, f.TaskType.INTENT_DETECTION, max_passes=1, options=OPTIONS)
 
+    async def test_owner_stops_failed_execution_after_cancellation(self):
+        with closing(sqlite3.connect(self.path)) as db:
+            engine = f.runtime(store=f.SQLiteExecutionStore(db), counter=Ask, counter_wait=CHOICE,
+                               interaction=Session("a"), enable_stop_intent=True)
+            await engine.run(KEY, f.TaskType.INTENT_DETECTION, max_passes=1, options=OPTIONS)
+            await engine.cancel_execution(KEY)
+            with self.assertRaises(f.ExecutionStopping) as stopped:
+                await engine.resume(KEY, max_passes=1, options=OPTIONS)
+            self.assertEqual(stopped.exception.intent.outcome, f.FailedOutcome(diagnostic="execution cancelled"))
+        with closing(sqlite3.connect(self.path)) as db:
+            with self.assertRaises(f.ExecutionStopping) as recovered:
+                await self.engine(db).resume(KEY, max_passes=1, options=OPTIONS)
+            self.assertEqual(recovered.exception.intent, stopped.exception.intent)
+
+    async def test_stop_fences_selected_input_and_reopens_failure(self):
+        with closing(sqlite3.connect(self.path)) as first, closing(sqlite3.connect(self.path)) as second:
+            await self.start(first)
+            engine = self.engine(first)
+            request = ResumeInput[f.Count](wait_id=WaitId("pick"), request_id="reply", expected_revision=3,
+                                          payload=f.Count(value=7))
+            await engine.accept_input(KEY, request)
+            selected, proceed = asyncio.Event(), asyncio.Event()
+            start = engine._executor._start_selected
+
+            async def barrier(coordinator, owned, record):
+                selected.set()
+                await proceed.wait()
+                return await start(coordinator, owned, record)
+
+            with patch.object(engine._executor, "_start_selected", barrier), patch.object(Ask, "resume") as continuation:
+                task = asyncio.create_task(engine.resume(KEY, max_passes=1, options=OPTIONS))
+                try:
+                    await asyncio.wait_for(selected.wait(), 5)
+                    with second:
+                        second.execute("UPDATE dag_executions SET lease_until=0 WHERE execution_id=?", (KEY,))
+                    store = f.SQLiteExecutionStore(second)
+                    claim = await store.claim(KEY, "new", 60)
+                    intent = await store.record_stop_intent(claim, (await store.load(KEY)).revision,
+                                                            f.FailedOutcome(diagnostic="execution refused"))
+                    await store.release(claim)
+                    with self.assertRaises(InputConflict):
+                        await self.engine(second).accept_input(KEY, request)
+                    proceed.set()
+                    with self.assertRaises(OwnershipConflict):
+                        await task
+                    continuation.assert_not_called()
+                finally:
+                    proceed.set()
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+        with closing(sqlite3.connect(self.path)) as db:
+            engine = self.engine(db)
+            with patch.object(engine._binding, "compile", side_effect=AssertionError), self.assertRaises(f.ExecutionStopping) as stopped:
+                await engine.resume(KEY, max_passes=1, options=OPTIONS)
+            self.assertEqual(stopped.exception.intent, intent)
+
     async def test_http_reopens_sqlite_and_replays_receipt(self):
         app = FastAPI()
 

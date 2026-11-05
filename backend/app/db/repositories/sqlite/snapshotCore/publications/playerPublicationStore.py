@@ -5,7 +5,9 @@ from app.application.worldSnapshot.contracts.commitScope import CommitScope, Com
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.worldSnapshot.identity.publication import PlayerHeadExpectation
 from app.dataModel.worldSnapshot.identity.refs import PlayerSnapshotRef
-from app.dataModel.worldSnapshot.results.publication import CasDecision
+from app.dataModel.worldSnapshot.results.publication import (
+    CasDecision, ObservedPublication, PlayerCasMismatch, PlayerCasResult,
+)
 from app.db.models.snapshotCore.publicationRows import PlayerPublicationRow
 from app.db.repositories.sqlite.snapshotCore.commitScope import SqlitePublicationCommitStore
 from app.db.repositories.sqlite.shared.access.scopedAccess import ScopedSqliteAccess
@@ -60,7 +62,7 @@ class SqlitePlayerPublicationStore:
             return None if row is None else await self._ref(row, pinned)
 
     async def compare_append(self, scope: CommitScope, expected: PlayerHeadExpectation,
-                             next_ref: PlayerSnapshotRef, operation_id: EntityUid) -> CasDecision:
+                             next_ref: PlayerSnapshotRef, operation_id: EntityUid) -> PlayerCasResult:
         entry = self._registry.check(scope, True)
         expected = PlayerHeadExpectation.model_validate(expected, strict=True)
         next_ref = PlayerSnapshotRef.model_validate(next_ref, strict=True)
@@ -70,7 +72,8 @@ class SqlitePlayerPublicationStore:
         row = await self._latest(expected.player_uid, scope)
         current = None if row is None else await self._ref(row, scope)
         if current != expected.expected_head:
-            return CasDecision.MISMATCH
+            source = None if row is None else ObservedPublication(row["publication_id"], row["operation_id"])
+            return PlayerCasMismatch(operation_id, expected, current, source)
         await self._access.insert(scope, PlayerPublicationRow(_UID.validate_python(runtime_uid(), strict=True),
             expected.player_uid, None if row is None else row["publication_id"],
             1 if row is None else row["publication_seq"] + 1, next_ref.snapshot_id, operation_id))

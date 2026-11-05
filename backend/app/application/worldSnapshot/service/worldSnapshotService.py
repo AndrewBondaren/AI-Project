@@ -20,11 +20,12 @@ from app.dataModel.artifacts.lifecycle.lease import OperationLeaseRef
 from app.application.worldSnapshot.storage.publicationStore import IPlayerPublicationStore, IWorldPublicationStore
 from app.dataModel.patch.results.sectionResult import SectionApplyReceipt, SectionRefused
 from app.dataModel.patch.sections.section import DomainSection
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
 from app.dataModel.worldSnapshot.identity.refs import PlayerSnapshotRef, SnapshotRef, WorldSnapshotRef
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
-from app.dataModel.worldSnapshot.results.publication import CasDecision
+from app.dataModel.worldSnapshot.results.publication import (
+    CasConflictTrace, CasDecision, CasStep, PlayerCasMismatch, WorldCasMismatch,
+)
 from app.ids.deterministicIds import runtime_uid
 
 
@@ -34,6 +35,16 @@ class _ApplyRefused(Exception):
     def __init__(self, refusal: SectionRefused) -> None:
         super().__init__(refusal.diagnostics)
         self.refusal = refusal
+
+
+class SnapshotCasConflict(Exception):
+    """Escapes the enclosing publication transaction to its caller after rollback."""
+
+    category = SnapshotApplyOutcomeKind.CONFLICT
+
+    def __init__(self, trace: CasConflictTrace) -> None:
+        super().__init__("snapshot publication conflict")
+        self.trace = trace
 
 
 class WorldSnapshotService:
@@ -112,13 +123,16 @@ class WorldSnapshotService:
                 raise ValueError("receipt belongs to another section")
             receipts.append(outcome)
         yield context, tuple(receipts)
-        if await self._world.compare_append(scope, expected, target) is CasDecision.MISMATCH:
-            raise _ApplyRefused(SectionRefused(category=SnapshotApplyOutcomeKind.CONFLICT,
-                diagnostics=(FieldPathError(path=(), message="world publication changed"),)))
+        operation_id = validation.operation_id
+        world_result = await self._world.compare_append(scope, expected, target)
+        if isinstance(world_result, WorldCasMismatch):
+            step = CasStep(world_result.operation_id, target, CasDecision.MISMATCH)
+            raise SnapshotCasConflict(CasConflictTrace(world_result, (step,)))
+        steps = [CasStep(operation_id, target, world_result)]
         for head in validation.expected_players:
-            decision = await self._players.compare_append(scope, head, assigned_players[head.player_uid],
-                                                          validation.operation_id)
-            if decision is CasDecision.MISMATCH:
-                raise _ApplyRefused(SectionRefused(category=SnapshotApplyOutcomeKind.CONFLICT,
-                    diagnostics=(FieldPathError(path=("expected_players", head.player_uid),
-                                                message="player publication changed"),)))
+            player_target = assigned_players[head.player_uid]
+            result = await self._players.compare_append(scope, head, player_target, operation_id)
+            if isinstance(result, PlayerCasMismatch):
+                steps.append(CasStep(result.operation_id, player_target, CasDecision.MISMATCH))
+                raise SnapshotCasConflict(CasConflictTrace(result, tuple(steps)))
+            steps.append(CasStep(operation_id, player_target, result))

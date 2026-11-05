@@ -6,8 +6,9 @@ from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Never
+from unittest.mock import patch
 
-from pydantic import BaseModel, ConfigDict, RootModel
+from pydantic import BaseModel, ConfigDict, RootModel, TypeAdapter
 
 from app.application.cancellation.typed.snapshotStore import SnapshotStore
 from app.application.engine.contracts.invocation.executionOptions import InvocationOptions
@@ -33,7 +34,9 @@ from app.application.engine.runtime.graphs.graphCompiler import GraphCompiler
 from app.application.engine.runtime.validation.contractValidator import ContractValidator
 from app.application.engine.runtime.validation.nodeValidator import NodeValidator
 from app.dataModel.engine.dag.identity import CallKey, ContractId, ContractVersion, ExecutionId, NodeId, PlanRevision
-from app.dataModel.engine.dag.invocations.record import InvocationGraph
+from app.application.engine.runtime.invocations.checkpointCodec import CheckpointCodec
+from app.application.engine.runtime.invocations.ownedExecution import ExecutionStopping
+from app.dataModel.engine.dag.invocations.record import CompletedOutcome, FailedOutcome, InvocationGraph
 from app.db.repositories.sqlite.dagExecutions.executionStore import SQLiteExecutionStore
 from app.application.engine.runtime.execution.pythonNodeError import PythonNodeError
 from tests.dag_typing.fixtures import TestNodeError, FakeExecutor, GraphBindings, GraphRuleState
@@ -185,7 +188,7 @@ class Merge(Source):
 
 
 def runtime(entry=Pipeline, store=None, transform=Transform, retry_policy=None, diamond=False, counter=CountCaller, lease_seconds=300,
-            interaction=None, counter_wait=None, entry_lifecycle=None):
+            interaction=None, counter_wait=None, entry_lifecycle=None, enable_stop_intent=False):
     registry, bindings = NodeRegistry(), GraphBindings()
     if diamond:
         for cls, deps in ((Source, ()), (Left, (Source.id,)), (Right, (Source.id,)), (Merge, (Left.id, Right.id))):
@@ -214,7 +217,8 @@ def runtime(entry=Pipeline, store=None, transform=Transform, retry_policy=None, 
                            invocation_options=config)
     plan = compiler.compile(GraphRuleState(), invocation_root=entry.id)
     if store is not None:
-        return DAGEngine(executor, None, registry, PipelineHooks(plan), None, ExecutionSnapshotService(), SnapshotStore())
+        return DAGEngine(executor, None, registry, PipelineHooks(plan), None, ExecutionSnapshotService(), SnapshotStore(),
+                         enable_stop_intent=enable_stop_intent)
     return executor, plan
 
 
@@ -304,6 +308,169 @@ class FailOnceTransform(Transform):
 
 
 class RecoveryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_stop_fences_selected_child_retry_and_join(self):
+        schema = Path(__file__).resolve().parents[3] / "app/db/migrations/0001_initial.sql"
+        for name, target_node, step, attempt in (("child", COUNT.node_id, 0, 1),
+                                                 ("retry", TRANSFORM.node_id, 0, 2),
+                                                 ("join", COUNT.node_id, 1, 2)):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "race.sqlite"
+                with closing(sqlite3.connect(path)) as first, closing(sqlite3.connect(path)) as second:
+                    first.executescript(schema.read_text("utf-8"))
+                    old, new = SQLiteExecutionStore(first), SQLiteExecutionStore(second)
+                    executor, plan = runtime(transform=FailOnceTransform, retry_policy=lambda _, n: n == 1)
+                    selected, resume = asyncio.Event(), asyncio.Event()
+                    stale = []
+                    starts = []
+                    start, dispatch = executor._start_selected, executor._invocation_step
+
+                    async def barrier(coordinator, owned, record):
+                        if (record.node_id, record.step_index, record.attempt_counter) == (target_node, step, attempt):
+                            stale.append(owned.claim)
+                            selected.set()
+                            await resume.wait()
+                        return await start(coordinator, owned, record)
+
+                    async def count(coordinator, record):
+                        if resume.is_set():
+                            starts.append(record.identity())
+                        return await dispatch(coordinator, record)
+
+                    key = ExecutionId(name)
+                    args = (plan, key, Pipeline.id, PlanRevision("1"))
+                    with patch.object(executor, "_start_selected", barrier), patch.object(executor, "_invocation_step", count):
+                        task = asyncio.create_task(executor.run_invocation(*args, old, owner="old", workers=1, invocation_limit=16))
+                        try:
+                            await asyncio.wait_for(selected.wait(), 10)
+                            with second:
+                                second.execute("UPDATE dag_executions SET lease_until=0 WHERE execution_id=?", (key,))
+                            claim = await new.claim(key, "recovery", 60)
+                            before = await new.load(key)
+                            await new.record_stop_intent(claim, before.revision, FailedOutcome(diagnostic="execution stopped"))
+                            with self.assertRaises(OwnershipConflict):
+                                await old.checkpoint(stale[0], before.revision + 1, before.status, before.blob)
+                            await new.release(claim)
+                            with patch.object(old, "claim", side_effect=AssertionError("ordinary claim after intent")):
+                                with self.assertRaises(OwnershipConflict):
+                                    await executor.run_invocation(*args, old, owner="direct", workers=1, invocation_limit=16)
+                            resume.set()
+                            with self.assertRaises(OwnershipConflict):
+                                await task
+                            self.assertEqual(starts, [])
+                        finally:
+                            resume.set()
+                            task.cancel()
+                            await asyncio.gather(task, return_exceptions=True)
+
+    async def test_stop_revokes_running_sibling_and_drains_cleanup(self):
+        from app.application.engine.runtime.invocations.memoryExecutionStore import MemoryExecutionStore
+        store = MemoryExecutionStore()
+        key = ExecutionId("admitted")
+        executor, plan = runtime(Group)
+        admitted, cleaned = asyncio.Event(), asyncio.Event()
+        selected, proceed = asyncio.Event(), asyncio.Event()
+        original_step, original_start = executor._invocation_step, executor._start_selected
+        starts_after_stop = []
+
+        async def running(coordinator, record):
+            if proceed.is_set():
+                starts_after_stop.append(record.identity())
+            if record.call_key == "failed":
+                admitted.set()
+                try:
+                    await asyncio.Event().wait()
+                finally:
+                    cleaned.set()
+            return await original_step(coordinator, record)
+
+        async def selected_sibling(coordinator, owned, record):
+            if record.call_key == "cancelled":
+                selected.set()
+                await proceed.wait()
+            return await original_start(coordinator, owned, record)
+
+        with patch.object(executor, "_invocation_step", running), patch.object(executor, "_start_selected", selected_sibling):
+            task = asyncio.create_task(executor.run_invocation(plan, key, Group.id, PlanRevision("1"), store,
+                                                              owner="old", workers=2, invocation_limit=8))
+            try:
+                await asyncio.wait_for(asyncio.gather(admitted.wait(), selected.wait()), 5)
+                store._entries[key].lease_until = 0
+                claim = await store.claim(key, "new", 60)
+                intent = await store.record_stop_intent(claim, (await store.load(key)).revision,
+                                                        FailedOutcome(diagnostic="stop siblings"))
+                proceed.set()
+                with self.assertRaises(OwnershipConflict):
+                    await task
+                self.assertTrue(cleaned.is_set())
+                self.assertEqual(starts_after_stop, [])
+                self.assertEqual((await store.load(key)).stop_intent, intent)
+            finally:
+                proceed.set()
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+
+    async def test_stop_fences_next_pass_before_compile(self):
+        from app.application.engine.runtime.invocations.memoryExecutionStore import MemoryExecutionStore
+        store = MemoryExecutionStore()
+        engine = runtime(store=store, enable_stop_intent=True)
+        selected, proceed = asyncio.Event(), asyncio.Event()
+        transition = False
+        key = ExecutionId("next-pass")
+        options = LLMExecutionOptions(player_message="", language="ru", repair_iterations=0, repair_mode=RepairMode.MAXIMUM)
+
+        def choose_pass(view):
+            nonlocal transition
+            transition = True
+            return TaskType.INTENT_DETECTION
+
+        checkpoint = store.checkpoint
+        async def barrier(claim, revision, status, blob):
+            if transition:
+                selected.set()
+                await proceed.wait()
+            return await checkpoint(claim, revision, status, blob)
+
+        with (patch.object(engine._binding, "transition", choose_pass), patch.object(store, "checkpoint", barrier),
+              patch.object(engine._binding, "compile", wraps=engine._binding.compile) as compile_plan):
+            task = asyncio.create_task(engine.run(key, TaskType.INTENT_DETECTION, max_passes=2, options=options))
+            try:
+                await asyncio.wait_for(selected.wait(), 5)
+                store._entries[key].lease_until = 0
+                claim = await store.claim(key, "new", 60)
+                await store.record_stop_intent(claim, (await store.load(key)).revision, FailedOutcome(diagnostic="stop"))
+                proceed.set()
+                with self.assertRaises(OwnershipConflict):
+                    await task
+                self.assertTrue(all(call.args[1] == 0 for call in compile_plan.call_args_list))
+            finally:
+                proceed.set()
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+
+    async def test_stop_reopens_before_compile_or_restore(self):
+        schema = Path(__file__).resolve().parents[3] / "app/db/migrations/0001_initial.sql"
+        options = LLMExecutionOptions(player_message="", language="ru", repair_iterations=0, repair_mode=RepairMode.MAXIMUM)
+        key = ExecutionId("stopping")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "stop.sqlite"
+            with closing(sqlite3.connect(path)) as db:
+                db.executescript(schema.read_text("utf-8"))
+                engine = runtime(Group, store=SQLiteExecutionStore(db), enable_stop_intent=True)
+                with self.assertRaises(ExecutionStopping) as stopped:
+                    await engine.run(key, TaskType.INTENT_DETECTION, max_passes=1, options=options)
+                intent = stopped.exception.intent
+                self.assertIsInstance(intent.outcome, CompletedOutcome)
+                self.assertEqual(TypeAdapter(ResolveResult[Text]).validate_json(intent.outcome.result_json).data, Text(text="joined"))
+            with closing(sqlite3.connect(path)) as db:
+                engine = runtime(Group, store=SQLiteExecutionStore(db))
+                with (patch.object(engine._binding, "compile", side_effect=AssertionError("compiled during stop")),
+                      patch.object(CheckpointCodec, "restore", side_effect=AssertionError("restored during stop"))):
+                    for operation in (engine.resume(key, max_passes=1, options=options),
+                                      engine.run(key, TaskType.INTENT_DETECTION, max_passes=1, options=options)):
+                        with self.assertRaises(ExecutionStopping) as recovered:
+                            await operation
+                        self.assertEqual(recovered.exception.intent, intent)
+
     async def test_terminal_resume_requires_data_read_by_output_lifecycle(self):
         schema = (Path(__file__).resolve().parents[3] / "app/db/migrations/0001_initial.sql").read_text("utf-8")
         execution = ExecutionId("terminal-resume")

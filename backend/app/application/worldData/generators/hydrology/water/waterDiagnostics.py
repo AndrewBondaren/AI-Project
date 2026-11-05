@@ -11,6 +11,11 @@ def water_issue(ctx: ResolveContext, uid: str, message: str, code: str, *,
                 disposition: PlanDiagnosticDisposition,
                 emit: Callable[[PlanDiagnostic], None] | None = None) -> None:
     issue = FieldPathError(path=("hydrology", "water", uid), message=message, code=code)
+    deliver_water_issue(ctx, issue, disposition=disposition, emit=emit)
+
+
+def deliver_water_issue(ctx: ResolveContext, issue: FieldPathError, *, disposition: PlanDiagnosticDisposition,
+                        emit: Callable[[PlanDiagnostic], None] | None = None) -> None:
     if emit is not None:
         emit(PlanDiagnostic(issue=issue, disposition=disposition))
         return

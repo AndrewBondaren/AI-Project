@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from app.application.engine.diagnostics.dagLog import emit as emit_diagnostic
 from app.application.engine.diagnostics.executionEvents import ExecutionEvents
-from app.application.engine.contracts.invocation.executionStore import ExecutionStore, RestoreFailure
+from app.application.engine.contracts.invocation.executionStore import ExecutionStore, OwnershipConflict, RestoreFailure
 from app.application.engine.contracts.invocation.executionOptions import InvocationOptions
 from app.application.engine.contracts.invocation.nodeStep import Complete
 from app.application.engine.nodeTypes.resumablePythonNode import ResumablePythonNode
@@ -25,7 +25,7 @@ from app.application.engine.contracts.pythonExecutor import PythonExecutor
 from app.application.engine.nodeTypes.pythonNode import PythonNode
 from app.application.engine.runtime.dag.context.dagReadView import PublishedDAGReadView
 from app.application.engine.runtime.dag.executionLevelSnapshot import ExecutionLevelSnapshot
-from app.application.engine.runtime.dag.executionPlan import ExecutionPlan
+from app.application.engine.runtime.dag.executionPlan import ExecutionPlan, LLMGroup
 from app.application.engine.runtime.dag.executionState import ExecutionState
 from app.application.engine.runtime.dag.executionTrace import ExecutionTrace
 from app.application.engine.runtime.execution.nodeOutcome import GateSignal, LevelDecision, NodeOutcome
@@ -42,6 +42,22 @@ from app.dataModel.engine.dag.executionPhase import ExecutionPhase, PythonExecut
 from app.dataModel.engine.dag.identity import DomainRevision, ExecutionIdentity, NodeId, PlanRevision
 from app.dataModel.engine.dag.nodeStatus import NodeStatus
 from app.dataModel.engine.dag.records import OutputRecord
+
+
+class _OwnedAggregate(LLMAggregateExecutor):
+    """Admit each selected LLM group on its worker before preparing inputs."""
+
+    def __init__(self, delegate: LLMAggregateExecutor, owned: OwnedExecution) -> None:
+        self.delegate, self.owned = delegate, owned
+
+    async def execute(
+        self, plan: ExecutionPlan, group: LLMGroup, identities: tuple[ExecutionIdentity, ...],
+        views: Mapping[NodeId, PublishedDAGReadView], request: LLMRequest, *,
+        options: LLMExecutionOptions, pass_number: int = 0, level: int = 0,
+    ) -> tuple[NodeOutcome[BaseModel, NodeError], ...]:
+        await self.owned.save()
+        return await self.delegate.execute(plan, group, identities, views, request, options=options,
+                                           pass_number=pass_number, level=level)
 
 
 class DAGExecutor:
@@ -70,13 +86,16 @@ class DAGExecutor:
         if workers < 1:
             raise ValueError("workers must be positive")
         try:
-            await store.load(execution_id)
+            if (await store.load(execution_id)).stop_intent is not None:
+                raise OwnershipConflict("execution is stopping")
         except KeyError:
             initial = InvocationCoordinator.create(plan, execution_id, revision, root, invocation_limit, input)
             await store.create(execution_id, CheckpointCodec.encode(initial.graph))
         claim = await store.claim(execution_id, owner, lease_seconds)
         try:
             saved = await store.load(execution_id)
+            if saved.stop_intent is not None:
+                raise OwnershipConflict("execution is stopping")
             graph = await CheckpointCodec.restore(saved.blob, plan)
             if (graph.execution_id, graph.revision, graph.records[graph.root].node_id) != (execution_id, revision, root):
                 raise RestoreFailure("checkpoint does not match execution plan")
@@ -103,9 +122,8 @@ class DAGExecutor:
                 if ready:
                     for record in ready:
                         coordinator.begin(record)
-                    await owned.save()
                     for record in ready:
-                        active[asyncio.create_task(self._invocation_step(coordinator, record))] = record.identity()
+                        active[asyncio.create_task(self._start_selected(coordinator, owned, record))] = record.identity()
                 if not active:
                     if root.status not in terminal and InputWaitCoordinator.waiting(graph, coordinator.plan).pending:
                         graph.waiting_for_input = True
@@ -132,6 +150,13 @@ class DAGExecutor:
             if active:
                 await asyncio.gather(*active, return_exceptions=True)
         return root
+
+    async def _start_selected(self, coordinator: InvocationCoordinator, owned: OwnedExecution,
+                              record: InvocationRecord) -> StepEffect:
+        # This CAS grants one start, ordered against the durable stop CAS even
+        # when selection and execution happen under different owner generations.
+        await owned.save()
+        return await self._invocation_step(coordinator, record)
 
     async def _invocation_step(self, coordinator: InvocationCoordinator, record: InvocationRecord) -> StepEffect:
         plan = coordinator.plan
@@ -164,7 +189,10 @@ class DAGExecutor:
         aggregate: LLMAggregateExecutor, request: LLMRequest, *, options: LLMExecutionOptions,
         pass_number: Index = 0, confirmed_domain_revisions: Mapping[str, DomainRevision] | None = None,
         rerun: Collection[NodeId] = (), cancellation: CancellationRequest | None = None, invalidate_reuse: bool = True,
+        durable: OwnedExecution | None = None,
     ) -> LevelDecision:
+        if durable is not None and plan.llm_groups:
+            aggregate = _OwnedAggregate(aggregate, durable)
         return await LLMGroupCoordinator(aggregate, self._emit, clock=self._clock).run_phase(
             plan, state, plan_revision, request, options=options, pass_number=pass_number,
             confirmed_domain_revisions=confirmed_domain_revisions, rerun=rerun, cancellation=cancellation, invalidate_reuse=invalidate_reuse,
@@ -206,7 +234,7 @@ class DAGExecutor:
                 state.catalog.invalidate_for_reuse(confirmed_domain_revisions or {})
             state.begin_level(())
             for level, node_ids in enumerate(levels):
-                snapshot = await self._run_level(plan, state, phase, plan_revision, pass_number, level, node_ids, rerun, cancellation)
+                snapshot = await self._run_level(plan, state, phase, plan_revision, pass_number, level, node_ids, rerun, cancellation, durable)
                 if snapshot.decision != LevelDecision.CONTINUE:
                     return snapshot.decision
             return LevelDecision.CONTINUE
@@ -296,7 +324,7 @@ class DAGExecutor:
     async def _run_level(
         self, plan: ExecutionPlan, state: ExecutionState, phase: PythonExecutionPhase,
         revision: PlanRevision, pass_number: int, level: int, node_ids: tuple[NodeId, ...], rerun: Collection[NodeId],
-        cancellation: CancellationRequest | None,
+        cancellation: CancellationRequest | None, durable: OwnedExecution | None = None,
     ) -> ExecutionLevelSnapshot:
         started_at = self._clock()
         current = {identity.node_id: identity for identity in state.catalog.current_outputs}
@@ -315,9 +343,13 @@ class DAGExecutor:
         views = tuple(state.catalog.read_view(identity.node_id) for identity in identities)
         events = ExecutionEvents(phase, revision, pass_number, level, started_at,
                                  {view.consumer: view.requirements for view in views}, self._emit, self._clock, cancellation)
-        for identity in identities:
+        async def start_node(view: PublishedDAGReadView, identity: ExecutionIdentity) -> NodeOutcome[BaseModel, NodeError]:
+            if durable is not None:
+                await durable.save()
             events.started(identity)
-        tasks = tuple(asyncio.create_task(self._run_node(plan, view, identity, pass_number, level))
+            return await self._run_node(plan, view, identity, pass_number, level)
+
+        tasks = tuple(asyncio.create_task(start_node(view, identity))
                       for identity, view in zip(identities, views, strict=True))
         group = asyncio.gather(*tasks, return_exceptions=True)
         cancel_requested_at: float | None = None
@@ -336,6 +368,9 @@ class DAGExecutor:
                 except asyncio.CancelledError:
                     # A repeated parent request must not cancel child cleanup.
                     pass
+        for result in results:
+            if isinstance(result, OwnershipConflict):
+                raise result
         outcomes = tuple(
             self._normalize(result, identity, view, phase, pass_number, level, started_at)
             for result, identity, view in zip(results, identities, views, strict=True)

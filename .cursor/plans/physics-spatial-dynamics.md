@@ -1465,3 +1465,10 @@ Verification из backend:
 **Открыто:** независимое review/пользовательская приёмка D2; real I0 routing и execution boundary; public DAG Time/settings bindings; settings storage/World/Snapshot acceptance и coherence/CAS. Не добавлены runtime numerical solver, DAG nodes, новый внешний port, SQL/read/write, effects или activation. Отсутствие disconnect в пользовательском приложении ещё требует end-to-end runtime proof; typed отказ сам по себе команды завершить сессию не содержит.
 
 Финальная перепроверка после последних правок: те же 11 модулей/cases (оба списка выше вместе) одним unittest запуском — **69/69 PASS**. AST — 20 Physics source/test/typing Python files PASS, reverse dataModel→application imports отсутствуют; scoped git diff --check PASS. D2 предъявлен на review, I0/runtime не активированы.
+
+**Независимое ревью D2, HEAD d01cf073:** профильный набор 69/69 PASS. Открыт воспроизводимый контрпример на malformed Python dict в обеих input operations. [Отчёт, матрица операций и воспроизведение](./ps-error-1-d2-review.md). D2 остаётся открыт до исправления и перепроверки. Граница I0/storage/production bindings сохранена.
+
+
+**P3.21 / P2 corrective follow-up (2026-11-05):** воспроизведён int-key -1 через обе публичные input operations; строковый ключ "-1" проверен отдельно. Минимальная правка _read_full_input: invalid_key → existing WireShapeIssue на containing object, extra_forbidden сохраняет точный строковый loc. Новые регрессии проверяют exact refusal/cause, отсутствие mutation/continuation и policy emit/collect_only; mixed invalid gravity + int key также отказывает без fallback. Новые tests 2/2 PASS; полный профиль §P3.21 **71/71 PASS** (69+2). Статус P2 — FIXED candidate, требуется независимое повторное ревью, не приёмка D2. [Отдельный отчёт, diff и evidence](./ps-error-1-d2-p2-fix-report.md); [исходное независимое ревью](./ps-error-1-d2-review.md) сохранено. Storage/I0/DAG bindings не начаты.
+
+**P3.21 · независимая проверка P2 от 2026-11-06.** [P2 — FIXED, результаты публичных вызовов и проверок](./ps-error-1-d2-review.md#повторная-проверка-p2--2026-11-06). Профиль 71/71. Пользовательская приёмка D2 остаётся открытой.

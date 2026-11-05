@@ -9,10 +9,11 @@ from app.application.worldData.generators.hydrology.water.levelFill import Level
 from app.application.worldData.generators.hydrology.water.shoreDerive import derive_shore
 from app.application.worldData.generators.hydrology.water.waterBodyResolver import ResolvedWaterLevels
 from app.application.worldData.generators.hydrology.water.waterClassifier import classify_components
-from app.application.worldData.generators.hydrology.water.waterDiagnostics import water_issue
+from app.application.worldData.generators.hydrology.water.waterDiagnostics import deliver_water_issue, water_issue
 from app.application.worldData.generators.hydrology.water.waterSources import WaterSource
 from app.application.worldData.generators.hydrology.waterBodyIdentity import AutoWaterBodyRole, auto_water_body_uid
 from app.application.worldData.generators.terrain.reliefObjects.bathymetry.distanceField import distance_from_boundary
+from app.dataModel.hydrology.waterKindMismatchIssue import WaterKindMismatchIssue
 from app.dataModel.hydrology.enums.basinKind import BasinKind
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
@@ -72,9 +73,9 @@ def materialize_water(surface_z: Mapping[Coord, int], sources: tuple[WaterSource
                 auto_remap[sources[i].spec.source_uid] = auto_uid
         for i in authored:
             if sources[i].spec.kind is not kind:
-                water_issue(ctx, sources[i].spec.source_uid,
-                            f"authored kind={sources[i].spec.kind} retained; physical class={kind}",
-                            "WATER_KIND_MISMATCH", disposition=PlanDiagnosticDisposition.FALLBACK, emit=emit)
+                spec = sources[i].spec
+                issue = WaterKindMismatchIssue.retained(spec.source_uid, spec.kind, kind)
+                deliver_water_issue(ctx, issue, disposition=PlanDiagnosticDisposition.FALLBACK, emit=emit)
     distances = distance_from_boundary(frozenset(wet), topology)
     by_cell, areas, floors = {}, {}, {}
     bodies: dict[str, WaterBody] = {}

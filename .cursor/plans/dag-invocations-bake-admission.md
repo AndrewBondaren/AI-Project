@@ -448,6 +448,10 @@ require вернул исходный экземпляр для готового
 
 Пути в таблице даны от `backend`. Один шаг — один изолированный срез с собственной точкой остановки.
 
+F1 проверен на `d01cf073`. Вход для F2 готов. [Отчёт о проверке F1](./sp-p2w-f1-verification.md)
+
+F2 реализован в рабочем diff поверх `d01cf073`. Вход DAG для F3 готов. [Остановка, гонки и восстановление после reopen](./sp-p2w-f2-verification.md)
+
 | Шаг и владелец | Вход и файлы | Проверяемый результат | Граница остановки |
 |---|---|---|---|
 | F1. DAG store — durable intent | Вход: принятое решение. `app/dataModel/engine/dag/invocations/record.py`, `app/application/engine/contracts/invocation/executionStore.py`, `app/application/engine/runtime/invocations/memoryExecutionStore.py`, `app/db/repositories/sqlite/dagExecutions/executionStore.py`; новый `tests/dag_typing/invocations/test_execution_stop_intent.py`. | Только текущий владелец с действующей lease при ожидаемой revision r может записать intent для execution: стабильная identity store/execution, stop_revision=r+1 и замороженный outcome (COMPLETED с JSON ResolveResult или окончательный FAILED с diagnostic). Операция CAS. Reopen возвращает тот же intent и outcome без outputs. Повтор той же операции возвращает существующий intent; конфликтующий outcome и устаревший writer не меняют его. Старые checkpoints без intent читаются как прежде. Обычные checkpoint/cancel/cancel_child не могут стереть intent. Проверить SQLite reopen, два owner/fence, конфликт revision, повтор и обе ветки outcome; тот же контракт memory store. | Только модель и storage API. Не вызывать из engine, не менять Pack, не публиковать finalized. |

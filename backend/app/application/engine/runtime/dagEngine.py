@@ -11,12 +11,12 @@ from pydantic import BaseModel, Field, TypeAdapter
 from app.application.engine.contracts.invocation.inputWait import Failed, InputConflict, ResumeInput
 from app.application.engine.runtime.invocations.inputWaitCoordinator import InputWaitCoordinator
 from app.dataModel.engine.dag.invocations.inputWait import InputReceipt
-from app.dataModel.engine.dag.invocations.record import InvocationStatus
+from app.dataModel.engine.dag.invocations.record import CompletedOutcome, FailedOutcome, InvocationStatus
 from app.application.engine.contracts.invocation.executionOptions import InvocationOptions
 from app.application.engine.contracts.invocation.executionStore import Checkpoint, OwnershipConflict, RestoreFailure
 from app.application.engine.runtime.invocations.checkpointCodec import CheckpointCodec
 from app.application.engine.runtime.invocations.invocationCoordinator import InvocationCoordinator
-from app.application.engine.runtime.invocations.ownedExecution import OwnedExecution
+from app.application.engine.runtime.invocations.ownedExecution import ExecutionStopping, OwnedExecution
 from app.application.engine.runtime.invocations.sessionFrame import SessionFrame
 from app.dataModel.engine.dag.invocations.record import InvocationGraph
 from app.application.cancellation.typed.snapshotStore import SnapshotStore
@@ -47,12 +47,14 @@ class DAGEngine(Generic[O, S]):
     def __init__(
         self, executor: DAGExecutor, aggregate: LLMAggregateExecutor, registry: NodeRegistry,
         binding: LifecycleBinding[O], request: LLMRequest, snapshots: ExecutionSnapshotService[S], store: SnapshotStore[S], *,
+        enable_stop_intent: bool = False,
         emit: Callable[[LifecycleDiagnostic], None] = emit_diagnostic, clock: Callable[[], float] = time,
     ) -> None:
         self._executor, self._aggregate, self._registry = executor, aggregate, registry
         self._binding, self._request = binding, request
         self._snapshots, self._store = snapshots, store
         self._emit, self._clock = emit, clock
+        self._enable_stop_intent = enable_stop_intent
         self._active: set[ExecutionId] = set()
 
     def _enter(self, execution_id: ExecutionId, max_passes: int) -> None:
@@ -72,6 +74,16 @@ class DAGEngine(Generic[O, S]):
             TypeAdapter(TaskType).validate_python(task_type, strict=True)
             if self._store.load(execution_id) is not None:
                 raise ValueError("saved execution requires resume")
+            settings = self._executor.invocation_options
+            if settings is not None:
+                try:
+                    existing = await settings.store.load(execution_id)
+                except KeyError:
+                    pass
+                else:
+                    if existing.stop_intent is not None:
+                        return await self._restore_durable(execution_id, settings, max_passes, options,
+                                                           confirmed_domain_revisions, cancellation, task_type)
             revision, plan = self._binding.compile(task_type, 0)
             state = ExecutionState(execution_id, self._registry, plan_revision=revision)
             state.set_cursor(ExecutionCursor(task_type, PassStage.PRE_LLM))
@@ -147,6 +159,8 @@ class DAGEngine(Generic[O, S]):
         frame = SessionFrame.model_validate_json(header.session)
         if frame.cursor is None:
             raise RestoreFailure("missing lifecycle cursor")
+        if saved.stop_intent is not None:
+            raise InputConflict("execution is stopping")
         revision, plan = self._binding.compile(frame.cursor.task_type, frame.metadata.pass_number)
         graph = CheckpointCodec.decode(saved.blob, plan)
         if revision != graph.revision or plan.invocation_root != graph.records[graph.root].node_id:
@@ -155,6 +169,9 @@ class DAGEngine(Generic[O, S]):
 
     async def accept_input[U: BaseModel](self, execution_id: ExecutionId, request: ResumeInput[U]) -> InputReceipt:
         settings = self._interaction_settings()
+        before = await settings.store.load(execution_id)
+        if before.stop_intent is not None:
+            self._interaction_graph(execution_id, settings, before)
         try:
             claim = await settings.store.claim(execution_id, str(uuid4()), settings.lease_seconds)
         except OwnershipConflict:
@@ -234,20 +251,35 @@ class DAGEngine(Generic[O, S]):
                 if header.interaction_owner is not None:
                     InputWaitCoordinator.check_owner(header, settings.interaction)
                 frame = SessionFrame.model_validate_json(header.session)
-                if frame.cursor is None or frame.metadata.pass_number >= max_passes:
+                if frame.cursor is None or (saved.stop_intent is None and frame.metadata.pass_number >= max_passes):
                     raise ValueError("invalid durable lifecycle cursor")
                 if requested_task is not None and frame.metadata.pass_number == 0 and frame.cursor.task_type != requested_task:
                     raise ValueError("duplicate execution request differs")
+                if saved.stop_intent is not None:
+                    if saved.stop_intent.execution_id != execution_id or saved.stop_intent.stop_revision != saved.revision:
+                        raise RestoreFailure("invalid stop intent identity")
+                    recovered = await settings.store.record_stop_intent(
+                        claim, saved.stop_intent.stop_revision - 1, saved.stop_intent.outcome,
+                    )
+                    raise ExecutionStopping(recovered)
                 revision, plan = self._binding.compile(frame.cursor.task_type, frame.metadata.pass_number)
                 graph = await CheckpointCodec.restore(saved.blob, plan)
                 if revision != graph.revision or plan.invocation_root != graph.records[graph.root].node_id:
                     raise ValueError("durable plan changed")
                 if graph.cancellation is not None or graph.failure is not None:
-                    return Failed(graph.cancellation or graph.failure or "execution failed")
+                    diagnostic = graph.cancellation or graph.failure or "execution failed"
+                    if self._enable_stop_intent:
+                        await OwnedExecution(settings.store, claim, saved.revision, graph, settings.lease_seconds).stop(
+                            FailedOutcome(diagnostic=diagnostic))
+                    return Failed(diagnostic)
                 if graph.waiting_for_input:
                     return InputWaitCoordinator.waiting(graph, plan)
                 if graph.response is not None:
-                    return TypeAdapter[ResolveResult[O]](ResolveResult[self._binding.response_type]).validate_json(graph.response)
+                    result = TypeAdapter[ResolveResult[O]](ResolveResult[self._binding.response_type]).validate_json(graph.response)
+                    if self._enable_stop_intent:
+                        await OwnedExecution(settings.store, claim, saved.revision, graph, settings.lease_seconds).stop(
+                            CompletedOutcome(result_json=graph.response))
+                    return result
                 state = await self._snapshots.decode(header.session, self._registry)
             except (ValueError, KeyError, TypeError) as exc:
                 raise RestoreFailure("incompatible durable execution") from exc
@@ -276,6 +308,8 @@ class DAGEngine(Generic[O, S]):
             graph, _ = self._interaction_graph(execution_id, settings, saved)
             if graph.cancellation is None:
                 raise
+            if self._enable_stop_intent:
+                return await self._restore_durable(execution_id, settings, max_passes, options, confirmed, cancellation)
             return Failed(graph.cancellation)
 
     async def _drive(
@@ -297,7 +331,7 @@ class DAGEngine(Generic[O, S]):
                 if stage in (PassStage.PRE_LLM, PassStage.LLM, PassStage.POST_LLM):
                     if stage == PassStage.LLM:
                         decision = await self._executor.run_llm_phase(
-                            plan, state, revision, self._aggregate, self._request, options=options, pass_number=state.pass_number,
+                            plan, state, revision, self._aggregate, self._request, options=options, pass_number=state.pass_number, durable=durable,
                             confirmed_domain_revisions=confirmed, cancellation=cancellation, invalidate_reuse=False,
                         )
                     else:
@@ -313,9 +347,11 @@ class DAGEngine(Generic[O, S]):
                     if decision == LevelDecision.CANCEL:
                         raise asyncio.CancelledError
                     if decision == LevelDecision.FAIL:
-                        if durable is not None and durable.graph.interaction_owner is not None:
+                        if durable is not None and (self._enable_stop_intent or durable.graph.interaction_owner is not None):
                             root = durable.graph.records[durable.graph.root]
                             durable.graph.failure = root.diagnostics[-1].message if root.diagnostics else "DAG pass failed"
+                            if self._enable_stop_intent:
+                                await durable.stop(FailedOutcome(diagnostic=durable.graph.failure))
                             await durable.save()
                             return Failed(durable.graph.failure)
                         raise RuntimeError("DAG pass failed")
@@ -333,6 +369,8 @@ class DAGEngine(Generic[O, S]):
                         next_pass = state.pass_number + 1
                         if next_pass >= max_passes:
                             raise RuntimeError("DAG pass limit exhausted")
+                        if durable is not None:
+                            await durable.save()
                         next_revision, next_plan = self._binding.compile(target, next_pass)
                         if next_plan.root_members != plan.root_members:
                             state.replace_plan_instance(self._registry, PlanInstanceId(f"pass-{next_pass}"))
@@ -360,11 +398,15 @@ class DAGEngine(Generic[O, S]):
                     if durable is not None:
                         if durable.graph.interaction_owner is not None and not result.ok:
                             durable.graph.failure = result.error or "response resolution failed"
+                            if self._enable_stop_intent:
+                                await durable.stop(FailedOutcome(diagnostic=durable.graph.failure))
                             await durable.save()
                             return Failed(durable.graph.failure)
                         durable.graph.response = TypeAdapter[ResolveResult[O]](
                             ResolveResult[self._binding.response_type],
                         ).dump_json(result).decode()
+                        if self._enable_stop_intent:
+                            await durable.stop(CompletedOutcome(result_json=durable.graph.response))
                         await durable.save()
                     else:
                         self._store.delete(state.catalog.execution_id)
