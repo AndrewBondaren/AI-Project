@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from dataclasses import dataclass
@@ -47,10 +48,10 @@ def resolve_picked_template[T: ReliefTemplate | MountainTemplateInput](
     *, resolve_ctx: ResolveContext | None = None,
 ) -> T:
     """Resolve the selected body; missing required bodies are unresolved."""
-    ctx = resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("relief_templates",))
+    ctx = resolve_ctx if resolve_ctx is not None else ResolveContext(location=WireLocation(parts=("relief_templates",)))
     template = templates_by_uid.get(pick.template_uid)
     if template is None:
-        reject_unresolved(ctx, [FieldPathError(ctx.path_prefix + (pick.template_uid,),
+        reject_unresolved(ctx, [FieldPathError(ctx.location.parts + (pick.template_uid,),
             "selected template body unavailable", code="REF_W_UNAVAILABLE")])
     return template
 
@@ -97,10 +98,10 @@ def pick_template(
         object_policy=object_policy,
         side_policy=side_policy,
     )
-    active = resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("relief_pick", ctx, site_id))
+    active = resolve_ctx if resolve_ctx is not None else ResolveContext(location=WireLocation(parts=("relief_pick", ctx, site_id)))
     candidates = candidates_for_context(templates, ctx)
     if not candidates:
-        reject_unresolved(active, [FieldPathError(active.path_prefix,
+        reject_unresolved(active, [FieldPathError(active.location.parts,
             "no relief template candidates", code="DOMAIN_NO_CANDIDATE")])
 
     if effective.mode == ReliefPickMode.FIXED:
@@ -121,7 +122,7 @@ def pick_template(
                 site_id=site_id,
             )
             return result
-        reject_unresolved(active, [FieldPathError(active.path_prefix + ("default_template_uid",),
+        reject_unresolved(active, [FieldPathError(active.location.parts + ("default_template_uid",),
             f"fixed template unavailable in context: {uid!r}", code="REF_W_UNKNOWN")])
 
     if effective.mode == ReliefPickMode.ROUND_ROBIN:

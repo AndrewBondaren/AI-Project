@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
@@ -101,8 +102,8 @@ def require_schedule_hit(template: ReliefTemplate, *, template_uid: str, terrain
         return None
     hit = classify(dz, normalize_condition(condition))
     if hit is None:
-        active = resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("relief_templates", template_uid, site_id))
-        reject_unresolved(active, [FieldPathError(active.path_prefix + ("conditions", terrain_key),
+        active = resolve_ctx if resolve_ctx is not None else ResolveContext(location=WireLocation(parts=("relief_templates", template_uid, site_id)))
+        reject_unresolved(active, [FieldPathError(active.location.parts + ("conditions", terrain_key),
             f"no schedule interval for dz={dz}", code="DOMAIN_SCHEDULE_HOLE")])
     return hit
 

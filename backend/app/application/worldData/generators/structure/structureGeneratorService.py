@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
 
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.dataModel.locations.context.locationContext import LocationContext
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import WorldLocationTypeRegistry
 from app.dataModel.locations.structure.building.roomConnection import RoomConnection
@@ -397,7 +398,7 @@ class StructureGeneratorService:
         """Complete level validation; invalid rooms never become skipped rows."""
         resolved = []
         for index, raw in enumerate(template.levels):
-            ctx = ResolveContext(path_prefix=("structures", str(template.system_name), "levels", index))
+            ctx = ResolveContext(location=WireLocation(parts=("structures", str(template.system_name), "levels", index)))
             try:
                 resolved.append(resolve_model(LevelDef, raw, ctx=ctx))
             except UnresolvedModelError as exc:
@@ -409,9 +410,9 @@ class StructureGeneratorService:
         try:
             validate_room_ids(resolved)
         except ValueError as exc:
-            ctx = ResolveContext(path_prefix=("structures", str(template.system_name), "levels"))
+            ctx = ResolveContext(location=WireLocation(parts=("structures", str(template.system_name), "levels")))
             try:
-                reject_unresolved(ctx, [FieldPathError(ctx.path_prefix, str(exc), code="ROOM_REFERENCE")])
+                reject_unresolved(ctx, [FieldPathError(ctx.location.parts, str(exc), code="ROOM_REFERENCE")])
             except UnresolvedModelError as unresolved:
                 raise GenerationError(str(unresolved)) from unresolved
         return resolved
@@ -423,7 +424,7 @@ class StructureGeneratorService:
         for index, raw in enumerate(template.connections):
             try:
                 resolved.append(resolve_model(RoomConnection, raw,
-                    ctx=ResolveContext(path_prefix=("structures", str(template.system_name), "connections", index))))
+                    ctx=ResolveContext(location=WireLocation(parts=("structures", str(template.system_name), "connections", index)))))
             except UnresolvedModelError as exc:
                 raise GenerationError(
                     f"Structure '{template.system_name}' connections[{index}]: {exc}"

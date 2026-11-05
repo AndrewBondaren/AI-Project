@@ -12,6 +12,7 @@ Coordinate convention:
 import math
 import logging
 
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.dataModel.spatial.facing import Facing
 from app.application.jsonValidation.resolve import ResolveContext, resolve_model
 from app.dataModel.locations.structure.room.shapeParams import ResolvedStemWall
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 def resolve_stem_wall(value: object, *, context: str) -> Facing:
     """Internal direction must be resolved before geometry generation."""
     resolved = resolve_model(ResolvedStemWall, {"stem_wall": value},
-        ctx=ResolveContext(path_prefix=(context,)))
+        ctx=ResolveContext(location=WireLocation(parts=(context,))))
     return resolved.stem_wall
 
 

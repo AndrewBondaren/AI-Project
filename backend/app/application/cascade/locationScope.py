@@ -9,6 +9,7 @@ location domain's boundary wiring — one per scope level.
 """
 
 from dataclasses import asdict
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.worldData.locations.locationPayloadAccess import settlement_payload
 from random import Random
 
@@ -38,7 +39,7 @@ from app.db.models.world import World
 def named_location_pojo(location: NamedLocation, *, world: World | None = None, resolve_ctx: ResolveContext | None = None) -> BundleNamedLocation:
     """Persist/runtime ``NamedLocation`` → its source POJO (§2)."""
     return resolve_model(BundleNamedLocation, asdict(location),
-        ctx=resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("locations", location.location_uid)),
+        ctx=resolve_ctx if resolve_ctx is not None else ResolveContext(location=WireLocation(parts=("locations", location.location_uid))),
         validation_context={"location_type_registry": location_types(world)} if world is not None else None)
 
 
@@ -64,7 +65,7 @@ def settlement_context(
     sources = (named_location_pojo(settlement, world=world, resolve_ctx=resolve_ctx), settlement_payload(settlement, ctx=resolve_ctx),
                settlement_skeleton_pojo(settlement, ctx=resolve_ctx))
     for source in sources:
-        validate_source(world, source, ctx=resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("locations", settlement.location_uid)))
+        validate_source(world, source, ctx=resolve_ctx if resolve_ctx is not None else ResolveContext(location=WireLocation(parts=("locations", settlement.location_uid))))
     return extend(
         root_context(world),
         *(Link(ScopeLevel.SETTLEMENT, source) for source in sources),
@@ -93,7 +94,7 @@ def district_context(
             Link(ScopeLevel.DISTRICT, named_location_pojo(district, world=world, resolve_ctx=resolve_ctx)),
         )
     for link in links:
-        validate_source(world, link.obj, ctx=resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("districts", district_uid)))
+        validate_source(world, link.obj, ctx=resolve_ctx if resolve_ctx is not None else ResolveContext(location=WireLocation(parts=("districts", district_uid))))
     return extend(
         ctx,
         *links,
@@ -110,7 +111,7 @@ def area_context(
     resolve_ctx: ResolveContext | None = None,
 ) -> LocationContext:
     """District ctx + plot link → area-scope ctx."""
-    validate_source(world, plot, ctx=resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("areas", area_uid)))
+    validate_source(world, plot, ctx=resolve_ctx if resolve_ctx is not None else ResolveContext(location=WireLocation(parts=("areas", area_uid))))
     return extend(
         ctx,
         Link(ScopeLevel.AREA, plot),
@@ -126,7 +127,7 @@ def building_context(
 ) -> LocationContext:
     """Area ctx + building NL link → building-scope ctx."""
     source = named_location_pojo(building, world=world, resolve_ctx=resolve_ctx)
-    validate_source(world, source, ctx=resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("locations", building.location_uid)))
+    validate_source(world, source, ctx=resolve_ctx if resolve_ctx is not None else ResolveContext(location=WireLocation(parts=("locations", building.location_uid))))
     return extend(
         ctx,
         Link(ScopeLevel.BUILDING, source),
@@ -143,7 +144,7 @@ def room_context(
     resolve_ctx: ResolveContext | None = None,
 ) -> LocationContext:
     """Building ctx + room_def link → room-scope ctx."""
-    active_ctx = resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("rooms", room_def.room_id))
+    active_ctx = resolve_ctx if resolve_ctx is not None else ResolveContext(location=WireLocation(parts=("rooms", room_def.room_id)))
     validate_source(world, room_def, ctx=active_ctx)
     return extend(
         ctx,

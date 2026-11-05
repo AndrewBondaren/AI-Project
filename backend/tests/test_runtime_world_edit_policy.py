@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from pydantic import BaseModel, Field, RootModel, model_validator
 
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.jsonValidation.resolve import (
     ResolveContext, ResolveMode, UnresolvedModelError, resolve_model, resolve_patch,
     resolve_result, resolve_root_list,
@@ -33,7 +34,7 @@ class RuntimeWorldEditPolicyTests(unittest.TestCase):
             facts = []
             for mode in ResolveMode:
                 ctx = ResolveContext(mode=mode, validate_only=mode == ResolveMode.IMPORT,
-                                     path_prefix=("terrain_masks", "default_landcover"))
+                                     location=WireLocation(parts=("terrain_masks", "default_landcover")))
                 with patch(resolve_module.__name__ + ".logger") as log:
                     result = resolve_result(LandcoverRegionsCategoryPolicy, {"seed_spacing": 1000, "max_radius": invalid}, ctx=ctx)
                 self.assertFalse(result.resolved)
@@ -77,7 +78,7 @@ class RuntimeWorldEditPolicyTests(unittest.TestCase):
         world = _world()
         parent = empty_location_chain(world, ScopeLevel.BUILDING)
         for mode in ResolveMode:
-            ctx = ResolveContext(mode=mode, validate_only=mode == ResolveMode.IMPORT, path_prefix=("rooms", "r1"))
+            ctx = ResolveContext(mode=mode, validate_only=mode == ResolveMode.IMPORT, location=WireLocation(parts=("rooms", "r1")))
             with patch(locationScope.__name__ + ".extend") as extend:
                 with self.assertRaises(UnresolvedModelError) as error:
                     room_context(world, parent, _room("unknown"), room_uid="r1", resolve_ctx=ctx)

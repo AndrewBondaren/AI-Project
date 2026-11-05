@@ -11,7 +11,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel, RootModel, TypeAdapter
 
 from app.dataModel.fields.validatedFieldPath import FieldSegment, IndexSegment, KeySegment, ModelIdentity
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
@@ -24,6 +24,11 @@ type ImportIssue = FieldPathError[Any] | WireShapeIssue
 _ISSUES: TypeAdapter[tuple[ImportIssue, ...]] = TypeAdapter(tuple[ImportIssue, ...])
 
 
+def validate_import_issues(issues: tuple[ImportIssue, ...]) -> tuple[ImportIssue, ...]:
+    """Carrier admission for request-local issue containers."""
+    return _ISSUES.validate_python(issues, strict=True)
+
+
 @dataclass
 class ResolveReport:
     """Request-local diagnostics; domain dependencies are supplied separately."""
@@ -33,7 +38,7 @@ class ResolveReport:
 class ImportValidationError(Exception):
     def __init__(self, errors: Iterable[ImportIssue]) -> None:
         self.errors: list[ImportIssue] = list(_ISSUES.validate_python(tuple(errors), strict=True))
-        super().__init__("; ".join(f"{'.'.join(str(p) for p in _wire_loc(e))}: {e.message}" for e in self.errors))
+        super().__init__("; ".join(f"{'.'.join(str(p) for p in wire_loc(e))}: {e.message}" for e in self.errors))
 
 
 @dataclass(frozen=True)
@@ -65,12 +70,14 @@ def _wire_name(segment: FieldSegment) -> str:
     return alias if isinstance(alias, str) else segment.name
 
 
-def _wire_loc(issue: ImportIssue) -> tuple[str | int, ...]:
+def wire_loc(issue: ImportIssue) -> tuple[str | int, ...]:
     if isinstance(issue, WireShapeIssue):
         return issue.location.parts
     flat: list[str | int] = []
     for segment in issue.path.segments:
         if isinstance(segment, FieldSegment):
+            if segment.name == "root" and issubclass(_model_of(segment.owner), RootModel):
+                continue
             flat.append(_wire_name(segment))
         elif isinstance(segment, IndexSegment):
             flat.append(segment.index)
@@ -81,7 +88,7 @@ def _wire_loc(issue: ImportIssue) -> tuple[str | int, ...]:
 
 
 def _wire_code(issue: ImportIssue) -> object:
-    if isinstance(issue, JsonFieldError) and issue.code is JsonValidationCode.SCHEMA_VIOLATION:
+    if isinstance(issue, (JsonFieldError, WireShapeIssue)) and issue.code is JsonValidationCode.SCHEMA_VIOLATION:
         return issue.pydantic_type
     return issue.code.value
 
@@ -89,7 +96,7 @@ def _wire_code(issue: ImportIssue) -> object:
 def import_validation_http_detail(exc: ImportValidationError) -> list[dict[str, object]]:
     detail: list[dict[str, object]] = []
     for issue in exc.errors:
-        item: dict[str, object] = {"loc": list(_wire_loc(issue)), "msg": issue.message, "code": _wire_code(issue)}
+        item: dict[str, object] = {"loc": list(wire_loc(issue)), "msg": issue.message, "code": _wire_code(issue)}
         if isinstance(issue, JsonFieldError) and issue.schema_id:
             item["schema_id"] = issue.schema_id
         detail.append(item)

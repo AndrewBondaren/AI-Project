@@ -26,7 +26,7 @@ from app.db.repositories.iRegionStateRepository import IRegionStateRepository
 def apply_region_operation(masks: WorldTerrainMasks, operation: DeclaredRegionEdit,
                            ctx: ResolveContext) -> dict:
     def invalid(message: str) -> NoReturn:
-        reject_unresolved(ctx, [FieldPathError(ctx.path_prefix + (bind_field(REGION_NAME).field,), message,
+        reject_unresolved(ctx, [FieldPathError(ctx.location.parts + (bind_field(REGION_NAME).field,), message,
                                              code="REGION_EDIT_INVALID")])
     entries = list(masks.declared_regions)
     index = next((i for i, entry in enumerate(entries) if entry.name == operation.name), None)

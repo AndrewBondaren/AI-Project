@@ -73,7 +73,7 @@ def prepare_authored_water_geometry(request: LegacyAuthoredWaterGeometryRequest)
 
 # GEO-LEGACY-16: Retire the PC placement adapter.
 def _context_issue(context: WaterPlacementContext, ctx: ResolveContext, reason: str) -> FieldPathError:
-    return FieldPathError(path=ctx.path_prefix + ("water_placement",),
+    return FieldPathError(path=ctx.location.parts + ("water_placement",),
                           code=WaterPreparationCode.SNAPSHOT.value, schema_id=ctx.schema_id,
                           message=f"world_uid={context.world_uid} snapshot_uid={context.snapshot_uid}; {reason}")
 
@@ -81,7 +81,7 @@ def _context_issue(context: WaterPlacementContext, ctx: ResolveContext, reason: 
 # GEO-LEGACY-16: Retire the PC placement adapter.
 def _source_issue(context: WaterPlacementContext, ctx: ResolveContext, source_uid: str,
                   code: WaterPreparationCode, reason: str) -> FieldPathError:
-    return FieldPathError(path=ctx.path_prefix + ("water_placement", source_uid), code=code.value,
+    return FieldPathError(path=ctx.location.parts + ("water_placement", source_uid), code=code.value,
                           schema_id=ctx.schema_id,
                           message=f"world_uid={context.world_uid} snapshot_uid={context.snapshot_uid} "
                                   f"source_uid={source_uid}; {reason}")

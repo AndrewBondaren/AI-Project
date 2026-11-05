@@ -23,7 +23,7 @@ def resolve_world_column(key: str, raw: Any, ctx: ResolveContext,
     """
     world_slice = slice_for_world_key(key)
     if world_slice is None or not world_slice.facade:
-        issue = FieldPathError(ctx.path_prefix + (key,),
+        issue = FieldPathError(ctx.location.parts + (key,),
             f"world column {key!r} is not a writable facade slice",
             code="NOT_WRITABLE_WORLD_COLUMN")
         ctx.report.issues.append(issue)
@@ -36,7 +36,7 @@ def resolve_world_column(key: str, raw: Any, ctx: ResolveContext,
             if (pojo.__pydantic_decorators__.model_validators
                     or pojo.__pydantic_decorators__.root_validators):
                 if existing is None:
-                    issue = FieldPathError(active.path_prefix + (key,),
+                    issue = FieldPathError(active.location.parts + (key,),
                         "current slice values required for a model invariant",
                         schema_id=active.schema_id, code="WORLD_SLICE_CONTEXT_REQUIRED")
                     active.report.issues.append(issue)
@@ -46,14 +46,14 @@ def resolve_world_column(key: str, raw: Any, ctx: ResolveContext,
                 wire[key] = raw
                 dump = resolve_model(pojo, wire, ctx=active).model_dump(mode="json")
                 return {key: dump[key]}
-            return {key: resolve_model_field(pojo, key, raw, ctx=active.child(key))}
+            return {key: resolve_model_field(pojo, key, raw, ctx=active)}
         out = {key: raw}
         merge_world_slice(out, world_slice, active)
         return {key: out[key]}
     except UnresolvedModelError as exc:
         raise ImportValidationError(list(exc.issues)) from exc
     except ValueError as exc:
-        issue = FieldPathError(active.path_prefix + (key,), str(exc),
+        issue = FieldPathError(active.location.parts + (key,), str(exc),
                                schema_id=active.schema_id, code="VALIDATION_ERROR")
         active.report.issues.append(issue)
         raise ImportValidationError([issue]) from exc

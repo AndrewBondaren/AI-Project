@@ -22,7 +22,7 @@ def preparation_diagnostics(header: PlacementHeader, issues: tuple[FieldPathErro
 
 def emit_diagnostics(result: PlacementBatchResult | PlacementBatchResultV2, ctx: ResolveContext) -> None:
     issues = [FieldPathError(
-        path=ctx.path_prefix + item.path, schema_id=ctx.schema_id, code=item.code.value,
+        path=ctx.location.parts + item.path, schema_id=ctx.schema_id, code=item.code.value,
         message=(f"placement | world_uid={result.world_uid} snapshot_uid={result.snapshot_uid} "
                  f"region_uid={item.region_uid} related_uids={item.related_uids}; {item.detail}"),
     ) for item in result.diagnostics]

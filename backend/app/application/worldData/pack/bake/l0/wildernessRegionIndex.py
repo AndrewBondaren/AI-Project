@@ -1,6 +1,7 @@
 """Pure adapter: resolved collect results → canonical fine-coordinate index."""
 from collections.abc import Iterable
 
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.worldData.generators.terrain.landcover.types import RegionSource, ResolvedRegion
 from app.application.worldData.generators.terrain.landcover.regionIdentityCheck import require_unique_region_uids
 from app.application.worldData.masks.regionRasterContext import RegionClaim, RegionRasterContext
@@ -62,7 +63,7 @@ def _claim_bounds(owners):
 def build_region_index(regions: list[ResolvedRegion], scale: LightGridScale, *,
                        registry: WorldTerrainRegistry) -> list[WildernessRegionEntry]:
     regions = [validate_region_coverage(region, registry, ctx=ResolveContext(
-        path_prefix=(region.world_uid, "wilderness_region_entries", index)))
+        location=WireLocation(parts=(region.world_uid, "wilderness_region_entries", index))))
         for index, region in enumerate(regions)]
     require_unique_region_uids(regions)
     entries: list[WildernessRegionEntry] = []

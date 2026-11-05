@@ -170,7 +170,7 @@ class WorldBundleService:
                 continue
             except (ValueError, ReliefValidationError) as exc:
                 try:
-                    reject_unresolved(section_ctx, [FieldPathError(section_ctx.path_prefix, str(exc), code="VALIDATION_ERROR")])
+                    reject_unresolved(section_ctx, [FieldPathError(section_ctx.location.parts, str(exc), code="VALIDATION_ERROR")])
                 except UnresolvedModelError:
                     continue
         if ctx.errors:

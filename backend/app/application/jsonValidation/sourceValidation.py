@@ -89,7 +89,7 @@ def validate_prepared_source(world, source: BaseModel, *, ctx: ResolveContext):
         if not channels:
             continue
         value = getattr(source, name)
-        path = ctx.path_prefix + (name,)
+        path = ctx.location.parts + (name,)
         try:
             value = TypeAdapter(info.rebuild_annotation()).validate_python(value)
         except ValidationError as exc:

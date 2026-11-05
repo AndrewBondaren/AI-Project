@@ -7,6 +7,7 @@ from unittest import TestCase
 
 from pydantic import ValidationError
 
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.cascade.cascadeLink import EmptyLink, Link
 from app.application.cascade.contextResolver import extend
 from app.application.jsonValidation.resolve import ResolveContext, resolve_model, resolve_patch
@@ -168,7 +169,7 @@ class BodyGenerationTests(TestCase):
     def test_shared_patch_boundary_preserves_missing_and_resets_null_to_inheritance(self):
         for factory in FACTORIES:
             owner = factory(BodyWaterGenerationSettings(water_fraction=0.2, autoresolve=False))
-            ctx = ResolveContext(validate_only=True, path_prefix=("generation",))
+            ctx = ResolveContext(validate_only=True, location=WireLocation(parts=("generation",)))
             self.assertEqual(resolve_patch(BodyWaterGenerationSettings, {}, ctx=ctx), {})
             changes = resolve_patch(BodyWaterGenerationSettings, {"water_fraction": None, "autoresolve": None}, ctx=ctx)
             patched = BodyWaterGenerationSettings.model_validate(owner.generation.model_dump() | changes)

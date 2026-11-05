@@ -39,7 +39,7 @@ def declared_region_identity(
             x_min, y_min, _, _ = spec.shape.bbox()
             uid = region_uid(world_uid, bbox_min=(x_min, y_min), shape_kind=spec.shape.kind)
         issue = FieldPathError(
-            path=active.path_prefix + (bind_field(REGION_NAME).field,),
+            path=active.location.parts + (bind_field(REGION_NAME).field,),
             message=f"landcover | degraded_identity | region_uid={uid}; declared region has no name",
             schema_id=active.schema_id,
             code="REGION_DEGRADED_IDENTITY",

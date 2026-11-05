@@ -6,6 +6,7 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict
 
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.jsonValidation.resolve import ResolveContext, ResolveMode, resolve_model
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.application.jsonValidation.types import ImportValidationError
@@ -118,7 +119,7 @@ def _normalize_rows(
             mode=ctx.mode,
             validate_only=ctx.validate_only,
             partial=ctx.partial,
-            path_prefix=(section, index),
+            location=WireLocation(parts=(section, index)),
             report=ctx.report,
             schema_id=schema_id,
         )
@@ -181,7 +182,7 @@ def normalize_connection_edges(
             mode=ctx.mode,
             validate_only=ctx.validate_only,
             partial=ctx.partial,
-            path_prefix=(BundleSection.CONNECTION_EDGES, index),
+            location=WireLocation(parts=(BundleSection.CONNECTION_EDGES, index)),
             report=ctx.report,
             schema_id=ConnectionEdgeImportRow.SCHEMA_ID,
         )

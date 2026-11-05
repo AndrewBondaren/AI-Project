@@ -2,6 +2,7 @@
 from collections import defaultdict
 from dataclasses import asdict, replace
 
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.templateLibrary.packs.write.bodyDiff import body_diff
 from app.application.templateLibrary.packs.lifecycleContracts import (
     CatalogSnapshot,
@@ -156,7 +157,7 @@ class WriteRetentionPlanner:
                     from app.dataModel.libraryPacks.libraryPinEntry import LibraryPinEntry
                     try:
                         result.library_pins = [resolve_model(LibraryPinEntry, pin,
-                            ctx=ResolveContext(path_prefix=(key, index))).model_dump(mode="json")
+                            ctx=ResolveContext(location=WireLocation(parts=(key, index)))).model_dump(mode="json")
                             for index, pin in enumerate(value)]
                     except UnresolvedModelError as exc:
                         raise ImportValidationError(list(exc.issues)) from exc

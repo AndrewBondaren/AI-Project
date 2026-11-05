@@ -4,6 +4,7 @@ from dataclasses import replace
 from itertools import permutations
 import unittest
 
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
 from app.application.worldData.placement import resolve_placements
 from app.application.worldData.placement.adapters import (
@@ -290,8 +291,8 @@ class WaterSharedPassTests(unittest.TestCase):
     def test_runtime_preview_preparation_parity_and_warning_paths(self):
         snap = context()
         arguments = dict(basins=[basin("bad", floor_z=-101)], coasts=[coast()], snapshot=snap)
-        runtime = ResolveContext(path_prefix=("master",))
-        preview = ResolveContext(validate_only=True, path_prefix=("master",))
+        runtime = ResolveContext(location=WireLocation(parts=("master",)))
+        preview = ResolveContext(validate_only=True, location=WireLocation(parts=("master",)))
         with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING") as log:
             actual = prepare(**arguments, ctx=runtime)
         with self.assertNoLogs("app.application.jsonValidation.resolve", level="WARNING"):

@@ -22,6 +22,6 @@ def validate_declared_regions(world: World, ctx: ResolveContext) -> None:
         local = regions_ctx.child(index)
         identity = declared_region_identity(world.world_uid, spec, ctx=local)
         if identity.region_uid in seen:
-            report_issues(ctx, [FieldPathError(local.path_prefix + (bind_field(REGION_NAME).field,),
+            report_issues(ctx, [FieldPathError(local.location.parts + (bind_field(REGION_NAME).field,),
                 "duplicate declared region identity", code="REGION_UID_CONFLICT")])
         seen.add(identity.region_uid)

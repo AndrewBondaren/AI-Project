@@ -9,17 +9,23 @@ from __future__ import annotations
 import copy
 import json
 import logging
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from collections.abc import Iterable
 from enum import StrEnum
 from typing import Any, NoReturn, TYPE_CHECKING
 
 from pydantic import BaseModel, RootModel, ValidationError
-from pydantic_core import SchemaSerializer, SchemaValidator, core_schema
+from pydantic_core import ErrorDetails, SchemaSerializer, SchemaValidator, core_schema
+from pydantic_core.core_schema import ErrorType
 from functools import lru_cache
+from typing import get_args
 
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
-from app.application.jsonValidation.types import ResolveReport
+from app.dataModel.fields.checkedPath import CheckedPath
+from app.dataModel.validation.importIssues.jsonFieldError import JsonFieldError
+from app.dataModel.validation.importIssues.jsonValidationCode import JsonValidationCode
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
+from app.dataModel.validation.importIssues.wireShapeIssue import WireShapeIssue
+from app.application.jsonValidation.types import ImportIssue, ResolveReport, validate_import_issues, wire_loc
 from app.dataModel.registryKey import registry_key_target
 
 if TYPE_CHECKING:
@@ -37,14 +43,14 @@ class ResolveMode(StrEnum):
 class ResolveContext:
     mode: ResolveMode = ResolveMode.RUNTIME
     partial: bool = False
-    path_prefix: tuple[str | int, ...] = ()
+    location: WireLocation = field(default_factory=WireLocation)
     report: ResolveReport = field(default_factory=ResolveReport)
     schema_id: str | None = None
     validate_only: bool = False
     collect_only: bool = False  # Collect facts without logging; independent of validation policy.
 
     @property
-    def errors(self) -> list[FieldPathError]:
+    def errors(self) -> list[ImportIssue]:
         """Compatibility view for existing aggregators; the report owns facts."""
         return self.report.issues
 
@@ -61,57 +67,53 @@ class ResolveContext:
             validate_only=self.validate_only,
             collect_only=self.collect_only,
             partial=self.partial,
-            path_prefix=self.path_prefix + (segment,),
+            location=self.location.child(segment),
             report=self.report,
             schema_id=self.schema_id,
         )
 
 
 class StrictFieldError(ValueError):
-    def __init__(self, path: tuple[str | int, ...], detail: str) -> None:
-        self.path = path
-        self.detail = detail
-        super().__init__(
-            f"{'.'.join(str(part) for part in path)}: {detail}" if path else detail,
-        )
+    def __init__(self, issue: ImportIssue) -> None:
+        (self.issue,) = validate_import_issues((issue,))
+        loc = ".".join(str(part) for part in wire_loc(self.issue))
+        super().__init__(f"{loc}: {self.issue.message}" if loc else self.issue.message)
 
 
 class UnresolvedModelError(StrictFieldError):
     """No valid POJO exists. Never substitute this outcome with None/default."""
 
-    def __init__(self, issues: list[FieldPathError]) -> None:
-        self.issues = issues
-        super().__init__(issues[0].path, issues[0].message)
+    def __init__(self, issues: Iterable[ImportIssue]) -> None:
+        self.issues = list(validate_import_issues(tuple(issues)))
+        super().__init__(self.issues[0])
 
 
 @dataclass(frozen=True)
 class ResolveResult:
     value: BaseModel | None
-    issues: tuple[FieldPathError, ...] = ()
+    issues: tuple[ImportIssue, ...] = ()
 
     @property
     def resolved(self) -> bool:
         return self.value is not None
 
 
-def log_issues(issues: Iterable[FieldPathError]) -> None:
+def log_issues(issues: Iterable[ImportIssue]) -> None:
     """Log-route for structured facts where no request/report ctx exists."""
-    for issue in dict.fromkeys(issues):
-        extra = ({**asdict(issue.reference), "reference_path": issue.path}
-                 if issue.reference is not None else {})
-        logger.warning("json_validation | WarningError | path=%s code=%s | %s",
-                       issue.path, issue.code, issue.message, extra=extra)
+    for issue in dict.fromkeys(validate_import_issues(tuple(issues))):
+        logger.warning("json_validation | WarningError | loc=%s code=%s | %s",
+                       wire_loc(issue), issue.code, issue.message)
 
 
-def report_issues(ctx: ResolveContext, issues: Iterable[FieldPathError]) -> None:
+def report_issues(ctx: ResolveContext, issues: Iterable[ImportIssue]) -> None:
     """Shared policy-resolve reporting for rejecting and diagnostic callers."""
-    issues = tuple(dict.fromkeys(issues))
-    ctx.errors.extend(issues)
+    admitted = tuple(dict.fromkeys(validate_import_issues(tuple(issues))))
+    ctx.errors.extend(admitted)
     if not ctx.validate_only and not ctx.collect_only:
-        log_issues(issues)
+        log_issues(admitted)
 
 
-def reject_unresolved(ctx: ResolveContext, issues: list[FieldPathError]) -> NoReturn:
+def reject_unresolved(ctx: ResolveContext, issues: Iterable[ImportIssue]) -> NoReturn:
     """One rejection point for structured facts from wire/domain checks."""
     report_issues(ctx, issues)
     raise UnresolvedModelError(issues)
@@ -230,20 +232,20 @@ def resolve_model_field(model_cls: type[BaseModel], name: str, raw: Any,
     try:
         value = validator.validate_python({name: raw}, by_name=True, by_alias=True)
     except ValidationError as exc:
-        reject_unresolved(ctx, [_validation_issue(ctx, ctx.path_prefix + tuple(e["loc"])[1:],
-            ("unknown wire value; " if e["type"] == "enum" else "") + e["msg"],
-            code="UNKNOWN_ENUM" if e["type"] == "enum" else e["type"])
-            for e in exc.errors()])
+        reject_unresolved(ctx, _pydantic_issues(ctx, model_cls, exc))
     return serializer.to_python(value, mode="json")[name]
 
 
-def _reference_issues(value: Any, ctx: ResolveContext, references: WorldRegistryIndex) -> list[FieldPathError]:
+def _reference_issues(value: Any, ctx: ResolveContext, references: WorldRegistryIndex,
+                      root: type[BaseModel] | None = None,
+                      loc: tuple[str | int, ...] = ()) -> list[ImportIssue]:
     """Membership over validated POJOs, reusing nominal RegistryKey metadata."""
-    issues = []
+    issues: list[ImportIssue] = []
     if isinstance(value, BaseModel):
+        root = root if root is not None else type(value)
         for name, info in type(value).model_fields.items():
             item = getattr(value, name)
-            child = ctx.child(name)
+            field_loc = loc if isinstance(value, RootModel) else (*loc, name)
             target = registry_key_target(info.annotation)
             if target is not None and item is not None:
                 keys = references.keys_for_registry(target)
@@ -252,15 +254,15 @@ def _reference_issues(value: Any, ctx: ResolveContext, references: WorldRegistry
                     if token is None:
                         continue  # A validated optional list member is not a reference.
                     if keys is None or str(token) not in keys:
-                        path = child.path_prefix if index is None else child.path_prefix + (index,)
-                        issues.append(_validation_issue(child, path,
+                        issues.append(_field_issue(ctx, root,
+                            field_loc if index is None else (*field_loc, index),
                             "reference index unavailable" if keys is None else f"unknown reference: {token!r}",
-                            code="REF_W_UNAVAILABLE" if keys is None else "REF_W_UNKNOWN"))
+                            JsonValidationCode.REF_W_UNAVAILABLE if keys is None else JsonValidationCode.REF_W_UNKNOWN))
             else:
-                issues.extend(_reference_issues(item, child, references))
+                issues.extend(_reference_issues(item, ctx, references, root, field_loc))
     elif isinstance(value, (list, tuple, dict)):
         for index, item in (enumerate(value) if isinstance(value, (list, tuple)) else value.items()):
-            issues.extend(_reference_issues(item, ctx.child(index), references))
+            issues.extend(_reference_issues(item, ctx, references, root, (*loc, index)))
     return issues
 
 
@@ -290,7 +292,8 @@ def resolve_result(model_cls: type[BaseModel], raw: Any, *, ctx: ResolveContext 
 def resolve_patch(model_cls: type[BaseModel], raw: dict[str, Any], *, ctx: ResolveContext) -> dict[str, Any]:
     """Validate supplied fields only; a patch is deliberately not a full POJO."""
     if not isinstance(raw, dict):
-        reject_unresolved(ctx, [_validation_issue(ctx, ctx.path_prefix, "expected object", code="EXPECTED_OBJECT")])
+        reject_unresolved(ctx, [WireShapeIssue(code=JsonValidationCode.EXPECTED_OBJECT,
+                                               location=ctx.location, message="expected object")])
     supplied = {}
     for name, info in model_cls.model_fields.items():
         value, present = _read_wire_field(raw, name, info)
@@ -302,10 +305,7 @@ def resolve_patch(model_cls: type[BaseModel], raw: dict[str, Any], *, ctx: Resol
     try:
         payload = _patch_validator(model_cls).validate_python(supplied)
     except ValidationError as exc:
-        reject_unresolved(ctx, [_validation_issue(ctx, ctx.path_prefix + tuple(e["loc"]),
-            ("unknown wire value; " if e["type"] == "enum" else "") + e["msg"],
-            code="UNKNOWN_ENUM" if e["type"] == "enum" else e["type"])
-            for e in exc.errors()])
+        reject_unresolved(ctx, _pydantic_issues(ctx, model_cls, exc))
     return payload
 
 
@@ -349,19 +349,36 @@ def _log_resolve_transform(
     )
 
 
-def _validation_issue(
-    ctx: ResolveContext | None,
-    path: tuple[str | int, ...],
-    message: str,
-    *,
-    code: str,
-) -> FieldPathError:
-    return FieldPathError(
-        path=path,
-        message=message,
-        schema_id=ctx.schema_id if ctx is not None else None,
-        code=code,
-    )
+_PYDANTIC_ERROR_TYPES: frozenset[str] = frozenset(get_args(ErrorType))
+
+
+def _field_issue(ctx: ResolveContext, root: type[BaseModel], loc: tuple[str | int, ...],
+                 message: str, code: JsonValidationCode,
+                 pydantic_type: ErrorType | None = None) -> ImportIssue:
+    """F01 when loc is a declared field of root; otherwise F09 at the raw wire location."""
+    path = CheckedPath.from_pydantic_loc(root, ("root", *loc) if issubclass(root, RootModel) else loc)
+    if path is None:
+        return WireShapeIssue(code=code, location=ctx.location.child(*loc),
+                              message=message, pydantic_type=pydantic_type)
+    return JsonFieldError(code=code, path=path, location=ctx.location, schema_id=ctx.schema_id,
+                          pydantic_type=pydantic_type, message=message)
+
+
+def _schema_issue(ctx: ResolveContext, root: type[BaseModel], error: ErrorDetails) -> ImportIssue:
+    kind = error["type"]
+    loc = tuple(part for part in error["loc"]
+                if not isinstance(part, str) or not part.startswith(("is-instance[", "function-")))
+    if kind == "enum":
+        return _field_issue(ctx, root, loc, "unknown wire value; " + error["msg"],
+                            JsonValidationCode.UNKNOWN_ENUM)
+    if kind in _PYDANTIC_ERROR_TYPES:
+        return _field_issue(ctx, root, loc, error["msg"], JsonValidationCode.SCHEMA_VIOLATION, kind)  # type: ignore[arg-type]
+    return _field_issue(ctx, root, loc, error["msg"], JsonValidationCode.VALIDATION_ERROR)
+
+
+def _pydantic_issues(ctx: ResolveContext, root: type[BaseModel], exc: ValidationError) -> list[ImportIssue]:
+    """C0-8: the owning validation boundary translates Pydantic errors()."""
+    return [_schema_issue(ctx, root, error) for error in exc.errors()]
 
 
 def _wire_lookup_keys(field_name: str, field_info: Any) -> tuple[str, ...]:
@@ -409,7 +426,7 @@ def resolve_model[ModelT: BaseModel](
     lose explicit null / model_fields_set used by cascade and room invariants.
     """
     active_ctx = ctx if ctx is not None else ResolveContext(
-        path_prefix=(label,) if label else (), schema_id=getattr(model_cls, "SCHEMA_ID", None))
+        location=WireLocation(parts=(label,) if label else ()), schema_id=getattr(model_cls, "SCHEMA_ID", None))
     if active_ctx.partial:
         raise TypeError("partial input is a patch; use resolve_patch and validate the merged object")
     try:
@@ -417,12 +434,7 @@ def resolve_model[ModelT: BaseModel](
             **(validation_context or {}), "validate_only": active_ctx.validate_only,
         })
     except ValidationError as exc:
-        reject_unresolved(active_ctx, [_validation_issue(active_ctx,
-            active_ctx.path_prefix + tuple(part for part in e["loc"]
-                if not isinstance(part, str) or not part.startswith(("is-instance[", "function-"))),
-            ("unknown wire value; " if e["type"] == "enum" else "") + e["msg"],
-            code="UNKNOWN_ENUM" if e["type"] == "enum" else e["type"])
-            for e in exc.errors()])
+        reject_unresolved(active_ctx, _pydantic_issues(active_ctx, model_cls, exc))
     _log_resolve_transform(label or model_cls.__name__, raw, result, active_ctx)
     return result
 
@@ -438,12 +450,12 @@ def resolve_root_list(
 ) -> RootModel:
     """A supplied registry is atomic: invalid rows never disappear."""
     active_ctx = ctx if ctx is not None else ResolveContext(
-        path_prefix=("worlds", world_uid, label) if world_uid else (label,),
+        location=WireLocation(parts=("worlds", world_uid, label) if world_uid else (label,)),
         schema_id=getattr(registry_cls, "SCHEMA_ID", None))
     if raw is None or (isinstance(raw, list) and not raw):
         return empty_factory()
     active_ctx = ResolveContext(mode=active_ctx.mode, partial=False,
-        path_prefix=active_ctx.path_prefix, report=active_ctx.report,
+        location=active_ctx.location, report=active_ctx.report,
         schema_id=active_ctx.schema_id, validate_only=active_ctx.validate_only, collect_only=active_ctx.collect_only)
     return resolve_model(registry_cls, raw, label=label, ctx=active_ctx)
 
@@ -459,11 +471,11 @@ def resolve_root_dict(
 ) -> RootModel:
     """A supplied registry replaces complete entries, even in a world patch."""
     active_ctx = ctx if ctx is not None else ResolveContext(
-        path_prefix=("worlds", world_uid, label) if world_uid else (label,),
+        location=WireLocation(parts=("worlds", world_uid, label) if world_uid else (label,)),
         schema_id=getattr(registry_cls, "SCHEMA_ID", None))
     if raw is None or (isinstance(raw, dict) and not raw):
         return empty_factory()
     active_ctx = ResolveContext(mode=active_ctx.mode, partial=False,
-        path_prefix=active_ctx.path_prefix, report=active_ctx.report,
+        location=active_ctx.location, report=active_ctx.report,
         schema_id=active_ctx.schema_id, validate_only=active_ctx.validate_only, collect_only=active_ctx.collect_only)
     return resolve_model(registry_cls, raw, label=label, ctx=active_ctx)
