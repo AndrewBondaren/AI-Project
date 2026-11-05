@@ -29,8 +29,8 @@ def _validate_definition(definition: CalendarDefinition, hours: int, work: Work)
     if any(s.span not in spans or (s.season is not None and s.season not in seasons) for s in values):
         raise InvalidCalendar(("spans",), "unknown span or season")
     periods = definition.periods.entries
-    starts = {p.from_hour for p in periods}
-    if 0 not in starts or max(starts) >= hours or len(starts) != len(periods):
+    starts = {p.start for p in periods}
+    if (0, 0) not in starts or max(starts) >= (hours, 0) or len(starts) != len(periods):
         raise InvalidCalendar(("periods",), "invalid period boundaries")
     if definition.week_anchor_index >= max(1, len(definition.weekdays.entries)):
         raise InvalidCalendar(("week_anchor_index",), "invalid weekday anchor")

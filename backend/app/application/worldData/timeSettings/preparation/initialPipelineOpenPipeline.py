@@ -9,7 +9,6 @@ from app.dataModel.world.settings.timeOperations.initial import (
     AuthoredTimeSettingsInput, InitialAnchorRequired, PrepareInitialSettings, PreparedInitialSettings,
 )
 from app.dataModel.world.settings.timeOperations.results import SettingsInvalid
-from .shared.candidate import issue
 
 
 class WorldInitialTimeSettingsPipelineOpenPipeline:
@@ -21,8 +20,6 @@ class WorldInitialTimeSettingsPipelineOpenPipeline:
         if isinstance(authored, AuthoredTimeSettingsInput):
             settings = authored.settings
         else:
-            if authored.hours_per_day < 4:
-                return issue("hours_per_day", "standard period definitions require at least four hours")
             origin = authored.origin
             if origin is None:
                 instant = datetime.strptime(request.captured_utc, "%Y-%m-%dT%H:%M:%S.%fZ")

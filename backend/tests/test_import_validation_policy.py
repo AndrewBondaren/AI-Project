@@ -16,6 +16,8 @@ from app.api.routes.worlds import router
 from app.application.imports.result import ImportResult
 from app.application.worldBundle import worldCopyImport
 from app.application.jsonValidation.types import ImportValidationError, ImportValidationReport, wire_loc
+from app.application.jsonValidation.resolve import ResolveContext
+from app.dataModel.validation.importIssues.wireShapeIssue import WireShapeIssue
 from app.dataModel.worldBundle.bundleSections import BundleSection
 from app.core.container import Container
 from app.db.database import Database
@@ -38,6 +40,45 @@ class ImportValidationPolicyTests(unittest.IsolatedAsyncioTestCase):
 
     def fixture(self, name="world_template"):
         return json.loads((FIXTURES / f"{name}.json").read_text(encoding="utf-8"))
+
+    async def test_early_preflight_failure_matches_report_and_delivery_policy(self):
+        cases = (
+            ({"world": None}, "world", "EXPECTED_OBJECT"),
+            ({"world": self.fixture()["world"], "map_cells": []}, "map_cells", "BUNDLE_INVALID"),
+        )
+        for data, section, code in cases:
+            for preview, collect in ((False, False), (True, False), (False, True)):
+                with self.subTest(section=section, preview=preview, collect=collect):
+                    ctx = ResolveContext.for_import(validate_only=preview).child("document")
+                    ctx.collect_only = collect
+                    with patch("app.application.jsonValidation.resolve.logger.warning") as warning:
+                        with self.assertRaises(ImportValidationError) as caught:
+                            self.service._prepare_bundle(data, level="skeleton", ctx=ctx)
+                    self.assertEqual(ctx.errors, caught.exception.errors)
+                    issue, = ctx.errors
+                    self.assertEqual((wire_loc(issue), issue.code.value), (("document", section), code))
+                    self.assertEqual(warning.call_count, int(not preview and not collect))
+
+    async def test_large_invalid_section_reconciles_facts_in_linear_work(self):
+        count = 128
+        data = {"world": self.fixture()["world"], "states": [None] * count}
+        ctx = ResolveContext.for_import()
+        comparisons = 0
+        equals = WireShapeIssue.__eq__
+
+        def counted_equals(left, right):
+            nonlocal comparisons
+            comparisons += 1
+            return equals(left, right)
+
+        with patch.object(WireShapeIssue, "__eq__", counted_equals), \
+             patch("app.application.jsonValidation.resolve.logger.warning") as warning:
+            with self.assertRaises(ImportValidationError) as caught:
+                self.service._prepare_bundle(data, level="skeleton", ctx=ctx)
+        self.assertLess(comparisons, 10 * count)
+        self.assertEqual(ctx.errors, caught.exception.errors)
+        self.assertEqual([wire_loc(issue) for issue in ctx.errors], [("states", i) for i in range(count)])
+        self.assertEqual(warning.call_count, count)
 
     async def test_landcover_fixture_matrix_and_existing_world_002_import(self):
         for name in ("world_landcover_default", "world_landcover_custom", "world_landcover_mixed", "world_test_002"):

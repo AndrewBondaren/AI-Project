@@ -33,6 +33,21 @@ _WEEKDAYS = (
 )
 _SEASONS = (("winter","Зима"), ("spring","Весна"), ("summer","Лето"), ("autumn","Осень"))
 _PERIODS = (("night","Ночь"), ("morning","Утро"), ("day","День"), ("evening","Вечер"))
+_SHORT_PERIODS = {
+    1: (("morning", 0, 0), ("day", 0, 20), ("night", 0, 40)),
+    2: (("day", 0, 0), ("night", 1, 0)),
+    3: (("morning", 0, 0), ("day", 1, 0), ("night", 2, 0)),
+}
+
+
+def _standard_periods(hours: int) -> CalendarPeriodRegistry:
+    starts = _SHORT_PERIODS.get(hours)
+    if starts is None:
+        starts = tuple((key, (i * hours + 3) // 4, 0) for i, (key, _) in enumerate(_PERIODS))
+    labels = dict(_PERIODS)
+    return CalendarPeriodRegistry(entries=tuple(
+        PeriodEntry(system_period=RegistryKey(key), display_period=labels[key], from_hour=hour, from_minute=minute)
+        for key, hour, minute in starts))
 
 
 def origin_from_utc(instant: datetime) -> CalendarOrigin:
@@ -63,9 +78,7 @@ def standard_entry(hours: int, origin: CalendarOrigin) -> CalendarEntry:
             WeekdayEntry(system_weekday=RegistryKey(name), display_weekday=label) for name, label in _WEEKDAYS)),
         seasons=CalendarSeasonRegistry(entries=tuple(
             SeasonEntry(system_season=RegistryKey(name), display_season=label) for name, label in _SEASONS)),
-        periods=CalendarPeriodRegistry(entries=tuple(
-            PeriodEntry(system_period=RegistryKey(name), display_period=label, from_hour=(i * hours + 3) // 4)
-            for i, (name, label) in enumerate(_PERIODS))),
+        periods=_standard_periods(hours),
         base_year=base,
         rules=(
             ReplaceSpanRule(kind=CalendarEditKind.REPLACE_SPAN, value=leap, condition=CalendarCondition(

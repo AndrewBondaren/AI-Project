@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Self
+from typing import Annotated, Self
 
 from pydantic import Field, model_validator
 
-from app.dataModel.annotationPolicy import StrictOnWire
+from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 from app.dataModel.world.calendar.scalars import CalendarRecord, Key, Label, Nat
 
 class CalendarPeriodRegistry(CalendarRecord):
@@ -24,6 +24,11 @@ class PeriodEntry(CalendarRecord):
     system_period: StrictOnWire[Key[CalendarPeriodRegistry]]
     display_period: StrictOnWire[Label]
     from_hour: StrictOnWire[Nat]
+    from_minute: DefaultWhenMissing[Annotated[int, Field(ge=0, le=59)]] = 0
+
+    @property
+    def start(self) -> tuple[int, int]:
+        return self.from_hour, self.from_minute
 
 
 CalendarPeriodRegistry.model_rebuild()

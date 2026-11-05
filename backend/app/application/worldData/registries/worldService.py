@@ -160,6 +160,7 @@ class WorldService:
     # ------------------------------------------------------------------
 
     async def import_from_json(self, data: dict, *, ctx: ResolveContext | None = None) -> ImportResult:
+        """Validate one world; a successful validate-only call stops before persistence."""
         ctx = ctx if ctx is not None else ResolveContext.for_import()
         data = normalize_world(with_default_created_at(data), ctx=ctx)
         try:
@@ -171,7 +172,8 @@ class WorldService:
                 total=1, succeeded=0, failed=1,
                 errors=[ImportError(index=0, message=str(e))],
             )
-        await self._save(world, self._repo.upsert, ctx)
+        if not ctx.validate_only:
+            await self._save(world, self._repo.upsert, ctx)
         return ImportResult(total=1, succeeded=1, failed=0)
 
     @classmethod

@@ -115,6 +115,16 @@ class DeclaredRegionEditTests(unittest.IsolatedAsyncioTestCase):
             saved_uids.append(row.region_uid)
         self.assertEqual(saved_uids[0], saved_uids[1])
 
+    async def test_standalone_world_preview_validates_without_writing_region_or_world(self):
+        ctx = ResolveContext.for_import(validate_only=True)
+        result = await self.worlds.import_from_json(self.bundle["world"], ctx=ctx)
+        self.assertEqual(result.failed, 0)
+        self.assertEqual((await self.worlds.get_all(), await self.repo.get_by_world(self.uid)), ([], []))
+        self.bundle["world"]["terrain_masks"]["declared_regions"][0].pop("name")
+        with self.assertRaises(ImportValidationError):
+            await self.worlds.import_from_json(self.bundle["world"], ctx=ctx)
+        self.assertEqual((await self.worlds.get_all(), await self.repo.get_by_world(self.uid)), ([], []))
+
     async def test_import_derives_world_uid_before_region_identity_check(self):
         self.bundle["world"].pop("world_uid")
         with patch("app.application.jsonValidation.declaredRegions.declared_region_identity",

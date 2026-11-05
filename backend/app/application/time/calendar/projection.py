@@ -70,7 +70,7 @@ class CalendarProjector:
             if definition.week_mode == CalendarWeekMode.CONTINUOUS:
                 shift = total - index.locate(definition.week_anchor_ordinal)[3]
             weekday = weekdays[(definition.week_anchor_index + shift) % len(weekdays)].system_weekday
-        period = max((p for p in definition.periods.entries if p.from_hour <= hour), key=lambda p: p.from_hour)
+        period = max((p for p in definition.periods.entries if p.start <= (hour, minute)), key=lambda p: p.start)
         epochs = (e for e in resolved.settings.epochs.entries if e.calendar == request.calendar
                   and (e.start_seconds, e.start_nanoseconds) <= point.coordinate)
         epoch = max(epochs, key=lambda e: (e.start_seconds, e.start_nanoseconds), default=None)

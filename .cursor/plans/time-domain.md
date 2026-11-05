@@ -10,11 +10,13 @@ Time предоставляет арифметику, календарную в�
 
 Для §32 обе операции project/resolve сверены с независимым посуточным перечислением в годах −25…25 при сочетании YEAR_RANGE, модулей 3 и 5 и RESET_AT_YEAR. Проверены оба лимита бюджета, неизвестный дискриминатор правила на JSON-входе и CalendarTimeOverflow при выходе на 1 нс за каждую границу TimePoint.
 
-Открыты политика STANDARD для суток в 1–3 часа и внешние контракты §§45–47. Приёмка изолированного core не закрывает T5: production read, атомарное принятие Time и effects, retry/restore/branch, emitter и cutover требуют отдельных интеграционных проверок.
+Политика STANDARD для суток в 1–3 часа согласована и реализована согласно таблице в ТЗ Time. PeriodEntry.from_minute задаёт минуту начала с default 0 при отсутствии. Открыты внешние контракты §§45–47. Приёмка изолированного core не закрывает T5: production read, атомарное принятие Time и effects, retry/restore/branch, emitter и cutover требуют отдельных интеграционных проверок.
 
 **Уточнение T5 от 2026-11-05.** DAG собирает Time proposal и последствия того же действия от общей исходной публикации в один `PatchSet` и вызывает публичный `IWorldSnapshotApply.apply`. Snapshot владеет общей транзакцией, записью секций и CAS. Отказ секции или конфликт головы откатывает всю группу. Для обычного продвижения передача назначенной публикации через `SnapshotApplyContext.next_publication` уже реализована в Snapshot. По Time остаются интеграция секции и проверка атомарности на доменных таблицах (§44). Порядок записи и проверки внешних ключей относится к реализации этой транзакции.
 
 **Решение о частях суток, 2026-11-05.** Части суток принадлежат календарю World и настраиваются как N+1 записи существующего CalendarPeriodRegistry. Для обычного 24-часового мира принят земной набор по умолчанию. Сезонное изменение соотношения дня и ночи по дню внутри сезона выделено в будущее расширение. Действующий projector использует фиксированные from_hour. [ТЗ Time](../../docs/tz_time.md#части-суток)
+
+Отложенный шаг: реализовать настраиваемую мастером мира зависимость границ периодов от дня внутри сезона. Приёмка — два мира могут задать разное поведение на одной календарной дате; историческая проекция использует настройку своей версии. До реализации согласовать типизированный контракт World и правила вычисления Time.
 
 <details><summary>История проверок отдельных срезов</summary>
 
@@ -789,7 +791,7 @@ Standalone delete WorldTimeSettings, удаление удерживаемой �
 |---|---|
 | SpanEntry | system_span:Key[CalendarSpanRegistry]; display_span:Text; role:CalendarSpanRole |
 | WeekdayEntry / SeasonEntry | system_weekday:Key[CalendarWeekdayRegistry], display_weekday:Text / system_season:Key[CalendarSeasonRegistry], display_season:Text |
-| PeriodEntry | system_period:Key[CalendarPeriodRegistry]; display_period:Text; from_hour:Nat |
+| PeriodEntry | system_period:Key[CalendarPeriodRegistry]; display_period:Text; from_hour:Nat; from_minute:DefaultWhenMissing[int 0..59]=0 |
 | CalendarSpan | span:Key[CalendarSpanRegistry]; days:Pos; counts_in_week:bool; season:Key[CalendarSeasonRegistry] \| None |
 | AlwaysPredicate | kind=ALWAYS |
 | YearModuloPredicate | kind=YEAR_MODULO; modulus:Pos; residue:Nat (<modulus); offset:Int |

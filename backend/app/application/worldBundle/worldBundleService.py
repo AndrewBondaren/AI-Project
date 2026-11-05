@@ -20,7 +20,7 @@ from app.application.worldBundle.worldLibraries import (
 from app.application.jsonValidation.bundle import normalize_bundle_connections
 from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.resolve import (
-    ResolveContext, StrictFieldError, UnresolvedModelError, pydantic_issues, report_issues,
+    ResolveContext, StrictFieldError, UnresolvedModelError, pydantic_issues, report_issues, report_unreported_issues,
 )
 from app.application.jsonValidation.types import ImportValidationError, ImportValidationReport
 from app.dataModel.validation.importIssues.jsonValidationCode import JsonValidationCode
@@ -126,11 +126,23 @@ class WorldBundleService:
 
     def _prepare_bundle(self, data: dict, *, level: ImportLevel, ctx: ResolveContext) -> tuple[dict, str]:
         """Shared pipeline. This phase has no repository/Pack/task access."""
+        try:
+            return self._prepare_sections(data, level=level, ctx=ctx)
+        except ImportValidationError as exc:
+            report_unreported_issues(ctx, exc.errors)
+            raise
+
+    def _prepare_sections(self, data: dict, *, level: ImportLevel, ctx: ResolveContext) -> tuple[dict, str]:
         world_ctx = ctx.child(BundleSection.WORLD)
         if not isinstance(data.get(BundleSection.WORLD), dict):
             raise ImportValidationError([WireShapeIssue(
                 location=world_ctx.location, message="expected world object",
                 code=JsonValidationCode.EXPECTED_OBJECT,
+            )])
+        if BundleSection.MAP_CELLS in data:
+            raise ImportValidationError([WireShapeIssue(
+                location=ctx.location.child(BundleSection.MAP_CELLS), message="use World Pack import",
+                code=JsonValidationCode.BUNDLE_INVALID,
             )])
         try:
             validate_bundle_for_import(data, level)
@@ -151,11 +163,6 @@ class WorldBundleService:
                 code=JsonValidationCode.BUNDLE_INVALID,
             )]) from exc
 
-        if BundleSection.MAP_CELLS in data:
-            raise ImportValidationError([WireShapeIssue(
-                location=ctx.location.child(BundleSection.MAP_CELLS), message="use World Pack import",
-                code=JsonValidationCode.BUNDLE_INVALID,
-            )])
         try:
             world = self._world.prepare_import(data[BundleSection.WORLD], ctx=world_ctx)
         except UnresolvedModelError as exc:
@@ -175,7 +182,7 @@ class WorldBundleService:
                 packs, consumed = import_libraries(data)
                 self._archives.validate_bodies(packs, world)
             except ImportValidationError as exc:
-                report_issues(ctx, (issue for issue in exc.errors if issue not in ctx.errors))
+                report_unreported_issues(ctx, exc.errors)
                 consumed = LIBRARY_CONSUMED_SECTIONS
             except (ValueError, LibraryPackValidationError) as exc:
                 report_issues(ctx, [WireShapeIssue(
@@ -190,12 +197,11 @@ class WorldBundleService:
             try:
                 handler.validate_section(world, data[handler.key], ctx=section_ctx)
             except UnresolvedModelError as exc:
-                report_issues(section_ctx, (issue for issue in exc.issues if issue not in ctx.errors))
+                report_unreported_issues(section_ctx, exc.issues)
             except ImportValidationError as exc:
-                report_issues(section_ctx, (issue for issue in exc.errors if issue not in ctx.errors))
+                report_unreported_issues(section_ctx, exc.errors)
             except StrictFieldError as exc:
-                if exc.issue not in ctx.errors:
-                    report_issues(section_ctx, [exc.issue])
+                report_unreported_issues(section_ctx, [exc.issue])
             except (ValueError, ReliefValidationError) as exc:
                 report_issues(section_ctx, [WireShapeIssue(
                     location=section_ctx.location, message=str(exc), code=JsonValidationCode.VALIDATION_ERROR,

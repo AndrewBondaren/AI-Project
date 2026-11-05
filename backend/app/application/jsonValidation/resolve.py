@@ -121,6 +121,12 @@ def reject_unresolved(ctx: ResolveContext, issues: Iterable[ImportIssue]) -> NoR
     raise failure
 
 
+def report_unreported_issues(ctx: ResolveContext, issues: Iterable[ImportIssue], *, since: int = 0) -> None:
+    """Forward facts that the nested operation did not already deliver to this report."""
+    reported = set(ctx.errors[since:])
+    report_issues(ctx, (issue for issue in issues if issue not in reported))
+
+
 def report_continuation(ctx: ResolveContext, issue: ImportIssue, *, same_wire_cause: bool = False) -> None:
     """Record a producer-authorized continuation without changing admission."""
     if ctx.report.record_continuation(issue, same_wire_cause=same_wire_cause):

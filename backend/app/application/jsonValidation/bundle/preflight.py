@@ -6,6 +6,7 @@ from pydantic import ValidationError
 
 from app.application.jsonValidation.resolve import (
     ResolveContext, StrictFieldError, UnresolvedModelError, pydantic_issues, reject_unresolved, report_issues,
+    report_unreported_issues,
 )
 from app.application.jsonValidation.types import ImportIssue, ImportValidationError
 from app.dataModel.validation.importIssues.jsonValidationCode import JsonValidationCode
@@ -41,8 +42,7 @@ def validate_rows(data: Any, prepare: Callable[..., Any], *, ctx: ResolveContext
         except (ReliefValidationError, ValueError) as exc:
             issues = [WireShapeIssue(location=row_ctx.location, message=str(exc),
                                      code=JsonValidationCode.VALIDATION_ERROR)]
-        reported = ctx.errors[before_prepare:]
-        report_issues(row_ctx, (issue for issue in issues if issue not in reported))
+        report_unreported_issues(row_ctx, issues, since=before_prepare)
 
     if len(ctx.errors) > initial_errors:
         raise UnresolvedModelError(ctx.errors[initial_errors:])

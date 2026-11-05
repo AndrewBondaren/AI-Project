@@ -16051,6 +16051,8 @@ GEO-I9.1 принят в границах authored geometry. G10-A и итого
 
 ### GEO-I11.3. Fine procedural draft с рецептом дна
 
+**Открытые дефекты независимого ревью — 5 P1.** Минимальные входы, ожидаемые и фактические результаты собраны в [реестре дефектов GEO-I11.3](geo-i11-3-review-defects.md).
+
 `design_native_coastline(input: NativeCoastlineStrategyInput) -> FineProceduralWaterDesignDraft` вызывает принятый `ContinentalFieldComposer.build_native` один раз. На вход подаётся результат адаптера I11.1. Контракт draft хранит metadata, поле с полным W.ref и z_min. Свойство floor_profile возвращает существующий FieldFloorProfile с рецептом поля, уровнем и default_depth источника и захваченным z_min. Свойство floor_z возвращает max(z_min, level − default_depth) в fine Z. Эти свойства восстанавливаются из сохранённых полей при повторной валидации.
 
 Проверки в `tests/geo1/coastline_source/test_native_field.py` сверяют поле каждого draft с I11.2, проверяют точный ref, оба варианта ограничения глубины и восстановление профиля после model_dump. Подмена metadata.source_kind и невозможный z_min на входе дают две диагностики WATER_DESIGN_INVALID_PREPARATION_INPUT до построения layout. Отдельно проверены пути обеих ошибок при повторной валидации draft.
@@ -16058,3 +16060,23 @@ GEO-I9.1 принят в границах authored geometry. G10-A и итого
 Следующий caller — fine placement preparation. Он должен сверить draft с принятым входом, применить allowed/required и ранжировать fine-клетки с площадью 1. GEO-LEGACY-56/57 остаются открыты до миграции потребителей. Фактическая wet membership и final bed проверяются в fine P2.
 
 **Статус GEO-I11.3 — предъявлен на независимое ревью.** Прошли все 909 тестов GEO. Pyright для модели draft и native entry завершился без ошибок и предупреждений.
+
+**Независимое ревью GEO-I11.3 — FAIL (2026-11-05).** В текущей рабочей копии воспроизведены следующие блокирующие ошибки.
+
+1. **P1.** `backend/app/application/worldData/generators/terrain/designedWater/fields/continentalFieldComposer.py:30`. Для принятого входа заменить metadata.source_kind на LAKE и z_min на metadata.level. Вместо PlanBuildFailure с двумя WATER_DESIGN_INVALID_PREPARATION_INPUT по путям continental_field.metadata.source_kind и continental_field.metadata.level entry выдаёт TypeError при создании абстрактного FieldPathError. Воспроизведено для всех трёх стратегий.
+2. **P1.** `backend/app/application/worldData/generators/terrain/designedWater/preparation/coastlineWaterSourceAdapter.py:119` (также строка 67). На валидных аргументах prepare_native ожидается NativeCoastlineStrategyInput. Адаптер вызывает ValidatorAggregationHelper() без обязательного admitted и падает до геометрии.
+3. **P1, зависимость admission.** `backend/app/application/policy/policyRead.py:18`. Штатный capture(strategy=PLATE) для подготовки draft ожидает разрешение admission, но чтение отсутствующего факта приоритета падает на создании базового FieldPathError вместо UnknownFact.
+4. **P1, зависимость геометрии.** `backend/app/application/worldData/placement/adapters/waterGeometry/nativeGeometry.py:30`. Открытый путь (4,4)–(12,4) на W 32×32 с max_area_fraction=0.04 должен вернуть геометрию с WATER_PLACEMENT_CAP_REACHED. Получен TypeError при создании notice.
+
+**Проверено запуском.** Полный discover tests/geo1 сообщил Ran 767 tests, FAILED (failures=2, errors=300). Pyright для модели draft и native entry прошёл. Изолированная проба подставила совместимые диагностические типы и конструктор коллектора только на этапе подготовки входа. На этом входе для noise, plate и plate-noise проверены один вызов build_native, равенство поля I11.2 и W.ref, восстановление профиля из model_dump и обе ветви ограничения глубины, включая равенство границ. Модель draft при двойной подмене возвращает обе ожидаемые ошибки metadata.source_kind и z_min. Сквозной штатный путь блокируют перечисленные дефекты.
+
+
+**Повторное независимое ревью GEO-I11.3 — FAIL (2026-11-05).** Повторно воспроизведены все четыре P1 из записи выше с теми же входами, местами отказа и результатами. Дополнительно обнаружен дефект на валидном рецепте.
+
+5. **P1.** `backend/app/application/worldData/generators/terrain/designedWater/fields/plateFieldGenerator.py:54`. В принятом PLATE-входе для W 32×32 задать plate_count=1025. Ожидается draft с полем из I11.2 и notice WATER_DESIGN_PLATE_COUNT_ADJUSTED (1024 эффективные плиты). Получен TypeError при создании базового FieldPathError в layout. Ошибка воспроизведена через design_native_coastline.
+
+**Проверено запуском.** Полный discover tests/geo1 из backend с PYTHONPATH=.;tests сообщил Ran 767 tests, failures=2, errors=300. Отдельно прошли три теста штатного успешного coarse design, по одному для noise, plate и mixed. Отдельный тест открытой линии с ограничением площади воспроизвёл P1 №4.
+
+В изолированной пробе только на этапе получения входа временно подставлены конкретные типы диагностик policy и geometry и аргумент admitted коллектора. После снятия подмен для всех трёх стратегий проверены оба случая (level=0, depth=5, z_min=-12 и -1). Получены floor_z=-5 и -1 соответственно. На каждый draft пришёлся ровно один вызов build_native. Поле целиком, включая samples, notices, recipe и полный W.ref, совпало с независимым вызовом I11.2. Совпали metadata, z_min и все поля FieldFloorProfile, включая kind. После строгой повторной валидации model_dump сохранились профиль, floor_z и полный ref. При одновременной подмене source_kind и z_min штатный entry упал до layout и первого sample (нулевые счётчики), выдав TypeError вместо двух доменных диагностик. Модель draft отдельно вернула обе ошибки в порядке metadata.source_kind, z_min.
+
+**Проверено статически.** Fine entry передаёт вход одному builder и собирает draft из metadata, field и z_min. Действующие coarse-стратегии по-прежнему вызывают свои build/combine. GEO-LEGACY-56/57 открыты до перевода потребителей. Fine placement ranking, wet membership и final bed относятся к следующим срезам. Пользовательская приёмка остаётся отдельным шагом.

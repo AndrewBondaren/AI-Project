@@ -811,19 +811,19 @@ flowchart TD
 
 **Проверка v6.10:** добавлен draft LOD трек и обратные ссылки без изменения hard-edge реестра. Markdown/Mermaid/ссылки и static graph должны быть проверены; implementation/runtime evidence отсутствует, GRAPH-AC остаётся OPEN.
 
-## 12. Действующая очередь на 2026-11-04
+## 12. Действующая очередь на 2026-11-05
 
 | Трек | Последнее решение и evidence | Следующая работа |
 |---|---|---|
-| [GEO](./geo-1-designed-water.md) | I11.1 передаёт fine constraints и закреплённую ссылку W в procedural strategy input. | Построить procedural field по fine-клеткам W. |
-| [Snapshot](./world-domain-patches-snapshots.md) | Storage core принят. 4D2 в работе, назначенная Q поступает в handlers и world CAS, player CAS принят. | Metadata builder, полная validation, публичный apply и terminal/retry. |
-| [Spatial](./spatial-distribution-domain.md) | P1-D, P2R-A/B и SP-1C приняты. §15.83 сопоставляет исходы активации с CAS и retention. | World Pack согласует владельцев active/retained manifest и cold resolution до реализации P2W. |
+| [GEO](./geo-1-designed-water.md) | I11.3 реализован. Независимое ревью выявило четыре P1 в штатном входе. | Исправить callers диагностики, затем повторить три стратегии и geo1. |
+| [Snapshot](./world-domain-patches-snapshots.md) | Metadata builder и scoped append приняты. 4D2 holder handoff в работе. | Проверить сохранение operation hold при добавлении snapshot holder для ref вне transferred. |
+| [Spatial](./spatial-distribution-domain.md) | §15.90 описывает replay durable read pin. | Pack/artifacts согласуют атомарную связь pin_id, owner, publication и manifest hold, затем проверяют восстановление после потери ответа. |
 | [Time](./time-domain.md) | Изолированные T3-A/T3-C, подготовка T4 и World settings проверены: 25 тестов, Pyright без ошибок по отчёту. | Политика STANDARD для суток в 1–3 часа открыта. Production T4 требует SN-TIME-READ и Time reader, T5 — SN-TIME-APPLY и handler, создание ветки — SN-TIME-BRANCH. |
-| [Physics](./physics-spatial-dynamics.md) | P3.9–11 приняты F1–F3, typed group output и карта/порядок P3.5/P3.7. P3.15 приняты S1–S4 для settings. P3.16 добавляет PH-LOG | Проработать внешний контракт B и затем closure C. Для PH-LOG согласовать event matrix, correlation и регистрацию маршрута. После общей архитектуры возможен water kernel proposal |
+| [Physics](./physics-spatial-dynamics.md) | PS-CORE-1 реализован изолированно, 7 тестов settings по отчёту. | Storage migration и подключение production consumers требуют отдельных контрактов. |
 | [API-1](./api-1-transport-boundary.md) | Проверено покрытие полей storage и wire. Climate C1 содержит девять scalars, десять после переноса lapse. | Сопоставить вход каждой операции с версией и выходом владельца, включая presence/aliases. |
 | [GEN-BAKE-READ](./generator-public-bake-reads.md) | Исправленный пакет D1–D7 предъявлен в §17.10.4 | Получить решение пользователя, затем R1/R2 отдельно по операциям. Handoff light, full L0+C23, named terrain и coordinate terrain описан в §17.10.3 |
-| [DAG invocation и bake admission](./dag-invocations-bake-admission.md) | Ревью R6 на 42e7f6e0 выявило ошибки recovery и SQL mapper. | Исправить удержание claim при неизвестном исходе и проверку типов до записи. |
-| [ERROR-CONTRACTS-1](./error-contracts-1.md) | Приняты только общие архитектурные принципы; A0-PROPOSAL exact shared file placement подготовлен, но полный direct/transitive `FieldPathError` register не готов и A0 не принят; C0 runtime admission/version selection и scoped D0/D1 affected consumers OPEN; production-код не изменён. | Согласовать A0 → C0; **до несовместимого C1 принять scoped D0/D1 всех непосредственно затронутых consumers**, первым кодом выполнить C1, затем немедленный D2 affected direct/transitive callers и targeted regression в едином рабочем срезе. Для операции с mandatory log обязателен I0 до эксплуатации; без второго `FieldPathError` и V1 adapter. |
+| [DAG invocation и bake admission](./dag-invocations-bake-admission.md) | Итог ревью R6 на 7b6104d7, полный набор 392/392. | Далее R7 по условиям owning-плана. |
+| [ERROR-CONTRACTS-1](./error-contracts-1.md) | A0/C0 приняты, C1 реализован. Planning D2 и JSON J1/J2 отмечены DONE. Статусы отдельных J3/J4 findings в §7. | Приоритет для GEO — миграция четырёх конкретных callers по §12.2. |
 | [LOD](./lod-simulation-handoff.md) | §11 учитывает draft и открытые вопросы coherent capture, continuation и неизменности мира | Продолжать согласование с владельцами первого consumer. Конкретные зависимости runtime уточняются по сценарию |
 
 Предложения новых bindings в этих планах не меняют hard-edge реестр автоматически. Исторические команды §9.3 для приёмки I1/B, preflight P1-A и проектирования уже принятой карты Physics заменены этой очередью.
@@ -832,15 +832,17 @@ flowchart TD
 
 | План | Номер трека | О чём трек | Следующий трек или внешняя зависимость |
 |---|---|---|---|
-| GEO | I11.1 реализован | Передача constraints в procedural strategy для fine-сетки. | GEO: исполнить procedural field build по клеткам W. |
-| Spatial / World Pack | SP-P2W, проектирование | Атомарная активация V2 и удержание manifest с дочерними refs. | Согласовать ownership и cold resolution, затем проверить ACTIVE + CAS + retention + terminal в одном CommitScope и rollback после CAS. |
+| GEO | I11.3, исправление | Процедурный draft с рецептом дна. | Повторить штатный путь после миграции диагностик. |
+| Spatial / World Pack | SP-P2W, проектирование | Восстановление read pin после потерянного ответа. | Проверить replay acquire A после закрытия соединений и смены active на B. |
 | Time | T3-A / T3-C, подготовка T4 проверена | Арифметика, календарь, World settings, чтение через закреплённые тестовые источники. | Внутри Time открыта политика STANDARD для 1–3 часов. Production T4 ждёт SN-TIME-READ, T5 — SN-TIME-APPLY, ветвление — SN-TIME-BRANCH. |
-| Snapshot | 4D2 в работе | Общий metadata builder появился в рабочем дереве после реализации world/player CAS. | Полный validation, публичный apply и terminal/retry. Для интеграции T5 ещё требуется проверка Time handler и эффектов в одном commit. |
-| ERROR-CONTRACTS-1 | A0/C0 и подготовительные D0/D1 (документально) | Архитектура типов, текущие POJO/ошибки, precise shared API impact и контрактные варианты. | C1 только после A0/C0 **и принятых scoped D0/D1 каждого ломаемого shared consumer**; D2 после C1 и своего D1. Не блокирует независимый GEO/SPATIAL/Snapshot шаг своим общим статусом. |
+| Snapshot | 4D2, holder handoff | Передача refs snapshot holder и сохранение operation hold. | Закрепить случай ref вне transferred, затем terminal/retry. |
+| ERROR-CONTRACTS-1 | D2 затронутых producers | Типизированные ошибки и admission коллектора в callers I11.3. | GEO повторяет интеграцию после правок owners. Остальные домены продолжают D0/D1 независимо. |
 
 API-1 ведёт пользователь. GEN-BAKE-READ после решения по D1–D7 переходит к проектированию R1/R2 по операциям.
 
 ### 12.2. ERROR-CONTRACTS-1: горизонтальные gates (v6.14)
+
+**Прикладная зависимость на 5 ноября.** Для штатного GEO-I11.3 владельцы terrain исправляют continentalFieldComposer (две типизированные ошибки) и coastlineWaterSourceAdapter (admitted для коллектора), Policy — policyRead (UnknownFact), Placement — nativeGeometry (notice WATER_PLACEMENT_CAP_REACHED). Владелец ядра подтверждает API. GEO повторяет noise/plate/plate-noise без подмены diagnostic types и полный geo1. Исходный отчёт: 767 тестов, 2 failures, 300 errors. Ребро относится к этим callers и I11.3. Snapshot handoff и проект Pack pin могут идти параллельно.
 
 | Локальный consumer-gate | Непосредственные prerequisite | Что не следует требовать |
 |---|---|---|

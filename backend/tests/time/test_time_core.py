@@ -569,7 +569,33 @@ class InitializationTests(unittest.TestCase):
         settings = self.prepare(short, "1970-01-01T00:00:00.000000Z").settings
         periods = settings.calendars.entries[0].definition.periods.entries
         self.assertEqual([p.from_hour for p in periods], [0, 3, 5, 8])
-        self.assertIsInstance(self.prepare(standard.model_copy(update={"hours_per_day":2}), utc), SettingsInvalid)
+        self.assertIsInstance(self.prepare(standard.model_copy(update={"hours_per_day":2}), utc), InitialAnchorRequired)
+
+    def test_short_standard_period_boundaries(self):
+        from app.dataModel.world.calendar.enums.rules import CalendarInitializationKind
+        from app.dataModel.world.settings.timeOperations.initial import StandardTimeSettingsInput
+
+        schedules = {
+            1: ((0, "morning"), (1200, "day"), (2400, "night")),
+            2: ((0, "day"), (3600, "night")),
+            3: ((0, "morning"), (3600, "day"), (7200, "night")),
+        }
+        clock = TimeCapture(point=point(), publication=publication())
+        for hours, schedule in schedules.items():
+            settings = self.prepare(StandardTimeSettingsInput(kind=CalendarInitializationKind.STANDARD, hours_per_day=hours),
+                                    "1970-01-01T00:00:00.000000Z").settings
+            key = settings.selected
+            version = CalendarVersionRef(calendar_key=key, publication=clock.publication)
+            capture = TimeSettingsCapture(source=clock.publication, settings=settings, versions=(version,))
+            resolved = WorldCalendarResolver.resolve_at(ResolveCalendarAt(capture=capture, calendar=key))
+            previous = schedule[-1][1]
+            for seconds, period in schedule:
+                for coordinate, expected in ((point(seconds-1, 999999999), previous), (point(seconds), period)):
+                    with self.subTest(hours=hours, point=coordinate):
+                        request = CalendarProjectionInput(point=coordinate, capture=clock, calendar=key, resolved=resolved,
+                            budget=CalendarBudget(max_year_patterns=400, max_rule_checks=800))
+                        self.assertEqual(make_calendar_projector().project(request).period, expected)
+                previous = period
 
     def test_authored(self):
         from app.dataModel.world.calendar.enums.rules import CalendarInitializationKind
