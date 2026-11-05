@@ -819,15 +819,15 @@ flowchart TD
 
 | Трек | Последнее решение и evidence | Следующая работа |
 |---|---|---|
-| [GEO](./geo-1-designed-water.md) | I11.3 реализован. Независимое ревью выявило четыре P1 в штатном входе. | Исправить callers диагностики, затем повторить три стратегии и geo1. |
-| [Snapshot](./world-domain-patches-snapshots.md) | Metadata builder и scoped append приняты. 4D2 holder handoff в работе. | Проверить сохранение operation hold при добавлении snapshot holder для ref вне transferred. |
-| [Spatial](./spatial-distribution-domain.md) | §15.90 описывает replay durable read pin. | Pack/artifacts согласуют атомарную связь pin_id, owner, publication и manifest hold, затем проверяют восстановление после потери ответа. |
+| [GEO](./geo-1-designed-water.md) | I11.3: реестр содержит пять P1, включая plate_count=1025. | После миграции callers проверить обе цепочки notices и штатные стратегии. |
+| [Snapshot](./world-domain-patches-snapshots.md) | Holder handoff прошёл повторное ревью. На 6bcd4073 импорт WorldSnapshotService останавливает тест до чтения holders. | Согласовать migration caller коллектора и повторить профильные и snapshotCore проверки. |
+| [Spatial](./spatial-distribution-domain.md) | §15.94: два чтения, cleanup по владельцу и поздний acquire проверены на fixture (5/5). | Определить окончательный FAILED execution, fencing worker и drain IO до release. |
 | [Time](./time-domain.md) | Изолированные T3-A/T3-C, подготовка T4 и World settings проверены: 25 тестов, Pyright без ошибок по отчёту. | Политика STANDARD для суток в 1–3 часа открыта. Production T4 требует SN-TIME-READ и Time reader, T5 — SN-TIME-APPLY и handler, создание ветки — SN-TIME-BRANCH. |
-| [Physics](./physics-spatial-dynamics.md) | PS-CORE-1 реализован изолированно, 7 тестов settings по отчёту. | Storage migration и подключение production consumers требуют отдельных контрактов. |
+| [Physics](./physics-spatial-dynamics.md) | PS-CORE-1: P2 исправлен, 19 адресных проверок прошли. В широком прогоне до и после переноса совпали 40 неуспешных test IDs. | Независимая проверка P2. Production storage и интеграция остаются отдельными шагами. |
 | [API-1](./api-1-transport-boundary.md) | Проверено покрытие полей storage и wire. Climate C1 содержит девять scalars, десять после переноса lapse. | Сопоставить вход каждой операции с версией и выходом владельца, включая presence/aliases. |
 | [GEN-BAKE-READ](./generator-public-bake-reads.md) | Исправленный пакет D1–D7 предъявлен в §17.10.4 | Получить решение пользователя, затем R1/R2 отдельно по операциям. Handoff light, full L0+C23, named terrain и coordinate terrain описан в §17.10.3 |
 | [DAG invocation и bake admission](./dag-invocations-bake-admission.md) | Итог ревью R6 на 7b6104d7, полный набор 392/392. | Далее R7 по условиям owning-плана. |
-| [ERROR-CONTRACTS-1](./error-contracts-1.md) | A0/C0 приняты, C1 реализован. Planning D2 и JSON J1/J2 отмечены DONE. Статусы отдельных J3/J4 findings в §7. | Приоритет для GEO — миграция четырёх конкретных callers по §12.2. |
+| [ERROR-CONTRACTS-1](./error-contracts-1.md) | D1 принят по GEO №4/5. Для №1–3 есть предложение с уточнением policy support. | D2 notices по принятому D1, согласование остальных причин отдельно. |
 | [LOD](./lod-simulation-handoff.md) | §11 учитывает draft и открытые вопросы coherent capture, continuation и неизменности мира | Продолжать согласование с владельцами первого consumer. Конкретные зависимости runtime уточняются по сценарию |
 
 Предложения новых bindings в этих планах не меняют hard-edge реестр автоматически. Исторические команды §9.3 для приёмки I1/B, preflight P1-A и проектирования уже принятой карты Physics заменены этой очередью.
@@ -836,17 +836,17 @@ flowchart TD
 
 | План | Номер трека | О чём трек | Следующий трек или внешняя зависимость |
 |---|---|---|---|
-| GEO | I11.3, исправление | Процедурный draft с рецептом дна. | Повторить штатный путь после миграции диагностик. |
-| Spatial / World Pack | SP-P2W, проектирование | Replay, отмена и два прохода с reopen проверены (§§15.91–93). | Согласовать с DAG/Pack owners удержание до COMPLETED execution и lookup по владельцу; проверить несколько чтений и поздний acquire. Доступно до SN-STAGE. |
+| GEO | I11.3 | Пять воспроизводимых дефектов в реестре GEO. | Повторить штатные сценарии после D2 соответствующих callers. |
+| Spatial / World Pack | SP-P2W, §15.94 | Два логических чтения восстановлены, cleanup повторяем, поздний acquire отклонён. | Следующая проба: terminal во время IO, fencing старого worker и release после выхода из guard. |
 | Time | T3-A / T3-C, подготовка T4 проверена | Арифметика, календарь, World settings, чтение через закреплённые тестовые источники. | Внутри Time открыта политика STANDARD для 1–3 часов. Production T4 ждёт SN-TIME-READ, T5 — SN-TIME-APPLY, ветвление — SN-TIME-BRANCH. |
-| Snapshot | 4D2, holder handoff | Передача refs snapshot holder и сохранение operation hold. | Закрепить случай ref вне transferred, затем terminal/retry. |
-| ERROR-CONTRACTS-1 | D2 затронутых producers | Типизированные ошибки и admission коллектора в callers I11.3. | GEO повторяет интеграцию после правок owners. Остальные домены продолжают D0/D1 независимо. |
+| Snapshot | 4D2, holder handoff | Регрессия есть в 8ce0ab50. На текущем HEAD устаревший импорт блокирует проверку. | Адаптировать WorldSnapshotService к текущему collector API по scoped D1, затем повторить проверку обеих ветвей holds со второго соединения. |
+| ERROR-CONTRACTS-1 | D2 №4/5, D1 №1–3 | Одобрены CoastlineCapNotice и PlateCountAdjustedNotice. | Реализовать и проверить доставку и восстановление notices. По №1–3 сначала согласовать D1. |
 
 API-1 ведёт пользователь. GEN-BAKE-READ после решения по D1–D7 переходит к проектированию R1/R2 по операциям.
 
 ### 12.2. ERROR-CONTRACTS-1: горизонтальные gates (v6.14)
 
-**Прикладная зависимость на 5 ноября.** Для штатного GEO-I11.3 владельцы terrain исправляют continentalFieldComposer (две типизированные ошибки) и coastlineWaterSourceAdapter (admitted для коллектора), Policy — policyRead (UnknownFact), Placement — nativeGeometry (notice WATER_PLACEMENT_CAP_REACHED). Владелец ядра подтверждает API. GEO повторяет noise/plate/plate-noise без подмены diagnostic types и полный geo1. Исходный отчёт: 767 тестов, 2 failures, 300 errors. Ребро относится к этим callers и I11.3. Snapshot handoff и проект Pack pin могут идти параллельно.
+**Прикладные зависимости на 5 ноября.** [Реестр GEO-I11.3](./geo-i11-3-review-defects.md) содержит пять P1. Для №4/5 приняты типы notices, поля и пути доставки. Для №1–3 требуется решение по предложению D1. Snapshot отдельно зависит от миграции импорта и вызова коллектора в WorldSnapshotService. Spatial может проверять гонку fencing/drain независимо.
 
 | Локальный consumer-gate | Непосредственные prerequisite | Что не следует требовать |
 |---|---|---|
