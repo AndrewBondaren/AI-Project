@@ -7,7 +7,7 @@ from test_library_packs_4b import _ServiceCase, _RELIEF
 import test_library_write_plan as plan_fixture
 from app.application.jsonValidation import resolve as resolve_module
 from app.application.jsonValidation import worldColumnResolve
-from app.application.jsonValidation.types import ImportValidationError
+from app.application.jsonValidation.types import ImportValidationError, wire_loc
 from app.application.templateLibrary.packs.errors import LibraryPackConflictError
 from app.application.templateLibrary.packs.write.writeContracts import LibraryWriteRequest
 from app.application.templateLibrary.packs.write.writeRetentionPlanner import WriteRetentionPlanner
@@ -81,7 +81,7 @@ class LibraryWorldColumnWriteTests(_ServiceCase):
         trace = await self.trace()
         with self.assertRaises(ImportValidationError) as caught:
             await self.writer.execute(self.request, imports={"raw": self.raw})
-        self.assertEqual(caught.exception.errors[0].path[:2], ("terrain_registry", 0))
+        self.assertEqual(wire_loc(caught.exception.errors[0])[:2], ("terrain_registry", 0))
         self.assertEqual(self.writes(trace), [])
         self.assertIsNone(await self.packs.get_by_uid(self.raw.pack.pack_uid))
         self.assertEqual((await self.worlds.get_by_id("w1")).terrain_registry, [42])
@@ -143,5 +143,5 @@ class LibraryWorldColumnWriteTests(_ServiceCase):
                 {"library_kind": _RELIEF.value, "template_uid": None}])):
             with self.assertRaises(ImportValidationError) as caught:
                 planner._world(world, (), {})
-            self.assertEqual(caught.exception.errors[0].path, ("library_pins", 1, "template_uid"))
+            self.assertEqual(wire_loc(caught.exception.errors[0]), ("library_pins", 1, "template_uid"))
         self.assertEqual(world, before)

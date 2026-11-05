@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.resolve import ResolveContext
-from app.application.jsonValidation.types import ImportValidationError
+from app.application.jsonValidation.types import ImportValidationError, wire_loc
 from app.application.jsonValidation.worldColumnResolve import resolve_world_column
 from app.application.jsonValidation.worldSlices import (
     WORLD_SLICE_BY_KEY, WorldSlice, slice_for_world_key,
@@ -59,7 +59,7 @@ class WorldColumnWriteTests(unittest.TestCase):
         for raw in (None, -1):
             with self.assertRaises(ImportValidationError) as error:
                 apply_world_column(world, "g", raw, self.ctx())
-            self.assertEqual(error.exception.errors[0].path, ("g",))
+            self.assertEqual(wire_loc(error.exception.errors[0]), ("g",))
             self.assertEqual(error.exception.errors[0].schema_id, "SCH-WORLD-TERRAIN-SCALARS")
             self.assertEqual(world, before)
         apply_world_column(world, "z_min", None, self.ctx())
@@ -97,7 +97,7 @@ class WorldColumnWriteTests(unittest.TestCase):
         ctx = self.ctx(location=WireLocation(parts=("operation",)))
         with self.assertRaises(ImportValidationError) as error:
             apply_world_column(world, "race_template_registry", [42, False], ctx)
-        self.assertEqual([e.path for e in error.exception.errors],
+        self.assertEqual([wire_loc(e) for e in error.exception.errors],
                          [("operation", "race_template_registry", 0),
                           ("operation", "race_template_registry", 1)])
         self.assertEqual(ctx.errors, error.exception.errors)
@@ -127,7 +127,7 @@ class WorldColumnWriteTests(unittest.TestCase):
                                 lambda: normalize_world({key: None}, partial=True)):
                     with self.assertRaises(ImportValidationError) as error:
                         resolve()
-                    facts.append(error.exception.errors[0].path)
+                    facts.append(wire_loc(error.exception.errors[0]))
                 self.assertEqual(facts[0], facts[1])
 
     def test_registry_null_uses_shared_root_contract_after_adapter(self):
@@ -183,7 +183,7 @@ class WorldColumnWriteTests(unittest.TestCase):
             self.assertEqual(resolve_world_column("value", 6, self.ctx()), {"value": 6})
             with self.assertRaises(ImportValidationError) as error:
                 resolve_world_column("value", 13, self.ctx())
-            self.assertEqual(error.exception.errors[0].path, ("value",))
+            self.assertEqual(wire_loc(error.exception.errors[0]), ("value",))
 
     def test_pure_resolve_does_not_mutate_caller_payload_on_rejection(self):
         class Mutating(BaseModel):

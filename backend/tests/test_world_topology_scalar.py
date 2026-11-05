@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.resolve import ResolveContext
-from app.application.jsonValidation.types import ImportValidationError
+from app.application.jsonValidation.types import ImportValidationError, wire_loc
 from app.application.jsonValidation.worldColumnResolve import resolve_world_column
 from app.application.jsonValidation.worldRow import terrain_scalars
 from app.dataModel.terrain.worldTerrainScalars import WorldTerrainScalars, validate_world_row_terrain_columns
@@ -41,7 +41,7 @@ class WorldTopologyScalarTests(unittest.TestCase):
         for value in (None, "unknown", 0, True):
             with self.subTest(value=value), self.assertRaises(ImportValidationError) as caught:
                 normalize_world({self.key: value})
-            self.assertTrue(any(issue.path[-1] == self.key for issue in caught.exception.errors))
+            self.assertTrue(any(wire_loc(issue)[-1:] == (self.key,) for issue in caught.exception.errors))
 
 
 class WorldTopologySchemaTests(unittest.IsolatedAsyncioTestCase):

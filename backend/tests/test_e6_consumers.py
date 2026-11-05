@@ -10,6 +10,7 @@ from app.application.cascade import locationScope
 from app.application.jsonValidation import resolve as resolve_module
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
 from app.application.jsonValidation.sourceValidation import validate_source
+from app.application.jsonValidation.types import wire_loc
 from app.application.cascade.locationScope import (
     area_context, building_context, district_context, settlement_context, empty_location_chain)
 from app.application.worldData.locations.namedLocationService import NamedLocationService
@@ -53,7 +54,7 @@ class SourceConsumerTests(unittest.TestCase):
                 facts.append(caught.exception.issues)
                 self.assertEqual(log.warning.call_count, 0 if preview else 1)
             self.assertEqual(facts[0], facts[1])
-            self.assertEqual(facts[0][0].path, (field,))
+            self.assertEqual(wire_loc(facts[0][0])[-1:], (field,))
 
     def test_invalid_authored_source_never_reaches_extend(self):
         world, location, _ = fixture()

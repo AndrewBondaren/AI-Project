@@ -16,7 +16,7 @@ from app.api.routes.worlds import router
 from app.application.jsonValidation import grid_settings
 from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.resolve import ResolveContext
-from app.application.jsonValidation.types import ImportValidationError
+from app.application.jsonValidation.types import ImportValidationError, wire_loc
 from app.application.jsonValidation.worldColumnResolve import resolve_world_column
 from app.application.jsonValidation.worldSlices import slice_for_pojo
 from app.application.worldData.registries.worldColumnWrite import apply_world_column
@@ -38,7 +38,7 @@ WIRE = {"world_uid": "w1", "name": "World", "created_at": "2026-10-16"}
 class GridSettingsTests(unittest.TestCase):
     def assert_issue(self, error):
         issue = error.errors[0]
-        self.assertEqual(issue.path, (KEY,))
+        self.assertEqual(wire_loc(issue)[-1:], (KEY,))
         self.assertEqual(issue.schema_id, WorldGridSettings.SCHEMA_ID)
         self.assertTrue(issue.code)
 
@@ -150,7 +150,7 @@ class GridSettingsBoundaryTests(_ServiceCase):
                 before = (self.db.conn.total_changes, self.db.bootstrap_conn.total_changes)
                 report = await bundle.import_bundle(data, validate_only=True)
                 self.assertFalse(report.valid)
-                self.assertEqual(report.issues[0].path, (KEY,))
+                self.assertEqual(wire_loc(report.issues[0])[-1:], (KEY,))
                 self.assertEqual(report.issues[0].schema_id, WorldGridSettings.SCHEMA_ID)
                 with self.assertRaises(ImportValidationError) as caught:
                     await bundle.import_bundle(data)
