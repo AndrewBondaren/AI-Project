@@ -54,7 +54,7 @@ class SourceConsumerTests(unittest.TestCase):
                 facts.append(caught.exception.issues)
                 self.assertEqual(log.warning.call_count, 0 if preview else 1)
             self.assertEqual(facts[0], facts[1])
-            self.assertEqual(wire_loc(facts[0][0])[-1:], (field,))
+            self.assertEqual(wire_loc(facts[0][0]), (field,))
 
     def test_invalid_authored_source_never_reaches_extend(self):
         world, location, _ = fixture()
