@@ -3,17 +3,13 @@
 Discovery uses POJO metadata; registries use the existing WorldSlice catalog.
 No policy/default decisions live here: facts reach the shared reject sink.
 """
-from typing import get_args
 
 from pydantic import BaseModel, TypeAdapter, ValidationError
-from pydantic_core import ErrorDetails
-from pydantic_core.core_schema import ErrorType
 
-from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved, resolve_model
+from app.application.jsonValidation.resolve import (
+    ResolveContext, field_issue, pydantic_issues, reject_unresolved, resolve_model,
+)
 from app.application.jsonValidation.types import ImportIssue
-from app.dataModel.fields.checkedPath import CheckedPath
-from app.dataModel.fields.validatedFieldPath import VariantSegment
-from app.dataModel.validation.importIssues.jsonFieldError import JsonFieldError
 from app.dataModel.validation.importIssues.jsonValidationCode import JsonValidationCode
 from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.dataModel.validation.importIssues.wireShapeIssue import WireShapeIssue
@@ -23,37 +19,10 @@ from app.dataModel.cascade.cascadeSpec import CascadeChannel, ChannelKind
 from app.dataModel.economy.enums.economicTierBand import EconomicTierBand
 from app.dataModel.registryKey import registry_key_target
 
-_PYDANTIC_ERROR_TYPES: frozenset[str] = frozenset(get_args(ErrorType))
-
 
 def _wire_issue(path: tuple, message: str, code: JsonValidationCode) -> ImportIssue:
     """``path`` is an absolute wire position without a known POJO root (F09)."""
     return WireShapeIssue(code=code, location=WireLocation(parts=path), message=message)
-
-
-def _field_issue(ctx: ResolveContext, root: type[BaseModel], loc: tuple[str | int, ...], message: str,
-                 code: JsonValidationCode, pydantic_type: ErrorType | None = None) -> ImportIssue:
-    """F01 when ``loc`` is a declared field path of ``root`` at ``ctx.location``; otherwise F09."""
-    path = CheckedPath.from_pydantic_loc(root, loc)
-    if path is None:
-        return WireShapeIssue(code=code, location=ctx.location.child(*loc),
-                              message=message, pydantic_type=pydantic_type)
-    wire_path = tuple(part for part, segment in zip(loc, path.segments, strict=True)
-                      if not isinstance(segment, VariantSegment))
-    return JsonFieldError(code=code, path=path, location=ctx.location, wire_path=wire_path,
-                          schema_id=ctx.schema_id, pydantic_type=pydantic_type, message=message)
-
-
-def _schema_issue(ctx: ResolveContext, root: type[BaseModel], prefix: tuple[str, ...],
-                  error: ErrorDetails) -> ImportIssue:
-    kind = error["type"]
-    loc = prefix + tuple(part for part in error["loc"]
-                         if not isinstance(part, str) or not part.startswith(("is-instance[", "function-")))
-    if kind == "enum":
-        return _field_issue(ctx, root, loc, "unknown wire value; " + error["msg"], JsonValidationCode.UNKNOWN_ENUM)
-    if kind in _PYDANTIC_ERROR_TYPES:
-        return _field_issue(ctx, root, loc, error["msg"], JsonValidationCode.SCHEMA_VIOLATION, kind)  # type: ignore[arg-type]
-    return _field_issue(ctx, root, loc, error["msg"], JsonValidationCode.VALIDATION_ERROR)
 
 
 def registry_vocabulary(world, registry_cls: type, ctx: ResolveContext, path: tuple) -> frozenset[str]:
@@ -136,19 +105,19 @@ def validate_prepared_source(world, source: BaseModel, *, ctx: ResolveContext):
         try:
             value = TypeAdapter(info.rebuild_annotation()).validate_python(value)
         except ValidationError as exc:
-            reject_unresolved(ctx, [_schema_issue(ctx, root, loc, e) for e in exc.errors()])
+            reject_unresolved(ctx, pydantic_issues(ctx, root, exc, prefix=loc))
         if value is None:
             continue
         validate_reference_value(world, info.annotation, value, ctx, path, cache)
         if any(c.kind is ChannelKind.BAND for c in channels):
             if EconomicTierBand.from_wire(value) is None:
-                reject_unresolved(ctx, [_field_issue(ctx, root, loc, f"unknown economic tier band: {value!r}",
+                reject_unresolved(ctx, [field_issue(ctx, root, loc, f"unknown economic tier band: {value!r}",
                                                      JsonValidationCode.DOMAIN_BAND)])
         if any(c.kind is ChannelKind.RANGE for c in channels):
             from app.application.jsonValidation import economic_tiers
             ordered = economic_tiers(world).sorted_by_base_value()
             ranks = {str(row.system_tier): i for i, row in enumerate(ordered)}
             if ranks[str(value.min)] > ranks[str(value.max)]:
-                reject_unresolved(ctx, [_field_issue(ctx, root, loc, "range min exceeds max",
+                reject_unresolved(ctx, [field_issue(ctx, root, loc, "range min exceeds max",
                                                      JsonValidationCode.DOMAIN_RANGE)])
     return source

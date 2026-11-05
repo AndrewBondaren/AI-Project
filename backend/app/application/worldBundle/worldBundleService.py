@@ -19,10 +19,13 @@ from app.application.worldBundle.worldLibraries import (
 )
 from app.application.jsonValidation.bundle import normalize_bundle_connections
 from app.application.jsonValidation.facade import normalize_world
-from app.application.jsonValidation.types import ImportValidationError
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
-from app.application.jsonValidation.types import ImportValidationReport
-from app.application.jsonValidation.resolve import ResolveContext, StrictFieldError, UnresolvedModelError, reject_unresolved
+from app.application.jsonValidation.resolve import (
+    ResolveContext, StrictFieldError, UnresolvedModelError, pydantic_issues, report_issues,
+)
+from app.application.jsonValidation.types import ImportValidationError, ImportValidationReport
+from app.dataModel.validation.importIssues.jsonValidationCode import JsonValidationCode
+from app.dataModel.validation.importIssues.wireShapeIssue import WireShapeIssue
+from app.db.models.world import World
 from app.application.templateLibrary.reliefErrors import ReliefValidationError
 from pydantic import ValidationError
 from app.application.worldBundle.handler import IBundleSectionHandler
@@ -123,11 +126,15 @@ class WorldBundleService:
 
     def _prepare_bundle(self, data: dict, *, level: ImportLevel, ctx: ResolveContext):
         """Shared pipeline. This phase has no repository/Pack/task access."""
+        world_ctx = ctx.child(BundleSection.WORLD)
         if not isinstance(data.get(BundleSection.WORLD), dict):
-            raise ImportValidationError([FieldPathError((BundleSection.WORLD,), "expected world object", code="EXPECTED_OBJECT")])
+            raise ImportValidationError([WireShapeIssue(
+                location=world_ctx.location, message="expected world object",
+                code=JsonValidationCode.EXPECTED_OBJECT,
+            )])
         try:
             validate_bundle_for_import(data, level)
-            world_data = normalize_world(dict(data[BundleSection.WORLD]), ctx=ctx)
+            world_data = normalize_world(dict(data[BundleSection.WORLD]), ctx=world_ctx)
             if not world_data.get("world_uid"):
                 world_data["world_uid"] = derive_world_uid(world_data)
             data = {**data, BundleSection.WORLD: world_data}
@@ -137,18 +144,31 @@ class WorldBundleService:
         except UnresolvedModelError as exc:
             raise ImportValidationError(exc.issues) from exc
         except StrictFieldError as exc:
-            raise ImportValidationError([FieldPathError(exc.path, exc.detail, code="STRICT_REQUIRED")]) from exc
+            raise ImportValidationError([exc.issue]) from exc
         except ValueError as exc:
-            raise ImportValidationError([FieldPathError((), str(exc), code="BUNDLE_INVALID")]) from exc
+            raise ImportValidationError([WireShapeIssue(
+                location=ctx.location, message=str(exc),
+                code=JsonValidationCode.BUNDLE_INVALID,
+            )]) from exc
 
         if BundleSection.MAP_CELLS in data:
-            raise ImportValidationError([FieldPathError((BundleSection.MAP_CELLS,), "use World Pack import", code="BUNDLE_INVALID")])
+            raise ImportValidationError([WireShapeIssue(
+                location=ctx.location.child(BundleSection.MAP_CELLS), message="use World Pack import",
+                code=JsonValidationCode.BUNDLE_INVALID,
+            )])
         try:
-            world = self._world.prepare_import(data[BundleSection.WORLD], ctx=ctx)
+            world = self._world.prepare_import(data[BundleSection.WORLD], ctx=world_ctx)
+        except UnresolvedModelError as exc:
+            raise ImportValidationError(exc.issues) from exc
+        except StrictFieldError as exc:
+            raise ImportValidationError([exc.issue]) from exc
         except ValidationError as exc:
-            raise ImportValidationError([FieldPathError((BundleSection.WORLD,) + tuple(e["loc"]), e["msg"], code=e["type"]) for e in exc.errors()]) from exc
+            raise ImportValidationError(pydantic_issues(world_ctx, World, exc)) from exc
         except ValueError as exc:
-            raise ImportValidationError([FieldPathError((BundleSection.WORLD,), str(exc), code="VALIDATION_ERROR")]) from exc
+            raise ImportValidationError([WireShapeIssue(
+                location=world_ctx.location, message=str(exc),
+                code=JsonValidationCode.VALIDATION_ERROR,
+            )]) from exc
         consumed = set()
         if self._archives is not None:
             try:
@@ -158,7 +178,10 @@ class WorldBundleService:
                 ctx.errors.extend(exc.errors)
                 consumed = LIBRARY_CONSUMED_SECTIONS
             except (ValueError, LibraryPackValidationError) as exc:
-                ctx.errors.append(FieldPathError((BundleSection.LIBRARY_PACKS,), str(exc), code="LIBRARY_INVALID"))
+                ctx.errors.append(WireShapeIssue(
+                    location=ctx.location.child(BundleSection.LIBRARY_PACKS), message=str(exc),
+                    code=JsonValidationCode.LIBRARY_INVALID,
+                ))
                 consumed = LIBRARY_CONSUMED_SECTIONS
         for handler in self._handlers:
             if handler.key not in data or handler.key == BundleSection.WORLD or handler.key in consumed:
@@ -168,11 +191,12 @@ class WorldBundleService:
                 handler.validate_section(world, data[handler.key], ctx=section_ctx)
             except UnresolvedModelError:
                 continue
+            except StrictFieldError as exc:
+                report_issues(section_ctx, [exc.issue])
             except (ValueError, ReliefValidationError) as exc:
-                try:
-                    reject_unresolved(section_ctx, [FieldPathError(section_ctx.location.parts, str(exc), code="VALIDATION_ERROR")])
-                except UnresolvedModelError:
-                    continue
+                report_issues(section_ctx, [WireShapeIssue(
+                    location=section_ctx.location, message=str(exc), code=JsonValidationCode.VALIDATION_ERROR,
+                )])
         if ctx.errors:
             raise ImportValidationError(list(ctx.errors))
         return data

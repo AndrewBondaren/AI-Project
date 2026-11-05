@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.validation.importIssues.jsonValidationCode import JsonValidationCode
 from app.dataModel.validation.importIssues.wireShapeIssue import WireShapeIssue
-from app.application.jsonValidation.resolve import ResolveContext, ResolveMode, _field_issue, report_issues, resolve_result
+from app.application.jsonValidation.resolve import ResolveContext, ResolveMode, field_issue, report_issues, resolve_result
 from app.application.jsonValidation.types import ImportValidationError
 from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictEnumOnWire, StrictOnWire
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
@@ -113,7 +113,7 @@ def _normalize_rows(
             continue
         if isinstance(resolved, ConnectionEdgeImportRow) and allowed is not None:
             if resolved.connection_type not in allowed:
-                report_issues(ctx, [_field_issue(
+                report_issues(ctx, [field_issue(
                     row_ctx, entry_cls, ("connection_type",),
                     f"unknown REF-W-CONN target: {resolved.connection_type!r}",
                     JsonValidationCode.REF_W_UNKNOWN,

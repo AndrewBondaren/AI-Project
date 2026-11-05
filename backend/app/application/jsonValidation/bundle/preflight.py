@@ -2,10 +2,10 @@
 from collections.abc import Callable
 from typing import Any
 
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from app.application.jsonValidation.resolve import (
-    ResolveContext, StrictFieldError, UnresolvedModelError, _pydantic_issues, reject_unresolved, report_issues,
+    ResolveContext, StrictFieldError, UnresolvedModelError, pydantic_issues, reject_unresolved, report_issues,
 )
 from app.application.jsonValidation.types import ImportIssue, ImportValidationError
 from app.dataModel.validation.importIssues.jsonValidationCode import JsonValidationCode
@@ -37,7 +37,7 @@ def validate_rows(data: Any, prepare: Callable[..., Any], *, ctx: ResolveContext
             issues = exc.errors
         except ValidationError as exc:
             # The callback exposes a raw row, without a declared model for checked paths.
-            issues = _pydantic_issues(row_ctx, BaseModel, exc)
+            issues = pydantic_issues(row_ctx, None, exc)
         except ReliefValidationError as exc:
             issues = [WireShapeIssue(location=row_ctx.location, message=str(exc),
                                      code=JsonValidationCode.LIBRARY_INVALID)]

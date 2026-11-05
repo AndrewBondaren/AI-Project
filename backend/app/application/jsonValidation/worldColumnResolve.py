@@ -7,11 +7,9 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.application.jsonValidation.resolve import (
-    ResolveContext, UnresolvedModelError, resolve_model, resolve_model_field,
+    ResolveContext, UnresolvedModelError, field_issue, resolve_model, resolve_model_field,
 )
-from app.application.jsonValidation.types import ImportIssue, ImportValidationError
-from app.dataModel.fields.checkedPath import CheckedPath
-from app.dataModel.validation.importIssues.jsonFieldError import JsonFieldError
+from app.application.jsonValidation.types import ImportValidationError
 from app.dataModel.validation.importIssues.jsonValidationCode import JsonValidationCode
 from app.dataModel.validation.importIssues.wireShapeIssue import WireShapeIssue
 from app.application.jsonValidation.worldSliceMerge import merge_world_slice
@@ -20,16 +18,6 @@ from app.application.jsonValidation.worldSlices import slice_for_world_key
 
 def _pojo_of(cls: type) -> type[BaseModel] | None:
     return cls if issubclass(cls, BaseModel) else None
-
-
-def _field_issue(ctx: ResolveContext, root: type[BaseModel] | None, loc: tuple[str, ...],
-                 message: str, code: JsonValidationCode) -> ImportIssue:
-    """F01 when ``loc`` is a declared field of ``root`` at ``ctx.location``; otherwise F09."""
-    path = CheckedPath.from_pydantic_loc(root, loc) if root is not None else None
-    if path is None:
-        return WireShapeIssue(code=code, location=ctx.location.child(*loc), message=message)
-    return JsonFieldError(code=code, path=path, location=ctx.location, wire_path=loc,
-                          schema_id=ctx.schema_id, message=message)
 
 
 def resolve_world_column(key: str, raw: Any, ctx: ResolveContext,
@@ -54,7 +42,7 @@ def resolve_world_column(key: str, raw: Any, ctx: ResolveContext,
             if (pojo.__pydantic_decorators__.model_validators
                     or pojo.__pydantic_decorators__.root_validators):
                 if existing is None:
-                    issue = _field_issue(active, pojo, (key,),
+                    issue = field_issue(active, pojo, (key,),
                         "current slice values required for a model invariant",
                         JsonValidationCode.WORLD_SLICE_CONTEXT_REQUIRED)
                     active.report.issues.append(issue)
@@ -71,7 +59,7 @@ def resolve_world_column(key: str, raw: Any, ctx: ResolveContext,
     except UnresolvedModelError as exc:
         raise ImportValidationError(list(exc.issues)) from exc
     except ValueError as exc:
-        issue = _field_issue(active, _pojo_of(world_slice.pojo_cls), (key,), str(exc),
+        issue = field_issue(active, _pojo_of(world_slice.pojo_cls), (key,), str(exc),
                             JsonValidationCode.VALIDATION_ERROR)
         active.report.issues.append(issue)
         raise ImportValidationError([issue]) from exc

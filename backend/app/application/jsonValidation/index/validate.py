@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from app.application.jsonValidation.index.build import build_world_registry_index
 from app.application.jsonValidation.index.refKinds import RefKind
 from app.application.jsonValidation.index.worldRegistryIndex import WorldRegistryIndex
-from app.application.jsonValidation.resolve import ResolveContext, _field_issue
+from app.application.jsonValidation.resolve import ResolveContext, field_issue
 from app.application.jsonValidation.types import ImportIssue
 from app.dataModel.validation.importIssues.jsonValidationCode import JsonValidationCode
 from app.dataModel.validation.importIssues.wireLocation import WireLocation
@@ -38,7 +38,7 @@ def _index_issue(*, model: type[BaseModel], path: tuple[str | int, ...],
     # under their column name, outside the validated POJO.
     offset = 0 if model is WorldClimateScalars else 1
     ctx = ResolveContext(location=WireLocation(parts=path[:offset]), schema_id=getattr(model, "SCHEMA_ID"))
-    return _field_issue(ctx, model, path[offset:], message, code)
+    return field_issue(ctx, model, path[offset:], message, code)
 
 
 def _check_ref(

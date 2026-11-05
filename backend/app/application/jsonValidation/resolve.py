@@ -116,8 +116,9 @@ def report_issues(ctx: ResolveContext, issues: Iterable[ImportIssue]) -> None:
 
 def reject_unresolved(ctx: ResolveContext, issues: Iterable[ImportIssue]) -> NoReturn:
     """One rejection point for structured facts from wire/domain checks."""
-    report_issues(ctx, issues)
-    raise UnresolvedModelError(issues)
+    failure = UnresolvedModelError(issues)
+    report_issues(ctx, failure.issues)
+    raise failure
 
 
 def _model_fields_schema(schema: dict, definitions: list[dict]) -> dict:
@@ -233,7 +234,7 @@ def resolve_model_field(model_cls: type[BaseModel], name: str, raw: Any,
     try:
         value = validator.validate_python({name: raw}, by_name=True, by_alias=True)
     except ValidationError as exc:
-        reject_unresolved(ctx, _pydantic_issues(ctx, model_cls, exc))
+        reject_unresolved(ctx, pydantic_issues(ctx, model_cls, exc))
     return serializer.to_python(value, mode="json")[name]
 
 
@@ -255,7 +256,7 @@ def _reference_issues(value: Any, ctx: ResolveContext, references: WorldRegistry
                     if token is None:
                         continue  # A validated optional list member is not a reference.
                     if keys is None or str(token) not in keys:
-                        issues.append(_field_issue(ctx, root,
+                        issues.append(field_issue(ctx, root,
                             field_loc if index is None else (*field_loc, index),
                             "reference index unavailable" if keys is None else f"unknown reference: {token!r}",
                             JsonValidationCode.REF_W_UNAVAILABLE if keys is None else JsonValidationCode.REF_W_UNKNOWN))
@@ -306,7 +307,7 @@ def resolve_patch(model_cls: type[BaseModel], raw: dict[str, Any], *, ctx: Resol
     try:
         payload = _patch_validator(model_cls).validate_python(supplied)
     except ValidationError as exc:
-        reject_unresolved(ctx, _pydantic_issues(ctx, model_cls, exc))
+        reject_unresolved(ctx, pydantic_issues(ctx, model_cls, exc))
     return payload
 
 
@@ -353,12 +354,13 @@ def _log_resolve_transform(
 _PYDANTIC_ERROR_TYPES: frozenset[str] = frozenset(get_args(ErrorType))
 
 
-def _field_issue(ctx: ResolveContext, root: type[BaseModel], loc: tuple[str | int, ...],
+def field_issue(ctx: ResolveContext, root: type[BaseModel] | None, loc: tuple[str | int, ...],
                  message: str, code: JsonValidationCode,
                  pydantic_type: ErrorType | None = None) -> ImportIssue:
     """F01 when loc is a declared field of root; otherwise F09 at the raw wire location."""
-    is_root_model = issubclass(root, RootModel)
-    path = CheckedPath.from_pydantic_loc(root, ("root", *loc) if is_root_model else loc)
+    is_root_model = root is not None and issubclass(root, RootModel)
+    model_loc = ("root", *loc) if is_root_model else loc
+    path = CheckedPath.from_pydantic_loc(root, model_loc) if root is not None else None
     if path is None:
         return WireShapeIssue(code=code, location=ctx.location.child(*loc),
                               message=message, pydantic_type=pydantic_type)
@@ -372,21 +374,23 @@ def _field_issue(ctx: ResolveContext, root: type[BaseModel], loc: tuple[str | in
                           schema_id=ctx.schema_id, pydantic_type=pydantic_type, message=message)
 
 
-def _schema_issue(ctx: ResolveContext, root: type[BaseModel], error: ErrorDetails) -> ImportIssue:
+def _schema_issue(ctx: ResolveContext, root: type[BaseModel] | None, error: ErrorDetails,
+                  prefix: tuple[str | int, ...]) -> ImportIssue:
     kind = error["type"]
-    loc = tuple(part for part in error["loc"]
+    loc = prefix + tuple(part for part in error["loc"]
                 if not isinstance(part, str) or not part.startswith(("is-instance[", "function-")))
     if kind == "enum":
-        return _field_issue(ctx, root, loc, "unknown wire value; " + error["msg"],
+        return field_issue(ctx, root, loc, "unknown wire value; " + error["msg"],
                             JsonValidationCode.UNKNOWN_ENUM)
     if kind in _PYDANTIC_ERROR_TYPES:
-        return _field_issue(ctx, root, loc, error["msg"], JsonValidationCode.SCHEMA_VIOLATION, kind)  # type: ignore[arg-type]
-    return _field_issue(ctx, root, loc, error["msg"], JsonValidationCode.VALIDATION_ERROR)
+        return field_issue(ctx, root, loc, error["msg"], JsonValidationCode.SCHEMA_VIOLATION, kind)  # type: ignore[arg-type]
+    return field_issue(ctx, root, loc, error["msg"], JsonValidationCode.VALIDATION_ERROR)
 
 
-def _pydantic_issues(ctx: ResolveContext, root: type[BaseModel], exc: ValidationError) -> list[ImportIssue]:
+def pydantic_issues(ctx: ResolveContext, root: type[BaseModel] | None, exc: ValidationError,
+                    *, prefix: tuple[str | int, ...] = ()) -> list[ImportIssue]:
     """C0-8: the owning validation boundary translates Pydantic errors()."""
-    return [_schema_issue(ctx, root, error) for error in exc.errors()]
+    return [_schema_issue(ctx, root, error, prefix) for error in exc.errors()]
 
 
 def _wire_lookup_keys(field_name: str, field_info: Any) -> tuple[str, ...]:
@@ -442,7 +446,7 @@ def resolve_model[ModelT: BaseModel](
             **(validation_context or {}), "validate_only": active_ctx.validate_only,
         })
     except ValidationError as exc:
-        reject_unresolved(active_ctx, _pydantic_issues(active_ctx, model_cls, exc))
+        reject_unresolved(active_ctx, pydantic_issues(active_ctx, model_cls, exc))
     _log_resolve_transform(label or model_cls.__name__, raw, result, active_ctx)
     return result
 

@@ -14,7 +14,7 @@ from app.api.deps import get_container
 from app.api.routes.worlds import router
 from app.application.imports.result import ImportResult
 from app.application.worldBundle import worldCopyImport
-from app.application.jsonValidation.types import ImportValidationError, ImportValidationReport
+from app.application.jsonValidation.types import ImportValidationError, ImportValidationReport, wire_loc
 from app.dataModel.worldBundle.bundleSections import BundleSection
 from app.core.container import Container
 from app.db.database import Database
@@ -103,7 +103,7 @@ class ImportValidationPolicyTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(entry=entry):
                 report = await self.service.import_bundle(fixture, validate_only=True)
                 self.assertFalse(report.valid)
-                self.assertTrue(any("declared_regions" in issue.path for issue in report.issues))
+                self.assertTrue(any("declared_regions" in wire_loc(issue) for issue in report.issues))
         self.assertEqual((self.db.conn.total_changes, self.db.bootstrap_conn.total_changes), before)
         self.assertEqual(await self.worlds.get_all(), [])
 
@@ -117,7 +117,7 @@ class ImportValidationPolicyTests(unittest.IsolatedAsyncioTestCase):
             fixture["world"]["material_registry"][0]["transparent"] = invalid
             report = await self.service.import_bundle(fixture, validate_only=True)
             self.assertFalse(report.valid)
-            self.assertTrue(any(issue.path[-1] == "transparent" for issue in report.issues))
+            self.assertTrue(any(wire_loc(issue)[-1] == "transparent" for issue in report.issues))
             with self.assertRaises(ImportValidationError) as error:
                 await self.service.import_bundle(fixture)
             self.assertEqual(tuple(error.exception.errors), report.issues)
@@ -135,7 +135,7 @@ class ImportValidationPolicyTests(unittest.IsolatedAsyncioTestCase):
             "context": "river", "structure_refs": ["missing-barrier"]}]
         report = await self.service.import_bundle(fixture, validate_only=True)
         self.assertFalse(report.valid)
-        self.assertEqual(report.issues[0].path, (BundleSection.LIBRARY_PACKS,))
+        self.assertEqual(wire_loc(report.issues[0]), (BundleSection.LIBRARY_PACKS,))
         self.assertEqual(await self.worlds.get_all(), [])
 
     async def test_library_schema_and_other_sections_aggregate(self):
@@ -145,7 +145,7 @@ class ImportValidationPolicyTests(unittest.IsolatedAsyncioTestCase):
         fixture["states"] = [{}]
         report = await self.service.import_bundle(fixture, validate_only=True)
         self.assertFalse(report.valid)
-        self.assertEqual({e.path[0] for e in report.issues}, {"states", "race_templates", "perk_templates"})
+        self.assertEqual({wire_loc(e)[0] for e in report.issues}, {"states", "race_templates", "perk_templates"})
 
     async def test_infrastructure_failure_is_not_a_validation_report(self):
         fixture = self.fixture()
@@ -227,8 +227,12 @@ class ImportValidationPolicyTests(unittest.IsolatedAsyncioTestCase):
             fixture["world"]["terrain_masks"] = {"default_forests": {"forest_min_rainfall": -1}}
             response = await send("?validate_only=true")
             self.assertFalse(response.json()["valid"])
-            self.assertEqual(response.json()["issues"][0]["code"], "greater_than_equal")
-            self.assertEqual((await send()).status_code, 422)
+            preview_issues = response.json()["issues"]
+            self.assertEqual(preview_issues[0]["code"], "greater_than_equal")
+            self.assertEqual(preview_issues[0]["loc"][0], "world")
+            response = await send()
+            self.assertEqual(response.status_code, 422)
+            self.assertEqual(response.json()["detail"], preview_issues)
             del fixture["world"]["terrain_masks"]
             self.assertEqual((await send("?validate_only=false")).status_code, 200)
             self.assertEqual((await send()).status_code, 200)

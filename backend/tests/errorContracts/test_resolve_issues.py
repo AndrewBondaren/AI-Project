@@ -6,8 +6,9 @@ from enum import StrEnum
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, RootModel, field_validator
 from pydantic_core import PydanticCustomError
 
+from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.resolve import (
-    ResolveContext, StrictFieldError, UnresolvedModelError, report_issues, resolve_model, resolve_patch,
+    ResolveContext, StrictFieldError, UnresolvedModelError, reject_unresolved, report_issues, resolve_model, resolve_patch,
 )
 from app.application.jsonValidation.types import (
     ImportValidationError, ImportValidationReport, import_validation_http_detail,
@@ -70,6 +71,21 @@ def _issues(call) -> list:
 class ResolveIssuesTests(unittest.TestCase):
     def ctx(self) -> ResolveContext:
         return ResolveContext(location=WireLocation(parts=("hydrology", "lakes")), validate_only=True)
+
+    def test_reject_reports_one_shot_iterable(self) -> None:
+        ctx = self.ctx()
+        issue = WireShapeIssue(code=JsonValidationCode.BUNDLE_INVALID, location=ctx.location, message="bad")
+        self.assertEqual(_issues(lambda: reject_unresolved(ctx, iter([issue]))), [issue])
+        self.assertEqual(ctx.errors, [issue])
+
+    def test_removed_field_keeps_world_location_through_facade(self) -> None:
+        ctx = ResolveContext.for_import(validate_only=True).child("world")
+        for partial in (False, True):
+            with self.subTest(partial=partial), self.assertRaises(ImportValidationError) as caught:
+                normalize_world({"map_cell_size_m": None}, partial=partial, ctx=ctx)
+            detail = import_validation_http_detail(caught.exception)
+            self.assertEqual([item["loc"] for item in detail], [["world", "map_cell_size_m"]])
+            self.assertEqual(detail[0]["code"], "REMOVED_FROM_WIRE")
 
     def test_child_extends_location(self) -> None:
         self.assertEqual(self.ctx().child(3).location.parts, ("hydrology", "lakes", 3))

@@ -6,8 +6,9 @@ from typing import Any
 
 from app.application.jsonValidation.resolve import ResolveContext, ResolveMode
 from app.application.jsonValidation.index import validate_ref_w
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
-from app.application.jsonValidation.types import ImportValidationError
+from app.dataModel.validation.importIssues.jsonValidationCode import JsonValidationCode
+from app.dataModel.validation.importIssues.wireShapeIssue import WireShapeIssue
+from app.application.jsonValidation.types import ImportIssue, ImportValidationError
 from app.application.jsonValidation.worldSliceMerge import merge_facade_slices
 from app.application.jsonValidation.worldSlices import facade_world_slices
 
@@ -37,13 +38,13 @@ def normalize_world(data: dict[str, Any], *, partial: bool = False,
                     ctx: ResolveContext | None = None) -> dict[str, Any]:
     """Normalize ``worlds`` wire dict for import or CRUD write."""
     out = dict(data)
-    if "map_cell_size_m" in out:
-        raise ImportValidationError([FieldPathError(
-            ("map_cell_size_m",),
-            "map_cell_size_m was removed; use fine_cells_per_map_cell",
-            code="REMOVED_FROM_WIRE",
-        )])
     ctx = ctx if ctx is not None else ResolveContext(mode=ResolveMode.IMPORT, partial=partial)
+    if "map_cell_size_m" in out:
+        raise ImportValidationError([WireShapeIssue(
+            location=ctx.location.child("map_cell_size_m"),
+            message="map_cell_size_m was removed; use fine_cells_per_map_cell",
+            code=JsonValidationCode.REMOVED_FROM_WIRE,
+        )])
 
     if partial and "terrain_masks" in out:
         from app.dataModel.terrainMasks.landcoverWire import normalize_landcover_wire
@@ -65,7 +66,7 @@ def normalize_world(data: dict[str, Any], *, partial: bool = False,
         from app.dataModel.terrainMasks.landcoverWire import landcover_patch_to_wire
         out["terrain_masks"] = landcover_patch_to_wire(out["terrain_masks"])
 
-    errors: list[FieldPathError] = list(ctx.errors)
+    errors: list[ImportIssue] = list(ctx.errors)
     if not errors:
         errors.extend(validate_ref_w(out, partial=partial))
 

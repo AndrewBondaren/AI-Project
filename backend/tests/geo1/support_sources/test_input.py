@@ -10,6 +10,7 @@ from app.dataModel.materials.worldMaterialRegistry import WorldMaterialRegistry
 from app.dataModel.terrain.relief.surfaceCoating.surfaceSupportInput import SurfaceSupportInput
 from app.dataModel.terrain.relief.surfaceCoating.surfaceSupportInput import MaterialSupportEntry
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError, validate_contracts
+from app.application.jsonValidation.types import wire_loc
 from app.application.jsonValidation.index.worldRegistryIndex import WorldRegistryIndex
 from app.dataModel.validation.immutableValue import validate_immutable
 from tests.geo1.support_sources.fixtures import captured,fingerprint
@@ -25,7 +26,7 @@ class SupportInputTests(TestCase):
         bad=value.model_copy(update={"materials":(value.materials[0].model_copy(update={"key":"unknown"}),)})
         with self.assertRaises(UnresolvedModelError) as caught:
             validate_contracts(SurfaceSupportInput,bad.model_dump(),ctx=ResolveContext(validate_only=True,location=WireLocation(parts=("support",))),references=index)
-        self.assertEqual(caught.exception.issues[0].path,("support","materials",0,"key"))
+        self.assertEqual(wire_loc(caught.exception.issues[0]), ("support", "materials", 0, "key"))
         self.assertEqual(caught.exception.issues[0].code,"REF_W_UNKNOWN")
 
     def test_canonical_substrate_is_explicit_in_fixture_and_engine_declarations(self):

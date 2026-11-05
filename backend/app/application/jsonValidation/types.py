@@ -58,7 +58,7 @@ class ImportValidationReport:
 
     def to_dict(self) -> dict[str, object]:
         return {"validate_only": True, "valid": self.valid,
-                "issues": import_validation_http_detail(ImportValidationError(self.issues))}
+                "issues": _wire_detail(self.issues)}
 
 
 def wire_loc(issue: ImportIssue) -> tuple[str | int, ...]:
@@ -84,8 +84,12 @@ def _wire_code(issue: ImportIssue) -> object:
 
 
 def import_validation_http_detail(exc: ImportValidationError) -> list[dict[str, object]]:
+    return _wire_detail(exc.errors)
+
+
+def _wire_detail(issues: Iterable[ImportIssue]) -> list[dict[str, object]]:
     detail: list[dict[str, object]] = []
-    for issue in exc.errors:
+    for issue in issues:
         item: dict[str, object] = {"loc": list(wire_loc(issue)), "msg": issue.message, "code": _wire_code(issue)}
         if isinstance(issue, JsonFieldError) and issue.schema_id:
             item["schema_id"] = issue.schema_id

@@ -25,7 +25,6 @@ from app.application.jsonValidation.resolve import (
     resolve_root_dict,
     resolve_root_list,
 )
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.application.jsonValidation.types import ImportValidationError, import_validation_http_detail
 from app.application.jsonValidation.wire import WireEnumError, parse_enum
 from app.application.jsonValidation.settlementSizeResolve import resolve_settlement_size_key
