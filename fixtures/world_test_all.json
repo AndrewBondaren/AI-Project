@@ -1055,7 +1055,6 @@
     "z_min": -500,
     "z_max": 8000,
     "elevation_lapse_rate": 0.65,
-    "g": 1.0,
     "closed_planet_grid": false,
     "default_climate_zone": "temperate",
     "climate_temperature_peak_min": -40,

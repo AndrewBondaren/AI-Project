@@ -2,7 +2,7 @@ from copy import replace
 from unittest import TestCase
 from unittest.mock import patch
 
-from app.application.encoding.canonicalCodec import encode, decode, digest
+from app.encoding.canonicalCodec import encode, decode, digest
 from app.application.planning.service.planningService import PlanBuildFailure
 from app.application.worldData.generators.terrain.planning.preWater.terrainBaseJob import PreWaterTerrainJob
 from app.application.worldData.generators.terrain.landcover.planning import preWaterHillHosts as host_module

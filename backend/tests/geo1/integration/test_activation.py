@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from unittest import TestCase
 from pydantic import ValidationError
 
-from app.application.encoding.canonicalCodec import encode, decode
+from app.encoding.canonicalCodec import encode, decode
 from app.application.planning.providers.planRegistry import PlanDependencyReader
 from app.application.planning.service.planningService import PlanContractFailure
 from app.application.worldData.planning.composition.planProviders import declared_binding

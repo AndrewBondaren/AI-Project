@@ -6,7 +6,7 @@ from hashlib import sha256
 import unittest
 from unittest.mock import patch, create_autospec
 
-from app.application.encoding.canonicalCodec import (
+from app.encoding.canonicalCodec import (
     CanonicalEncodingError, content_digest, decode, digest, encode, merge_manifests,
 )
 from app.application.patch.encoding.coreManifest import PATCH_CORE_SCHEMA
@@ -72,7 +72,7 @@ class CanonicalRequestCodecTests(unittest.TestCase):
         for payload in (bytearray(b"abc"), "abc", True):
             with self.assertRaises(CanonicalEncodingError):
                 content_digest(payload)
-        with patch("app.application.encoding.canonicalCodec.content_digest", return_value=b"digest") as raw:
+        with patch("app.encoding.canonicalCodec.content_digest", return_value=b"digest") as raw:
             self.assertEqual(digest((1, "x"), PATCH_CORE_SCHEMA), b"digest")
             raw.assert_called_once_with(encode((1, "x"), PATCH_CORE_SCHEMA))
         with patch("app.application.worldData.pack.io.tileCodec.content_digest", return_value=b"digest") as raw:

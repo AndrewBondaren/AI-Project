@@ -4,7 +4,7 @@ from hashlib import sha256
 from unittest import TestCase
 from unittest.mock import patch
 
-from app.application.encoding.canonicalCodec import CanonicalEncodingError, encode
+from app.encoding.canonicalCodec import CanonicalEncodingError, encode
 from app.application.worldData.generators.hydrology.encoding import packSchema
 from app.application.worldData.generators.hydrology.encoding.packCodec import (
     decode_root, decode_shard, encode_root, encode_shard,

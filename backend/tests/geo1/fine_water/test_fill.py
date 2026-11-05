@@ -1,7 +1,7 @@
 from copy import replace
 from unittest import TestCase
 
-from app.application.encoding.canonicalCodec import encode, decode
+from app.encoding.canonicalCodec import encode, decode
 from app.application.planning.service.planningService import PlanBuildFailure
 from app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner import WaterBodyPlanner
 from app.application.worldData.generators.terrain.planning.preWater.terrainBasePlanner import PreWaterTerrainPlanner

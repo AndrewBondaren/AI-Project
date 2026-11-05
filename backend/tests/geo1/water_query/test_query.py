@@ -2,7 +2,7 @@ from copy import replace
 from unittest import TestCase
 from unittest.mock import patch
 
-from app.application.encoding.canonicalCodec import encode
+from app.encoding.canonicalCodec import encode
 from app.application.planning.service.planningService import PlanBuildFailure
 from app.application.worldData.generators.hydrology.query.nativeFinalWaterQuery import NativeFinalWaterQuery
 from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_MANIFEST

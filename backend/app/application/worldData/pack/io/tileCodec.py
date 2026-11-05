@@ -7,7 +7,7 @@ import struct
 import orjson
 import zstandard
 
-from app.application.encoding.canonicalCodec import content_digest
+from app.encoding.canonicalCodec import content_digest
 from app.dataModel.worldPack.bake.packBakeDefaults import PackBakeDefaults
 
 PAYLOAD_KIND_WORLD_MAP = 0

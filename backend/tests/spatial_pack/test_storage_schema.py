@@ -7,7 +7,7 @@ from unittest import TestCase
 from unittest.mock import patch
 from typing import TypeAliasType
 
-from app.application.encoding.canonicalCodec import CanonicalEncodingError, decode, encode
+from app.encoding.canonicalCodec import CanonicalEncodingError, decode, encode
 from app.application.worldData.generators.hydrology.encoding import packSchema
 from app.application.worldData.generators.hydrology.planning.assembly.final.publication import NATIVE_FINAL
 from app.application.worldData.generators.hydrology.planning.assembly.nativeRoutesPublication import NATIVE_ROUTES_CONTRACT

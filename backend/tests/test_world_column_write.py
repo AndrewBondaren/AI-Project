@@ -42,11 +42,11 @@ class WorldColumnWriteTests(unittest.TestCase):
         return replace(ResolveContext.for_import(validate_only=True), **kwargs)
 
     def world(self):
-        return World("w1", "World", "2026-10-12", g=2.0, z_min=-700)
+        return World("w1", "World", "2026-10-12", map_subsurface_depth=2, z_min=-700)
 
     def test_scalar_preserves_neighbors_even_invalid_independent_fields(self):
         world = self.world()
-        world.g = -1
+        world.map_subsurface_depth = -1
         world.material_registry = [42]
         before = copy.deepcopy(world)
         self.assertEqual(apply_world_column(world, "terrain_chunk_columns", 64, self.ctx()), frozenset())
@@ -58,8 +58,8 @@ class WorldColumnWriteTests(unittest.TestCase):
         before = copy.deepcopy(world)
         for raw in (None, -1):
             with self.assertRaises(ImportValidationError) as error:
-                apply_world_column(world, "g", raw, self.ctx())
-            self.assertEqual(wire_loc(error.exception.errors[0]), ("g",))
+                apply_world_column(world, "map_subsurface_depth", raw, self.ctx())
+            self.assertEqual(wire_loc(error.exception.errors[0]), ("map_subsurface_depth",))
             self.assertEqual(error.exception.errors[0].schema_id, "SCH-WORLD-TERRAIN-SCALARS")
             self.assertEqual(world, before)
         apply_world_column(world, "z_min", None, self.ctx())
@@ -107,10 +107,10 @@ class WorldColumnWriteTests(unittest.TestCase):
         for key in ("name", "grid_bbox_padding", "missing"):
             with self.assertRaises(ImportValidationError):
                 resolve_world_column(key, 1000, self.ctx())
-        world_slice = replace(slice_for_world_key("g"), facade=False)
-        with patch.dict(WORLD_SLICE_BY_KEY, {"g": world_slice}):
+        world_slice = replace(slice_for_world_key("map_subsurface_depth"), facade=False)
+        with patch.dict(WORLD_SLICE_BY_KEY, {"map_subsurface_depth": world_slice}):
             with self.assertRaises(ImportValidationError):
-                resolve_world_column("g", 2.0, self.ctx())
+                resolve_world_column("map_subsurface_depth", 2, self.ctx())
 
     def test_blob_is_atomic_and_does_not_merge_saved_fields(self):
         world = self.world()
@@ -208,18 +208,18 @@ class WorldColumnWriteTests(unittest.TestCase):
         self.assertNotIn("grid_bbox_padding", WORLD_SLICE_BY_KEY)
 
     def test_invalidation_only_for_supplied_changes_and_unions_tables(self):
-        before = {"fine_cells_per_map_cell": 1000, "g": 1.0}
+        before = {"fine_cells_per_map_cell": 1000, "map_subsurface_depth": 1}
         self.assertEqual(invalidated_world_tables(before, {"fine_cells_per_map_cell": 1000}), frozenset())
-        self.assertEqual(invalidated_world_tables(before, {"g": 2.0}), frozenset())
-        with patch.dict(COLUMN_INVALIDATES, {"g": frozenset({"map_cells", "other"})}):
-            self.assertEqual(invalidated_world_tables(before, {"fine_cells_per_map_cell": 2000, "g": 2}),
+        self.assertEqual(invalidated_world_tables(before, {"map_subsurface_depth": 2}), frozenset())
+        with patch.dict(COLUMN_INVALIDATES, {"map_subsurface_depth": frozenset({"map_cells", "other"})}):
+            self.assertEqual(invalidated_world_tables(before, {"fine_cells_per_map_cell": 2000, "map_subsurface_depth": 2}),
                              frozenset({"map_cells", "other"}))
 
     def test_apply_reports_consequences_after_validation(self):
         world = self.world()
-        with patch.dict(COLUMN_INVALIDATES, {"g": frozenset({"test_table"})}):
-            self.assertEqual(apply_world_column(world, "g", 2.0, self.ctx()), frozenset())
-            self.assertEqual(apply_world_column(world, "g", 3.0, self.ctx()), frozenset({"test_table"}))
+        with patch.dict(COLUMN_INVALIDATES, {"map_subsurface_depth": frozenset({"test_table"})}):
+            self.assertEqual(apply_world_column(world, "map_subsurface_depth", 2, self.ctx()), frozenset())
+            self.assertEqual(apply_world_column(world, "map_subsurface_depth", 3, self.ctx()), frozenset({"test_table"}))
 
 
 class _StubWorldRepo:

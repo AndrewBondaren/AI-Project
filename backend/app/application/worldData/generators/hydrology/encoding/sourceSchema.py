@@ -4,7 +4,7 @@ import hashlib
 import typing
 from enum import Enum
 from pydantic import BaseModel
-from app.application.encoding.canonicalCodec import CanonicalEncodingError, CanonicalCodec
+from app.encoding.canonicalCodec import CanonicalEncodingError, CanonicalCodec
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest, CanonicalTypeKind, RegisteredTypeEntry
 from app.dataModel.registryKey import RegistryKey
 from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope

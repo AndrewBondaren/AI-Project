@@ -193,7 +193,7 @@ class GeoReliefProviderTests(TestCase):
             {"relief": relief, "hydrology_routes": routes})
 
     def test_geo_pre_river_relief_matches_pc_mountain_basin_and_light_geometry(self):
-        from app.application.encoding.canonicalCodec import encode
+        from app.encoding.canonicalCodec import encode
         from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_MANIFEST
         before = {name: encode(envelope, SURFACE_MANIFEST) for name, envelope in self.seam.upstream.items()}
         result = self.relief()
@@ -595,7 +595,7 @@ class GeoCapturedAssemblerTests(TestCase):
         self.assembler = SurfacePlanningAssembler(self.service, self.registry, self.handles)
 
     def test_twelve_phase_order_exact_refs_codec_and_immutable_source(self):
-        from app.application.encoding.canonicalCodec import encode, decode
+        from app.encoding.canonicalCodec import encode, decode
         from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_MANIFEST
         before = self.view.model_dump()
         result = self.assembler.prepare_geo(self.view, wait=Wait())

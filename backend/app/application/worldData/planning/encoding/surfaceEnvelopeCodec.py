@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from pydantic import TypeAdapter
 from app.application.cache.service.cacheService import retained_entry_bytes, validate_immutable
-from app.application.encoding.canonicalCodec import encode, decode
+from app.encoding.canonicalCodec import encode, decode
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest
 from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
 

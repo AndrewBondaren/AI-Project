@@ -24,3 +24,23 @@
 4. Для IO, допущенного до финализации, проверить обратный порядок: закрытие stream предшествует release. Повтор cleanup после reopen должен сохранить общий shard, удерживаемый версией B.
 
 Существующая проба формирует FAILED вручную. При одной SQLite-базе открытый reader под BEGIN IMMEDIATE задерживает запись FAILED. При отдельных БД cleanup ждёт guard, но предварительная проверка статуса оставляет окно до admission. В §15.96 зафиксирован результат 2/2 для этой пробы. Итог повторного запуска во время исследования не подтверждён. [Барьер, checkpoint и release в пробе](../../backend/tests/spatial_pack/test_pin_worker_drain.py#L66)
+## Проверка terminal resume через DAGEngine (2026-11-05)
+
+Focused-тест завершает Pipeline через штатный `DAGEngine.run`, получает ответ `count=5`, проверяет сохранённый `COMPLETED` и закрывает соединение SQLite. Для каждой попытки `resume` тест создаёт новое соединение, store и engine. Lifecycle существующего тестового root использует восстановленное значение `Text.text` как ключ внешнего файла. Удаление файла моделирует потерю доступности данных после release. Pack в тесте не участвует. [Исполняемый тест](../../backend/tests/dag_typing/invocations/test_world_calls.py#L307)
+
+| Состояние файла при reopen | Наблюдение на штатном resume |
+|---|---|
+| Доступен | Restore вызывает `validate_restored(Text(text="count=5"))`. Callback открывает файл и читает `held data`. Только затем caller получает ответ, равный исходному. |
+| Удалён | Тот же callback пытается открыть тот же файл. `FileNotFoundError` оборачивается в `RestoreFailure` кодеком и затем движком. Caller получает исключение, хотя ответ по-прежнему сохранён. |
+
+В обоих случаях checkpoint после вызова равен исходному, включая статус, ревизию и blob. Причина порядка — вызов `CheckpointCodec.restore` внутри `_restore_durable` до ветки `graph.response`. [Caller в DAGEngine](../../backend/app/application/engine/runtime/dagEngine.py#L242) · [Callback в кодеке](../../backend/app/application/engine/runtime/invocations/checkpointCodec.py#L23)
+
+**Уточнение для согласования.** После публикации `finalized` для завершённого execution штатный `resume` обязан вернуть сохранённый ответ после reopen, даже если Pack уже освободил все его pins и связанные данные недоступны. До возврата нельзя запускать восстановление outputs, требующее доступа к этим данным. Проверяемая граница — тот же результат и ноль попыток открыть освобождённые данные. Сегодня второй случай таблицы воспроизводит нарушение предложенной гарантии.
+
+Воспроизведение из `backend`:
+
+```powershell
+../.venv/Scripts/python -B -m unittest -v tests.dag_typing.invocations.test_world_calls.RecoveryTests.test_terminal_resume_requires_data_read_by_output_lifecycle
+```
+
+Результат на Windows — один тест, оба случая прошли (`OK`).

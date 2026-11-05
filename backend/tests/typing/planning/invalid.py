@@ -37,7 +37,7 @@ from app.application.planning.providers.planRegistry import PlanDependencyReader
 from app.application.planning.service.planningService import PlanningService, PlanWaitControl
 from app.dataModel.planning.identity.planKey import PlanSlot
 from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot
-from app.application.encoding.canonicalCodec import decode
+from app.encoding.canonicalCodec import decode
 from app.application.worldData.generators.climate.planning.climatePlanSampler import ClimatePlanSampler
 from app.application.worldData.generators.terrain.planning.terrainPlanProvider import TerrainPlanProvider
 from app.application.worldData.generators.terrain.planning.waterPlacementPlanProvider import WaterPlacementPlanProvider

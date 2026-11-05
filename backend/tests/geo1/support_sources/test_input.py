@@ -2,7 +2,7 @@
 from unittest import TestCase
 
 from app.dataModel.validation.importIssues.wireLocation import WireLocation
-from app.application.encoding.canonicalCodec import encode,decode
+from app.encoding.canonicalCodec import encode,decode
 from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_MANIFEST
 from app.dataModel.materials.enums.materialSubstrateKind import MaterialSubstrateKind as Substrate
 from app.dataModel.materials.materialRegistryEntry import MaterialRegistryEntry

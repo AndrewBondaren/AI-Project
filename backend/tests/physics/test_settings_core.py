@@ -4,7 +4,6 @@ import unittest
 from pydantic import ValidationError
 
 from app.application.physics.settings.capture import build_settings_view, validate_settings_view
-from app.application.physics.settings.legacyImport import normalise_legacy_gravity
 from app.application.physics.settings.prepare import (
     prepare_replace_world_physics_settings, prepare_reset_world_physics_settings,
 )
@@ -93,13 +92,6 @@ class SettingsCoreTests(unittest.TestCase):
             self.assertEqual(result.reason, PhysicsSettingsChangeReason.STALE_SETTINGS)
         with self.assertRaises(ValidationError):
             WorldPhysicsSettingsReset(world_uid="other", expected_ref=current.ref)
-
-    def test_legacy_factor_is_explicit_and_finite(self):
-        for factor, expected in ((1, 9.80665), (0.38, 3.726527), (0, 0.0)):
-            self.assertEqual(normalise_legacy_gravity(factor).gravity_acceleration_m_s2, expected)
-        for invalid in (None, True, "1", -1, float("inf"), 1e308):
-            with self.subTest(invalid=invalid), self.assertRaises(ValidationError):
-                normalise_legacy_gravity(invalid)
 
     def test_damaged_nested_settings_are_rejected_before_defaults_restore(self):
         current = build_settings_view("w", WorldPhysicsSettings(gravity_acceleration_m_s2=0))

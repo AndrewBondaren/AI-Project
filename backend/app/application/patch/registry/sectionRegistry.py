@@ -3,7 +3,7 @@
 from collections.abc import Awaitable, Callable
 from typing import cast
 
-from app.application.encoding.canonicalCodec import merge_manifests
+from app.encoding.canonicalCodec import merge_manifests
 from app.application.patch.encoding.coreManifest import PATCH_CORE_SCHEMA
 from app.application.patch.contracts.sectionHandler import DomainSectionHandler, SectionContract
 from app.application.worldSnapshot.contracts.context import SnapshotApplyContext, SnapshotValidationContext

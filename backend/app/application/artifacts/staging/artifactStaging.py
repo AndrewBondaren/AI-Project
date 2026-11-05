@@ -1,7 +1,7 @@
 """Stage already prepared content through registered typed backends."""
 
 from pydantic import BaseModel, TypeAdapter
-from app.application.encoding.canonicalCodec import content_digest
+from app.encoding.canonicalCodec import content_digest
 from app.application.artifacts.contracts.formatBackend import ArtifactFormatContract
 from app.application.artifacts.contracts.stagingPort import IArtifactStaging
 from app.application.artifacts.contracts.holderPort import IArtifactHolders

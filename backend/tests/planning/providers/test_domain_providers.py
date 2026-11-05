@@ -8,7 +8,7 @@ import unittest
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 from app.application.cache.backends.memoryCache import MemoryCache
-from app.application.encoding.canonicalCodec import CanonicalCodec
+from app.encoding.canonicalCodec import CanonicalCodec
 from app.application.planning.service.planFingerprints import input_fingerprint
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest, RegisteredTypeEntry, CanonicalTypeKind
 from app.application.cache.contracts.cacheBackend import CacheBinding
@@ -180,7 +180,7 @@ class ClimateBaseProviderTests(unittest.TestCase):
         from app.dataModel.climate.planning.climatePoints import ClimatePolePoint
         from app.dataModel.climate.planning.inputs.climateBaseInput import ClimateBaseInput, ManualPoleInput
         from app.dataModel.spatial.grid.gridBBox import GridBBox
-        from app.application.encoding.canonicalCodec import encode, decode
+        from app.encoding.canonicalCodec import encode, decode
         from app.application.planning.service.planFingerprints import cache_item_key
 
         self.Input, self.Plan, self.Manual = ClimateBaseInput, ClimateBasePlan, ManualPoleInput
@@ -305,7 +305,7 @@ class ClimateBaseProviderTests(unittest.TestCase):
         self.assertEqual((middle.system_climate_zone, middle.base_temperature_override, middle.typical_elevation_z), ("temperate", -4, 2))
 
     def test_envelope_codec_round_trip_including_rich_preset_wire_value(self):
-        from app.application.encoding.canonicalCodec import encode, decode
+        from app.encoding.canonicalCodec import encode, decode
         encoded = encode(self.inputs, self.manifest)
         self.assertEqual(decode(encoded, self.Input, self.manifest), self.inputs)
         envelope = self.get()
@@ -364,7 +364,7 @@ class TerrainBaseProviderTests(unittest.TestCase):
     def setUp(self):
         from unittest.mock import Mock
         from app.application.worldData.generators.terrain.planning.terrainPlanProvider import TerrainPlanProvider
-        from app.application.encoding.canonicalCodec import encode, decode
+        from app.encoding.canonicalCodec import encode, decode
         from app.dataModel.planning.contracts.planDependency import PlanDependencyContract
         from app.dataModel.planning.identity.planKey import PlanSlot
         from app.dataModel.spatial.grid.coordinateTypes import SurfaceGridCoord
@@ -530,7 +530,7 @@ class TerrainBaseProviderTests(unittest.TestCase):
         self.assertEqual(self.provider.build.call_count, 1)
 
     def test_payload_and_envelope_round_trip(self):
-        from app.application.encoding.canonicalCodec import encode, decode
+        from app.encoding.canonicalCodec import encode, decode
         first = self.get()
         self.assertEqual(decode(encode(self.inputs, self.manifest), self.Input, self.manifest), self.inputs)
         codec = self.binding.cache_binding.codec
@@ -540,7 +540,7 @@ class TerrainBaseProviderTests(unittest.TestCase):
 class WaterPlacementProviderTests(unittest.TestCase):
     def setUp(self):
         from unittest.mock import Mock
-        from app.application.encoding.canonicalCodec import encode, decode
+        from app.encoding.canonicalCodec import encode, decode
         from app.application.worldData.generators.terrain.planning.waterPlacementPlanProvider import WaterPlacementPlanProvider
         from app.dataModel.planning.contracts.planDependency import PlanDependencyContract
         from app.dataModel.planning.identity.planKey import PlanSlot
@@ -733,7 +733,7 @@ class WaterPlacementProviderTests(unittest.TestCase):
         self.assertEqual(len(record.footprint_cells), 9)
 
     def test_input_envelope_codec_round_trip_and_lake_projection(self):
-        from app.application.encoding.canonicalCodec import encode, decode
+        from app.encoding.canonicalCodec import encode, decode
         lake = self.Lake.model_validate(dict(location_uid="lake", shoreline=[
             dict(x=0, y=-20), dict(x=20, y=-20), dict(x=20, y=0), dict(x=0, y=0)]))
         inputs = self.inputs.model_copy(update={"basins": (), "declared_lakes": (lake,)})
@@ -768,7 +768,7 @@ class WaterPlacementProviderTests(unittest.TestCase):
 class ReliefProviderFixture:
     def setUp(self):
         from unittest.mock import Mock
-        from app.application.encoding.canonicalCodec import encode, decode
+        from app.encoding.canonicalCodec import encode, decode
         from app.application.worldData.generators.terrain.relief.planning.reliefPlanProvider import ReliefPlanProvider
         from app.dataModel.planning.contracts.planDependency import PlanDependencyContract
         from app.dataModel.planning.identity.planKey import PlanSlot
@@ -1026,7 +1026,7 @@ class ReliefTemplateProviderTests(ReliefProviderFixture, unittest.TestCase):
         self.assertEqual(mode_d.diagnostics, ())
 
     def test_range_peaks_spine_sides_saddles_and_codec_round_trip(self):
-        from app.application.encoding.canonicalCodec import encode, decode
+        from app.encoding.canonicalCodec import encode, decode
         range_spec = self.Range.model_validate(dict(spine=[[5, -5], [25, -5]], width_m=12,
             peaks=[self.peak(sides=[]).model_dump(), self.peak(origin_x_m=25, sides=[]).model_dump()],
             peak_spacings_m=[20], saddles=[dict(peak_a_index=0, peak_b_index=1, rise_fraction=0.7)],
@@ -1088,7 +1088,7 @@ class ReliefTemplateProviderTests(ReliefProviderFixture, unittest.TestCase):
 
 class RiverReliefProviderTests(ReliefProviderFixture, unittest.TestCase):
     def setUp(self):
-        from app.application.encoding.canonicalCodec import encode, decode
+        from app.encoding.canonicalCodec import encode, decode
         from app.application.planning.service.planFingerprints import output_fingerprint
         from app.application.worldData.generators.terrain.relief.planning.reliefPlanProvider import RiverReliefPlanProvider
         from app.dataModel.terrain.relief.planning.inputs.reliefPlanInput import RiverReliefInput
@@ -1240,7 +1240,7 @@ if __name__ == "__main__":
 class HydrologyProviderTests(ReliefProviderFixture, unittest.TestCase):
     def setUp(self):
         from unittest.mock import Mock
-        from app.application.encoding.canonicalCodec import encode, decode
+        from app.encoding.canonicalCodec import encode, decode
         from app.application.worldData.generators.hydrology.planning.hydrologyPlanProvider import (
             HydrologyRoutesPlanProvider, HydrologyFinalPlanProvider)
         from app.application.worldData.generators.terrain.relief.planning.reliefPlanProvider import RiverReliefPlanProvider
@@ -1590,7 +1590,7 @@ class HydrologyProviderTests(ReliefProviderFixture, unittest.TestCase):
 class ClimateLocalProviderTests(unittest.TestCase):
     def setUp(self):
         from unittest.mock import Mock
-        from app.application.encoding.canonicalCodec import encode, decode
+        from app.encoding.canonicalCodec import encode, decode
         from app.application.worldData.generators.climate.planning.climatePlanProvider import ClimateLocalPlanProvider
         from app.dataModel.climate.planning.climatePlan import ClimateLocalPlan
         from app.dataModel.climate.planning.climatePoints import ClimateAnchorPoint, AnchorSource
@@ -1756,7 +1756,7 @@ class ClimateLocalProviderTests(unittest.TestCase):
         self.assertEqual(self.get(inputs, base, self.surface({(0, 0): 0})).payload.anchors, legacy.anchors)
 
     def test_cap_diagnostics_cache_clear_codec_and_fresh_single_worker(self):
-        from app.application.encoding.canonicalCodec import encode, decode
+        from app.encoding.canonicalCodec import encode, decode
         from app.application.planning.service.planningService import PlanningService
         heights = {(x, y): (60 if x % 3 == 0 and y % 3 == 0 else 0) for y in range(6) for x in range(6)}
         hydro = self.surface(heights)

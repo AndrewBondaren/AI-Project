@@ -1,6 +1,6 @@
 """The three planning fingerprint formulas; bindings supply only their manifest."""
 
-from app.application.encoding.canonicalCodec import digest
+from app.encoding.canonicalCodec import digest
 from app.dataModel.cache.identity.cacheKey import CacheItemKey
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest
 from app.dataModel.identity.uid import EntityUid

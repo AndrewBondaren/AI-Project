@@ -131,7 +131,6 @@ class World:
     magma_band_thickness:           int | None = None   # 0/null = skip magma band
     closed_planet_grid:             bool = bool_col(default=False)
     elevation_lapse_rate:           float | None = None
-    g:                              float = 1.0
     fine_cells_per_map_cell:        int = FINE_CELLS_PER_MAP_CELL_DEFAULT  # fine cells per coarse map cell, multiples of 1000
     default_passage_height:         int = 2
 

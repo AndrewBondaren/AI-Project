@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import create_autospec
 
 from pydantic import BaseModel, ValidationError
-from app.application.encoding.canonicalCodec import encode as canonical_encode
+from app.encoding.canonicalCodec import encode as canonical_encode
 
 from app.application.patch.contracts.sectionHandler import SectionContract
 from app.application.patch.registry.sectionRegistry import SectionRegistry

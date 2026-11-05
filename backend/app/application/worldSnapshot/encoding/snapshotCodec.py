@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import ClassVar
 
-from app.application.encoding.canonicalCodec import CanonicalEncodingError, decode as canonical_decode, encode as canonical_encode, merge_manifests
+from app.encoding.canonicalCodec import CanonicalEncodingError, decode as canonical_decode, encode as canonical_encode, merge_manifests
 from app.application.worldSnapshot.encoding.coreManifest import SNAPSHOT_CORE_SCHEMA
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest
 from app.dataModel.patch.values import FormatVersion

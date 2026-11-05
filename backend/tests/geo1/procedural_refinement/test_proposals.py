@@ -2,7 +2,7 @@ from copy import replace
 from unittest import TestCase
 from unittest.mock import patch
 
-from app.application.encoding.canonicalCodec import encode, decode, digest
+from app.encoding.canonicalCodec import encode, decode, digest
 from app.application.planning.service.planningService import PlanBuildFailure
 from app.application.worldData.generators.hydrology.rivers.planning.coarseRiverPlanner import CoarseRiverPlanner
 from app.application.worldData.generators.hydrology.rivers.planning.fine.proposals import procedural_requests

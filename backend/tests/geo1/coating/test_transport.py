@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from app.application.encoding.canonicalCodec import encode, decode
+from app.encoding.canonicalCodec import encode, decode
 from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_MANIFEST
 from app.application.worldData.generators.terrain.relief.surfaceCoatingSupport import CoatingPlanProvider
 from app.dataModel.terrain.relief.surfaceCoating.surfaceCoatingFacts import SurfaceSupportPlan

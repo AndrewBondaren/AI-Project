@@ -7,7 +7,7 @@ from unittest import TestCase
 
 from pydantic import BaseModel, ValidationError
 
-from app.application.encoding.canonicalCodec import decode, encode
+from app.encoding.canonicalCodec import decode, encode
 from app.application.worldData.planning.contracts.surfacePlanningView import GeoSurfacePlanningView
 from app.application.worldData.planning.contracts.surfacePlanBundle import GeoSurfacePlanBundle
 from app.application.worldData.planning.encoding.surfaceEnvelopeCodec import SurfaceEnvelopeCodec

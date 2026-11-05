@@ -8,7 +8,7 @@ from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.hydrology.pack.root import HydrologyPackRoot, HydrologyShardRef
 from app.dataModel.hydrology.pack.shard import HydrologyPackShard
 from app.dataModel.encoding.decodeLimits import CollectionLimit, DecodeLimits, RecordLimits
-from app.application.encoding.canonicalCodec import CanonicalEncodingError, encode
+from app.encoding.canonicalCodec import CanonicalEncodingError, encode
 from app.application.worldData.generators.hydrology.encoding.packSchema import OPEN_WATER_PACK_SCHEMA_V1 as MANIFEST
 from app.dataModel.planning.identity.planRef import PlanRef
 from tests.spatial_pack.test_storage_schema import records

@@ -6,7 +6,7 @@ from hashlib import sha256
 
 from pydantic import BaseModel, ValidationError
 
-from app.application.encoding.canonicalCodec import CanonicalEncodingError
+from app.encoding.canonicalCodec import CanonicalEncodingError
 from app.application.worldData.generators.hydrology.encoding.sourceSchema import (
     OPEN_WATER_SOURCE_SCHEMA_V1, require_source_diagnostics_v1, require_source_schema_v1,
 )

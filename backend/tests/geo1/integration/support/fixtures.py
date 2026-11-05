@@ -2,7 +2,7 @@
 
 from app.application.cache.backends.memoryCache import MemoryCache
 from app.application.cache.service.cacheService import CacheService
-from app.application.encoding.canonicalCodec import digest
+from app.encoding.canonicalCodec import digest
 from app.application.planning.providers.planRegistry import PlanRegistry, PlanDependencyReader
 from app.application.planning.service.planFingerprints import output_fingerprint
 from app.application.planning.service.planningService import PlanningService

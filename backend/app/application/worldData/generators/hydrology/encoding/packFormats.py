@@ -1,6 +1,6 @@
 """Pure bytes contracts for open-water artifacts."""
 from app.application.artifacts.contracts.formatBackend import ArtifactFormatContract
-from app.application.encoding.canonicalCodec import CanonicalEncodingError
+from app.encoding.canonicalCodec import CanonicalEncodingError
 from app.dataModel.artifacts.references import ArtifactKind, FormatVersion
 from app.dataModel.hydrology.pack.profile import FORMAT_VERSION, ROOT_V1, SHARD_V1, OpenWaterArtifactV1
 

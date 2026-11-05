@@ -2,7 +2,7 @@ from copy import replace
 from unittest import TestCase
 from unittest.mock import patch
 
-from app.application.encoding.canonicalCodec import encode
+from app.encoding.canonicalCodec import encode
 from app.application.worldData.generators.terrain.planning.preWater.terrainBasePlanner import PreWaterTerrainPlanner
 from app.application.worldData.generators.terrain.planning.preWater.terrainBaseJob import PreWaterTerrainJob
 from app.application.worldData.generators.terrain.planning.preWater.prepared import materialization as window_job

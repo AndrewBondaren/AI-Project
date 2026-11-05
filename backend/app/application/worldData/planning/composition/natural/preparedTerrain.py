@@ -2,7 +2,7 @@
 from pydantic import TypeAdapter
 
 from app.application.cache.contracts.cacheBackend import CacheBinding
-from app.application.encoding.canonicalCodec import encode
+from app.encoding.canonicalCodec import encode
 from app.application.planning.providers.planProvider import RegisteredPlanContract
 from app.application.planning.providers.planRegistry import PlanRegistry
 from app.application.planning.service.planFingerprints import input_fingerprint

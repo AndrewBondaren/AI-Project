@@ -7,7 +7,7 @@ from typing import assert_type
 from app.application.cache.backends.memoryCache import MemoryCache
 from app.application.cache.contracts.cacheBackend import CacheBackend, CacheBinding
 from app.application.cache.service.cacheService import CacheService
-from app.application.encoding.canonicalCodec import decode
+from app.encoding.canonicalCodec import decode
 from app.application.planning.providers.planProvider import PlanProvider, RegisteredPlanContract
 from app.application.planning.providers.planRegistry import PlanDependencyReader, PlanRegistry
 from app.application.planning.service.planningService import PlanWaitControl, PlanningService

@@ -248,7 +248,7 @@ class SurfacePlanSlotTests(unittest.TestCase):
                 SurfacePlanSlot(value)
 
     def test_boundary_preserves_string_encoding_keys_and_fingerprints(self):
-        from app.application.encoding.canonicalCodec import CanonicalCodec
+        from app.encoding.canonicalCodec import CanonicalCodec
         from app.application.planning.service.planFingerprints import (
             input_fingerprint, output_fingerprint, cache_item_key,
         )

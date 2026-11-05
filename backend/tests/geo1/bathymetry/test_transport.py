@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from app.application.encoding.canonicalCodec import encode,decode
+from app.encoding.canonicalCodec import encode,decode
 from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_MANIFEST
 from app.dataModel.terrain.relief.bathymetry.basinSpec import BasinSpec
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind as Strategy

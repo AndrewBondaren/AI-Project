@@ -7,7 +7,7 @@ import unittest
 
 from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
-from app.application.encoding.canonicalCodec import CanonicalEncodingError, decode, digest, encode
+from app.encoding.canonicalCodec import CanonicalEncodingError, decode, digest, encode
 from app.application.planning.service.planFingerprints import cache_item_key, input_fingerprint, output_fingerprint
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest, CanonicalTypeKind, RegisteredTypeEntry
 from app.dataModel.planning.contracts.planContract import PlanContractMetadata

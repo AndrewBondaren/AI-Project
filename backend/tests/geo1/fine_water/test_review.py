@@ -2,7 +2,7 @@ from copy import replace
 from unittest import TestCase
 from unittest.mock import patch
 
-from app.application.encoding.canonicalCodec import encode
+from app.encoding.canonicalCodec import encode
 from app.application.planning.service.planningService import PlanBuildFailure
 from app.application.planning.service.planFingerprints import output_fingerprint
 from app.application.worldData.generators.hydrology.water.planning.waterBodyPlanner import WaterBodyPlanner

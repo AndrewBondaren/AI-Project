@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import ClassVar
 from pydantic import TypeAdapter
 
-from app.application.encoding.canonicalCodec import (
+from app.encoding.canonicalCodec import (
     CanonicalEncodingError, content_digest, decode as canonical_decode, encode as canonical_encode,
 )
 from app.application.patch.registry.sectionRegistry import SectionRegistry

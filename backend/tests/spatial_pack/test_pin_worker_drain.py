@@ -24,7 +24,13 @@ class PinWorkerDrainTests(IsolatedAsyncioTestCase):
     async def test_independent_checkpoint_can_commit_during_read(self):
         await self.exercise(shared=False)
 
-    async def exercise(self, *, shared):
+    async def test_guarded_admission_revocation_first_opens_zero_files(self):
+        await self.exercise(shared=True, guarded_admission=True, revoke_first=True)
+
+    async def test_guarded_admission_read_first_closes_before_release(self):
+        await self.exercise(shared=True, guarded_admission=True)
+
+    async def exercise(self, *, shared, guarded_admission=False, revoke_first=False):
         async with AsyncExitStack() as stack:
             pack = await stack.enter_async_context(live_database())
             competitor = await stack.enter_async_context(live_database(pack[0].path, seed=False))
@@ -51,10 +57,15 @@ class PinWorkerDrainTests(IsolatedAsyncioTestCase):
                 await f.holders.release(artifact, OperationHolder(lease=lease))
 
             entered, finish, cleanup_attempt = threading.Event(), threading.Event(), threading.Event()
+            prechecked, continue_to_guard = asyncio.Event(), asyncio.Event()
             opened = []
+            open_calls = []
+            paths = {f.backend._path(ref), f.backend._path(next_ref)}
             opens = Path.open
 
             def controlled_open(path, *args, **kwargs):
+                if path in paths:
+                    open_calls.append(path)
                 stream = opens(path, *args, **kwargs)
                 if path == f.backend._path(ref):
                     opened.append(stream)
@@ -67,9 +78,19 @@ class PinWorkerDrainTests(IsolatedAsyncioTestCase):
             async def read_if_live(artifact):
                 if (await store.load(execution)).status == InvocationStatus.FAILED:
                     raise ValueError("execution closed")
+                if revoke_first:
+                    prechecked.set()
+                    await continue_to_guard.wait()
                 async with f.catalog.guard(artifact):
                     if not await f.holders.is_held(artifact, holder):
                         raise ValueError("missing hold")
+                    if guarded_admission:
+                        scopes = f.catalog._scopes
+                        async with scopes.read_scope() as scope:
+                            state = await scopes.access.one(scope, "SELECT status FROM dag_executions WHERE execution_id=?",
+                                                           (execution,))
+                        if state is None or state["status"] == InvocationStatus.FAILED.value:
+                            raise ValueError("revoked inside guard")
                     return await f.backend.read_verified(artifact, max_bytes=artifact.nbytes)
 
             async def cleanup():
@@ -82,6 +103,23 @@ class PinWorkerDrainTests(IsolatedAsyncioTestCase):
                 await store.checkpoint(claim, 0, graph.checkpoint_status(), graph.model_dump_json().encode())
 
             with patch.object(Path, "open", controlled_open):
+                if revoke_first:
+                    async def stale_worker():
+                        with self.assertRaisesRegex(ValueError, "revoked inside guard"):
+                            await read_if_live(ref)
+
+                    async with asyncio.TaskGroup() as tasks:
+                        tasks.create_task(stale_worker())
+                        try:
+                            await asyncio.wait_for(prechecked.wait(), 5)
+                            await terminal()
+                            self.assertEqual((await store.load(execution)).status, InvocationStatus.FAILED)
+                            self.assertTrue(await observer.holders.is_held(ref, holder))
+                        finally:
+                            finish.set()
+                            continue_to_guard.set()
+                    self.assertEqual(open_calls, [])
+                    return
                 async with asyncio.TaskGroup() as tasks:
                     first = tasks.create_task(read_if_live(ref))
                     try:
@@ -106,6 +144,7 @@ class PinWorkerDrainTests(IsolatedAsyncioTestCase):
                         finish.set()
             self.assertEqual(first.result(), b"first")
             self.assertTrue(opened[0].closed)
+            self.assertEqual(open_calls, [f.backend._path(ref)])
             if shared:
                 await terminal()
                 with self.assertRaisesRegex(ValueError, "execution closed"):

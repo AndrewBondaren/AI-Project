@@ -39,6 +39,14 @@ def normalize_world(data: dict[str, Any], *, partial: bool = False,
     """Normalize ``worlds`` wire dict for import or CRUD write."""
     out = dict(data)
     ctx = ctx if ctx is not None else ResolveContext(mode=ResolveMode.IMPORT, partial=partial)
+    if "g" in out:
+        issue = WireShapeIssue(
+            location=ctx.location.child("g"),
+            message="g was removed; Physics settings use gravity_acceleration_m_s2 in SI",
+            code=JsonValidationCode.REMOVED_FROM_WIRE,
+        )
+        report_issues(ctx, [issue])
+        raise ImportValidationError([issue])
     if "map_cell_size_m" in out:
         issue = WireShapeIssue(
             location=ctx.location.child("map_cell_size_m"),

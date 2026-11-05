@@ -6,7 +6,7 @@ from typing import TypeAliasType
 from unittest import TestCase
 from unittest.mock import patch
 
-from app.application.encoding.canonicalCodec import CanonicalEncodingError, encode, decode
+from app.encoding.canonicalCodec import CanonicalEncodingError, encode, decode
 from app.application.planning.service.planFingerprints import output_fingerprint
 from app.application.worldData.generators.hydrology.encoding import sourceSchema as schema
 from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope

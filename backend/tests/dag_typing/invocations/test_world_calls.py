@@ -2,6 +2,7 @@ import asyncio
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Never
@@ -19,7 +20,7 @@ from app.application.engine.repair.repairMode import RepairMode
 from app.application.engine.taskType import TaskType
 from app.application.engine.contracts.invocation.callTarget import CallTarget
 from app.application.engine.contracts.invocation.continuationContract import ContinuationContract
-from app.application.engine.contracts.invocation.executionStore import OwnershipConflict
+from app.application.engine.contracts.invocation.executionStore import OwnershipConflict, RestoreFailure
 from app.application.engine.contracts.invocation.nodeStep import Call, CallGroup, CallRequest, Complete
 from app.application.engine.contracts.invocation.resumeEvent import CallCancelled, CallFailure, CallSuccess
 from app.application.engine.contracts.nodeContract import NodeContract
@@ -184,7 +185,7 @@ class Merge(Source):
 
 
 def runtime(entry=Pipeline, store=None, transform=Transform, retry_policy=None, diamond=False, counter=CountCaller, lease_seconds=300,
-            interaction=None, counter_wait=None):
+            interaction=None, counter_wait=None, entry_lifecycle=None):
     registry, bindings = NodeRegistry(), GraphBindings()
     if diamond:
         for cls, deps in ((Source, ()), (Left, (Source.id,)), (Right, (Source.id,)), (Merge, (Left.id, Right.id))):
@@ -201,7 +202,8 @@ def runtime(entry=Pipeline, store=None, transform=Transform, retry_policy=None, 
         contract = NodeContract(declaration.input_type, declaration.output_type, declaration.contract_id,
                                 declaration.version, (), calls=calls, continuation=continuation, error_types=declaration.error_types,
                                 retry_policy=retry_policy if cls is transform else None,
-                                input_wait=counter_wait if cls is counter else None)
+                                input_wait=counter_wait if cls is counter else None,
+                                lifecycle=entry_lifecycle if cls is entry else None)
         register = registry.register_resumable if calls else registry.register_python
         register(cls, FakeExecutor, contract)
         bindings.nodes[cls.id] = cls(deps=(Merge.id,)) if diamond and cls is transform else cls()
@@ -302,6 +304,55 @@ class FailOnceTransform(Transform):
 
 
 class RecoveryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_terminal_resume_requires_data_read_by_output_lifecycle(self):
+        schema = (Path(__file__).resolve().parents[3] / "app/db/migrations/0001_initial.sql").read_text("utf-8")
+        execution = ExecutionId("terminal-resume")
+        options = LLMExecutionOptions(player_message="", language="ru", repair_iterations=0,
+                                      repair_mode=RepairMode.MAXIMUM)
+        events = []
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "execution.sqlite"
+            # The restored output is the lookup key for an independently retained payload.
+            payload = Path(directory) / "count=5"
+            payload.write_bytes(b"held data")
+
+            class ReadRestoredPayload:
+                async def validate_restored(self, output: Text):
+                    events.append(("open", output.text))
+                    data = (Path(directory) / output.text).read_bytes()
+                    events.append(("read", data))
+
+            with closing(sqlite3.connect(db_path)) as db:
+                db.executescript(schema)
+                store = SQLiteExecutionStore(db)
+                result = await runtime(store=store, entry_lifecycle=ReadRestoredPayload()).run(
+                    execution, TaskType.INTENT_DETECTION, max_passes=1, options=options)
+                saved = await store.load(execution)
+                self.assertEqual(saved.status.value, "COMPLETED")
+                self.assertEqual(result.data, Text(text="count=5"))
+
+            for available in (True, False):
+                with self.subTest(available=available), closing(sqlite3.connect(db_path)) as db:
+                    if not available:
+                        payload.unlink()
+                    store = SQLiteExecutionStore(db)
+                    engine = runtime(store=store, entry_lifecycle=ReadRestoredPayload())
+                    events.clear()
+                    events.append("resume")
+                    if available:
+                        restored = await engine.resume(execution, max_passes=1, options=options)
+                        events.append("returned")
+                        self.assertEqual(restored, result)
+                        self.assertEqual(events, ["resume", ("open", "count=5"), ("read", b"held data"), "returned"])
+                    else:
+                        with self.assertRaises(RestoreFailure) as raised:
+                            await engine.resume(execution, max_passes=1, options=options)
+                        cause = raised.exception.__cause__
+                        self.assertIsInstance(cause, RestoreFailure)
+                        self.assertIsInstance(cause.__cause__, FileNotFoundError)
+                        self.assertEqual(events, ["resume", ("open", "count=5")])
+                    self.assertEqual(await store.load(execution), saved)
+
     async def test_prior_phase_output_is_bound_to_post_root(self):
         from app.dataModel.engine.dag.executionPhase import ExecutionPhase
         from app.application.engine.runtime.invocations.memoryExecutionStore import MemoryExecutionStore

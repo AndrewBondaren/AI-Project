@@ -1,7 +1,7 @@
 """Caller-owned typed rows and a membership-scoped full relief template."""
 from app.application.templateLibrary.templateContracts import ReliefTemplateSnapshot, TemplateEntry
 from app.application.worldData.planning.composition.support.surfaceSupportCapture import SurfaceSupportCapture
-from app.application.encoding.canonicalCodec import digest
+from app.encoding.canonicalCodec import digest
 from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_MANIFEST
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.terrain.relief.enums import ReliefContext, ReliefSideKind

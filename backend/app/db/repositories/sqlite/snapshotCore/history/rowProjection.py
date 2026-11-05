@@ -5,7 +5,7 @@ from typing import Any
 
 from pydantic import TypeAdapter
 
-from app.application.encoding.canonicalCodec import content_digest
+from app.encoding.canonicalCodec import content_digest
 from app.application.publication.errors import PublicationInfrastructureError
 from app.application.worldSnapshot.encoding.snapshotCodec import SnapshotEnvelopeCodec
 from app.dataModel.patch.values import FormatVersion

@@ -94,8 +94,16 @@ class GridSettingsTests(unittest.TestCase):
         with self.assertRaises(ImportValidationError):
             resolve_world_column("map_cell_size_m", 2000, ResolveContext())
 
+    def test_removed_gravity_factor_is_rejected_without_conversion(self):
+        for partial in (False, True):
+            with self.subTest(partial=partial), self.assertRaises(ImportValidationError) as error:
+                normalize_world({"g": 1.0}, partial=partial)
+            self.assertEqual(wire_loc(error.exception.errors[0]), ("g",))
+        with self.assertRaises(ImportValidationError):
+            resolve_world_column("g", 1.0, ResolveContext())
+
     def test_scoped_change_isolated_and_reports_only_actual_invalidation(self):
-        world = World(**WIRE, material_registry=[42], g=-1)
+        world = World(**WIRE, material_registry=[42], map_subsurface_depth=-1)
         before = deepcopy(world)
         self.assertEqual(apply_world_column(world, KEY, 1000, ResolveContext()), frozenset())
         self.assertEqual(apply_world_column(world, KEY, 2000, ResolveContext()), frozenset({"map_cells"}))

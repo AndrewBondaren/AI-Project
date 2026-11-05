@@ -7,7 +7,7 @@ from typing import Annotated, Literal, NewType, TypeAliasType, Union, get_args, 
 
 from pydantic import BaseModel
 
-from app.application.encoding.canonicalCodec import CanonicalCodec, CanonicalEncodingError, _decode_scalar, encode
+from app.encoding.canonicalCodec import CanonicalCodec, CanonicalEncodingError, _decode_scalar, encode
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest, CanonicalTypeKind
 from app.dataModel.encoding.decodeLimits import DecodeLimits
 

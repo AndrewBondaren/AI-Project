@@ -4,7 +4,7 @@ from collections.abc import Sequence
 
 from pydantic import BaseModel, TypeAdapter
 
-from app.application.encoding.canonicalCodec import digest
+from app.encoding.canonicalCodec import digest
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.jsonValidation.worldSlices import resolve_world_slice
 from app.application.worldData.generators.climate.anchorCollect import collect_manual_anchors, collect_admin_anchors

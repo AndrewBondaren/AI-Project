@@ -1,6 +1,6 @@
 """Canonical open-water V1 root and shard codecs for in-memory artifacts."""
 from app.application.encoding.boundedCanonicalDecode import decode_bounded, validate_bounded
-from app.application.encoding.canonicalCodec import CanonicalEncodingError, encode
+from app.encoding.canonicalCodec import CanonicalEncodingError, encode
 from app.application.worldData.generators.hydrology.encoding import packSchema
 from app.application.worldData.generators.hydrology.encoding.packFormats import require_v1
 from app.dataModel.hydrology.pack.root import HydrologyPackRoot

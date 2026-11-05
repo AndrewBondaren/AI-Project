@@ -4,7 +4,7 @@ from unittest import TestCase
 
 from pydantic import TypeAdapter, ValidationError
 
-from app.application.encoding.canonicalCodec import encode, decode
+from app.encoding.canonicalCodec import encode, decode
 from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.types import ImportValidationError, import_validation_http_detail
 from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_MANIFEST

@@ -1,6 +1,6 @@
 """Pure bytes/checksum verification before decoding."""
 
-from app.application.encoding.canonicalCodec import content_digest
+from app.encoding.canonicalCodec import content_digest
 from app.application.publication.errors import PublicationInfrastructureError
 from app.dataModel.validation.diagnostics.runtimeIssueContext import RevisionHex
 from app.db.repositories.sqlite.shared.validation.rowValues import _HASH

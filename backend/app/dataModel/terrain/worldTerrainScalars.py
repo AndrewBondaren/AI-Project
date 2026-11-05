@@ -50,7 +50,6 @@ class WorldTerrainScalars(BaseModel):
     # Pydantic падает на bound. Плюс: отрицательные значения не режутся на model_validate — долг;
     # при необходимости — import strict (GV-3) или проверка в resolved_*.
     elevation_lapse_rate: DefaultWhenMissing[float | None] = None
-    g: DefaultWhenMissing[float] = constrained_field(default=1.0, greater=0.0)
     closed_planet_grid: DefaultWhenMissing[bool] = False
     world_topology_mode: DefaultEnumWhenMissing[WorldTopologyMode] = WorldTopologyMode.WRAPPED
     magma_band_thickness: DefaultWhenMissing[int | None] = None  # см. elevation_lapse_rate

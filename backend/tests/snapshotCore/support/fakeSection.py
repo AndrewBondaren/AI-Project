@@ -1,7 +1,7 @@
 """Test-only domain contracts; never registered in production."""
 
 from pydantic import BaseModel, ConfigDict
-from app.application.encoding.canonicalCodec import CanonicalEncodingError, encode, decode, merge_manifests
+from app.encoding.canonicalCodec import CanonicalEncodingError, encode, decode, merge_manifests
 from app.application.patch.encoding.coreManifest import PATCH_CORE_SCHEMA
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest, RegisteredTypeEntry, CanonicalTypeKind
 from app.application.patch.contracts.sectionHandler import DomainSectionHandler, SectionContract

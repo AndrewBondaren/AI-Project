@@ -1625,8 +1625,7 @@ temperature_base = zone.base_temperature
   "z_max":                 8849,       -- в единицах worlds.measurement_system (метры или футы); Эверест = 8849м
   "z_min":               -11000,       -- минимальная точка; отрицательный (Марианская впадина = -11000м)
   "elevation_lapse_rate":    0.65,     -- снижение температуры на 100м подъёма (°C); всегда в метрах
-  "default_climate_zone": "temperate", -- NOT NULL; фолбек resolve_climate() когда нет climate_zone у локации и нет родителя; ref → worlds.climate_zone_registry
-  "g":                       1.0       -- гравитация; 1.0 = Земля; 0.38 = Марс; 0.0 = невесомость; влияет на падение solid и урон от падения
+  "default_climate_zone": "temperate"  -- NOT NULL; фолбек resolve_climate() когда нет climate_zone у локации и нет родителя; ref → worlds.climate_zone_registry
 }
 ```
 

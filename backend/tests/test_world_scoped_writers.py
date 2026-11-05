@@ -19,7 +19,7 @@ from app.db.repositories.iWorldRepository import IWorldRepository
 
 class ScopedWriterTests(unittest.IsolatedAsyncioTestCase):
     def world_repo(self):
-        world = World("w1", "World", "2026-10-16", material_registry=[42], g=-1)
+        world = World("w1", "World", "2026-10-16", material_registry=[42], map_subsurface_depth=-1)
         repo = AsyncMock(spec=IWorldRepository)
         repo.get_by_id.return_value = world
         return world, repo

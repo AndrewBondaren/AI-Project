@@ -2,7 +2,7 @@ from copy import replace
 
 from app.application.worldData.generators.terrain.relief.surfaceCoatingSupport import SurfaceSupportDependencies
 from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_MANIFEST
-from app.application.encoding.canonicalCodec import digest
+from app.encoding.canonicalCodec import digest
 from app.application.planning.service.planFingerprints import output_fingerprint
 from app.dataModel.climate.climatePoleBlendDefaults import CLIMATE_POLE_BLEND
 from app.dataModel.climate.enums.climateZone import ClimateZoneProfileData

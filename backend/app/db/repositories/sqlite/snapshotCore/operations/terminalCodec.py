@@ -1,7 +1,7 @@
 """Pure terminal wire/row projection; no storage access."""
 
 from pydantic import TypeAdapter
-from app.application.encoding.canonicalCodec import content_digest, encode, decode, merge_manifests
+from app.encoding.canonicalCodec import content_digest, encode, decode, merge_manifests
 from app.application.publication.errors import PublicationInfrastructureError
 from app.application.worldSnapshot.encoding.coreManifest import SNAPSHOT_CORE_SCHEMA
 from app.dataModel.artifacts.lifecycle.operation.record import OperationCancelled
