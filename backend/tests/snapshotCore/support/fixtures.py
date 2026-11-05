@@ -196,7 +196,7 @@ async def live_database(path=None, seed=True):
     from app.db.repositories.sqlite.shared.transactions.transactionDriver import SqliteTransactionDriver
     from app.db.repositories.sqlite.shared.access.scopedAccess import ScopedSqliteAccess
     workspace = Path(__file__).resolve().parents[4]
-    root = (workspace / "backend/.tmp_snapshot_core").resolve()
+    root = (workspace / "backend/tests/.tmp_snapshot_core").resolve()
     assert root.is_relative_to(workspace)
     root.mkdir(exist_ok=True)
     temporary = tempfile.TemporaryDirectory(dir=root) if path is None else None

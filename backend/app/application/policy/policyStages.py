@@ -4,22 +4,29 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Generic, TypeVar
 
-from app.application.policy.policyRead import ConditionResult, PolicyReader, issue
+from app.application.policy.policyRead import ConditionResult, PolicyReader
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.policy.policyEnums import PolicyIssueReason, PolicyStage, PolicySupportState
 from app.dataModel.policy.policyRules import (
     DisableEffect, PolicyRule, RequireSupportEffect, SelectBehaviorEffect, SelectPriorityDefaultEffect,
 )
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.dataModel.policy.policyTypeError import PolicyCause, PolicySupportIssue, SupportFailureReason
 
 B = TypeVar("B", bound=Enum)
 R = TypeVar("R", bound=Enum)
 
 
+_SUPPORT_FAILURES: dict[PolicySupportState, SupportFailureReason] = {
+    PolicySupportState.MISSING: PolicyIssueReason.MISSING_SUPPORT,
+    PolicySupportState.FAILED: PolicyIssueReason.FAILED_SUPPORT,
+    PolicySupportState.CYCLE: PolicyIssueReason.DEPENDENCY_CYCLE,
+}
+
+
 @dataclass(frozen=True)
 class PolicyProblem:
     reason: PolicyIssueReason
-    issues: tuple[FieldPathError, ...]
+    issues: tuple[PolicyCause, ...]
 
 
 @dataclass(frozen=True)
@@ -67,11 +74,9 @@ def evaluate_stage(rules: tuple[PolicyRule[B, R], ...], stage: PolicyStage,
             elif state is PolicySupportState.DISABLED:
                 disabled.add(uid)
             elif state is not PolicySupportState.ACCEPTED:
-                reason = {PolicySupportState.MISSING: PolicyIssueReason.MISSING_SUPPORT,
-                          PolicySupportState.FAILED: PolicyIssueReason.FAILED_SUPPORT,
-                          PolicySupportState.CYCLE: PolicyIssueReason.DEPENDENCY_CYCLE}[state]
+                reason = _SUPPORT_FAILURES[state]
                 details = support.issues if support and support.issues else (
-                    issue(reason, ("supports", uid), f"required support is {state.value}"),)
+                    PolicySupportIssue(code=reason, support_uid=uid, message=f"required support is {state.value}"),)
                 problems.append(PolicyProblem(reason, details))
     return StageResult(tuple(matches), tuple(sorted(waiting)), tuple(problems), tuple(sorted(disabled)))
 

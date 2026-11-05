@@ -25,6 +25,7 @@ from app.dataModel.spatial.grid.gridSettings import SurfaceGridSettings
 from app.dataModel.spatial.regionShape import BboxShape
 from app.dataModel.topology.worldBounds import WorldBounds
 from app.dataModel.topology.worldTopology import WorldTopology
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
 from tests.geo1.integration.support.pipeline import view, bundle, rebuild, placement_plan
 from tests.geo1.placement_policy.fixtures import coastline
@@ -44,7 +45,15 @@ class SurfaceContractTests(TestCase):
             if kind in seen:
                 return
             seen.add(kind)
-            if isinstance(kind, TypeAliasType):
+            if isinstance(kind, type) and issubclass(kind, FieldPathError) and (
+                    kind is FieldPathError or kind.__pydantic_generic_metadata__["origin"] is FieldPathError):
+                # C0-9 carriers have no instances on the wire. Traverse their concrete records.
+                concrete = [owner for owner in registered if issubclass(owner, FieldPathError)
+                            and owner is not FieldPathError and owner.__pydantic_generic_metadata__["origin"] is None]
+                self.assertTrue(concrete)
+                for owner in concrete:
+                    visit(owner)
+            elif isinstance(kind, TypeAliasType):
                 visit(kind.__value__)
             elif isinstance(kind, type) and kind not in (Enum, StrEnum) and (
                     issubclass(kind, (BaseModel, Enum)) or is_dataclass(kind)):

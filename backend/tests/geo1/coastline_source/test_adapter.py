@@ -43,7 +43,7 @@ class CoastlineSourceAdapterTests(TestCase):
                 self.assertEqual(result.pre_hydrology_ref, result.constraints.pre_hydrology_ref)
                 self.assertEqual(result.topology, topology)
                 self.assertEqual(result.strategy, strategy)
-                stale = window.ref.model_copy(update={"output_fingerprint": "0" * 32})
+                stale = window.ref.model_copy(update={"output_fingerprint": b"0" * 32})
                 bad = result.constraints.model_copy(update={"pre_hydrology_ref": stale})
                 with self.assertRaises(ValueError):
                     type(result).model_validate(result.model_copy(update={"constraints": bad}))
@@ -66,7 +66,7 @@ class CoastlineSourceAdapterTests(TestCase):
             with self.assertRaises(PlanBuildFailure) as caught:
                 CoastlineWaterSourceAdapter().prepare_native(**args)
         geometry.assert_not_called()
-        self.assertEqual([(issue.path, issue.code) for issue in caught.exception.issues], [
+        self.assertEqual([(issue.diagnostic_path(), issue.code) for issue in caught.exception.issues], [
             (("water_source", value.source.location_uid, "admission", "decision", "behavior"),
              "WATER_DESIGN_INVALID_PREPARATION_INPUT")])
 
@@ -82,7 +82,7 @@ class CoastlineSourceAdapterTests(TestCase):
         with patch.object(CoastlineConstraintPreparer, "prepare_native", side_effect=AssertionError("geometry")):
             with self.assertRaises(PlanBuildFailure) as caught:
                 CoastlineWaterSourceAdapter().prepare_native(**args)
-        self.assertEqual([issue.path for issue in caught.exception.issues],
+        self.assertEqual([issue.diagnostic_path() for issue in caught.exception.issues],
                          [("water_source", value.source.location_uid, "field_policy", field)
                           for field in ("strategy", "seed_root", "topology")])
         self.assertEqual([issue.code for issue in caught.exception.issues],
@@ -103,17 +103,29 @@ class CoastlineSourceAdapterTests(TestCase):
                 CoastlineWaterSourceAdapter().prepare_native(**(args | {
                     "budget": value.budget.model_copy(update={"source_uid": "other"}),
                     "region_coverage": value.region_coverage.model_copy(update={"region_uid": "other"}),
-                    "expected_window": window.ref.model_copy(update={"output_fingerprint": "0" * 32}),
+                    "expected_window": window.ref.model_copy(update={"output_fingerprint": b"0" * 32}),
                     "metadata": value.metadata.model_copy(update={"source_kind": WaterDesignSourceKind.LAKE})}))
-            self.assertEqual([(i.path, i.code) for i in joined.exception.issues],
+            self.assertEqual([(i.diagnostic_path(), i.code) for i in joined.exception.issues],
                              [(prefix + path, "WATER_DESIGN_INVALID_PREPARATION_INPUT") for path in (
-                                 ("expected_window",), ("metadata", "source_kind"), ("budget", "source_uid"),
+                                 ("geometry_request","pre_hydrology","ref"), ("metadata", "source_kind"), ("budget", "source_uid"),
                                  ("region_coverage", "region_uid"))])
+            # Independent upstream and context causes at one displayed path both survive.
+            from app.dataModel.terrain.designedWater.waterDesignTypeError import WaterDesignTypeError
+            other = WaterDesignTypeError.at(type(value.metadata), ("source_kind",), "upstream refusal",
+                operation="water_source", source_uid=value.source.location_uid, prefix=("metadata",))
+            with patch(TARGET + "._ready_mode", side_effect=PlanBuildFailure((other,))):
+                with self.assertRaises(PlanBuildFailure) as same_path:
+                    CoastlineWaterSourceAdapter().prepare_native(**(args | {
+                        "metadata": value.metadata.model_copy(update={"source_kind": WaterDesignSourceKind.LAKE})}))
+            first, second = same_path.exception.issues
+            self.assertEqual(first.diagnostic_path(), second.diagnostic_path())
+            self.assertNotEqual(first.path.root, second.path.root)
+            self.assertNotEqual(first.message, second.message)
             with self.assertRaises(PlanBuildFailure) as caught:
                 CoastlineWaterSourceAdapter().prepare_native(**(args | {
                     "metadata": value.metadata.model_copy(update={"default_depth": 0}),
                     "budget": value.budget.model_copy(update={"requested_fine2": -1})}))
-            self.assertEqual([(i.path, i.code) for i in caught.exception.issues],
+            self.assertEqual([(i.diagnostic_path(), i.code) for i in caught.exception.issues],
                              [(prefix + path, "WATER_DESIGN_INVALID_PREPARATION_INPUT")
                               for path in (("metadata", "default_depth"), ("budget", "requested_fine2"))])
             for name, invalid in (
@@ -202,7 +214,7 @@ class CoastlineSourceAdapterTests(TestCase):
                 prepare(replace(value, admission=admission, generation=resolve(root, context_for(root)),
                                 metadata=value.metadata.model_copy(update={"source_kind": WaterDesignSourceKind.LAKE})))
         prefix = ("water_source", value.source.location_uid)
-        self.assertEqual([(issue.path, issue.code) for issue in caught.exception.issues],
+        self.assertEqual([(issue.diagnostic_path(), issue.code) for issue in caught.exception.issues],
                          [(prefix + suffix, "WATER_DESIGN_INVALID_PREPARATION_INPUT") for suffix in (
                              ("admission", "decision", "state"), ("generation", "state"),
                              ("admission", "header", "identity", "source_uid"),

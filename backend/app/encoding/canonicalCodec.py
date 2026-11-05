@@ -10,6 +10,7 @@ from pydantic import TypeAdapter
 from typing import get_type_hints
 from struct import unpack
 
+from app.dataModel.fields.validatedFieldPath import ModelIdentity
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest, CanonicalTypeKind, RegisteredTypeEntry
 
 
@@ -176,6 +177,16 @@ def _decode_scalar(tag: int, body: bytes | memoryview) -> object:
     raise CanonicalEncodingError("unknown canonical scalar tag")
 
 
+def validate_decoded_identity(owner: type, values: dict, manifest: CanonicalSchemaManifest) -> None:
+    if owner is ModelIdentity and not any(
+        issubclass(entry.python_type, BaseModel)
+        and entry.python_type.__module__ == values["module"]
+        and entry.python_type.__qualname__ == values["qualname"]
+        for entry in manifest.entries
+    ):
+        raise CanonicalEncodingError("model identity is not registered in the manifest")
+
+
 def _decode_one(encoded: bytes, manifest: CanonicalSchemaManifest) -> tuple[object, int]:
     if len(encoded) < 9:
         raise CanonicalEncodingError("truncated canonical header")
@@ -229,6 +240,7 @@ def _decode_one(encoded: bytes, manifest: CanonicalSchemaManifest) -> tuple[obje
         if tuple(field[0] for field in pairs) != names:
             raise CanonicalEncodingError("missing, duplicate, extra or reordered record fields")
         values_by_name = dict(pairs)
+        validate_decoded_identity(owner, values_by_name, manifest)
         if issubclass(owner, BaseModel):
             return owner.model_validate(values_by_name, strict=True), end
         annotations = get_type_hints(owner, include_extras=True)

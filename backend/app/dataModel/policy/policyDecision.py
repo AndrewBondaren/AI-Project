@@ -11,7 +11,7 @@ from app.dataModel.placement.common import Specificity
 from app.dataModel.policy.policyEnums import (
     PolicyDisableReason, PolicyOperation, PolicyOrigin, PolicyRuleId, PolicyState,
 )
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.dataModel.policy.policyTypeError import PolicyCause
 
 
 B_co = TypeVar("B_co", bound=Enum, covariant=True)
@@ -50,7 +50,7 @@ class PolicyDecision(BaseModel, Generic[B_co, R_co, Op_co], frozen=True):
     reasons: tuple[PolicyReason[R_co], ...]
     waiting_supports: tuple[EntityUid, ...]
     provenance: tuple[PolicyProvenance, ...]
-    issues: tuple[FieldPathError, ...]
+    issues: tuple[PolicyCause, ...]
 
     @model_validator(mode="after")
     def coherent_state(self) -> Self:

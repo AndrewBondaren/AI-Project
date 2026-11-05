@@ -3,7 +3,7 @@ from app.dataModel.world.settings.timeOperations.read import (
 )
 from app.dataModel.world.settings.timeOperations.results import SettingsConflict, SettingsNotFound, SettingsSnapshotNotFound
 from app.dataModel.world.settings.timeOperations.results import SettingsInvalid
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.dataModel.world.calendar.projection.errors import CalendarFieldIssue, CalendarIssueCode
 from app.dataModel.world.settings.timeOperations.read import ResolveCalendarAt
 from app.dataModel.world.calendar.projection.request import ResolvedCalendarAt
 from .sourcePort import IWorldTimeSettingsSource
@@ -27,4 +27,4 @@ class WorldCalendarResolver:
         for version in capture.versions:
             if version.calendar_key == request.calendar:
                 return ResolvedCalendarAt(source=capture.source, version=version, settings=capture.settings)
-        return SettingsInvalid(issues=(FieldPathError(path=("calendar",), message="unknown calendar"),))
+        return SettingsInvalid(issues=(CalendarFieldIssue.at(ResolveCalendarAt, ("calendar",), CalendarIssueCode.INVALID_SETTINGS_CHANGE, "unknown calendar"),))

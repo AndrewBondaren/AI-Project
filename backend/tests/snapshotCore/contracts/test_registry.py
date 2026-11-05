@@ -328,7 +328,7 @@ class SectionRegistryTests(unittest.TestCase):
             with self.assertRaises(SnapshotMetadataFailure) as caught:
                 build((bad,), {}, {})
             next_stage.assert_not_called()
-        self.assertEqual([(issue.code, issue.path) for issue in caught.exception.diagnostics], [
+        self.assertEqual([(issue.code, issue.diagnostic_path) for issue in caught.exception.diagnostics], [
             ("snapshot.metadata.missing_base", ("bases", "old")),
             ("snapshot.metadata.unassigned_artifact", ("receipts", 0, "retained_artifacts", 0)),
             ("snapshot.metadata.foreign_history", ("receipts", 0, "history_refs", 0, "snapshot")),
@@ -338,7 +338,7 @@ class SectionRegistryTests(unittest.TestCase):
         def diagnostics(call):
             with self.assertRaises(SnapshotMetadataFailure) as failure:
                 call()
-            return [(issue.code.removeprefix("snapshot.metadata."), issue.path)
+            return [(issue.code.removeprefix("snapshot.metadata."), issue.diagnostic_path)
                     for issue in failure.exception.diagnostics]
 
         self.assertEqual(diagnostics(lambda: build((), {world: (artifact, artifact), player: (artifact, artifact)},

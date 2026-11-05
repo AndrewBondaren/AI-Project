@@ -4,6 +4,26 @@
 
 ## Выполнение изолированного core (2026-11-03)
 
+### Ревью политики данных Time / World settings (2026-11-05)
+
+Основание — [error-contracts-1, O05 и EC-11](error-contracts-1.md), [общая политика данных](../../docs/tz_runtime_world_edit_policy.md) и уточнение мастера о двух режимах. Это ревью текущего поведения; миграция диагностики и подключение runtime resolver предстоят.
+
+| Вход | validate | runtime — целевой контракт |
+|---|---|---|
+| Допустимое значение или отсутствующее поле со штатным default | Принять по POJO | То же значение. Например, отсутствующие hours_per_day → 24 и from_minute → 0 без WarningError. |
+| Явное недопустимое значение | Вернуть типизированную диагностику с кодом и путём | Общая граница пишет WarningError и применяет объявленный для этого случая fallback. Например, для ошибочной минуты нужно явно разрешить fallback 0; один DefaultWhenMissing такого разрешения не даёт. |
+| У обязательного поля или ссылки нет допустимого fallback | Вернуть точную причину | Записать WarningError и оставить зависимую операцию unresolved. Для авторского календаря требуется явный origin. |
+
+**Реализовано после ревью.** Для полного WorldTimeSettings публичная граница resolve_world_time_settings использует ResolveContext, общий resolver и CalendarValidator. Явные ошибки hours_per_day/from_minute в runtime разрешены в POJO defaults (24/0), с WarningError; validate возвращает структурированные ошибки. Остальные поля требуют валидного значения. После замены выполняется полная семантическая проверка. CalendarFieldIssue содержит enum-код и ValidatedFieldPath; независимые календарные проверки используют ValidatorAggregationHelper. Проверены парные входы и число событий. Подключение к production binding остаётся отдельным этапом.
+
+Проверка 2026-11-05: 29 тестов Time и 14 адресных тестов jsonValidation resolve прошли; Pyright по Time, World settings и изменённому общему resolver — 0 ошибок и предупреждений.
+
+**Исходные находки ревью до исправления.**
+
+1. Подтверждён сбой validate при неизвестном selected: CalendarValidator конструирует базовый FieldPathError и выбрасывает TypeError вместо CalendarInvalid. Та же конструкция есть в WorldCalendarResolver и preparation/shared/candidate. Потребитель prepare_calendar_update индексирует path как tuple, хотя теперь это ValidatedFieldPath. Нужны конкретная доменная ошибка с enum-кодом и проверяемым путём по контракту общего carrier.
+2. CalendarValidator прекращает проверку на первом InvalidCalendar. Для validate требуется накопить независимые ошибки, например в двух календарях. Производные проверки следует пропускать, если для них не разрешены исходные поля.
+3. Для настроек Time найден общий sink WarningError в jsonValidation, но не подтверждена связка resolver → зарегистрированная причина → fallback → итоговый WorldTimeSettings. В текущих POJO defaults описывают отсутствие поля. До реализации нужна полевая матрица допустимых замен для явных ошибок. Проверять парой входов в обоих режимах: код/путь, фактическое значение и ровно одно runtime-событие. Чистая арифметика и prepare_advance продолжают возвращать свои доменные исходы.
+
 **Актуальный итог ревью.** Изолированные T3-A, T3-C, подготовка T4 и операции World settings проверены по §§10–11, 29–33, 36 и 38. Все 25 тестов Time прошли. Pyright по dataModel/time, dataModel/world, application/time и application/worldData/timeSettings — 0 ошибок и предупреждений.
 
 Time предоставляет арифметику, календарную валидацию, project/resolve и чистый prepare_advance с типизированными результатами и отказами. World владеет настройками и их подготовкой. Чтение делегируется закреплённым source ports. Проверка импортов не выявила прямых зависимостей этих пакетов от DAG engine, БД, логгера, Physics или actionCore.

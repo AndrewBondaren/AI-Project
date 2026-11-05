@@ -823,9 +823,9 @@ flowchart TD
 |---|---|---|
 | [GEO](./geo-1-designed-water.md) | [Проверка №4/5](./geo-i11-3-notice-verification.md) дала PASS по обеим цепочкам. | Полный путь ждёт D1/D2 №1–3. |
 | [Snapshot](./world-domain-patches-snapshots.md) | Прямой handoff подтверждён. На e7a30e1b штатный путь падает до транзакции на старом импорте. | Согласовать scoped D1 для трёх типов причин metadata, затем мигрировать service и builder и повторить интеграцию. |
-| [Spatial](./spatial-distribution-domain.md) | §15.97 воспроизвёл одно открытие BLOB старым worker после отзыва. | Согласовать порядок допуска и отзыва с DAG, затем добиться нуля физических открытий. |
+| [Spatial](./spatial-distribution-domain.md) | §15.98: в одной SQLite проверка под guard дала 0 открытий после отзыва, контроль — 1. Обратный порядок подтвердил закрытие файла до release. 5/5 по отчёту. | Согласовать авторитетный отзыв DAG; для раздельных хранилищ нужен свой протокол. |
 | [Time](./time-domain.md) | Изолированные T3-A/T3-C, подготовка T4 и World settings проверены: 25 тестов, Pyright без ошибок по отчёту. | Политика STANDARD для суток в 1–3 часа открыта. Production T4 требует SN-TIME-READ и Time reader, T5 — SN-TIME-APPLY и handler, создание ветки — SN-TIME-BRANCH. |
-| [Physics](./physics-spatial-dynamics.md) | PS-CORE-1: P2 исправлен, 19 адресных проверок прошли. В широком прогоне до и после переноса совпали 40 неуспешных test IDs. | Независимая проверка P2. Production storage и интеграция остаются отдельными шагами. |
+| [Physics](./physics-spatial-dynamics.md) | PS-CORE-1 P2: после FAIL прежнего варианта A восстановлены codec facade и регрессия. Последний отчёт фиксирует PASS P2, 18/18 профильных тестов. | Предъявить исправление отдельно от приёмки всего PS-CORE-1; широкий набор после восстановления не повторялся. |
 | [API-1](./api-1-transport-boundary.md) | Проверено покрытие полей storage и wire. Climate C1 содержит девять scalars, десять после переноса lapse. | Сопоставить вход каждой операции с версией и выходом владельца, включая presence/aliases. |
 | [GEN-BAKE-READ](./generator-public-bake-reads.md) | Исправленный пакет D1–D7 предъявлен в §17.10.4 | Получить решение пользователя, затем R1/R2 отдельно по операциям. Handoff light, full L0+C23, named terrain и coordinate terrain описан в §17.10.3 |
 | [DAG invocation и bake admission](./dag-invocations-bake-admission.md) | Итог ревью R6 на 7b6104d7, полный набор 392/392. | Далее R7 по условиям owning-плана. |
@@ -839,8 +839,8 @@ flowchart TD
 | План | Номер трека | О чём трек | Следующий трек или внешняя зависимость |
 |---|---|---|---|
 | GEO | I11.3 | №4 проверен до constraints, №5 до draft на явно собранном strategy input. | После D2 №1–3 проверить штатную цепочку трёх стратегий. |
-| Spatial / World Pack | SP-P2W §15.97 | Предварительная проверка пропускает физический open после отзыва (1 вместо 0). | Для общей SQLite проверить актуальный допуск внутри guard у того же coordinator; для разных хранилищ согласовать fence с DAG. |
-| DAG / Pack | Окончательность execution, предложение | [Исследование](./spatial-dag-execution-finality.md) показывает, почему COMPLETED/FAILED недостаточно для release. | Согласовать durable finalized и порядок restore, child/retry/pass и каждого нового открытия до реализации. |
+| Spatial / World Pack | SP-P2W §15.98 | Кандидат для общей SQLite проверен в обоих порядках admission/отзыва. | До production — авторитетный отзыв execution/children от DAG и решение о порядке admission при разных хранилищах. |
+| DAG / Pack | Окончательность execution | [Проверка terminal resume](./spatial-dag-execution-finality.md) воспроизвела RestoreFailure после удаления данных даже при сохранённом ответе COMPLETED. | Согласовать finalized и гарантию восстановления terminal без доступа к освобождённым данным, затем связывать release с этим событием. |
 | Time | T3-A / T3-C, подготовка T4 проверена | Арифметика, календарь, World settings, чтение через закреплённые тестовые источники. | Внутри Time открыта политика STANDARD для 1–3 часов. Production T4 ждёт SN-TIME-READ, T5 — SN-TIME-APPLY, ветвление — SN-TIME-BRANCH. |
 | Snapshot | 4D2, scoped D1 на согласовании | Прямой handoff проверен, штатный сервис блокирует миграция metadata diagnostics. | После решения по D1 проверить handoff через сервис со второго соединения. |
 | ERROR-CONTRACTS-1 | D2 №4/5 проверен, D1 №1–3 предъявлен | Обе notices восстановлены с точным классом и значениями. | Решение по №1–3 открывает соответствующий D2. |

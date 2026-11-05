@@ -130,7 +130,7 @@ class LifecycleFixture:
 
 class ArtifactStagingTests(unittest.TestCase):
     def setUp(self):
-        root = Path(__file__).resolve().parents[4] / ".tmp_snapshot_core"
+        root = Path(__file__).resolve().parents[3] / ".tmp_snapshot_core"
         root.mkdir(exist_ok=True)
         self.temp = tempfile.TemporaryDirectory(dir=root)
         self.addCleanup(self.temp.cleanup)
@@ -420,7 +420,7 @@ class SqliteBlobLifecycleTests(unittest.TestCase):
 
     def test_gc_serializes_physical_delete_with_reserve_and_restart(self):
         async def check():
-            root = Path(__file__).resolve().parents[4] / ".tmp_snapshot_core"
+            root = Path(__file__).resolve().parents[3] / ".tmp_snapshot_core"
             root.mkdir(exist_ok=True)
             with tempfile.TemporaryDirectory(dir=root) as directory:
                 path = str(Path(directory) / "test.db")

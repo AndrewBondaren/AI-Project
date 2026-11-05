@@ -3,12 +3,13 @@ from dataclasses import fields
 from enum import Enum
 from functools import lru_cache
 from types import UnionType
-from typing import Annotated, Literal, NewType, TypeAliasType, Union, get_args, get_origin, get_type_hints
+from typing import Any, Annotated, Literal, NewType, TypeAliasType, Union, get_args, get_origin, get_type_hints
 
 from pydantic import BaseModel
 
-from app.encoding.canonicalCodec import CanonicalCodec, CanonicalEncodingError, _decode_scalar, encode
+from app.encoding.canonicalCodec import CanonicalCodec, CanonicalEncodingError, _decode_scalar, encode, validate_decoded_identity
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest, CanonicalTypeKind
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.encoding.decodeLimits import DecodeLimits
 
 
@@ -42,6 +43,12 @@ def _matches(option, owner, value=None):
     if get_origin(option) is Literal:
         return any(type(member) is owner and member == value for member in get_args(option))
     target = get_origin(option) or option
+    if isinstance(target, type) and issubclass(target, FieldPathError) and (
+        target is FieldPathError or target.__pydantic_generic_metadata__["origin"] is FieldPathError
+    ):
+        return issubclass(owner, target) or (
+            issubclass(owner, FieldPathError) and target.__pydantic_generic_metadata__["args"] == (Any,)
+        )
     if target is owner:
         return True
     # Branded string keys have the same scalar wire representation as str.
@@ -51,6 +58,7 @@ def _matches(option, owner, value=None):
 class _Reader:
     def __init__(self, data, manifest, limits):
         self.data = memoryview(data)
+        self.manifest = manifest
         self.bindings = {e.type_id: e for e in manifest.entries}
         self.limits = limits
         self.sizes = {(record.owner, rule.bound.field): (rule.minimum, rule.maximum)
@@ -174,6 +182,7 @@ class _Reader:
                 values[name] = value
         self.require_end(end)
         if values is not None:
+            validate_decoded_identity(owner, values, self.manifest)
             return owner.model_validate(values, strict=True) if issubclass(owner, BaseModel) else owner(**values)
 
 

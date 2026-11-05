@@ -11,18 +11,23 @@ from app.dataModel.policy.policyEnums import PolicyIssueReason
 from app.dataModel.policy.policyFacts import FactValue, KnownFact, UnknownFact, WaitingFact
 from app.dataModel.policy.policyReferences import FactValueRef, PolicyReference
 from app.dataModel.policy.policyRules import Equal, InSet, IsPresent, PolicyPredicate
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.dataModel.fields.validatedFieldPath import ModelIdentity
+from app.dataModel.fields.checkedPath import CheckedPath
+from app.dataModel.policy.policyTypeError import PolicyCause, PolicyTypeError, PolicySupportIssue, PolicyModelIssue
 
 
-def issue(reason: PolicyIssueReason, path: SourcePath, message: str) -> FieldPathError:
-    return FieldPathError(path, message, code=reason.value)
+def reference_issue(reason: PolicyIssueReason, reference: PolicyReference, message: str) -> PolicyTypeError:
+    bound = reference.bound_field
+    path = CheckedPath.from_pydantic_loc(bound.model, (bound.field,))
+    assert path is not None
+    return PolicyTypeError(path=path, message=message, code=reason)
 
 
 @dataclass(frozen=True)
 class ConditionResult:
     matches: bool | None
     waiting: tuple[EntityUid, ...] = ()
-    issues: tuple[FieldPathError, ...] = ()
+    issues: tuple[PolicyCause, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -31,24 +36,28 @@ class PolicyReader:
     facts: PolicyFacts
     computed: ObjectAdmissionFacts | None = None
 
-    def validate(self) -> tuple[FieldPathError, ...]:
+    def validate(self) -> tuple[PolicyCause, ...]:
         models = self.sources.models + self.facts.models
         if len({m.model for m in models}) != len(models):
             raise ValueError("source/fact model binding is ambiguous")
         if any(m.model is ObjectAdmissionFacts for m in models):
             raise ValueError("effective priority is owned by the executor")
-        errors: list[FieldPathError] = []
+        errors: list[PolicyCause] = []
         for binding in models:
             try:
                 binding.model.model_validate(binding.instance, strict=True)
             except ValidationError as exc:
                 for error in exc.errors():
-                    errors.append(issue(PolicyIssueReason.INVALID_INPUT, binding.path + error["loc"], error["msg"]))
+                    path = CheckedPath.from_pydantic_loc(binding.model, error["loc"])
+                    if path is None:
+                        errors.append(PolicyModelIssue(model=ModelIdentity.of(binding.model), message=error["msg"]))
+                    else:
+                        errors.append(PolicyTypeError(code=PolicyIssueReason.INVALID_INPUT, path=path, message=error["msg"]))
         for support in self.facts.supports:
             try:
                 type(support).model_validate(support, strict=True)
             except ValidationError as exc:
-                errors.append(issue(PolicyIssueReason.INVALID_INPUT, ("supports", support.uid), str(exc)))
+                errors.append(PolicySupportIssue(code=PolicyIssueReason.INVALID_INPUT, support_uid=support.uid, message=str(exc)))
         return tuple(errors)
 
     def path(self, reference: PolicyReference) -> SourcePath:
@@ -64,12 +73,12 @@ class PolicyReader:
             binding = next((m for m in self.sources.models + self.facts.models if m.model is bound.model), None)
             instance = binding.instance if binding else None
         if instance is None:
-            return UnknownFact(issue=issue(PolicyIssueReason.UNKNOWN_FACT, self.path(reference), "policy source is unavailable"))
+            return UnknownFact(issue=reference_issue(PolicyIssueReason.UNKNOWN_FACT, reference, "policy source is unavailable"))
         value: object = getattr(instance, bound.field)
         if isinstance(reference, FactValueRef):
             if isinstance(value, (KnownFact, WaitingFact, UnknownFact)):
                 return value
-            return UnknownFact(issue=issue(PolicyIssueReason.INVALID_INPUT, self.path(reference), "expected FactValue"))
+            return UnknownFact(issue=reference_issue(PolicyIssueReason.INVALID_INPUT, reference, "expected FactValue"))
         TypeAdapter[object](reference.value_annotation).validate_python(value, strict=True)
         return KnownFact[object](value=value)
 

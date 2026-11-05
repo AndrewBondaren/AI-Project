@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.policy.policyEnums import PolicySupportState
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.dataModel.policy.policyTypeError import PolicyCause
 
 M = TypeVar("M", bound=BaseModel)
 type SourcePath = tuple[str | int, ...]
@@ -55,7 +55,7 @@ class PolicySupportFact(BaseModel, frozen=True):
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True, revalidate_instances="always")
     uid: EntityUid
     state: PolicySupportState
-    issues: tuple[FieldPathError, ...] = ()
+    issues: tuple[PolicyCause, ...] = ()
 
 
 @dataclass(frozen=True)

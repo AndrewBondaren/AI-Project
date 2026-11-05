@@ -10,6 +10,7 @@ from app.dataModel.world.calendar.projection.errors import (
 from app.dataModel.world.calendar.projection.request import CalendarProjectionInput, CalendarResolveInput
 from app.dataModel.world.calendar.projection.result import CalendarProjection
 from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
+from app.dataModel.world.settings.timeSettings import WorldTimeSettings
 from .ordinal import CalendarIndex
 from .rules import ExhaustedBudget, InvalidCalendar
 from .validation import invalid, validated_indexes
@@ -28,7 +29,7 @@ def origin_offset(entry: CalendarEntry, index: CalendarIndex, day_length: int) -
 def entry_for(request: CalendarProjectionInput | CalendarResolveInput) -> CalendarEntry:
     resolved = request.resolved
     if request.calendar != resolved.version.calendar_key:
-        raise InvalidCalendar(("version",), "calendar differs from pinned version")
+        raise InvalidCalendar(("resolved", "version"), "calendar differs from pinned version")
     entry = resolved.settings.calendars.entry_for(request.calendar)
     if entry is None:
         raise InvalidCalendar(("calendar",), "unknown calendar")
@@ -52,7 +53,7 @@ class CalendarProjector:
         except ExhaustedBudget:
             return CalendarBudgetExceeded(budget=request.budget)
         except InvalidCalendar as error:
-            return invalid(error)
+            return invalid(error, WorldTimeSettings if error.path[0] in ("selected", "calendars", "epochs") else type(request))
         definition = entry.definition
         day_length = resolved.settings.hours_per_day * 3600 * NANOS_PER_SECOND
         offset = origin_offset(entry, index, day_length)
@@ -98,12 +99,17 @@ class CalendarProjector:
             if request.time.hour >= settings.hours_per_day:
                 raise InvalidCalendar(("time", "hour"), "hour outside day")
             day_length = settings.hours_per_day * 3600 * NANOS_PER_SECOND
-            total = index.ordinal(request.date) * day_length + clock_nanos(request.time)
+            try:
+                ordinal = index.ordinal(request.date)
+            except InvalidCalendar as error:
+                path = ("date", "year") if error.path == ("year",) else ("date",)
+                raise InvalidCalendar(path, str(error)) from error
+            total = ordinal * day_length + clock_nanos(request.time)
             seconds, nanos = divmod(total - origin_offset(entry, index, day_length), NANOS_PER_SECOND)
         except ExhaustedBudget:
             return CalendarBudgetExceeded(budget=request.budget)
         except InvalidCalendar as error:
-            return invalid(error)
+            return invalid(error, WorldTimeSettings if error.path[0] in ("selected", "calendars", "epochs") else type(request))
         if not -MAX_SECONDS-1 <= seconds <= MAX_SECONDS:
             return CalendarTimeOverflow(operation=CalendarConversionKind.RESOLVE)
         return PointResult(point=TimePoint(world_uid=source.world_uid, timeline_id=request.scope.timeline_id,

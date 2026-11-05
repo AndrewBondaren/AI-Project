@@ -14,6 +14,7 @@ from app.dataModel.terrain.designedWater.fields.plateLayout import PlateLayout
 from app.dataModel.terrain.designedWater.input import NativeCoastlineStrategyInput
 from app.dataModel.terrain.designedWater.settings.fieldCompositionPolicy import FieldCompositionOperator
 from app.dataModel.terrain.designedWater.strategyKind import WaterDesignIssueCode
+from app.dataModel.terrain.designedWater.waterDesignTypeError import WaterDesignTypeError
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 
@@ -27,8 +28,8 @@ class ContinentalFieldComposer:
             input = NativeCoastlineStrategyInput.model_validate(input, strict=True)
         except ValidationError as error:
             raise PlanBuildFailure(tuple(
-                FieldPathError(("continental_field", *issue["loc"]), issue["msg"],
-                               code=WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value)
+                WaterDesignTypeError.at(NativeCoastlineStrategyInput, issue["loc"], issue["msg"],
+                                        operation="continental_field")
                 for issue in error.errors(include_input=False, include_context=False, include_url=False)
             )) from error
         recipe = input.field_policy

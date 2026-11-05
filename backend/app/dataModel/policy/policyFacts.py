@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.policy.policyEnums import FactState
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.dataModel.policy.policyTypeError import PolicyCause
 
 T_co = TypeVar("T_co", covariant=True)
 
@@ -61,7 +61,7 @@ class WaitingFact(BaseModel, frozen=True):
 class UnknownFact(BaseModel, frozen=True):
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True, revalidate_instances="always")
     state: Literal[FactState.UNKNOWN] = FactState.UNKNOWN
-    issue: FieldPathError
+    issue: PolicyCause
 
 
 type FactValue[T] = Annotated[KnownFact[T] | WaitingFact | UnknownFact, Field(discriminator="state")]

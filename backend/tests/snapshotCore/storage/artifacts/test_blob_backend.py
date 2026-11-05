@@ -42,7 +42,7 @@ class Admission:
 
 class BlobBackendTests(unittest.TestCase):
     def setUp(self):
-        temporary_root = Path(__file__).resolve().parents[4] / ".tmp_snapshot_core"
+        temporary_root = Path(__file__).resolve().parents[3] / ".tmp_snapshot_core"
         temporary_root.mkdir(exist_ok=True)
         self.temp = tempfile.TemporaryDirectory(dir=temporary_root)
         self.addCleanup(self.temp.cleanup)

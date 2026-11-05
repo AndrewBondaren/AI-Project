@@ -258,6 +258,24 @@ from app.dataModel.hydrology.boundaries.attachedCoastline import CoastlineBounda
 from app.dataModel.hydrology.boundaries.attachedCoastline import AttachedCoastline as _MAttachedCoastline
 from app.dataModel.hydrology.boundaries.attachedCoastline import CoastlinePart as _MCoastlinePart
 
+from app.dataModel.policy.policyTypeError import PolicyRuleIssue, PolicySupportIssue, PolicyModelIssue, PolicyTypeError
+
+from app.dataModel.terrain.designedWater.waterDesignTypeError import WaterDesignTypeError
+
+from app.dataModel.fields.validatedFieldPath import ValidatedFieldPath, ModelIdentity, FieldSegment, VariantSegment, IndexSegment, KeySegment
+
+from app.dataModel.policy.policyEnums import PolicyIssueReason, PolicyStage
+
+from app.dataModel.terrain.designedWater.strategyKind import WaterDesignIssueCode
+
+from app.dataModel.policy.objectAdmissionPolicyDefinition import ObjectAdmissionFacts, PlacementPolicyDefaults
+
+from app.dataModel.hydrology.placement.placementFields import WaterSourcePlacementFields, WaterCategoryPlacementFields
+
+from app.dataModel.hydrology.policy.hydrologyPlacementPolicy import HydrologyPlacementBehaviorInputs, HydrologyPlacementGateInputs, HydrologyPolicyFacts, HydrologyProceduralGenerationInputs, HydrologyProceduralExtentFacts
+
+from app.dataModel.terrain.designedWater.input import NativeCoastlineStrategyInput, NativeCoastlineStrategyContext
+
 # Stable TLV v1 type IDs. Append entries; never infer IDs from runtime discovery.
 SURFACE_MANIFEST = CanonicalSchemaManifest(entries=tuple(
     RegisteredTypeEntry(type_id=identity, python_type=owner, kind=kind)
@@ -563,6 +581,31 @@ SURFACE_MANIFEST = CanonicalSchemaManifest(entries=tuple(
     (296, _MPlanEnvelope[_MPreparedNaturalTerrain], CanonicalTypeKind.RECORD),
     (297, _MCoarseRiverPlan, CanonicalTypeKind.RECORD),
 
+    (298, PolicyRuleIssue, CanonicalTypeKind.RECORD),
+    (299, PolicySupportIssue, CanonicalTypeKind.RECORD),
+    (300, PolicyModelIssue, CanonicalTypeKind.RECORD),
+    (301, PolicyTypeError, CanonicalTypeKind.RECORD),
+    (302, WaterDesignTypeError, CanonicalTypeKind.RECORD),
+    (303, ValidatedFieldPath, CanonicalTypeKind.RECORD),
+    (304, ModelIdentity, CanonicalTypeKind.RECORD),
+    (305, FieldSegment, CanonicalTypeKind.RECORD),
+    (306, VariantSegment, CanonicalTypeKind.RECORD),
+    (307, IndexSegment, CanonicalTypeKind.RECORD),
+    (308, KeySegment, CanonicalTypeKind.RECORD),
+    (309, PolicyIssueReason, CanonicalTypeKind.ENUM),
+    (310, PolicyStage, CanonicalTypeKind.ENUM),
+    (311, WaterDesignIssueCode, CanonicalTypeKind.ENUM),
+    (312, ObjectAdmissionFacts, CanonicalTypeKind.RECORD),
+    (313, PlacementPolicyDefaults, CanonicalTypeKind.RECORD),
+    (314, WaterSourcePlacementFields, CanonicalTypeKind.RECORD),
+    (315, WaterCategoryPlacementFields, CanonicalTypeKind.RECORD),
+    (316, HydrologyPlacementBehaviorInputs, CanonicalTypeKind.RECORD),
+    (317, HydrologyPlacementGateInputs, CanonicalTypeKind.RECORD),
+    (318, HydrologyPolicyFacts, CanonicalTypeKind.RECORD),
+    (319, HydrologyProceduralGenerationInputs, CanonicalTypeKind.RECORD),
+    (320, HydrologyProceduralExtentFacts, CanonicalTypeKind.RECORD),
+    (321, NativeCoastlineStrategyInput, CanonicalTypeKind.RECORD),
+    (322, NativeCoastlineStrategyContext, CanonicalTypeKind.RECORD),
 )))
 
 

@@ -418,7 +418,7 @@ class WorldOperationTests(unittest.TestCase):
                 validation = self.validator.validate(ValidateCalendarInput(
                     settings=settings.model_copy(update={"calendars": registry}), budget=self.base.budget))
                 self.assertIsInstance(validation, CalendarInvalid)
-                self.assertEqual(validation.issues[0].path, ("calendars", "entries", 0, "definition", "rules", 2))
+                self.assertEqual(validation.issues[0].path.projection(), ("calendars", "entries", 0, "definition", "rules", 2))
                 result = pipeline.prepare_calendar_update(CalendarUpdate(base=self.base, entry=candidate))
                 self.assertIsInstance(result, SettingsInvalid)
                 self.assertEqual(result.issues, validation.issues)
@@ -460,6 +460,67 @@ class WorldOperationTests(unittest.TestCase):
         self.assertIsInstance(self.projector.project(request), CalendarSourceMismatch)
 
 class AdmissionTests(unittest.TestCase):
+    def test_preview_and_runtime_on_same_invalid_minute(self):
+        from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
+        from app.application.jsonValidation.types import wire_loc
+        from app.application.worldData.timeSettings.admission.settings import resolve_world_time_settings
+
+        raw = custom_settings().model_dump(mode="json")
+        entry, = raw["calendars"]["entries"]
+        period, = entry["definition"]["periods"]["entries"]
+        period["from_minute"] = 75
+        budget = CalendarBudget(max_year_patterns=100, max_rule_checks=100)
+        logger = "app.application.jsonValidation.resolve"
+        preview = ResolveContext.for_import(validate_only=True)
+        with self.assertNoLogs(logger, level="WARNING"), self.assertRaises(UnresolvedModelError):
+            resolve_world_time_settings(raw, preview, budget)
+        expected, = [i for i in preview.errors if wire_loc(i)[-1:] == ("from_minute",)]
+
+        runtime = ResolveContext()
+        with self.assertLogs(logger, level="WARNING") as output:
+            result = resolve_world_time_settings(raw, runtime, budget)
+        self.assertEqual(result, custom_settings())
+        self.assertEqual(len(output.records), 1)
+        self.assertIn("WarningError", output.output[0])
+        actual, = runtime.report.diagnostics
+        self.assertEqual((actual.code, wire_loc(actual)), (expected.code, wire_loc(expected)))
+        self.assertEqual(period["from_minute"], 75)
+
+    def test_semantic_errors_accumulate_after_fallback(self):
+        from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
+        from app.application.worldData.timeSettings.admission.settings import resolve_world_time_settings
+        raw = custom_settings().model_dump(mode="json")
+        entry, = raw["calendars"]["entries"]
+        periods = entry["definition"]["periods"]["entries"]
+        periods.append(dict(system_period="evening", display_period="Evening", from_hour=0, from_minute=75))
+        raw["selected"] = "missing"
+        ctx = ResolveContext()
+        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING") as output:
+            with self.assertRaises(UnresolvedModelError):
+                resolve_world_time_settings(raw, ctx, CalendarBudget(max_year_patterns=100, max_rule_checks=100))
+        self.assertEqual(len(output.records), 3)
+        self.assertEqual({i.path.projection() for i in ctx.errors},
+                         {("selected",), ("calendars", "entries", 0, "definition", "periods")})
+
+    def test_world_hours_default_and_required_fields(self):
+        from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
+        from app.application.worldData.timeSettings.admission.settings import resolve_world_time_settings
+        logger = "app.application.jsonValidation.resolve"
+        raw = custom_settings().model_dump(mode="json")
+        budget = CalendarBudget(max_year_patterns=100, max_rule_checks=100)
+        del raw["hours_per_day"]
+        with self.assertNoLogs(logger, level="WARNING"):
+            self.assertEqual(resolve_world_time_settings(raw, ResolveContext(), budget).hours_per_day, 24)
+        raw["hours_per_day"] = 0
+        with self.assertNoLogs(logger, level="WARNING"), self.assertRaises(UnresolvedModelError):
+            resolve_world_time_settings(raw, ResolveContext.for_import(validate_only=True), budget)
+        with self.assertLogs(logger, level="WARNING") as warnings:
+            self.assertEqual(resolve_world_time_settings(raw, ResolveContext(), budget).hours_per_day, 24)
+        self.assertEqual(len(warnings.records), 1)
+        del raw["selected"]
+        with self.assertLogs(logger, level="WARNING"), self.assertRaises(UnresolvedModelError):
+            resolve_world_time_settings(raw, ResolveContext(), budget)
+
     def test_unknown_calendar_rule_tag_is_rejected(self):
         payload = custom_settings().model_dump(mode="json")
         entry, = payload["calendars"]["entries"]

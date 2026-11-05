@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
-from pydantic import BaseModel, ConfigDict, StrictBool
+from pydantic import BaseModel, ConfigDict, StrictBool, TypeAdapter
 
 from app.application.policy.policyRead import PolicyReader
 from app.application.policy.policyResolver import PolicyResolver
@@ -29,7 +29,8 @@ from app.dataModel.policy.policyRules import (
     RequireSupportEffect, SelectBehaviorEffect, SelectPriorityDefaultEffect,
 )
 from app.dataModel.policy.policySpec import ValueSelectionPolicySpec
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.dataModel.policy.policyTypeError import PolicyTypeError
+from app.dataModel.fields.checkedPath import CheckedPath
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
 
 
@@ -69,7 +70,7 @@ DEFAULT = PriorityValueRef(FieldRef(lambda: Defaults, lambda d: d.priority))
 ALTERNATIVE = PriorityValueRef(FieldRef(lambda: Defaults, lambda d: d.alternative))
 TERMINAL = PriorityValueRef(FieldRef(lambda: PlacementPolicyDefaults, lambda d: d.placement_specificity))
 FLAG = FactValueRef(FieldRef(lambda: Facts, lambda f: f.flag))
-ERROR = FieldPathError(("observed",), "unknown observation")
+ERROR = PolicyTypeError(path=CheckedPath.from_pydantic_loc(Facts, ("flag",)), code=PolicyIssueReason.UNKNOWN_FACT, message="unknown observation")
 
 
 def rule(name="choose", *, stage=PolicyStage.BEHAVIOR, effect=None, conditions=(), precedence=1):
@@ -194,7 +195,7 @@ class PolicyResolverTests(TestCase):
                     self.assertEqual(result.behavior, Action.SECOND)
                 else:
                     self.assertEqual(result.issues[0].code, PolicyIssueReason.RULE_CONFLICT)
-                    self.assertEqual(tuple(i.path for i in result.issues), (("rules", "a"), ("rules", "b")))
+                    self.assertEqual(result.issues[0].rule_ids, ("a", "b"))
 
     def test_same_value_equal_precedence_is_not_conflict(self):
         result = self.resolve(admission((rule("a"), rule("b"))))
@@ -285,6 +286,54 @@ class PolicyResolverTests(TestCase):
                     self.assertEqual(result.reasons[-1].common_reason, PolicyDisableReason.SUPPORT_DISABLED)
         self.assertEqual(self.resolve(spec).issues[0].code, PolicyIssueReason.MISSING_SUPPORT)
 
+    def test_failed_support_preserves_external_cause_through_cold_water_decision(self):
+        from app.application.encoding.boundedCanonicalDecode import decode_bounded
+        from app.dataModel.encoding.decodeLimits import DecodeLimits
+        from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_MANIFEST
+        from app.encoding.canonicalCodec import encode, decode
+        from app.dataModel.hydrology.policy.hydrologyGenerationDecision import WaterDesignDecision
+        from app.dataModel.hydrology.sources.waterSourceMetadata import WaterSourceMetadata
+        from app.dataModel.terrain.designedWater.waterDesignTypeError import WaterDesignTypeError
+        from tests.geo1.placement_policy.fixtures import bind, coastline, snapshot
+
+        cause = WaterDesignTypeError.at(WaterSourceMetadata, ("source_kind",), "unexpected source",
+                                        operation="water_source", source_uid="source")
+        failed = PolicySupportFact(uid="source", state=PolicySupportState.FAILED, issues=(cause,))
+        binding = bind(coastline(boundary=True), snapshot(PolicySupportState.FAILED))
+        self.assertIs(type(PolicySupportFact.model_validate(failed).issues[0]), WaterDesignTypeError)
+        self.assertIn('"operation":"water_source"', failed.model_dump_json())
+        observed = replace(binding.facts, supports=(failed,))
+        for mode in ResolutionMode:
+            for has_fallback in (False, True):
+                with self.subTest(mode=mode, fallback=has_fallback):
+                    rules = (PolicyFallback(PolicyIssueReason.FAILED_SUPPORT, None, True),) if has_fallback else ()
+                    spec = replace(binding.spec, fallback_rules=rules)
+                    result = PolicyResolver().resolve(spec, binding.inputs, observed, mode=mode)
+                    result = TypeAdapter(WaterDesignDecision).validate_python(result, strict=True)
+                    fallback = has_fallback and mode is ResolutionMode.RUNTIME
+                    self.assertEqual(result.state, PolicyState.DISABLED if fallback else PolicyState.UNRESOLVED)
+                    self.assertEqual([p.source_path for p in result.provenance if p.origin == PolicyOrigin.FALLBACK],
+                                     [(PolicyIssueReason.FAILED_SUPPORT.value,)] if fallback else [])
+                    self.assertEqual(any(r.common_reason is PolicyDisableReason.ERROR_FALLBACK for r in result.reasons), fallback)
+                    self.assertEqual(result.issues, (cause,))
+                    encoded = encode(result, SURFACE_MANIFEST)
+                    restored = decode(encoded, WaterDesignDecision, SURFACE_MANIFEST)
+                    bounded = decode_bounded(encoded, type(result), SURFACE_MANIFEST,
+                                             limits=DecodeLimits(100000, 10000, 100, 1024))
+                    self.assertEqual(bounded, restored)
+                    self.assertEqual(restored, result)
+                    self.assertIs(type(restored.issues[0]), WaterDesignTypeError)
+                    self.assertEqual(encode(restored, SURFACE_MANIFEST), encoded)
+
+    def test_cold_read_rejects_unregistered_path_owner(self):
+        from app.dataModel.fields.validatedFieldPath import ModelIdentity
+        from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_MANIFEST
+        from app.encoding.canonicalCodec import encode, decode, CanonicalEncodingError
+
+        identity = ModelIdentity.of(Settings)
+        with self.assertRaisesRegex(CanonicalEncodingError, "not registered"):
+            decode(encode(identity, SURFACE_MANIFEST), ModelIdentity, SURFACE_MANIFEST)
+
     def test_failed_support_dominates_disabled_and_retains_cause(self):
         spec = admission((rule(stage=PolicyStage.SUPPORT, effect=RequireSupportEffect(("bad", "off"))),))
         result = self.resolve(spec, observations=facts(supports=(support("bad", PolicySupportState.FAILED),
@@ -346,7 +395,7 @@ class PolicyResolverTests(TestCase):
     def test_missing_model_is_unknown_and_ambiguous_binding_rejected(self):
         result = self.resolve(admission((rule(conditions=(Equal(FLAG, True),)),)), observations=PolicyFacts())
         self.assertEqual(result.state, PolicyState.UNRESOLVED)
-        self.assertEqual(result.issues[0].path, ("Facts", "flag"))
+        self.assertEqual(result.issues[0].path.projection(), ("flag",))
         binding = PolicySource(Settings, Settings(), ())
         with self.assertRaises(ValueError):
             PolicyInputs(models=(binding, binding))

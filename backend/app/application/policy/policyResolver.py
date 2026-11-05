@@ -3,7 +3,8 @@
 from enum import Enum
 from typing import TypeVar, overload
 
-from app.application.policy.policyRead import PolicyReader, issue
+from app.application.policy.policyRead import PolicyReader
+from app.dataModel.policy.policyTypeError import PolicyRuleIssue
 from app.application.policy.policyResolution import PolicyResolution, rule_provenance
 from app.application.policy.policyStages import PolicyProblem, evaluate_stage, selection_rules
 from app.dataModel.policy.objectAdmissionPolicyDefinition import ObjectAdmissionFacts
@@ -85,12 +86,11 @@ class PolicyResolver:
         result.provenance.extend(rule_provenance(r) for r in choices)
         values = {r.effect.value for r in choices if isinstance(r.effect, SelectBehaviorEffect)}
         if len(values) > 1:
-            return result.failure((PolicyProblem(PolicyIssueReason.RULE_CONFLICT, tuple(
-                issue(PolicyIssueReason.RULE_CONFLICT, ("rules", r.id),
-                      "equal-precedence behavior selections conflict") for r in choices)),))
+            return result.failure((PolicyProblem(PolicyIssueReason.RULE_CONFLICT, (PolicyRuleIssue(code=PolicyIssueReason.RULE_CONFLICT, stage=PolicyStage.BEHAVIOR,
+                rule_ids=tuple(r.id for r in choices), message="equal-precedence behavior selections conflict"),)),))
         if not values and isinstance(spec, ValueSelectionPolicySpec):
             return result.failure((PolicyProblem(PolicyIssueReason.RULE_NO_MATCH, (
-                issue(PolicyIssueReason.RULE_NO_MATCH, (), "required behavior has no matching rule"),)),))
+                PolicyRuleIssue(code=PolicyIssueReason.RULE_NO_MATCH, stage=PolicyStage.BEHAVIOR, rule_ids=(), message="required behavior has no matching rule"),)),))
         result.reasons.extend(PolicyReason[R](domain_reason=r.domain_reason,
             common_reason=PolicyDisableReason.DOMAIN_RULE) for r in choices if r.domain_reason is not None)
         return result.decision(PolicyState.READY, behavior=next(iter(values), None))

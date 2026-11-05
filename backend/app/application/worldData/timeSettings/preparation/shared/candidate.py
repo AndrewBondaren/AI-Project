@@ -1,5 +1,6 @@
 from app.dataModel.world.settings.timeOperations.results import SettingsInvalid
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from pydantic import BaseModel
+from app.dataModel.world.calendar.projection.errors import CalendarFieldIssue, CalendarIssueCode
 from app.application.time.calendar.projection import CalendarProjector
 from app.application.time.calendar.validation import CalendarValidator
 from app.dataModel.world.calendar.projection.request import CalendarProjectionInput, ValidateCalendarInput
@@ -14,8 +15,8 @@ from app.dataModel.world.settings.timeOperations.results import PreparedTimeSett
 from ...reader import WorldCalendarResolver
 
 
-def issue(field: str, message: str) -> SettingsInvalid:
-    return SettingsInvalid(issues=(FieldPathError(path=(field,), message=message),))
+def issue(request: BaseModel, field: str, message: str) -> SettingsInvalid:
+    return SettingsInvalid(issues=(CalendarFieldIssue.at(type(request), tuple(field.split(".")), CalendarIssueCode.INVALID_SETTINGS_CHANGE, message),))
 
 
 def projected(base: SettingsPreparationBase, key: RegistryKey[WorldCalendarRegistry], projector: CalendarProjector) -> CalendarProjection | SettingsInvalid | CalendarBudgetExceeded:
@@ -28,7 +29,7 @@ def projected(base: SettingsPreparationBase, key: RegistryKey[WorldCalendarRegis
         return result
     if isinstance(result, CalendarInvalid):
         return SettingsInvalid(issues=result.issues)
-    return issue("capture", "inconsistent projection source")
+    return issue(base, "capture", "inconsistent projection source")
 
 
 def prepare(base: SettingsPreparationBase, candidate: WorldTimeSettings, validator: CalendarValidator) -> PreparedTimeSettingsChange | SettingsInvalid | CalendarBudgetExceeded:

@@ -7,6 +7,8 @@ Contract: ``docs/tz_json_validation.md``.
 from __future__ import annotations
 
 from dataclasses import replace
+from copy import deepcopy
+import json
 from typing import Any, TYPE_CHECKING
 
 from pydantic import BaseModel, RootModel, ValidationError
@@ -19,6 +21,10 @@ from app.application.jsonValidation.resolution.partial import resolve_model_fiel
 from app.application.jsonValidation.resolution.references import reference_issues as _reference_issues
 from app.application.jsonValidation.resolution.wireIssues import field_issue, pydantic_issues
 from app.dataModel.validation.importIssues.wireLocation import WireLocation
+from app.dataModel.fields.fieldRef import FieldRef
+from app.dataModel.fields.fieldBinding import bind_field
+from app.dataModel.fields.validatedFieldPath import FieldSegment, ModelIdentity
+from app.dataModel.validation.importIssues.jsonFieldError import JsonFieldError
 
 if TYPE_CHECKING:
     from app.application.jsonValidation.index.worldRegistryIndex import WorldRegistryIndex
@@ -65,14 +71,59 @@ def resolve_model[ModelT: BaseModel](
         location=WireLocation(parts=(label,) if label else ()), schema_id=getattr(model_cls, "SCHEMA_ID", None))
     if active_ctx.partial:
         raise TypeError("partial input is a patch; use resolve_patch and validate the merged object")
-    try:
-        result = model_cls.model_validate(raw, by_name=True, context={
-            **(validation_context or {}), "validate_only": active_ctx.validate_only,
-        })
-    except ValidationError as exc:
-        reject_unresolved(active_ctx, pydantic_issues(active_ctx, model_cls, exc, raw=raw))
+    context_data = {**(validation_context or {}), "validate_only": active_ctx.validate_only}
+    defaults = getattr(model_cls, "WIRE_RUNTIME_DEFAULTS", ())
+    if defaults and isinstance(raw, dict):
+        result = _resolve_defaultable_wire(model_cls, raw, active_ctx, context_data, defaults)
+    else:
+        try:
+            result = model_cls.model_validate(raw, by_name=True, context=context_data)
+        except ValidationError as exc:
+            reject_unresolved(active_ctx, pydantic_issues(active_ctx, model_cls, exc, raw=raw))
     log_resolve_transform(label or model_cls.__name__, raw, result, active_ctx)
     return result
+
+
+def _resolve_defaultable_wire[ModelT: BaseModel](
+    model_cls: type[ModelT], raw: dict, ctx: ResolveContext, context_data: dict,
+    defaults: tuple[FieldRef, ...],
+) -> ModelT:
+    try:
+        encoded = json.dumps(raw)
+    except (TypeError, ValueError):
+        # Internal callers may supply nested POJOs instead of a JSON document.
+        try:
+            return model_cls.model_validate(raw, by_name=True, context=context_data)
+        except ValidationError as exc:
+            reject_unresolved(ctx, pydantic_issues(ctx, model_cls, exc, raw=raw))
+    try:
+        return model_cls.model_validate_json(encoded, context=context_data)
+    except ValidationError as exc:
+        issues = pydantic_issues(ctx, model_cls, exc, raw=raw)
+    if ctx.validate_only:
+        reject_unresolved(ctx, issues)
+    authorized = {(ModelIdentity.of(f.model), f.field) for f in map(bind_field, defaults)}
+    repaired = deepcopy(raw)
+    recovered = []
+    for issue in issues:
+        if not isinstance(issue, JsonFieldError):
+            continue
+        leaf = issue.path.segments[-1]
+        if not isinstance(leaf, FieldSegment) or (leaf.owner, leaf.name) not in authorized:
+            continue
+        parent = repaired
+        for part in issue.wire_path[:-1]:
+            parent = parent[part]
+        del parent[issue.wire_path[-1]]
+        recovered.append(issue)
+    if not recovered:
+        reject_unresolved(ctx, issues)
+    for issue in recovered:
+        report_continuation(ctx, issue)
+    try:
+        return model_cls.model_validate_json(json.dumps(repaired), context=context_data)
+    except ValidationError as remaining:
+        reject_unresolved(ctx, pydantic_issues(ctx, model_cls, remaining, raw=repaired))
 
 
 def resolve_root_list(

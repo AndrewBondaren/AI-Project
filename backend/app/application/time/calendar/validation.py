@@ -1,5 +1,7 @@
+from app.dataModel.validation.diagnostics.validatorAggregationHelper import ValidatorAggregationHelper
 from app.dataModel.registryKey import RegistryKey
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from pydantic import BaseModel
+from app.dataModel.world.calendar.projection.errors import CalendarFieldIssue, CalendarIssueCode
 from app.dataModel.world.calendar.definitions.definition import CalendarDefinition, CalendarEntry
 from app.dataModel.world.calendar.definitions.registry import WorldCalendarRegistry
 from app.dataModel.world.calendar.projection.errors import CalendarBudgetExceeded, CalendarInvalid
@@ -11,7 +13,7 @@ from .ordinal import CalendarIndex
 from .rules import ExhaustedBudget, InvalidCalendar, Work
 
 
-def _validate_definition(definition: CalendarDefinition, hours: int, work: Work) -> CalendarIndex:
+def _validate_definition(definition: CalendarDefinition, work: Work) -> CalendarIndex:
     spans = {s.system_span for s in definition.spans.entries}
     seasons = {s.system_season for s in definition.seasons.entries}
     base = definition.base_year
@@ -28,60 +30,69 @@ def _validate_definition(definition: CalendarDefinition, hours: int, work: Work)
                 raise InvalidCalendar(("rules",), "unknown insertion anchor")
     if any(s.span not in spans or (s.season is not None and s.season not in seasons) for s in values):
         raise InvalidCalendar(("spans",), "unknown span or season")
-    periods = definition.periods.entries
-    starts = {p.start for p in periods}
-    if (0, 0) not in starts or max(starts) >= (hours, 0) or len(starts) != len(periods):
-        raise InvalidCalendar(("periods",), "invalid period boundaries")
-    if definition.week_anchor_index >= max(1, len(definition.weekdays.entries)):
-        raise InvalidCalendar(("week_anchor_index",), "invalid weekday anchor")
     return CalendarIndex(definition, work)
 
 
-def validate_entry(entry: CalendarEntry, hours: int, work: Work) -> CalendarIndex:
-    try:
-        index = _validate_definition(entry.definition, hours, work)
-    except InvalidCalendar as error:
-        raise InvalidCalendar(("definition", *error.path), str(error)) from error
-    if entry.anchor.origin.time.hour >= hours:
-        raise InvalidCalendar(("anchor", "origin", "time"), "hour outside day")
-    try:
-        index.ordinal(entry.anchor.origin.date)
-    except InvalidCalendar as error:
-        raise InvalidCalendar(("anchor", "origin", *error.path), str(error)) from error
-    return index
-
-
-def validated_indexes(settings: WorldTimeSettings, budget: CalendarBudget) -> dict[RegistryKey[WorldCalendarRegistry], CalendarIndex]:
+def validated_indexes(settings: WorldTimeSettings, budget: CalendarBudget, issues: ValidatorAggregationHelper[CalendarFieldIssue] | None = None) -> dict[RegistryKey[WorldCalendarRegistry], CalendarIndex]:
     work = Work.from_budget(budget)
+    def record(path: tuple[str | int, ...], message: str) -> None:
+        if issues is None:
+            raise InvalidCalendar(path, message)
+        issues.add(CalendarFieldIssue.at(WorldTimeSettings, path, CalendarIssueCode.INVALID_CALENDAR, message))
+
     indices = {}
     for i, entry in enumerate(settings.calendars.entries):
+        prefix = ("calendars", "entries", i)
+        definition = entry.definition
+        periods = definition.periods.entries
+        starts = {p.start for p in periods}
+        if (0, 0) not in starts or max(starts) >= (settings.hours_per_day, 0) or len(starts) != len(periods):
+            record((*prefix, "definition", "periods"), "invalid period boundaries")
+        if definition.week_anchor_index >= max(1, len(definition.weekdays.entries)):
+            record((*prefix, "definition", "week_anchor_index"), "invalid weekday anchor")
+        if entry.anchor.origin.time.hour >= settings.hours_per_day:
+            record((*prefix, "anchor", "origin", "time", "hour"), "hour outside day")
         try:
-            indices[entry.definition.system_calendar] = validate_entry(entry, settings.hours_per_day, work)
+            index = _validate_definition(definition, work)
         except InvalidCalendar as error:
-            raise InvalidCalendar(("calendars", "entries", i, *error.path), str(error)) from error
-    if settings.selected not in indices:
-        raise InvalidCalendar(("selected",), "unknown selected calendar")
+            record((*prefix, "definition", *error.path), str(error))
+            continue
+        indices[definition.system_calendar] = index
+        try:
+            index.ordinal(entry.anchor.origin.date)
+        except InvalidCalendar as error:
+            date_path = ("date", "year") if error.path == ("year",) else error.path
+            record((*prefix, "anchor", "origin", *date_path), str(error))
+    if settings.calendars.entry_for(settings.selected) is None:
+        record(("selected",), "unknown selected calendar")
     seen = set()
     for i, epoch in enumerate(settings.epochs.entries):
         key = epoch.calendar, epoch.start_seconds, epoch.start_nanoseconds
-        if key in seen or epoch.calendar not in indices:
-            raise InvalidCalendar(("epochs", "entries", i), "invalid epoch calendar or duplicate start")
-        indices[epoch.calendar].astronomical(epoch.start_year_label)
+        if key in seen or settings.calendars.entry_for(epoch.calendar) is None:
+            record(("epochs", "entries", i), "invalid epoch calendar or duplicate start")
+        if epoch.calendar in indices:
+            try:
+                indices[epoch.calendar].astronomical(epoch.start_year_label)
+            except InvalidCalendar as error:
+                record(("epochs", "entries", i, "start_year_label"), str(error))
         seen.add(key)
     return indices
 
 
-def invalid(error: InvalidCalendar) -> CalendarInvalid:
-    return CalendarInvalid(issues=(FieldPathError(path=error.path, message=str(error)),))
+def invalid(error: InvalidCalendar, root: type[BaseModel] = WorldTimeSettings) -> CalendarInvalid:
+    return CalendarInvalid(issues=(CalendarFieldIssue.at(root, error.path, CalendarIssueCode.INVALID_CALENDAR, str(error)),))
 
 
 class CalendarValidator:
     @staticmethod
     def validate(request: ValidateCalendarInput) -> CalendarValidated | CalendarInvalid | CalendarBudgetExceeded:
+        issues = ValidatorAggregationHelper((CalendarFieldIssue,))
         try:
-            validated_indexes(request.settings, request.budget)
+            validated_indexes(request.settings, request.budget, issues)
         except ExhaustedBudget:
             return CalendarBudgetExceeded(budget=request.budget)
         except InvalidCalendar as error:
             return invalid(error)
+        if facts := issues.snapshot():
+            return CalendarInvalid(issues=facts)
         return CalendarValidated(settings=request.settings)

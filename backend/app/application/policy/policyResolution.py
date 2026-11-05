@@ -4,7 +4,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Generic, TypeVar
 
-from app.application.policy.policyRead import PolicyReader, issue
+from app.application.policy.policyRead import PolicyReader, reference_issue
+from app.dataModel.policy.policyTypeError import PolicyRuleIssue
 from app.application.policy.policyStages import PolicyProblem, StageResult, selection_rules
 from app.dataModel.placement.common import Specificity
 from app.dataModel.identity.uid import EntityUid
@@ -12,7 +13,7 @@ from app.dataModel.policy.policyDecision import (
     ObjectAdmissionDecision, PolicyProvenance, PolicyReason, ValueSelectionDecision,
 )
 from app.dataModel.policy.policyEnums import (
-    PolicyDisableReason, PolicyIssueReason, PolicyOperation, PolicyOrigin, PolicyState,
+    PolicyDisableReason, PolicyIssueReason, PolicyOperation, PolicyOrigin, PolicyStage, PolicyState,
 )
 from app.dataModel.policy.policyFacts import KnownFact, UnknownFact, WaitingFact
 from app.dataModel.policy.policyRules import DisableEffect, PolicyRule, RequireSupportEffect, SelectPriorityDefaultEffect
@@ -107,9 +108,8 @@ class PolicyResolution(Generic[B, R]):
             if unknowns:
                 return self.failure((PolicyProblem(PolicyIssueReason.UNKNOWN_FACT, unknowns),))
             if len({v.value for v in selected if isinstance(v, KnownFact)}) > 1:
-                return self.failure((PolicyProblem(PolicyIssueReason.RULE_CONFLICT, tuple(
-                    issue(PolicyIssueReason.RULE_CONFLICT, ("rules", r.id),
-                          "equal-precedence priority values conflict") for r in choices)),))
+                return self.failure((PolicyProblem(PolicyIssueReason.RULE_CONFLICT, (PolicyRuleIssue(code=PolicyIssueReason.RULE_CONFLICT, stage=PolicyStage.PRIORITY,
+                    rule_ids=tuple(r.id for r in choices), message="equal-precedence priority values conflict"),)),))
             ref = refs[0] if refs else spec.domain_priority_ref
             origin = PolicyOrigin.DOMAIN_DEFAULT
         value = reader.read(ref)
@@ -118,8 +118,8 @@ class PolicyResolution(Generic[B, R]):
             origin = PolicyOrigin.TERMINAL_DEFAULT
             value = reader.read(ref)
         if not isinstance(value, KnownFact) or type(value.value) is not int or value.value < 0:
-            problem = value.issue if isinstance(value, UnknownFact) else issue(
-                PolicyIssueReason.INVALID_INPUT, reader.path(ref), "priority must resolve to nonnegative integer")
+            problem = value.issue if isinstance(value, UnknownFact) else reference_issue(
+                PolicyIssueReason.INVALID_INPUT, ref, "priority must resolve to nonnegative integer")
             return self.failure((PolicyProblem(PolicyIssueReason.UNKNOWN_FACT if isinstance(value, UnknownFact)
                                               else PolicyIssueReason.INVALID_INPUT, (problem,)),))
         self.priority = value.value

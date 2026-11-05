@@ -1,13 +1,16 @@
 """Build immutable tick metadata from pinned envelopes and assigned participants."""
 from collections.abc import Callable, Mapping
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, StrictInt, TypeAdapter, ValidationError
 
 from app.dataModel.validation.diagnostics.validatorAggregationHelper import ValidatorAggregationHelper
 from app.dataModel.fields.fieldBinding import bind_field
 from app.dataModel.fields.fieldRef import FieldRef
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.dataModel.fields.checkedPath import CheckedPath
+from app.dataModel.worldSnapshot.metadata.metadataIssues import (
+    SnapshotBuilderIssue, SnapshotMetadataCode as Code, SnapshotMetadataFieldIssue, SnapshotMetadataRelationIssue,
+)
 
 from app.application.worldSnapshot.contracts.context import SnapshotApplyContext
 from app.application.worldSnapshot.validation.receiptProvenance import validate_receipt_provenance
@@ -25,7 +28,7 @@ _CREATED = TypeAdapter(CreatedAtUtc)
 
 
 class SnapshotMetadataFailure(ValueError):
-    def __init__(self, diagnostics: tuple[FieldPathError, ...]) -> None:
+    def __init__(self, diagnostics: tuple[SnapshotBuilderIssue, ...]) -> None:
         self.diagnostics = diagnostics
         super().__init__(diagnostics)
 
@@ -60,21 +63,35 @@ class SnapshotMetadataBuilder:
               receipts: tuple[SectionApplyReceipt, ...], bases: Mapping[SnapshotRef, SnapshotEnvelope],
               retained: Mapping[SnapshotRef, tuple[ArtifactRef, ...]]) -> tuple[SnapshotEnvelope, ...]:
         """Retention destinations are explicit; a flat receipt does not identify a holder."""
-        errors = ValidatorAggregationHelper()
-        def report(path: tuple[str | int, ...], code: str, message: str) -> None:
-            errors.add(FieldPathError(path, message, code="snapshot.metadata." + code))
+        errors: ValidatorAggregationHelper[SnapshotBuilderIssue] = ValidatorAggregationHelper(
+            (SnapshotMetadataFieldIssue, SnapshotMetadataRelationIssue))
 
-        for label, adapter, value in (("turn_id", _TURN, turn_id), ("created_at", _CREATED, created_at)):
+        def report(path: tuple[str | int, ...], code: Code, message: str, snapshot: SnapshotRef | None = None) -> None:
+            errors.add(SnapshotMetadataRelationIssue.model_validate(dict(location=path[0], address=path[1:],
+                code=code, message=message, snapshot=snapshot), strict=True))
+
+        def malformed(location: Literal["receipts", "retained"], destination: tuple[int] | tuple[str, int],
+                      model: type[BaseModel], loc: tuple[str | int, ...], code: Code, message: str) -> None:
+            checked = CheckedPath.from_pydantic_loc(model, loc)
+            if checked is None:
+                report((location, *destination, *loc), code, message)
+            else:
+                errors.add(SnapshotMetadataFieldIssue(location=location, destination=destination, code=code,
+                                                     path=checked, message=message))
+
+        for label, adapter, value, code in (("turn_id", _TURN, turn_id, Code.INVALID_TURN_ID),
+                                            ("created_at", _CREATED, created_at, Code.INVALID_CREATED_AT)):
             try:
                 adapter.validate_python(value, strict=True)
             except ValidationError as error:
-                report((label,), "invalid_" + label, error.errors()[0]["msg"])
+                for issue in error.errors():
+                    report((label,), code, issue["msg"])
         expected = context.validation.expected_world
         players = {}
         for i, head in enumerate(context.validation.expected_players):
             field, uid = metadata_field(head, lambda p: p.player_uid)
             if uid in players:
-                report(("validation", "expected_players", i, field), "duplicate_expectation", "duplicate expected player")
+                report(("validation", "expected_players", i, field), Code.DUPLICATE_EXPECTATION, "duplicate expected player")
             players[uid] = head.expected_head
         parents: dict[SnapshotRef, SnapshotRef | None] = {}
         parents[context.world_snapshot] = expected.snapshot_head
@@ -82,33 +99,33 @@ class SnapshotMetadataBuilder:
         for i, player in enumerate(context.player_snapshots):
             field, uid = metadata_field(player, lambda p: p.player_uid)
             if uid not in players or uid in assigned_uids:
-                report(("player_snapshots", i, field), "unexpected_player", "unmatched or duplicate assigned player")
+                report(("player_snapshots", i, field), Code.UNEXPECTED_PLAYER, "unmatched or duplicate assigned player")
             assigned_uids.add(uid)
             parents[player] = players.get(uid)
         for i, head in enumerate(context.validation.expected_players):
             field, uid = metadata_field(head, lambda p: p.player_uid)
             if uid not in assigned_uids:
-                report(("validation", "expected_players", i, field), "missing_player", "missing assigned player")
+                report(("validation", "expected_players", i, field), Code.MISSING_PLAYER, "missing assigned player")
         for ref, parent in parents.items():
             if ref == parent:
-                report(("parents", ref.snapshot_id), "self_parent", "assigned snapshot cannot be its own parent")
+                report(("parents", ref.snapshot_id), Code.SELF_PARENT, "assigned snapshot cannot be its own parent")
         pinned = tuple(p for p in (expected.snapshot_head, *players.values()) if p is not None)
         for parent in pinned:
             if parent not in bases:
-                report(("bases", parent.snapshot_id), "missing_base", "missing pinned snapshot")
+                report(("bases", parent.snapshot_id), Code.MISSING_BASE, "missing pinned snapshot", parent)
             else:
                 name, identity = metadata_field(bases[parent], lambda m: m.ref)
                 if identity != parent:
-                    report(("bases", parent.snapshot_id, name), "base_identity", "metadata base identity mismatch")
+                    report(("bases", parent.snapshot_id, name), Code.BASE_IDENTITY, "metadata base identity mismatch")
         for ref in bases:
             if ref not in pinned:
-                report(("bases", ref.snapshot_id), "unexpected_base", "base is not pinned")
+                report(("bases", ref.snapshot_id), Code.UNEXPECTED_BASE, "base is not pinned")
         artifacts: list[ArtifactRef] = []
         for ref, values in retained.items():
             if ref not in parents:
-                report(("retained", ref.snapshot_id), "foreign_destination", "artifact destination is not assigned")
+                report(("retained", ref.snapshot_id), Code.FOREIGN_DESTINATION, "artifact destination is not assigned")
             if not isinstance(values, tuple):
-                report(("retained", ref.snapshot_id), "invalid_retention", "retention must be a tuple")
+                report(("retained", ref.snapshot_id), Code.INVALID_RETENTION, "retention must be a tuple")
                 continue
             seen = set()
             for j, artifact in enumerate(values):
@@ -116,15 +133,15 @@ class SnapshotMetadataBuilder:
                     artifact = ArtifactRef.model_validate(artifact, strict=True)
                 except ValidationError as error:
                     for issue in error.errors():
-                        report(("retained", ref.snapshot_id, j, *issue["loc"]), "invalid_artifact", issue["msg"])
+                        malformed("retained", (ref.snapshot_id, j), ArtifactRef, issue["loc"], Code.INVALID_ARTIFACT, issue["msg"])
                     continue
                 if artifact in seen:
-                    report(("retained", ref.snapshot_id, j), "duplicate_artifact", "duplicate retained artifact")
+                    report(("retained", ref.snapshot_id, j), Code.DUPLICATE_ARTIFACT, "duplicate retained artifact")
                 seen.add(artifact)
                 if ref in parents:
                     artifacts.append(artifact)
         if not isinstance(receipts, tuple):
-            report(("receipts",), "invalid_receipts", "receipts must be a tuple")
+            report(("receipts",), Code.INVALID_RECEIPTS, "receipts must be a tuple")
         validated: list[SectionApplyReceipt] = []
         seen_sections = set()
         for i, raw in enumerate(receipts if isinstance(receipts, tuple) else ()):
@@ -137,7 +154,7 @@ class SnapshotMetadataBuilder:
                 valid = False
                 for issue in error.errors():
                     loc = issue["loc"]
-                    report((*path, *loc), "invalid_receipt", issue["msg"])
+                    malformed("receipts", (i,), SectionApplyReceipt, loc, Code.INVALID_RECEIPT, issue["msg"])
                     if loc and isinstance(loc[0], str):
                         invalid_fields.add(loc[0])
                 if not isinstance(raw, SectionApplyReceipt):
@@ -149,22 +166,22 @@ class SnapshotMetadataBuilder:
             key_name, key = metadata_field(receipt, lambda r: r.section_key)
             if key_name not in invalid_fields:
                 if key in seen_sections:
-                    report((*path, key_name), "duplicate_section", "duplicate section receipt")
+                    report((*path, key_name), Code.DUPLICATE_SECTION, "duplicate section receipt")
                 seen_sections.add(key)
             changed_name, changed = metadata_field(receipt, lambda r: r.changed)
             for j, patch in _indexed_items(changed, PatchRef, validated=valid):
                 op_name, op = metadata_field(patch, lambda p: p.operation_id)
                 if op != context.validation.operation_id:
-                    report((*path, changed_name, j, op_name), "foreign_operation", "patch belongs to another operation")
+                    report((*path, changed_name, j, op_name), Code.FOREIGN_OPERATION, "patch belongs to another operation")
             name, refs = metadata_field(receipt, lambda r: r.retained_artifacts)
             for j, artifact in _indexed_items(refs, ArtifactRef, validated=valid):
                 if artifact not in artifacts:
-                    report((*path, name, j), "unassigned_artifact", "receipt artifact has no metadata destination")
+                    report((*path, name, j), Code.UNASSIGNED_ARTIFACT, "receipt artifact has no metadata destination")
             history_name, histories = metadata_field(receipt, lambda r: r.history_refs)
             for j, entry in _indexed_items(histories, SectionHistoryRef, validated=valid):
                 field, snapshot = metadata_field(entry, lambda r: r.snapshot)
                 if snapshot not in parents:
-                    report((*path, history_name, j, field), "foreign_history", "history must target an assigned snapshot")
+                    report((*path, history_name, j, field), Code.FOREIGN_HISTORY, "history must target an assigned snapshot")
             state_name, states = metadata_field(receipt, lambda r: r.state_refs)
             indexed_states = _indexed_items(states, SectionStateRef, validated=valid)
             replacements = {(_owner(entry.snapshot), entry.section_key) for _, entry in indexed_states
@@ -173,7 +190,7 @@ class SnapshotMetadataBuilder:
                 field, snapshot = metadata_field(state_ref, lambda r: r.snapshot)
                 if snapshot in parents:
                     if "changed" not in invalid_fields and not receipt.changed:
-                        report((*path, state_name, j, field), "noop_state", "no-op receipt cannot replace state")
+                        report((*path, state_name, j, field), Code.NOOP_STATE, "no-op receipt cannot replace state")
                 else:
                     if isinstance(snapshot, WorldSnapshotRef):
                         owner_present = snapshot.world_uid == context.world_snapshot.world_uid
@@ -182,14 +199,14 @@ class SnapshotMetadataBuilder:
                         owner_present = snapshot.player_uid in players
                         parent = players.get(snapshot.player_uid)
                     if (_owner(snapshot), state_ref.section_key) in replacements:
-                        report((*path, state_name, j), "superseded_state", "receipt also replaces this inherited state")
+                        report((*path, state_name, j), Code.SUPERSEDED_STATE, "receipt also replaces this inherited state")
                     if owner_present and parent is not None and (parent not in bases or bases[parent].ref != parent):
                         continue  # Reachability depends on the pinned base.
                     if not owner_present or parent is None or state_ref not in bases[parent].state_refs:
-                        report((*path, state_name, j, field), "unreachable_state", "state is not reachable from pinned base")
+                        report((*path, state_name, j, field), Code.UNREACHABLE_STATE, "state is not reachable from pinned base")
         field, pack = metadata_field(context.next_publication, lambda p: p.pack_hash)
         if pack is None:
-            report(("context", "next_publication", field), "missing_pack", "runtime metadata requires a pack")
+            report(("context", "next_publication", field), Code.MISSING_PACK, "runtime metadata requires a pack")
         errors.raise_if_any(SnapshotMetadataFailure)
         receipts = tuple(validated)
         assert pack is not None

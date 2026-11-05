@@ -15,7 +15,7 @@ class WorldEpochSettingsPipelineOpenPipeline:
         entries = settings.epochs.entries
         key = request.epoch.system_epoch
         if any(e.system_epoch == key for e in entries):
-            return issue("epoch", "epoch already exists")
+            return issue(request, "epoch", "epoch already exists")
         registry = WorldCalendarEpochRegistry(entries=(*entries, request.epoch))
         return prepare(request.base, settings.model_copy(update={"epochs": registry}), self._validator)
 
@@ -24,7 +24,7 @@ class WorldEpochSettingsPipelineOpenPipeline:
         entries = settings.epochs.entries
         key = request.epoch.system_epoch
         if not any(e.system_epoch == key for e in entries):
-            return issue("epoch", "unknown epoch")
+            return issue(request, "epoch", "unknown epoch")
         registry = WorldCalendarEpochRegistry(entries=tuple(request.epoch if e.system_epoch == key else e for e in entries))
         return prepare(request.base, settings.model_copy(update={"epochs": registry}), self._validator)
 
@@ -33,6 +33,6 @@ class WorldEpochSettingsPipelineOpenPipeline:
         entries = settings.epochs.entries
         key = request.epoch
         if not any(e.system_epoch == key for e in entries):
-            return issue("epoch", "unknown epoch")
+            return issue(request, "epoch", "unknown epoch")
         registry = WorldCalendarEpochRegistry(entries=tuple(e for e in entries if e.system_epoch != key))
         return prepare(request.base, settings.model_copy(update={"epochs": registry}), self._validator)

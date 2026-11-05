@@ -30,7 +30,10 @@ class PinWorkerDrainTests(IsolatedAsyncioTestCase):
     async def test_guarded_admission_read_first_closes_before_release(self):
         await self.exercise(shared=True, guarded_admission=True)
 
-    async def exercise(self, *, shared, guarded_admission=False, revoke_first=False):
+    async def test_independent_checkpoint_between_guarded_check_and_open(self):
+        await self.exercise(shared=False, separate_check_gap=True)
+
+    async def exercise(self, *, shared, guarded_admission=False, revoke_first=False, separate_check_gap=False):
         async with AsyncExitStack() as stack:
             pack = await stack.enter_async_context(live_database())
             competitor = await stack.enter_async_context(live_database(pack[0].path, seed=False))
@@ -84,6 +87,10 @@ class PinWorkerDrainTests(IsolatedAsyncioTestCase):
                 async with f.catalog.guard(artifact):
                     if not await f.holders.is_held(artifact, holder):
                         raise ValueError("missing hold")
+                    if separate_check_gap:
+                        self.assertNotEqual((await store.load(execution)).status, InvocationStatus.FAILED)
+                        prechecked.set()
+                        await continue_to_guard.wait()
                     if guarded_admission:
                         scopes = f.catalog._scopes
                         async with scopes.read_scope() as scope:
@@ -103,6 +110,22 @@ class PinWorkerDrainTests(IsolatedAsyncioTestCase):
                 await store.checkpoint(claim, 0, graph.checkpoint_status(), graph.model_dump_json().encode())
 
             with patch.object(Path, "open", controlled_open):
+                if separate_check_gap:
+                    async with asyncio.TaskGroup() as tasks:
+                        stale = tasks.create_task(read_if_live(ref))
+                        try:
+                            await asyncio.wait_for(prechecked.wait(), 5)
+                            await terminal()
+                            self.assertEqual((await store.load(execution)).status, InvocationStatus.FAILED)
+                            self.assertTrue(await observer.holders.is_held(ref, holder))
+                            self.assertEqual(open_calls, [])
+                        finally:
+                            finish.set()
+                            continue_to_guard.set()
+                    self.assertEqual(stale.result(), b"first")
+                    self.assertEqual(open_calls, [f.backend._path(ref)])
+                    self.assertTrue(opened[0].closed)
+                    return
                 if revoke_first:
                     async def stale_worker():
                         with self.assertRaisesRegex(ValueError, "revoked inside guard"):

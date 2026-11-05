@@ -612,6 +612,9 @@ class AssignedPublicationTests(unittest.TestCase):
         run_async(check())
 
     def test_missing_persisted_bases_preserve_independent_receipt_diagnostics(self):
+        from app.application.worldSnapshot.validation.missingPersistedSnapshotBase import MissingPersistedSnapshotBase
+        from app.dataModel.worldSnapshot.metadata.metadataIssues import SnapshotMetadataFieldIssue, SnapshotMetadataRelationIssue
+        from app.dataModel.validation.diagnostics.validatorAggregationHelper import ValidatorAggregationHelper, IssueAdmissionError
         from unittest.mock import AsyncMock
         from app.application.patch.registry.sectionRegistry import SectionRegistry
         from app.application.publication.errors import PublicationInfrastructureError
@@ -645,14 +648,30 @@ class AssignedPublicationTests(unittest.TestCase):
                     async with commits.transaction("candidate") as scope:
                         ctx = SnapshotApplyContext(SnapshotValidationContext("candidate", expected, heads, (), scope.read_scope),
                                                    new, (player,), scope, target)
-                        with patch.object(history, "append", new_callable=AsyncMock) as append:
+                        with (patch.object(history, "append", new_callable=AsyncMock) as append,
+                              patch("app.application.worldSnapshot.service.snapshotMetadataBuilder.ValidatorAggregationHelper",
+                                    wraps=ValidatorAggregationHelper) as builder_collector,
+                              patch("app.application.worldSnapshot.service.worldSnapshotService.ValidatorAggregationHelper",
+                                    wraps=ValidatorAggregationHelper) as service_collector):
                             with self.assertRaises(PublicationInfrastructureError) as caught:
                                 await service._append_metadata(ctx, 2, STAMP, (a, b), {})
                             append.assert_not_awaited()
+                            builder_collector.assert_called_once_with((SnapshotMetadataFieldIssue, SnapshotMetadataRelationIssue))
+                            admitted = (MissingPersistedSnapshotBase, SnapshotMetadataFieldIssue, SnapshotMetadataRelationIssue)
+                            service_collector.assert_called_once_with(admitted)
+                    causes = caught.exception.args[0]
+                    self.assertEqual([type(item) for item in causes],
+                        [MissingPersistedSnapshotBase] * (2 if player_parent else 1) +
+                        [SnapshotMetadataFieldIssue, SnapshotMetadataRelationIssue, SnapshotMetadataRelationIssue])
+                    self.assertEqual([(c.snapshot, c.player_index) for c in causes[:-3]],
+                                     [(old, None)] + ([(player_parent, 0)] if player_parent else []))
+                    for invalid in (object(), causes[-1].model_copy(update={"address": []})):
+                        with self.assertRaises(IssueAdmissionError):
+                            ValidatorAggregationHelper(admitted).add(invalid)
                     issues = [("missing_persisted_base", ("validation", "expected_world", "snapshot_head"))]
                     if player_parent:
                         issues.append(("missing_persisted_base", ("validation", "expected_players", 0, "expected_head")))
-                    self.assertEqual([(i.code.removeprefix("snapshot.metadata."), i.path) for i in caught.exception.args[0]],
+                    self.assertEqual([(i.code.removeprefix("snapshot.metadata."), i.diagnostic_path) for i in caught.exception.args[0]],
                                      issues + [("invalid_receipt", ("receipts", 0, "retained_artifacts", 0)),
                                                ("foreign_history", ("receipts", 0, "history_refs", 0, "snapshot")),
                                                ("unassigned_artifact", ("receipts", 1, "retained_artifacts", 0))])

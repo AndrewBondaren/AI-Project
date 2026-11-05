@@ -10,14 +10,15 @@ from app.application.worldData.generators.terrain.designedWater.fields.plateFiel
 from app.application.worldData.generators.terrain.designedWater.preparation.coastlineWaterSourceAdapter import CoastlineWaterSourceAdapter
 from app.application.worldData.generators.terrain.designedWater.strategies.procedural.nativeCoastlineDesign import design_native_coastline
 from app.dataModel.hydrology.sources.waterDesignSource import WaterDesignSourceKind
+from app.dataModel.fields.validatedFieldPath import ModelIdentity
+from app.dataModel.terrain.designedWater.waterDesignTypeError import WaterDesignTypeError
 from app.dataModel.terrain.designedWater.draft import FineProceduralWaterDesignDraft
 from app.dataModel.terrain.designedWater.fields.plateCountAdjustedNotice import PlateCountAdjustedNotice
 from app.dataModel.terrain.designedWater.input import NativeCoastlineStrategyInput
-from app.application.worldData.generators.terrain.designedWater.preparation.coastlineConstraintPreparer import CoastlineConstraintPreparer
 from app.dataModel.terrain.designedWater.fields.field import FineContinentalField, NoiseRecipe, PlateRecipe
 from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometryRequest
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind as Strategy
-from tests.geo1.coastline_source.fixtures import capture, capture_design_inputs
+from tests.geo1.coastline_source.fixtures import capture
 from tests.geo1.fine_water.fixtures import physical_inputs
 from tests.geo1.fine_water.test_fill import source as fine_window
 
@@ -27,14 +28,17 @@ class NativeFieldTests(TestCase):
     def setUpClass(cls):
         cls.window, _, cls.topology = fine_window(hills=False)
 
-    def admitted(self, strategy):
+    def admitted(self, strategy, *, plate_count=None):
         value = capture(strategy=strategy)
         legacy = value.geometry_request
         request = AuthoredWaterGeometryRequest(source=legacy.source, pre_hydrology=self.window,
             topology=self.topology, grid=physical_inputs(self.topology).grid, seed_root=legacy.seed_root,
             anchors=(), seas=legacy.seas, z_min=legacy.z_min)
+        recipe = value.field_policy.model_copy(update={"topology": self.topology})
+        if plate_count is not None:
+            recipe = recipe.model_copy(update={"plate_policy": recipe.plate_policy.model_copy(update={"plate_count": plate_count})})
         return CoastlineWaterSourceAdapter().prepare_native(**dict(vars(value), geometry_request=request,
-            expected_window=self.window.ref, field_policy=value.field_policy.model_copy(update={"topology": self.topology})))
+            expected_window=self.window.ref, field_policy=recipe))
 
     def test_native_draft_binds_admitted_field_and_floor(self):
         for strategy in (Strategy.CONTINENTAL_NOISE, Strategy.PLATE, Strategy.PLATE_NOISE):
@@ -63,27 +67,29 @@ class NativeFieldTests(TestCase):
             FineProceduralWaterDesignDraft.model_validate(draft.model_copy(update=changes))
         self.assertEqual([(issue["loc"], issue["type"]) for issue in caught.exception.errors()],
                          [(("metadata", "source_kind"), "value_error"), (("z_min",), "value_error")])
-        with patch.object(PlateFieldGenerator, "layout", side_effect=AssertionError("layout")):
-            with self.assertRaises(PlanBuildFailure) as refused:
-                design_native_coastline(admitted.model_copy(update=changes))
-        self.assertEqual([(issue.path, issue.code) for issue in refused.exception.issues], [
-            (("continental_field", "metadata", field), "WATER_DESIGN_INVALID_PREPARATION_INPUT")
-            for field in ("source_kind", "level")])
+        for strategy in (Strategy.CONTINENTAL_NOISE, Strategy.PLATE, Strategy.PLATE_NOISE):
+            with self.subTest(strategy=strategy):
+                admitted = self.admitted(strategy)
+                changes = {"z_min": admitted.metadata.level, "metadata": admitted.metadata.model_copy(
+                    update={"source_kind": WaterDesignSourceKind.LAKE})}
+                with (patch.object(PlateFieldGenerator, "layout") as layout,
+                      patch.object(PlateFieldGenerator, "fine_values") as plate_samples,
+                      patch.object(NoiseFieldGenerator, "fine_values") as noise_samples):
+                    with self.assertRaises(PlanBuildFailure) as refused:
+                        design_native_coastline(admitted.model_copy(update=changes))
+                layout.assert_not_called()
+                plate_samples.assert_not_called()
+                noise_samples.assert_not_called()
+                for issue in refused.exception.issues:
+                    self.assertIs(type(issue), WaterDesignTypeError)
+                    self.assertEqual(issue.path.root, ModelIdentity.of(NativeCoastlineStrategyInput))
+                self.assertEqual([(issue.diagnostic_path(), issue.code) for issue in refused.exception.issues], [
+                    (("continental_field", "metadata", field), "WATER_DESIGN_INVALID_PREPARATION_INPUT")
+                    for field in ("source_kind", "level")])
 
     def test_plate_adjustment_survives_native_draft_restore(self):
-        values = capture_design_inputs(strategy=Strategy.PLATE)
-        legacy = values["geometry_request"]
-        recipe = values["field_policy"]
-        recipe = recipe.model_copy(update={"topology": self.topology,
-            "plate_policy": recipe.plate_policy.model_copy(update={"plate_count": 1025})})
-        req = AuthoredWaterGeometryRequest(source=legacy.source, pre_hydrology=self.window, topology=self.topology,
-            grid=physical_inputs(self.topology).grid, seed_root=legacy.seed_root, anchors=(), seas=legacy.seas,
-            z_min=legacy.z_min)
-        admitted = NativeCoastlineStrategyInput(strategy=Strategy.PLATE, source=req.source, metadata=values["metadata"],
-            context=values["context"], region=values["region"], budget=values["budget"],
-            region_coverage=values["region_coverage"], seed_root=req.seed_root, topology=req.topology,
-            grid=req.grid, pre_hydrology=self.window, z_min=req.z_min, field_policy=recipe,
-            constraints=CoastlineConstraintPreparer().prepare_native(req))
+        admitted = self.admitted(Strategy.PLATE, plate_count=1025)
+        recipe = admitted.field_policy
         layout = PlateFieldGenerator().layout(recipe)
         self.assertEqual(len(layout.centers), 1024)
         draft = design_native_coastline(admitted)
@@ -147,5 +153,5 @@ class NativeFieldTests(TestCase):
         with patch.object(NoiseFieldGenerator, "fine_values", side_effect=AssertionError("sampling")):
             with self.assertRaises(PlanBuildFailure) as caught:
                 ContinentalFieldComposer().build_native(admitted.model_copy(update={"constraints": constraints}))
-        self.assertEqual([(i.path, i.code) for i in caught.exception.issues], [
+        self.assertEqual([(i.diagnostic_path(), i.code) for i in caught.exception.issues], [
             (("continental_field", "constraints", "pre_hydrology_ref"), "WATER_DESIGN_INVALID_PREPARATION_INPUT")])

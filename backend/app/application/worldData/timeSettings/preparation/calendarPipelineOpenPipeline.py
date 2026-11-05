@@ -22,7 +22,7 @@ class WorldCalendarSettingsPipelineOpenPipeline:
         settings = request.base.capture.settings
         entries = settings.calendars.entries
         if any(e.definition.system_calendar == request.entry.definition.system_calendar for e in entries):
-            return issue("entry", "calendar already exists")
+            return issue(request, "entry", "calendar already exists")
         registry = WorldCalendarRegistry(entries=(*entries, request.entry))
         return prepare(request.base, settings.model_copy(update={"calendars": registry}), self._validator)
 
@@ -38,7 +38,7 @@ class WorldCalendarSettingsPipelineOpenPipeline:
         explicit = (entry.anchor.coordinate_seconds, entry.anchor.coordinate_nanoseconds) == point.coordinate
         previous = settings.calendars.entry_for(key)
         if not explicit and previous is not None and entry.anchor != previous.anchor:
-            return issue("anchor", "replacement anchor must be at the effective point")
+            return issue(request, "entry.anchor", "replacement anchor must be at the effective point")
         if not explicit:
             anchor = CalendarAnchor(coordinate_seconds=point.seconds, coordinate_nanoseconds=point.nanoseconds,
                                     origin=CalendarOrigin(date=current.date, time=current.time))
@@ -46,7 +46,9 @@ class WorldCalendarSettingsPipelineOpenPipeline:
         entries = tuple(entry if e.definition.system_calendar == key else e for e in settings.calendars.entries)
         candidate = settings.model_copy(update={"calendars": WorldCalendarRegistry(entries=entries)})
         result = prepare(base, candidate, self._validator)
-        if not explicit and isinstance(result, SettingsInvalid) and any(i.path[-3:-1] == ("anchor", "origin") for i in result.issues):
+        if not explicit and isinstance(result, SettingsInvalid) and all(
+            i.path.projection()[3:5] == ("anchor", "origin") for i in result.issues
+        ):
             return SettingsAnchorRequired(calendar=key, current=current.time)
         return result
 
@@ -58,7 +60,7 @@ class WorldCalendarSettingsPipelineOpenPipeline:
         settings = request.base.capture.settings
         keys = {e.definition.system_calendar for e in settings.calendars.entries}
         if request.calendar not in keys or request.replacement not in keys - {request.calendar}:
-            return issue("replacement", "existing distinct replacement required")
+            return issue(request, "replacement", "existing distinct replacement required")
         if any(epoch.calendar == request.calendar for epoch in settings.epochs.entries):
             return SettingsInUse(calendar=request.calendar)
         entries = tuple(e for e in settings.calendars.entries if e.definition.system_calendar != request.calendar)

@@ -1,6 +1,8 @@
 from typing import ClassVar
 
 from app.dataModel.world.calendar.dates.anchor import CalendarOrigin
+from app.dataModel.fields.fieldRef import FieldRef
+from app.dataModel.world.calendar.catalogs.periods import PeriodEntry
 
 from app.dataModel.annotationPolicy import DefaultWhenMissing, StrictOnWire
 from app.dataModel.world.calendar.scalars import CalendarRecord, Key, Pos
@@ -10,6 +12,10 @@ from app.dataModel.world.calendar.epochs.registry import WorldCalendarEpochRegis
 
 class WorldTimeSettings(CalendarRecord):
     SCHEMA_ID: ClassVar[str] = "SCH-WORLD-TIME-SETTINGS-V1"
+    WIRE_RUNTIME_DEFAULTS: ClassVar = (
+        FieldRef(lambda: WorldTimeSettings, lambda model: model.hours_per_day),
+        FieldRef(lambda: PeriodEntry, lambda model: model.from_minute),
+    )
 
     hours_per_day: DefaultWhenMissing[Pos] = 24
     calendars: StrictOnWire[WorldCalendarRegistry]

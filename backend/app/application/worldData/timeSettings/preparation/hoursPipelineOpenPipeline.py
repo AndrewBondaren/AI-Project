@@ -23,7 +23,7 @@ class WorldHoursSettingsPipelineOpenPipeline:
         replacements = {item.calendar: item.origin for item in request.anchors}
         keys = {e.definition.system_calendar for e in settings.calendars.entries}
         if len(replacements) != len(request.anchors) or replacements.keys() - keys:
-            return issue("anchors", "duplicate or unknown calendar")
+            return issue(request, "anchors", "duplicate or unknown calendar")
         entries = []
         for entry in settings.calendars.entries:
             key = entry.definition.system_calendar
