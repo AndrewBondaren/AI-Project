@@ -8,6 +8,9 @@ from app.application.worldData.generators.terrain.designedWater.fields.continent
 from app.application.worldData.generators.terrain.designedWater.fields.noiseFieldGenerator import NoiseFieldGenerator
 from app.application.worldData.generators.terrain.designedWater.fields.plateFieldGenerator import PlateFieldGenerator
 from app.application.worldData.generators.terrain.designedWater.preparation.coastlineWaterSourceAdapter import CoastlineWaterSourceAdapter
+from app.application.worldData.generators.terrain.designedWater.strategies.procedural.nativeCoastlineDesign import design_native_coastline
+from app.dataModel.hydrology.sources.waterDesignSource import WaterDesignSourceKind
+from app.dataModel.terrain.designedWater.draft import FineProceduralWaterDesignDraft
 from app.dataModel.terrain.designedWater.fields.field import FineContinentalField, NoiseRecipe, PlateRecipe
 from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometryRequest
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind as Strategy
@@ -29,6 +32,40 @@ class NativeFieldTests(TestCase):
             anchors=(), seas=legacy.seas, z_min=legacy.z_min)
         return CoastlineWaterSourceAdapter().prepare_native(**dict(vars(value), geometry_request=request,
             expected_window=self.window.ref, field_policy=value.field_policy.model_copy(update={"topology": self.topology})))
+
+    def test_native_draft_binds_admitted_field_and_floor(self):
+        for strategy in (Strategy.CONTINENTAL_NOISE, Strategy.PLATE, Strategy.PLATE_NOISE):
+            with self.subTest(strategy=strategy):
+                admitted = self.admitted(strategy)
+                if strategy is Strategy.PLATE_NOISE:
+                    admitted = admitted.model_copy(update={"z_min": admitted.metadata.level - 1})
+                draft = design_native_coastline(admitted)
+                self.assertEqual(draft.metadata, admitted.metadata)
+                self.assertEqual(draft.field, ContinentalFieldComposer().build_native(admitted))
+                self.assertEqual(draft.field.pre_hydrology_ref, self.window.ref)
+                profile = draft.floor_profile
+                self.assertEqual((profile.recipe, profile.level, profile.depth, profile.z_min),
+                                 (admitted.field_policy, admitted.metadata.level,
+                                  admitted.metadata.default_depth, admitted.z_min))
+                self.assertEqual(draft.floor_z, max(admitted.z_min, profile.level - profile.depth))
+                restored = FineProceduralWaterDesignDraft.model_validate(draft.model_dump())
+                self.assertEqual((restored.floor_z, restored.floor_profile), (draft.floor_z, profile))
+
+    def test_native_draft_rejects_invalid_metadata_and_lower_bound_together(self):
+        admitted = self.admitted(Strategy.PLATE)
+        draft = design_native_coastline(admitted)
+        metadata = admitted.metadata.model_copy(update={"source_kind": WaterDesignSourceKind.LAKE})
+        changes = {"metadata": metadata, "z_min": metadata.level}
+        with self.assertRaises(ValidationError) as caught:
+            FineProceduralWaterDesignDraft.model_validate(draft.model_copy(update=changes))
+        self.assertEqual([(issue["loc"], issue["type"]) for issue in caught.exception.errors()],
+                         [(("metadata", "source_kind"), "value_error"), (("z_min",), "value_error")])
+        with patch.object(PlateFieldGenerator, "layout", side_effect=AssertionError("layout")):
+            with self.assertRaises(PlanBuildFailure) as refused:
+                design_native_coastline(admitted.model_copy(update=changes))
+        self.assertEqual([(issue.path, issue.code) for issue in refused.exception.issues], [
+            (("continental_field", "metadata", field), "WATER_DESIGN_INVALID_PREPARATION_INPUT")
+            for field in ("source_kind", "level")])
 
     def test_fields_cover_window_and_match_independent_fine_samples(self):
         composer = ContinentalFieldComposer()

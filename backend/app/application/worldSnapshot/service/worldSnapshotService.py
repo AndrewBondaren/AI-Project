@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 
 from app.core.validatorAggregationHelper import ValidatorAggregationHelper
+from app.application.artifacts.contracts.holderPort import IArtifactHolders
 from app.application.patch.registry.sectionRegistry import SectionRegistry
 from app.application.worldSnapshot.contracts.commitScope import CommitScope
 from app.application.worldSnapshot.contracts.context import SnapshotApplyContext, SnapshotValidationContext
@@ -11,6 +12,7 @@ from app.application.worldSnapshot.service.snapshotMetadataBuilder import Snapsh
 from app.application.worldSnapshot.storage.historyStore import ISnapshotHistoryStore
 from app.dataModel.worldSnapshot.metadata.envelope import CreatedAtUtc, SnapshotEnvelope
 from app.dataModel.artifacts.references import ArtifactRef
+from app.dataModel.artifacts.lifecycle.lease import OperationLeaseRef
 from app.application.worldSnapshot.storage.publicationStore import IPlayerPublicationStore, IWorldPublicationStore
 from app.dataModel.patch.results.sectionResult import SectionApplyReceipt, SectionRefused
 from app.dataModel.patch.sections.section import DomainSection
@@ -37,6 +39,15 @@ class WorldSnapshotService:
         self._world = world
         self._players = players
         self._history = history
+
+    async def _append_metadata_and_handoff(
+        self, context: SnapshotApplyContext, turn_id: int, created_at: CreatedAtUtc,
+        receipts: tuple[SectionApplyReceipt, ...], retained: Mapping[SnapshotRef, tuple[ArtifactRef, ...]],
+        *, holders: IArtifactHolders, lease: OperationLeaseRef, transferred: tuple[ArtifactRef, ...],
+    ) -> None:
+        """Publish explicit destinations and transfer the selected holds in the caller's writer scope."""
+        await self._append_metadata(context, turn_id, created_at, receipts, retained)
+        await holders.handoff(context.scope, lease, (context.world_snapshot, *context.player_snapshots), transferred)
 
     async def _append_metadata(self, context: SnapshotApplyContext, turn_id: int, created_at: CreatedAtUtc,
                                receipts: tuple[SectionApplyReceipt, ...],

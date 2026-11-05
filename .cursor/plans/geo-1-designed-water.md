@@ -16046,3 +16046,15 @@ GEO-I9.1 принят в границах authored geometry. G10-A и итого
 - Для каждой стратегии замена только output_fingerprint в ref ограничений на 32 байта 0x49 дала ровно один PlanBuildFailure с кодом WATER_DESIGN_INVALID_PREPARATION_INPUT и путём ('continental_field', 'constraints', 'pre_hydrology_ref') до layout или вычисления значений. FineContinentalField отклонил пропуск, дубликат при сохранённой длине и перестановку соседних клеток.
 
 **Проверено статически.** build_native повторно валидирует NativeCoastlineStrategyInput, берёт рецепт и W из этого входа и обходит W.surface_z. Noise очищает memo при смене fine-строки. Действующие coarse-стратегии по-прежнему вызывают прежние build/combine. Пометки GEO-LEGACY-56/57 покрывают оба coarse build, combine, ContinentalField с SurfaceGridCoord и ProceduralWaterDesignDraft.field. Перечень будущего удаления сохраняет sample и layout для fine-пути. Пользовательская приёмка остаётся отдельным шагом.
+
+**Приёмка GEO-I11.2 — 2026-11-05.** После независимого PASS пользователь подтвердил переход к следующему срезу. Принято построение поля на полном W для noise, plate и plate-noise.
+
+### GEO-I11.3. Fine procedural draft с рецептом дна
+
+`design_native_coastline(input: NativeCoastlineStrategyInput) -> FineProceduralWaterDesignDraft` вызывает принятый `ContinentalFieldComposer.build_native` один раз. На вход подаётся результат адаптера I11.1. Контракт draft хранит metadata, поле с полным W.ref и z_min. Свойство floor_profile возвращает существующий FieldFloorProfile с рецептом поля, уровнем и default_depth источника и захваченным z_min. Свойство floor_z возвращает max(z_min, level − default_depth) в fine Z. Эти свойства восстанавливаются из сохранённых полей при повторной валидации.
+
+Проверки в `tests/geo1/coastline_source/test_native_field.py` сверяют поле каждого draft с I11.2, проверяют точный ref, оба варианта ограничения глубины и восстановление профиля после model_dump. Подмена metadata.source_kind и невозможный z_min на входе дают две диагностики WATER_DESIGN_INVALID_PREPARATION_INPUT до построения layout. Отдельно проверены пути обеих ошибок при повторной валидации draft.
+
+Следующий caller — fine placement preparation. Он должен сверить draft с принятым входом, применить allowed/required и ранжировать fine-клетки с площадью 1. GEO-LEGACY-56/57 остаются открыты до миграции потребителей. Фактическая wet membership и final bed проверяются в fine P2.
+
+**Статус GEO-I11.3 — предъявлен на независимое ревью.** Прошли все 909 тестов GEO. Pyright для модели draft и native entry завершился без ошибок и предупреждений.

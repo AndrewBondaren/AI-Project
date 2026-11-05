@@ -538,6 +538,79 @@ class AssignedPublicationTests(unittest.TestCase):
                 self.assertEqual(await peer[3].read(parent.player_uid), player)
         run_async(check())
 
+    def test_metadata_handoff_and_heads_share_outer_transaction(self):
+        from app.application.patch.registry.sectionRegistry import SectionRegistry
+        from app.application.worldSnapshot.contracts.context import SnapshotValidationContext
+        from app.application.worldSnapshot.service.worldSnapshotService import WorldSnapshotService
+        from app.dataModel.artifacts.lifecycle.holders import OperationHolder, SnapshotHolder
+        from app.dataModel.worldSnapshot.identity.publication import PlayerHeadExpectation
+        from app.dataModel.worldSnapshot.identity.refs import PlayerSnapshotRef, WorldSnapshotRef
+        from tests.snapshotCore.support.artifactFixtures import adapters, close_preparation, descriptor, preparing, sealed
+        from tests.snapshotCore.support.fixtures import STAMP
+
+        async def check():
+            async with live_database() as bundle, live_database(bundle[0].path, seed=False) as peer:
+                _, commits, world, players, history, operations = bundle
+                expected = await live_started(bundle)
+                catalog, holders = adapters(bundle)
+                _, peer_holders = adapters(peer)
+                lease = await preparing(bundle)
+                a, b, leftover = (descriptor(n) for n in ("world", "player", "leftover"))
+                for ref in (a, b, leftover):
+                    await sealed(bundle, catalog, lease, ref)
+                await close_preparation(bundle, lease, ready=True)
+                owner = await operations.claim_publication(OperationKind.SNAPSHOT_APPLY, lease.operation_id,
+                                                          lease.world_uid, lease.preparation_fingerprint, "b"*64)
+                snapshot = WorldSnapshotRef(world_uid="w1", timeline_id="t1", snapshot_id="new-world")
+                player = PlayerSnapshotRef(player_uid="p1", snapshot_id="new-player")
+                head = PlayerHeadExpectation(player_uid="p1", expected_head=None)
+                service = WorldSnapshotService(SectionRegistry(), world, players, history)
+
+                async def publish(transferred):
+                    async with commits.transaction(lease.operation_id) as scope:
+                        validation = SnapshotValidationContext(lease.operation_id, expected, (head,), (), scope.read_scope)
+                        async with service._apply_to_target(scope, validation, (), snapshot, (player,)) as (ctx, receipts):
+                            await service._append_metadata_and_handoff(ctx, 1, STAMP, receipts,
+                                {snapshot: (a,), player: (b,)}, holders=holders, lease=owner.lease, transferred=transferred)
+                    return ctx.next_publication
+
+                async def assert_rolled_back():
+                    self.assertEqual(await peer[2].read("w1"), expected)
+                    self.assertIsNone(await peer[3].read("p1"))
+                    for ref in (snapshot, player):
+                        self.assertIsNone(await peer[4].read(ref))
+                    for ref in (a, b, leftover):
+                        self.assertEqual(await peer_holders.holders(ref), (OperationHolder(lease=lease),))
+
+                with self.assertRaisesRegex(ValueError, "no published/retention owner"):
+                    await publish((a, b, leftover))
+                await assert_rolled_back()
+                cancelled = asyncio.CancelledError()
+
+                async def cancel_player_cas(scope, expected_head, next_player, operation_id):
+                    self.assertEqual((expected_head, next_player, operation_id), (head, player, lease.operation_id))
+                    self.assertEqual((await world.read("w1", scope=scope.read_scope)).snapshot_head, snapshot)
+                    async with holders._scopes.bind(scope):
+                        for ref, destination in ((a, snapshot), (b, player)):
+                            self.assertEqual(await holders.holders(ref), (SnapshotHolder(snapshot=destination),))
+                    raise cancelled
+
+                with patch.object(players, "compare_append", side_effect=cancel_player_cas):
+                    with self.assertRaises(asyncio.CancelledError) as caught:
+                        await publish((a, b))
+                    self.assertIs(caught.exception, cancelled)
+                await assert_rolled_back()
+                target = await publish((a,))
+                self.assertEqual(await peer[2].read("w1"), target)
+                self.assertEqual(await peer[3].read("p1"), player)
+                for ref, destination in ((a, snapshot), (b, player)):
+                    self.assertEqual((await peer[4].read(destination)).retained_artifacts, (ref,))
+                self.assertEqual(await peer_holders.holders(a), (SnapshotHolder(snapshot=snapshot),))
+                self.assertCountEqual(await peer_holders.holders(b),
+                                      (SnapshotHolder(snapshot=player), OperationHolder(lease=lease)))
+                self.assertEqual(await peer_holders.holders(leftover), (OperationHolder(lease=lease),))
+        run_async(check())
+
     def test_missing_persisted_bases_preserve_independent_receipt_diagnostics(self):
         from unittest.mock import AsyncMock
         from app.application.patch.registry.sectionRegistry import SectionRegistry

@@ -9,7 +9,8 @@ from app.dataModel.hydrology.sources.waterSourceMetadata import WaterSourceMetad
 from app.dataModel.hydrology.sources.waterDesignSource import WaterDesignSourceKind
 from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
 from app.dataModel.spatial.grid.coordinateTypes import FineZ
-from app.dataModel.terrain.designedWater.fields.field import ContinentalField
+from app.dataModel.terrain.designedWater.fields.field import ContinentalField, FineContinentalField
+from app.dataModel.terrain.designedWater.inputValidation import InputIssues
 from app.dataModel.terrain.relief.bathymetry.floorProfile import (
     BasinFloorProfile, FieldFloorProfile, SampledFloorProfile,
 )
@@ -85,3 +86,32 @@ class ProceduralWaterDesignDraft(_WaterDesignDraft, frozen=True):
 type WaterDesignDraft = Annotated[
     AuthoredWaterDesignDraft | ProceduralWaterDesignDraft, Field(discriminator="kind"),
 ]
+
+
+class FineProceduralWaterDesignDraft(BaseModel, frozen=True):
+    """Coastline strategy result before selection. The field owns its recipe and window ref."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, revalidate_instances="always")
+
+    metadata: WaterSourceMetadata
+    field: FineContinentalField
+    z_min: Annotated[FineZ, Field(strict=True)]
+
+    @model_validator(mode="after")
+    def coherent_floor(self) -> Self:
+        issues = InputIssues()
+        if self.metadata.source_kind is not WaterDesignSourceKind.COASTLINE:
+            issues.report(self.metadata, lambda m: m.source_kind, "native draft requires coastline metadata", "metadata")
+        if self.metadata.level <= self.z_min:
+            issues.report(self, lambda d: d.z_min, "floor lower bound must be below the water level")
+        issues.raise_if_any(type(self).__name__)
+        return self
+
+    @property
+    def floor_profile(self) -> FieldFloorProfile:
+        return FieldFloorProfile(recipe=self.field.recipe, level=self.metadata.level,
+                                 depth=self.metadata.default_depth, z_min=self.z_min)
+
+    @property
+    def floor_z(self) -> FineZ:
+        return FineZ(max(self.z_min, self.metadata.level - self.metadata.default_depth))

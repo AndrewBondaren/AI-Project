@@ -2617,7 +2617,7 @@ Concrete 4C3 adapters в checkout отсутствуют: SQL integration и п�
 | 4C4 | **ПРИНЯТ**, 2026-11-01, изолированный ContentAddressedBlobBackend | Concrete 4C3 integration и SN-CORE |
 | 4D1 / 4D1-L | **ПРИНЯТЫ**, включая concrete integration 2026-11-04 | Production composition — 4E2 |
 | 4C3 / SN-CORE | **ПРИНЯТЫ** в объёме storage core 4C2–4C4. 4C3-D принят 2026-11-04 после повторного PASS | Полный crash takeover остаётся OPEN вне freeze |
-| 4D2 | **В РАБОТЕ**. Приняты assigned Q → handlers → world CAS и player CAS в той же транзакции | Открыты публичный apply(), полный validation, общий metadata builder и terminal/retry |
+| 4D2 | **В РАБОТЕ**. Приняты assigned Q → handlers → world CAS, player CAS и metadata builder со scoped append | Следующий срез — scoped holder handoff. Открыты выбор retention destinations, публичный apply(), полный validation и terminal/retry |
 
 SN-STAGE, SN-RUNTIME и Snapshot B-2 остаются OPEN до соответствующих producer/consumer evidence.
 
@@ -2996,6 +2996,28 @@ Evidence гонок получено на отдельных соединени�
 Подмена builder версией из HEAD в отдельном процессе воспроизвела оба падения регрессионных тестов. На исправленном рабочем дереве адресный прогон из `backend` (`test_registry`, `AssignedPublicationTests`, `test_typing`) — 16 тестов, OK, 27,271 с. Полный `snapshotCore` discover — 168 тестов, OK, 1 пропущен, 138,458 с.
 
 **PASS подтверждён на HEAD `7b6104d71763d314ecf4f3b1e5e11e330a91e98b`, 2026-11-05.** Исправления вошли в `e49d3c4f`. На момент проверки файлы среза совпадали с HEAD. Адресный прогон из `backend` — 16 тестов, OK, 24,851 с. Полный `snapshotCore` discover — 168 тестов, OK, 1 пропущен, 130,032 с. [Результаты проверки обоих замечаний и подмены builder](world-domain-4d2-metadata-builder-review.md).
+
+#### Приёмка metadata builder и scoped append, следующий срез 4D2 — holder handoff, 2026-11-05
+
+**Независимое ревью holder handoff — CHANGES REQUIRED** для рабочего дерева поверх `b958c308`. Текущая реализация прошла проверку частичной передачи. Для приёмки требуется закрепить сценарий, где артефакт получает snapshot holder и сохраняет operation hold, поскольку caller не включил его в `transferred`. [Контрпример, ожидаемые держатели и результаты прогонов](world-domain-4d2-holder-handoff-review.md).
+
+Пользователь принял metadata builder и scoped append после независимого PASS по коммиту `7b6104d7` с исправлениями из `e49d3c4f`. [Отчёт по проверенной версии](world-domain-4d2-metadata-builder-review.md#L3).
+
+В `backend/app/application/worldSnapshot/service/worldSnapshotService.py` добавлена внутренняя фаза `_append_metadata_and_handoff` для уже выданного scope. После append всех envelopes она передаёт существующему порту holders тот же writer scope, fenced lease, назначенные world/player refs и точный список передаваемых operation refs. SQLite-адаптер читает назначения из сохранённых envelopes. Внешний owner продолжает CAS при успехе и откатывает всю транзакцию при выходе по исключению.
+
+В `backend/tests/snapshotCore/storage/publication/test_atomicity.py` добавлен `test_metadata_handoff_and_heads_share_outer_transaction`. Два независимых соединения с одной временной SQLite БД. При попытке передать третий артефакт без назначения caller получает отказ handoff. При отмене в player CAS после handoff и world CAS наружу выходит исходный CancelledError. В обоих случаях второе соединение проверяет исходные heads, отсутствие обеих записей metadata и сохранение трёх operation holds. После commit оно видит новые heads и metadata, раздельные world/player holders и исходный hold непереданного артефакта.
+
+Пределы проверки. В тесте SQL-fixtures подготавливают sealed artifacts, service получает явные назначения и список передачи. В срезе проверяется применение этих входов. Автоматический выбор назначений из плоского receipt остаётся контрактным вопросом: для одного BLOB и двух владельцев возможны разные корректные назначения. Публичный apply, terminal/retry и production composition остаются открытыми.
+
+Проверки для предъявления среза на ревью:
+
+- Из `backend` команда `../.venv/Scripts/python.exe -B -m unittest tests.snapshotCore.storage.publication.test_atomicity.AssignedPublicationTests tests.snapshotCore.contracts.test_registry tests.snapshotCore.contracts.test_typing` — 17 тестов, OK (36.607 с). В точке отмены player CAS тест прочитал новый world head и оба snapshot holds внутри исходного scope.
+- Из `backend` команда `../.venv/Scripts/python.exe -B -m unittest discover -s tests/snapshotCore -p "test_*.py"` — 169 тестов, OK (1 пропущен, 155.677 с).
+- Из корня `node node_modules/pyright/index.js -p backend/tests/typing/snapshotCore/pyrightconfig.valid.json backend/app/application/worldSnapshot/service/worldSnapshotService.py` — 0 ошибок и предупреждений. `git diff --check` по owning-плану, сервису и тесту прошёл.
+
+**Исправление по ревью holder handoff, 2026-11-05.** В успешном сценарии `test_metadata_handoff_and_heads_share_outer_transaction` в `backend/tests/snapshotCore/storage/publication/test_atomicity.py` назначения по-прежнему включают `a` для мира и `b` для игрока, а caller передаёт только `a`. После commit второе соединение проверяет точный состав держателей: у `a` только world snapshot holder, у `b` player snapshot holder и исходный operation holder, у `leftover` только исходный operation holder. Подмена сервиса в отдельном процессе расширила transferred всеми назначениями. Регрессия упала именно на отсутствии operation holder у `b`. Исправление затрагивает тест. Сценарий проверяет явные назначения в SQLite при подготовленных fixture артефактах.
+
+Повторены команды из блока проверок выше. Адресный прогон — 17 тестов, OK (32.401 с). Полный Snapshot — 169 тестов, OK (1 пропущен, 139.485 с). Pyright по сервису — 0 ошибок и предупреждений. Исправление предъявлено на повторное ревью.
 
 ## Контракты Snapshot для интеграции Time (2026-11-03)
 
