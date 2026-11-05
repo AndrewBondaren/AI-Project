@@ -1,3 +1,4 @@
+import json
 import unittest
 
 from pydantic import ValidationError
@@ -10,6 +11,7 @@ from app.application.physics.settings.prepare import (
 from app.dataModel.physics.settings.settingsChange import (
     PreparedPhysicsSettingsChange, WorldPhysicsSettingsReplace, WorldPhysicsSettingsReset,
 )
+from app.dataModel.physics.settings.settingsCapture import WorldPhysicsSettingsView
 from app.dataModel.physics.settings.settingsResults import PhysicsSettingsChangeReason, PhysicsSettingsChangeRefused
 from app.dataModel.physics.settings.worldPhysicsSettings import WorldPhysicsSettings
 
@@ -98,6 +100,52 @@ class SettingsCoreTests(unittest.TestCase):
         for invalid in (None, True, "1", -1, float("inf"), 1e308):
             with self.subTest(invalid=invalid), self.assertRaises(ValidationError):
                 normalise_legacy_gravity(invalid)
+
+    def test_damaged_nested_settings_are_rejected_before_defaults_restore(self):
+        current = build_settings_view("w", WorldPhysicsSettings(gravity_acceleration_m_s2=0))
+        damaged = current.settings.model_copy()
+        object.__delattr__(damaged, "gravity_acceleration_m_s2")
+        with self.assertRaises(ValidationError):
+            WorldPhysicsSettings.model_validate(damaged)
+        with self.assertRaises(ValidationError):
+            WorldPhysicsSettingsReplace(world_uid="w", expected_ref=current.ref, value=damaged)
+        with self.assertRaises(ValidationError):
+            PreparedPhysicsSettingsChange(world_uid="w", expected_ref=current.ref,
+                                          proposed=damaged, proposed_ref=current.ref)
+        self.assertEqual(current.settings.gravity_acceleration_m_s2, 0)
+        # Actual missing authoring input still receives the declared default.
+        self.assertEqual(WorldPhysicsSettings.model_validate({}).gravity_acceleration_m_s2, 9.80665)
+
+    def test_prepared_change_rejects_content_mismatch_on_all_decode_boundaries(self):
+        earth = build_settings_view("w", WorldPhysicsSettings())
+        zero = build_settings_view("w", WorldPhysicsSettings(gravity_acceleration_m_s2=0))
+        fields = dict(world_uid="w", expected_ref=earth.ref, proposed=zero.settings, proposed_ref=earth.ref)
+        with self.assertRaises(ValidationError):
+            PreparedPhysicsSettingsChange(**fields)
+        invalid = PreparedPhysicsSettingsChange.model_construct(**fields)
+        with self.assertRaises(ValidationError):
+            PreparedPhysicsSettingsChange.model_validate(invalid)
+        with self.assertRaises(ValidationError):
+            PreparedPhysicsSettingsChange.model_validate(invalid.model_dump())
+        with self.assertRaises(ValidationError):
+            PreparedPhysicsSettingsChange.model_validate_json(invalid.model_dump_json())
+        fields["proposed_ref"] = zero.ref
+        valid = PreparedPhysicsSettingsChange(**fields)
+        self.assertEqual(PreparedPhysicsSettingsChange.model_validate_json(valid.model_dump_json()), valid)
+
+    def test_view_rejects_mismatched_content_and_schema_during_construction(self):
+        earth = build_settings_view("w", WorldPhysicsSettings())
+        zero = WorldPhysicsSettings(gravity_acceleration_m_s2=0)
+        with self.assertRaises(ValidationError):
+            WorldPhysicsSettingsView(settings=zero, ref=earth.ref)
+        wire = earth.model_dump(mode="json")
+        wire["settings"]["gravity_acceleration_m_s2"] = 0
+        with self.assertRaises(ValidationError):
+            WorldPhysicsSettingsView.model_validate_json(json.dumps(wire))
+        wire = earth.model_dump(mode="json")
+        wire["ref"]["schema_version"] = 2
+        with self.assertRaises(ValidationError):
+            WorldPhysicsSettingsView.model_validate(wire)
 
 
 if __name__ == "__main__":

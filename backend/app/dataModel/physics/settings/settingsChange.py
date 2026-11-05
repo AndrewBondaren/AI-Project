@@ -5,7 +5,7 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.dataModel.identity.uid import EntityUid
-from app.dataModel.physics.settings.settingsCapture import WorldPhysicsSettingsRef
+from app.dataModel.physics.settings.settingsCapture import WorldPhysicsSettingsRef, WorldPhysicsSettingsView
 from app.dataModel.physics.settings.worldPhysicsSettings import WorldPhysicsSettings
 
 
@@ -47,4 +47,5 @@ class PreparedPhysicsSettingsChange(BaseModel):
             raise ValueError("settings change contains another world")
         if self.expected_ref.schema_version != self.proposed_ref.schema_version:
             raise ValueError("settings preparation cannot migrate schema versions")
+        WorldPhysicsSettingsView(settings=self.proposed, ref=self.proposed_ref)
         return self

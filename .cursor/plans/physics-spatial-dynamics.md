@@ -1179,3 +1179,74 @@ Validation: focused unittest tests defaults/zero/invalid values, stable/world-bo
 Подтверждены SI/default, strict validation при обычном создании, zero, canonical projection v1 с привязкой к миру и проверкой ref текущего view, полный stale-check, pure replace/reset без мутации входов, стабильность revision при no-op, legacy earth-factor conversion и отказ при overflow. Обе return unions конкретны. Проверка зависимостей и callers в backend не выявила обратного импорта из dataModel в application, скрытого SQL/read/write, production registration или dispatcher.
 
 Проверка ограничена изолированным settings-срезом, его зависимостями и статическим поиском callers. Полный backend suite, сервер и внешний World/Snapshot lifecycle не запускались. Content view связывает значение с ref; prepared change описывает предложение; publication pinning и durable acceptance требуют отдельных внешних гарантий. PH-ARCH, PH-ORCH и runtime сохраняют собственные gates. Основание ревью — принятые S1–S4 и локальный freeze P3.18; GEN-DAG draft в оценку не входил.
+
+#### PS-CORE-1 review follow-up — 2026-11-05
+
+P1 подтверждён и исправлен внутри Settings schema: wrap validator проверяет полноту/immutability исходного экземпляра **до** core Pydantic revalidation. Before validator оказался недостаточным: revalidate_instances может передать туда уже восстановленный mapping. Регрессия проверяет direct model_validate, вложенный Replace.value и PreparedChange.proposed с удалённым gravity field; настоящий missing authoring dict сохраняет default policy. Focused suite — **8 PASS**. P1 disposition FIXED / awaiting independent re-review, не пользовательская приёмка.
+
+P2 подтверждён, остаётся OPEN. На выбор пользователя описываются два решения: (A) существующий pure canonicalCodec переносится в domain-neutral общий namespace, старый application import API сохраняется compatibility re-export; dataModel constructors/view/prepared validators используют единый primitive для content coherence, без обратного application import/копии canonicalizer; (B) codec остаётся application-owned, hash coherence проверяет явный application validate/decode boundary, а POJO constructor проверяет только форму/refs и может принять несогласованную пару. B требует явного изменения ранее предъявленного S3 guarantee и обязательных consumers wrappers; type annotations не гарантируют прохождение wrapper. A — рекомендация, но новый shared-code move и exact import/file map ещё не согласованы. Код P2 до решения не меняется, общий codec не перемещён. Общий freeze/production binding не разблокированы.
+
+#### PS-CORE-1 P2 — вариант A: зависимости и согласованный repair scope (2026-11-05)
+
+Пользователь выбрал A с обязательным исследованием зависимостей и ссылками. Exact target: **backend/app/encoding/canonicalCodec.py**, domain-neutral pure primitive; dependencies только stdlib/Pydantic/dataModel.encoding.schemaManifest. Manifest не импортирует Physics/codec, цикла нет. Old application/encoding/canonicalCodec.py становится compatibility facade с прежними classes/functions и private _decode_scalar/_decode_one/_tuple. Bytes/type IDs/manifest/error class semantics не меняются; canonical wire не использует __module__, долговременная pickle compatibility не заявлена. New folder с init=2, старый folder остаётся=3; Physics settings folder=5, шестой файл не нужен.
+
+Важные dependencies: [bounded decoder](../../backend/app/application/encoding/boundedCanonicalDecode.py) импортирует private _decode_scalar; [codec compatibility test](../../backend/tests/snapshotCore/contracts/test_codec.py) patch-ит old-module content_digest. Поэтому facade digest сохраняет композицию через facade encode/content_digest, остальные symbols — exact shared objects, не второй codec. Planning fingerprints/cache keys, PatchSet/Snapshot codecs, artifact/SQL blob integrity, tile hashes и Hydrology/Spatial codec consumers должны получить прежние canonical bytes/errors без обязательного массового изменения imports. DataModel Physics импортирует только новый neutral module, не application facade.
+
+P2 fix: domain helper settings_ref(world_uid, settings) в settingsCapture.py вычисляет единственный projection v1 с common primitive. View constructor/JSON validator и PreparedChange constructor/JSON validator проверяют actual proposed-ref coherence этим helper (Prepared через View). Application build/validate delegates тому же owner, duplicate hashing code удаляется. P1 wrap guard сохраняется. Это scoped validation repair; read/publication/state trust не добавляется.
+
+Полный найденный static import inventory (повторные imports в одном файле сведены; строка первого определения):
+- [backend/app/db/repositories/sqlite/snapshotCore/history/rowProjection.py](../../backend/app/db/repositories/sqlite/snapshotCore/history/rowProjection.py#L8) — `content_digest`.
+- [backend/app/db/repositories/sqlite/snapshotCore/operations/terminalCodec.py](../../backend/app/db/repositories/sqlite/snapshotCore/operations/terminalCodec.py#L4) — `content_digest,encode,decode,merge_manifests`.
+- [backend/app/db/repositories/sqlite/shared/validation/blobIntegrity.py](../../backend/app/db/repositories/sqlite/shared/validation/blobIntegrity.py#L3) — `content_digest`.
+- [backend/app/application/encoding/boundedCanonicalDecode.py](../../backend/app/application/encoding/boundedCanonicalDecode.py#L10) — `CanonicalCodec,CanonicalEncodingError,_decode_scalar,encode`.
+- [backend/app/application/worldSnapshot/encoding/snapshotCodec.py](../../backend/app/application/worldSnapshot/encoding/snapshotCodec.py#L6) — `CanonicalEncodingError,decode,encode,merge_manifests`.
+- [backend/app/application/worldData/planning/composition/planProviders.py](../../backend/app/application/worldData/planning/composition/planProviders.py#L8) — `encode`.
+- [backend/app/application/worldData/planning/composition/surfacePlanningCapture.py](../../backend/app/application/worldData/planning/composition/surfacePlanningCapture.py#L7) — `digest`.
+- [backend/app/application/worldData/planning/encoding/surfaceEnvelopeCodec.py](../../backend/app/application/worldData/planning/encoding/surfaceEnvelopeCodec.py#L6) — `encode,decode`.
+- [backend/app/application/worldData/planning/composition/natural/preparedTerrain.py](../../backend/app/application/worldData/planning/composition/natural/preparedTerrain.py#L5) — `encode`.
+- [backend/app/application/worldData/pack/io/tileCodec.py](../../backend/app/application/worldData/pack/io/tileCodec.py#L10) — `content_digest`.
+- [backend/app/application/worldData/generators/hydrology/encoding/packCodec.py](../../backend/app/application/worldData/generators/hydrology/encoding/packCodec.py#L3) — `CanonicalEncodingError,encode`.
+- [backend/app/application/worldData/generators/hydrology/encoding/packFormats.py](../../backend/app/application/worldData/generators/hydrology/encoding/packFormats.py#L3) — `CanonicalEncodingError`.
+- [backend/app/application/worldData/generators/hydrology/encoding/packSchema.py](../../backend/app/application/worldData/generators/hydrology/encoding/packSchema.py#L9) — `CanonicalEncodingError`.
+- [backend/app/application/worldData/generators/hydrology/encoding/sourceSchema.py](../../backend/app/application/worldData/generators/hydrology/encoding/sourceSchema.py#L7) — `CanonicalEncodingError,CanonicalCodec`.
+- [backend/app/application/planning/service/planFingerprints.py](../../backend/app/application/planning/service/planFingerprints.py#L3) — `digest`.
+- [backend/app/application/physics/settings/capture.py](../../backend/app/application/physics/settings/capture.py#L5) — `content_digest,encode`.
+- [backend/app/application/patch/encoding/patchSetCodec.py](../../backend/app/application/patch/encoding/patchSetCodec.py#L7) — `CanonicalEncodingError,content_digest,decode,encode`.
+- [backend/app/application/patch/registry/sectionRegistry.py](../../backend/app/application/patch/registry/sectionRegistry.py#L6) — `merge_manifests`.
+- [backend/app/application/artifacts/staging/artifactStaging.py](../../backend/app/application/artifacts/staging/artifactStaging.py#L4) — `content_digest`.
+- [backend/tests/spatial_pack/test_bounded_decode.py](../../backend/tests/spatial_pack/test_bounded_decode.py#L11) — `CanonicalEncodingError,encode`.
+- [backend/tests/spatial_pack/test_pack_codec.py](../../backend/tests/spatial_pack/test_pack_codec.py#L7) — `CanonicalEncodingError,encode`.
+- [backend/tests/spatial_pack/test_source_schema.py](../../backend/tests/spatial_pack/test_source_schema.py#L9) — `CanonicalEncodingError,encode,decode`.
+- [backend/tests/spatial_pack/test_storage_schema.py](../../backend/tests/spatial_pack/test_storage_schema.py#L10) — `CanonicalEncodingError,decode,encode`.
+- [backend/tests/typing/planning/invalid.py](../../backend/tests/typing/planning/invalid.py#L40) — `decode`.
+- [backend/tests/typing/planning/valid/infrastructure.py](../../backend/tests/typing/planning/valid/infrastructure.py#L10) — `decode`.
+- [backend/tests/snapshotCore/contracts/test_codec.py](../../backend/tests/snapshotCore/contracts/test_codec.py#L9) — `CanonicalEncodingError,content_digest,decode,digest,encode,merge_manifests`.
+- [backend/tests/snapshotCore/contracts/test_registry.py](../../backend/tests/snapshotCore/contracts/test_registry.py#L10) — `encode`.
+- [backend/tests/snapshotCore/support/fakeSection.py](../../backend/tests/snapshotCore/support/fakeSection.py#L4) — `CanonicalEncodingError,encode,decode,merge_manifests`.
+- [backend/tests/planning/contracts/test_contracts.py](../../backend/tests/planning/contracts/test_contracts.py#L251) — `CanonicalCodec`.
+- [backend/tests/planning/encoding/test_canonical_codec.py](../../backend/tests/planning/encoding/test_canonical_codec.py#L10) — `CanonicalEncodingError,decode,digest,encode`.
+- [backend/tests/planning/providers/test_domain_providers.py](../../backend/tests/planning/providers/test_domain_providers.py#L11) — `CanonicalCodec`.
+- [backend/tests/geo1/bathymetry/test_transport.py](../../backend/tests/geo1/bathymetry/test_transport.py#L9) — `encode,decode`.
+- [backend/tests/geo1/coastline/test_purpose.py](../../backend/tests/geo1/coastline/test_purpose.py#L7) — `encode,decode`.
+- [backend/tests/geo1/coating/fixtures.py](../../backend/tests/geo1/coating/fixtures.py#L5) — `digest`.
+- [backend/tests/geo1/coating/test_transport.py](../../backend/tests/geo1/coating/test_transport.py#L3) — `encode,decode`.
+- [backend/tests/geo1/final_publication/test_publication.py](../../backend/tests/geo1/final_publication/test_publication.py#L5) — `encode,decode`.
+- [backend/tests/geo1/fine_water/test_fill.py](../../backend/tests/geo1/fine_water/test_fill.py#L4) — `encode,decode`.
+- [backend/tests/geo1/fine_water/test_review.py](../../backend/tests/geo1/fine_water/test_review.py#L5) — `encode`.
+- [backend/tests/geo1/fine_water/test_routing.py](../../backend/tests/geo1/fine_water/test_routing.py#L5) — `encode,decode`.
+- [backend/tests/geo1/integration/test_activation.py](../../backend/tests/geo1/integration/test_activation.py#L8) — `encode,decode`.
+- [backend/tests/geo1/integration/test_revisions.py](../../backend/tests/geo1/integration/test_revisions.py#L196) — `encode`.
+- [backend/tests/geo1/integration/test_surface_validation.py](../../backend/tests/geo1/integration/test_surface_validation.py#L10) — `decode,encode`.
+- [backend/tests/geo1/native_final/test_facts.py](../../backend/tests/geo1/native_final/test_facts.py#L4) — `encode,decode`.
+- [backend/tests/geo1/native_relief/test_beds.py](../../backend/tests/geo1/native_relief/test_beds.py#L5) — `encode,decode`.
+- [backend/tests/geo1/natural_preparation/test_materialization.py](../../backend/tests/geo1/natural_preparation/test_materialization.py#L5) — `encode`.
+- [backend/tests/geo1/natural_preparation/test_preparation.py](../../backend/tests/geo1/natural_preparation/test_preparation.py#L5) — `encode,decode,digest`.
+- [backend/tests/geo1/natural_preparation/test_publication.py](../../backend/tests/geo1/natural_preparation/test_publication.py#L5) — `encode,decode`.
+- [backend/tests/geo1/procedural_refinement/test_proposals.py](../../backend/tests/geo1/procedural_refinement/test_proposals.py#L5) — `encode,decode,digest`.
+- [backend/tests/geo1/source_projection/test_projection.py](../../backend/tests/geo1/source_projection/test_projection.py#L5) — `encode,decode`.
+- [backend/tests/geo1/support_sources/fixtures.py](../../backend/tests/geo1/support_sources/fixtures.py#L4) — `digest`.
+- [backend/tests/geo1/support_sources/test_input.py](../../backend/tests/geo1/support_sources/test_input.py#L5) — `encode,decode`.
+- [backend/tests/geo1/water_query/test_query.py](../../backend/tests/geo1/water_query/test_query.py#L5) — `encode`.
+- [backend/tests/geo1/integration/support/fixtures.py](../../backend/tests/geo1/integration/support/fixtures.py#L5) — `digest`.
+
+Checks до завершения: Physics regression constructor/dict/JSON recovery и corrupted fields; neutral-vs-old symbol/bytes/digest/error identity; existing canonical planning/codec, Snapshot codecs/registry и bounded Spatial decoder tests. При провале broader dependencies разбирать root cause, не переписывать unrelated consumers. Общий backend suite/runtime не заменяются этими targeted checks. Чужие edits сохраняются.
