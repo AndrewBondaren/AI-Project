@@ -13,7 +13,7 @@ from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.types import ImportValidationError, wire_loc
 from app.application.cascade import locationScope
 from app.application.cascade.locationScope import empty_location_chain, room_context
-from app.application.jsonValidation import resolve as resolve_module
+from app.application.jsonValidation.resolution import diagnostics
 from app.dataModel.annotationPolicy import DefaultWhenMissing, field_policy, WireFieldPolicy
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.structure.room.roomDef import RoomDef
@@ -35,7 +35,7 @@ class RuntimeWorldEditPolicyTests(unittest.TestCase):
             for mode in ResolveMode:
                 ctx = ResolveContext(mode=mode, validate_only=mode == ResolveMode.IMPORT,
                                      location=WireLocation(parts=("terrain_masks", "default_landcover")))
-                with patch(resolve_module.__name__ + ".logger") as log:
+                with patch.object(diagnostics, "logger") as log:
                     result = resolve_result(LandcoverRegionsCategoryPolicy, {"seed_spacing": 1000, "max_radius": invalid}, ctx=ctx)
                 self.assertFalse(result.resolved)
                 self.assertIsNone(result.value)

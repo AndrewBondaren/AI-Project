@@ -170,7 +170,7 @@ class WorldBundleService:
         except StrictFieldError as exc:
             raise ImportValidationError([exc.issue]) from exc
         except ValidationError as exc:
-            raise ImportValidationError(pydantic_issues(world_ctx, None, exc)) from exc
+            raise ImportValidationError(pydantic_issues(world_ctx, None, exc, raw=data[BundleSection.WORLD])) from exc
         except ValueError as exc:
             raise ImportValidationError([WireShapeIssue(
                 location=world_ctx.location, message=str(exc),

@@ -1,6 +1,6 @@
 # WORLD-PLAN-GRAPH-1 — Граф зависимостей GEO-1 / SPATIAL-1 / GEN-DAG-1 / PHYSICS-1 / TIME / LOD-SIM-1
 
-**Статус:** архитектурная карта межплановых gates, v6.14 (2026-11-04), с cross-cutting навигацией ERROR-CONTRACTS-1; **не** разрешение на код, изменение POJO/enum, cutover или закрытие owning-планов. Путь документа: `.cursor/plans/world-generation-plan-dependency-graph.md`.
+**Статус:** архитектурная карта межплановых gates, v6.15 (2026-11-05), с cross-cutting навигацией ERROR-CONTRACTS-1; **не** разрешение на код, изменение POJO/enum, cutover или закрытие owning-планов. Путь документа: `.cursor/plans/world-generation-plan-dependency-graph.md`.
 
 **Текущая очередь и источники приёмки приведены в §12.** Разделы 9–11 сохраняют историю последовательных сверок.
 
@@ -11,7 +11,7 @@
 | План и точный файл | Нормативная ответственность / текущий gate |
 |---|---|
 | [GEO-1](./geo-1-designed-water.md) — `.cursor/plans/geo-1-designed-water.md` | Hydrology canonical final source: water identity, levels, resolved membership/connectivity, final bed/geometry, proven coverage, refs/revisions. Task1–10 verified isolated; **EF-1 и joint приняты документально; GEO-I1 принят пользователем; G10-A cutover OPEN**. Контракт данных и representation выбираются **до следующего зависимого producer code step**. |
-| [SPATIAL-1](./spatial-distribution-domain.md) — `.cursor/plans/spatial-distribution-domain.md` | Общая typed read форма и требования к bounded query/materialization; конкретный Hydrology reader/index принадлежит Hydrology. **SP-0 — DONE; SP-1 принят документально; SP-P0 принят документально (§15.19); SP-M принят документально (§16.16); P1-A реализован и предъявлен (§15.23)**. Water Pack/root steps отдельно от runtime Snapshot и gameplay. |
+| [SPATIAL-1](./spatial-distribution-domain.md) — `.cursor/plans/spatial-distribution-domain.md` | Общая typed read форма и требования к bounded query/materialization; конкретный Hydrology reader/index принадлежит Hydrology. **SP-0 — DONE; SP-1 принят документально; SP-P0 принят документально (§15.19); SP-M принят документально (§16.16); SP-P1-A…D, SP-P2R-A/B и SP-1C приняты (§§15.61–68, 15.82); SP-P2W на этапе проектирования и интеграционных проб (§§15.83–92)**. Water Pack/root steps отдельно от runtime Snapshot и gameplay. |
 | [Domain Patches & Snapshots](./world-domain-patches-snapshots.md) — `.cursor/plans/world-domain-patches-snapshots.md` | **Актуальный owning-план Snapshot** (наряду с нормативным [World Snapshot ТЗ](../../docs/tz_world_snapshot.md)): архитектура принята, core/runtime **не DONE**. 4C2-R/H приняты 2026-11-01; 4C2-O принят 2026-11-02; 4C3-A принят, 4C3-B после исправления REV-1 прошёл повторное review и принят пользователем; C принят, D предъявлен, общий SN-CORE/production integration OPEN. 4C4 и 4D1/4D1-L приняты только в выполненных backend/port scopes; 4D2 не начат. После GEN-DAG остаётся отдельный B-2 gate первичного bake (§1.1). |
 | [DAG-TYPING-1](./dag-typing-1.md) — `.cursor/plans/dag-typing-1.md` | Общая typed инфраструктура `NodeContract`, OutputRef, runtime, NodeRegistry, parallelism: **A1–A3 implemented/verified**, **B1–B3 не завершены**, B зависит от конкретной интеграции GEN-DAG-1. |
 | [GEN-DAG-1](./gen-dag-1-post-geo-ws.md) — `.cursor/plans/gen-dag-1-post-geo-ws.md` | **Совместный дизайн нового production DAG**, точные Input/Output/Error POJO, factories, публичные domain operations и единый cutover. Старые 15 ID — AS-IS inventory, **все legacy concrete-ноды под удаление, кроме перерабатываемой `check_scene`**; нет 1:1 миграции. **GEN-NODE-JOINT-REVIEW** обязателен с мастером: Mermaid-карта зависимостей, решения keep/split публичных pipelines и per-node contracts до кода. **DRAFT/DEFERRED**: GEO-1, необходимые Patch/Snapshot gates и concrete contracts/приёмка OPEN. |
@@ -76,7 +76,9 @@ flowchart TD
     PC["PACK-ENTRY-CONTRACT: accepted entrypoint"] --> W
     W --> P3["SP-P3: publication proof"]
     P3 --> R["SP-3: base reader"]
-    S1 --> R
+    S1 --> SC["SP-1C: открытые read-контракты"]
+    SC --> R
+    H --> R
     R --> L2["SP-4: base L2"]
     M --> L2
 ```
@@ -220,7 +222,8 @@ Owners: PH-* — PHYSICS-1 §6 (PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-H
 | PACK-ENTRY-CONTRACT | SP-P3W |
 | SP-P3W | SP-P3 |
 | SP-P3 | SP-3 |
-| SP-1 | SP-3 |
+| SP-1 | SP-1C |
+| SP-1C | SP-3 |
 | SP-H | SP-3 |
 | SP-M | SP-4 |
 | SP-3 | SP-4 |
@@ -355,20 +358,21 @@ Owners: PH-* — PHYSICS-1 §6 (PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-H
 | SN-RUNTIME | SN-APPLY-HANDLER | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [Snapshot §8.3, §8.13–8.14](./world-domain-patches-snapshots.md) |
 | SN-STAGE | 4E2 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [Snapshot §8.3, §8.13–8.14](./world-domain-patches-snapshots.md) |
 | SP-0 | Внешние условия / критерии owning-плана | DONE | ГОТОВ: переход к архитектурному SP-1 | Явная приёмка пользователя 2026-11-01; принят статический аудит §0.1–0.14 с доработками SP0-REV-1/2 (§0.15). Глобальный LEGACY-AC последующего cutover OPEN, runtime/code permission не выдано. [SPATIAL SP-0, §0.15](./spatial-distribution-domain.md) |
-| SP-1 | SP-0 | ПРИНЯТ документально | SP-P0/SP-M design по своим gates | Scope §14.12, явная приёмка §14.14; shared implementation не принят. [SPATIAL](./spatial-distribution-domain.md) |
-| SP-3 | SP-P3, SP-1, SP-H | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
+| SP-1 | SP-0 | ПРИНЯТ документально | SP-P0/SP-M design по своим gates | Scope §14.12, явная приёмка §14.14; реализация открытых read-контрактов принята отдельно в SP-1C. [SPATIAL](./spatial-distribution-domain.md) |
+| SP-1C | SP-1 | ПРИНЯТ | §15.82 | Общие типы и Protocol, первый доменный reader — SP-3. |
+| SP-3 | SP-P3, SP-1C, SP-H | НЕ УТОЧНЁН | BLOCKED | Открыты SP-H и SP-P3; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
 | SP-3S | SN-RUNTIME, SP-3 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
 | SP-4 | SP-M, SP-3 | НЕ РЕАЛИЗОВАН | BLOCKED на executable SP-3 и code gate | SP-M принят; нужны prepared source/readers, lifetime, bounded batch budget и caller/error evidence. |
 | SP-4R | SP-3S, SP-4 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
 | SP-H | G10-A | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
 | SP-M | SP-1 | ПРИНЯТ ДОКУМЕНТАЛЬНО | SP-R0 design доступен; SP-4 code не разрешён | §§16.9–16.16: G1/context/result/protected-domain boundary; implementation evidence OPEN. |
 | SP-P0 | SP-1, GEO-SPATIAL-CONTRACT | DESIGN ПРИНЯТ | SP-P1 preflight доступен; код требует отдельного разрешения | §§15.17–15.19: 33/38 types, narrow diagnostic admission; parser/cold/retention evidence впереди. |
-| SP-P1 | SP-P0 | P1-D принят | §15.61 | Удаление V1 отдельно по §15.73. |
-| SP-P2 | SP-P2R, SP-P2W | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
+| SP-P1 | SP-P0 | A…D приняты | §§15.61–62 | Удаление V1 отдельно по §15.73. |
+| SP-P2 | SP-P2R, SP-P2W | НЕ УТОЧНЁН | BLOCKED | SP-P2R принят; для milestone требуется приёмка SP-P2W. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
 | SP-P2R | SP-P1 | A/B приняты | §§15.65–68 | Чтение immutable BLOB под guard. |
-| SP-P2W | SP-P1, SN-STAGE | Проектирование | §§15.70–83 | Открыты lifetime и cold resolution manifest. |
+| SP-P2W | SP-P1, SN-STAGE | Проектирование | §§15.70–92 | SN-STAGE открыт для production. Проверены pin/GC, replay acquire и cleanup при отмене в тестовой схеме. Открыты production binding и окончательность завершения логического чтения при next_pass. |
 | SP-P3 | SP-P3W | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
-| SP-P3I | SP-H, SP-P0, SP-P1 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
+| SP-P3I | SP-H, SP-P0, SP-P1 | НЕ УТОЧНЁН | BLOCKED | SP-P0 и SP-P1 приняты; требуется SP-H (G10-A). [SPATIAL §8, §11](./spatial-distribution-domain.md) |
 | SP-P3W | SP-P3I, SP-P2, SP-H, PACK-ENTRY-CONTRACT | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
 | SP-R | SP-R1, SP-R2, SP-3S | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
 | SP-R0 | SP-1, SP-M | OPEN | DESIGN ДОСТУПЕН | Локальные документальные prerequisites приняты; co-freeze domain reads/GEN consumers ещё требуется для приёмки. |
@@ -833,7 +837,7 @@ flowchart TD
 | План | Номер трека | О чём трек | Следующий трек или внешняя зависимость |
 |---|---|---|---|
 | GEO | I11.3, исправление | Процедурный draft с рецептом дна. | Повторить штатный путь после миграции диагностик. |
-| Spatial / World Pack | SP-P2W, проектирование | Восстановление read pin после потерянного ответа. | Проверить replay acquire A после закрытия соединений и смены active на B. |
+| Spatial / World Pack | SP-P2W, проектирование | Проба replay и отмены выполнена (§§15.91–92). | Сверить с DAG owner окончательность release при next_pass и восстановление intent после очистки continuation. Доступно до SN-STAGE. |
 | Time | T3-A / T3-C, подготовка T4 проверена | Арифметика, календарь, World settings, чтение через закреплённые тестовые источники. | Внутри Time открыта политика STANDARD для 1–3 часов. Production T4 ждёт SN-TIME-READ, T5 — SN-TIME-APPLY, ветвление — SN-TIME-BRANCH. |
 | Snapshot | 4D2, holder handoff | Передача refs snapshot holder и сохранение operation hold. | Закрепить случай ref вне transferred, затем terminal/retry. |
 | ERROR-CONTRACTS-1 | D2 затронутых producers | Типизированные ошибки и admission коллектора в callers I11.3. | GEO повторяет интеграцию после правок owners. Остальные домены продолжают D0/D1 независимо. |

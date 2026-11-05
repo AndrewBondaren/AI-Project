@@ -105,7 +105,7 @@ def validate_prepared_source(world, source: BaseModel, *, ctx: ResolveContext):
         try:
             value = TypeAdapter(info.rebuild_annotation()).validate_python(value)
         except ValidationError as exc:
-            reject_unresolved(ctx, pydantic_issues(ctx, root, exc, prefix=loc))
+            reject_unresolved(ctx, pydantic_issues(ctx, root, exc, raw=value, prefix=loc))
         if value is None:
             continue
         validate_reference_value(world, info.annotation, value, ctx, path, cache)

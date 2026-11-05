@@ -307,6 +307,27 @@ class ImportValidationPolicyTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((await send()).status_code, 200)
             self.assertEqual(len(await self.worlds.get_all()), 2)
 
+    async def test_dictionary_key_errors_keep_distinct_locations_in_preview_and_422(self):
+        app = FastAPI()
+        app.include_router(router)
+        app.dependency_overrides[get_container] = lambda: self.container
+        keys = ("function-main", "is-instance[custom]")
+        fixture = self.fixture("world_defaults_test")
+        fixture["world"]["weather_type_registry"] = [
+            {"system_weather": "custom", "need_modifiers": dict.fromkeys(keys, "bad")},
+        ]
+        files = {"file": ("world.json", json.dumps(fixture), "application/json")}
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            preview = await client.post("/worlds/import?validate_only=true", files=files)
+            apply = await client.post("/worlds/import", files=files)
+        self.assertEqual((preview.status_code, apply.status_code), (200, 422))
+        issues = preview.json()["issues"]
+        self.assertEqual(apply.json()["detail"], issues)
+        self.assertEqual([(i["loc"], i["code"]) for i in issues], [
+            (["world", "weather_type_registry", 0, "need_modifiers", key], "int_parsing") for key in keys
+        ])
+        self.assertEqual(await self.worlds.get_all(), [])
+
 
 if __name__ == "__main__":
     unittest.main()

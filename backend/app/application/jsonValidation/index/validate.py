@@ -40,8 +40,8 @@ def _index_issue(location: WireLocation, *, model: type[BaseModel], path: tuple[
         raise RuntimeError(f"no WorldSlice registered for {model.__name__}")
     # multi_column POJO fields are world-row keys; other slices nest under their column.
     offset = 0 if world_slice.wire_kind == "multi_column" else 1
-    if offset and path[:1] != world_slice.world_keys[:1]:
-        raise RuntimeError(f"{model.__name__} issue path {path!r} is outside {world_slice.world_keys[0]!r}")
+    if not path or path[0] not in world_slice.world_keys:
+        raise RuntimeError(f"{model.__name__} issue path {path!r} is outside {world_slice.world_keys!r}")
     ctx = ResolveContext(location=location.child(*path[:offset]), schema_id=world_slice.schema_id)
     return field_issue(ctx, model, path[offset:], message, code)
 

@@ -2,7 +2,7 @@
 import unittest
 from unittest.mock import patch
 
-from app.application.jsonValidation import resolve as resolve_module
+from app.application.jsonValidation.resolution import diagnostics
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
 from app.application.worldData.generators.terrain.relief.pick.templatePick import PickResult, pick_template, resolve_picked_template
 from app.application.worldData.generators.terrain.relief.canal.attachments import resolve_knobs_canal
@@ -23,7 +23,7 @@ class R21PolicyTests(unittest.TestCase):
         facts = []
         for preview in (False, True):
             ctx = ResolveContext.for_import(validate_only=preview)
-            with patch(resolve_module.__name__ + ".logger") as log:
+            with patch.object(diagnostics, "logger") as log:
                 with self.assertRaises(UnresolvedModelError) as caught:
                     operation(ctx)
             facts.append(caught.exception.issues)

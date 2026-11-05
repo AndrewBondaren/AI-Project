@@ -38,7 +38,7 @@ def validate_rows(data: Any, prepare: Callable[..., Any], *, ctx: ResolveContext
             issues = exc.errors
         except ValidationError as exc:
             # The callback exposes a raw row, without a declared model for checked paths.
-            issues = pydantic_issues(row_ctx, None, exc)
+            issues = pydantic_issues(row_ctx, None, exc, raw=row)
         except (ReliefValidationError, ValueError) as exc:
             issues = [WireShapeIssue(location=row_ctx.location, message=str(exc),
                                      code=JsonValidationCode.VALIDATION_ERROR)]

@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
 
 from app.application.cascade import locationScope
-from app.application.jsonValidation import resolve as resolve_module
+from app.application.jsonValidation.resolution import diagnostics
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
 from app.application.jsonValidation.sourceValidation import validate_source
 from app.application.jsonValidation.types import wire_loc
@@ -46,7 +46,7 @@ class SourceConsumerTests(unittest.TestCase):
             facts = []
             for preview in (False, True):
                 ctx = ResolveContext.for_import(validate_only=preview)
-                with patch(resolve_module.__name__ + ".logger") as log:
+                with patch.object(diagnostics, "logger") as log:
                     with self.assertRaises(UnresolvedModelError) as caught:
                         NamedLocationService._from_wire({"location_uid": "source", "display_name": "Source",
                             "system_location_type": "building", field: value},
