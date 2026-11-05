@@ -1,7 +1,7 @@
 """Plot domain preparation and common-writer adapter."""
 
 from app.application.jsonValidation.worldRow import crops, livestock, resource_types
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.application.templateLibrary.packs.domainAdapters.bodyPreparation import (
     TemplateBodyPreparation, TemplatePreparationError,
 )

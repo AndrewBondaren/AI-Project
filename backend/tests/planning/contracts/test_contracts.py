@@ -146,8 +146,6 @@ class PlanningContractTests(unittest.TestCase):
                 PlanKey.model_validate(bad)
 
     def test_shared_issue_symbols_and_runtime_context(self):
-        for name in ("FieldPathError", "ReferenceIssueContext", "ReferenceIssueReason"):
-            self.assertIs(getattr(legacy, name), getattr(shared, name))
         self.assertEqual(TypeAdapter(RevisionHex).validate_python("a" * 64), "a" * 64)
         for invalid in ("A" * 64, "a" * 63, "z" * 64, bytes(32)):
             with self.assertRaises(ValidationError):

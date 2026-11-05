@@ -8,7 +8,7 @@ import unittest
 
 from pydantic import BaseModel, ConfigDict, StrictBool, TypeAdapter, ValidationError
 
-from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.policy.declarations.policyIdentity import CommonPolicyOwner, RuleIdentity, RuleKind, make_rule_id
 from app.dataModel.placement.common import Specificity
 from app.dataModel.policy.objectAdmissionPolicyDefinition import (

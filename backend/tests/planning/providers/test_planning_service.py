@@ -6,13 +6,18 @@ from unittest.mock import patch
 
 from app.application.planning.providers.planRegistry import PlanDependencyReader
 from app.application.planning.service.planFingerprints import cache_item_key
-from app.application.planning.service.planningService import PlanContractFailure, PlanContractFailureReason, PlanBuildFailure
+from app.application.planning.service.planningService import PlanBuildFailure, PlanContractFailure, PlanContractFailureReason, PlanProviderFault
 from app.dataModel.cache.contracts.cacheEntry import CacheEntry
 from app.dataModel.cache.identity.cacheKey import CacheKey
 from app.dataModel.planning.contracts.planDependency import PlanDependency, PlanDependencyContract
 from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult
 from app.dataModel.planning.identity.planKey import RegionPlanScope
+from tests.planning.probeIssues import ProbeCode, ProbeTypeError, probe_issue
 from tests.planning.providers.test_domain_providers import Data, Harness, Provider, Wait, contract, request
+
+
+class MutableProbeError(ProbeTypeError):
+    data: list[str]
 
 
 class PlanningServiceTests(unittest.TestCase):
@@ -25,6 +30,7 @@ class PlanningServiceTests(unittest.TestCase):
         with self.assertRaises(PlanContractFailure) as caught:
             action()
         self.assertEqual(caught.exception.reason, reason)
+        self.assertEqual(str(caught.exception), f"{reason.value}: {caught.exception.message}")
 
     def test_hit_clear_restart_and_input_change_have_same_frozen_semantics(self):
         first = self.h.get(self.binding)
@@ -115,9 +121,9 @@ class PlanningServiceTests(unittest.TestCase):
     def test_provider_failure_not_cached_and_next_request_retries(self):
         binding, provider = self.h.register(contract("fails"), Provider(lambda *args: (_ for _ in ()).throw(ValueError("broken"))))
         for _ in range(2):
-            with self.assertRaises(PlanBuildFailure) as caught:
+            with self.assertRaises(PlanProviderFault) as caught:
                 self.h.get(binding)
-            self.assertTrue(caught.exception.issues)
+            self.assertIsInstance(caught.exception.__cause__, ValueError)
         self.assertEqual(provider.count, 2)
 
     def test_oversize_delivered_unchanged_without_caching(self):
@@ -162,3 +168,15 @@ class PlanningServiceTests(unittest.TestCase):
         binding, _, base, dep, reader = self._dependent()
         another, _ = self.h.register(contract("other.phase"))
         self.failure(PlanContractFailureReason.DEPENDENCY_MISMATCH, lambda: reader.require("base", another))
+
+
+class PlanBuildFailureTests(unittest.TestCase):
+    def test_published_issues_are_deeply_immutable_and_read_only(self):
+        issue = probe_issue("m")
+        failure = PlanBuildFailure((issue,))
+        self.assertEqual(failure.issues, (issue,))
+        with self.assertRaises(AttributeError):
+            failure.issues = ()  # type: ignore[misc]
+        mutable = MutableProbeError(code=ProbeCode.FACT, path=issue.path, message="m", data=["a"])
+        with self.assertRaises(ValueError):
+            PlanBuildFailure((mutable,))

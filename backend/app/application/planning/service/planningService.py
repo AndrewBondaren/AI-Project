@@ -5,7 +5,9 @@ from dataclasses import dataclass
 from enum import StrEnum
 from math import isfinite
 from threading import Event, RLock, local
-from typing import Protocol
+from typing import Any, Protocol
+
+from pydantic import TypeAdapter
 
 from app.application.cache.service.cacheService import CacheService, _complete_record, _immutable
 from app.application.planning.providers.planProvider import RegisteredPlanContract
@@ -20,6 +22,7 @@ from app.dataModel.planning.identity.planKey import PlanKey
 from app.dataModel.planning.identity.planRef import PlanRef
 from app.dataModel.planning.policy.planningExecutionPolicy import PlanningExecutionPolicy
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.dataModel.validation.immutableValue import validate_immutable
 
 
 class PlanContractFailureReason(StrEnum):
@@ -30,17 +33,35 @@ class PlanContractFailureReason(StrEnum):
 
 
 class PlanContractFailure(Exception):
-    def __init__(self, reason: PlanContractFailureReason, issues: tuple[FieldPathError, ...]):
-        self.reason, self.issues = reason, issues
-        super().__init__(reason.value)
+    """F02: request, registry or dependency contract rejected before or around a build."""
+
+    def __init__(self, reason: PlanContractFailureReason, message: str):
+        self.reason, self.message = reason, message
+        super().__init__(f"{reason.value}: {message}")
+
+
+_BUILD_ISSUES = TypeAdapter(tuple[FieldPathError[Any], ...])
 
 
 class PlanBuildFailure(Exception):
-    def __init__(self, issues: tuple[FieldPathError, ...]):
+    """F03: provider-owned concrete field issues from a domain build."""
+
+    def __init__(self, issues: tuple[FieldPathError[Any], ...]):
         if not issues:
             raise ValueError("PlanBuildFailure requires nonempty issues")
-        self.issues = issues
+        admitted = _BUILD_ISSUES.validate_python(issues, strict=True)
+        for issue in admitted:
+            validate_immutable(issue)
+        self._issues = admitted
         super().__init__("plan build failed")
+
+    @property
+    def issues(self) -> tuple[FieldPathError[Any], ...]:
+        return self._issues
+
+
+class PlanProviderFault(Exception):
+    """F05: unexpected provider fault; the original exception is ``__cause__``."""
 
 
 class PlanWaitCancelled(Exception):
@@ -79,10 +100,6 @@ class _Flight:
     waiters: int = 0
 
 
-def _failure(reason: PlanContractFailureReason, message: str) -> PlanContractFailure:
-    return PlanContractFailure(reason, (FieldPathError(("planning",), message),))
-
-
 class PlanningService:
     def __init__(self, registry: PlanRegistry, cache: CacheService, policy: PlanningExecutionPolicy):
         self._registry, self._cache = registry, cache
@@ -103,13 +120,13 @@ class PlanningService:
             inputs = contract.validate_inputs(checked.inputs)
             _immutable(inputs, set())
         except Exception as exc:
-            raise _failure(PlanContractFailureReason.INVALID_INPUT, str(exc)) from exc
+            raise PlanContractFailure(PlanContractFailureReason.INVALID_INPUT, str(exc)) from exc
         metadata = contract.metadata
         if (key.contract_id != metadata.id or key.schema_version != metadata.schema_version
                 or key.algorithm_version != metadata.algorithm_version):
-            raise _failure(PlanContractFailureReason.KEY_MISMATCH, "request metadata differs from registered contract")
+            raise PlanContractFailure(PlanContractFailureReason.KEY_MISMATCH, "request metadata differs from registered contract")
         if dependencies.registry is not self._registry:
-            raise _failure(PlanContractFailureReason.DEPENDENCY_MISMATCH, "foreign dependency registry")
+            raise PlanContractFailure(PlanContractFailureReason.DEPENDENCY_MISMATCH, "foreign dependency registry")
         dependencies.validate_for(checked.dependencies, contract.dependency_contracts, key.world_uid, key.scope)
         try:
             fingerprint = contract.fingerprint_inputs(key.world_uid, key.scope, inputs, checked.dependencies)
@@ -117,7 +134,7 @@ class PlanningService:
             if fingerprint != exact or fingerprint != key.input_fingerprint:
                 raise ValueError("input fingerprint mismatch")
         except Exception as exc:
-            raise _failure(PlanContractFailureReason.KEY_MISMATCH, str(exc)) from exc
+            raise PlanContractFailure(PlanContractFailureReason.KEY_MISMATCH, str(exc)) from exc
         return PlanRequest[I](key=key, inputs=inputs, dependencies=checked.dependencies)
 
     def _envelope[I, T](self, contract: RegisteredPlanContract[I, T], value: object,
@@ -129,7 +146,7 @@ class PlanningService:
                 raise ValueError("envelope key/dependencies differ from expected request")
             return envelope
         except Exception as exc:
-            raise _failure(PlanContractFailureReason.KEY_MISMATCH, str(exc)) from exc
+            raise PlanContractFailure(PlanContractFailureReason.KEY_MISMATCH, str(exc)) from exc
 
     def _build[I, T](self, contract: RegisteredPlanContract[I, T], request: PlanRequest[I],
                       dependencies: PlanDependencyReader, key: CacheKey[PlanEnvelope[T]]) -> object:
@@ -144,10 +161,10 @@ class PlanningService:
                 envelope = PlanEnvelope[T](ref=PlanRef(key=request.key, output_fingerprint=output),
                     dependencies=request.dependencies, payload=result.payload, diagnostics=result.diagnostics)
                 envelope = self._envelope(contract, envelope, request)
-            except (PlanBuildFailure, PlanWaitCancelled, PlanContractFailure):
+            except (PlanBuildFailure, PlanProviderFault, PlanWaitCancelled, PlanContractFailure):
                 raise
             except Exception as exc:
-                raise PlanBuildFailure((FieldPathError(("provider",), str(exc)),)) from exc
+                raise PlanProviderFault(f"{type(exc).__qualname__}: {exc}") from exc
             with self._lock:
                 control.raise_if_shutdown()
                 self._cache.put(contract.cache_binding, CacheEntry[PlanEnvelope[T]](key=key, value=envelope))
@@ -181,7 +198,7 @@ class PlanningService:
     def get_or_build[I, T](self, contract: RegisteredPlanContract[I, T], request: PlanRequest[I],
                             dependencies: PlanDependencyReader, *, wait: PlanWaitControl) -> PlanEnvelope[T]:
         if getattr(self._worker, "active", False):
-            raise _failure(PlanContractFailureReason.DEPENDENCY_MISMATCH, "recursive provider planning is forbidden")
+            raise PlanContractFailure(PlanContractFailureReason.DEPENDENCY_MISMATCH, "recursive provider planning is forbidden")
         self._check_wait(wait)
         checked = self._request(contract, request, dependencies)
         key = CacheKey[PlanEnvelope[T]](contract=contract.cache_binding.contract,

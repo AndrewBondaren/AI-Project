@@ -8,6 +8,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError, validate_contracts
 from app.application.jsonValidation.index.worldRegistryIndex import WorldRegistryIndex
 from app.application.jsonValidation.sourceValidation import registry_vocabulary, validate_reference_value
@@ -200,13 +201,13 @@ class LocationsIndexTypeKeyTests(unittest.TestCase):
         world = World(world_uid="world", name="World", created_at="now",
                       location_type_registry=[{"system_type": "custom-place", "display_type": "Custom",
                                                "parent_types": ["building"]}])
-        ctx = ResolveContext(path_prefix=("locations", "system_location_type"), validate_only=True)
-        vocabulary = registry_vocabulary(world, WorldLocationTypeRegistry, ctx, ctx.path_prefix)
+        ctx = ResolveContext(location=WireLocation(parts=("locations", "system_location_type")), validate_only=True)
+        vocabulary = registry_vocabulary(world, WorldLocationTypeRegistry, ctx, ctx.location.parts)
         self.assertIn("custom-place", vocabulary)
         self.assertNotIn("['building']", vocabulary)
-        validate_reference_value(world, LocationTypeKey, "custom-place", ctx, ctx.path_prefix)
+        validate_reference_value(world, LocationTypeKey, "custom-place", ctx, ctx.location.parts)
         with self.assertRaises(UnresolvedModelError) as caught:
-            validate_reference_value(world, LocationTypeKey, "['building']", ctx, ctx.path_prefix)
+            validate_reference_value(world, LocationTypeKey, "['building']", ctx, ctx.location.parts)
         self.assertEqual(caught.exception.issues[0].code, "REF_W_UNKNOWN")
 
     def test_parent_key_membership_accepts_null_and_rejects_unknown(self):

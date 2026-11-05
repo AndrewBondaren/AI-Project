@@ -2,7 +2,7 @@
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 
-from app.core.validatorAggregationHelper import ValidatorAggregationHelper
+from app.dataModel.validation.diagnostics.validatorAggregationHelper import ValidatorAggregationHelper
 from app.application.patch.registry.sectionRegistry import SectionRegistry
 from app.application.worldSnapshot.contracts.commitScope import CommitScope
 from app.application.worldSnapshot.contracts.context import SnapshotApplyContext, SnapshotValidationContext

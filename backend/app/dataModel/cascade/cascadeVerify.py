@@ -10,7 +10,6 @@ from pydantic import BaseModel
 
 from app.dataModel.cascade.cascadeGraph import (
     CascadeNode,
-    bind_field,
     _base_types,
     _channels_of,
     _declared_edges,
@@ -21,6 +20,7 @@ from app.dataModel.cascade.cascadeGraph import (
     ordered_chain,
     ordered_scopes,
 )
+from app.dataModel.fields.fieldBinding import bind_field
 from app.dataModel.cascade.cascadeSpec import (
     Cascade,
     CascadeChannel,

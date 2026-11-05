@@ -1,6 +1,7 @@
 """Resolve anchors/state after the shared source merge, without persistence."""
 
 from dataclasses import replace
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
 from app.application.worldData.generators.terrain.landcover.regionCoverageValidation import validate_region_coverage
 import logging
@@ -39,7 +40,7 @@ def resolve_collected(regions: list[ResolvedRegion], ctx: LandcoverCollectContex
                      region.region_uid, "state" if state is not None else "spec", region.current_type)
         try:
             region = validate_region_coverage(region, registry, ctx=ResolveContext(
-                path_prefix=(ctx.world.world_uid, "regions", region.region_uid)))
+                location=WireLocation(parts=(ctx.world.world_uid, "regions", region.region_uid))))
         except UnresolvedModelError:
             continue
         shape = region.spec.shape

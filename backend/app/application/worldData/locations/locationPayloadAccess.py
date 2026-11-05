@@ -1,6 +1,7 @@
 """Typed reads from the location's payload storage."""
 
 from pydantic import BaseModel
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.jsonValidation.resolve import ResolveContext, resolve_model
 
 from app.dataModel.locations.locationPayload import LocationPayload
@@ -11,7 +12,7 @@ from app.dataModel.locations.settlement.district.districtPayload import District
 def _read(location: object, model: type[BaseModel], ctx: ResolveContext | None = None):
     raw = getattr(location, "location_payload", None)
     return resolve_model(model, {} if raw is None else raw,
-                         ctx=ctx if ctx is not None else ResolveContext(path_prefix=("locations", getattr(location, "location_uid", "?"), "location_payload")))
+                         ctx=ctx if ctx is not None else ResolveContext(location=WireLocation(parts=("locations", getattr(location, "location_uid", "?"), "location_payload"))))
 
 
 def settlement_payload(location: object, *, ctx: ResolveContext | None = None) -> SettlementPayload:

@@ -1,6 +1,7 @@
 """Unknown substrates and immutable complete source closure."""
 from unittest import TestCase
 
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.encoding.canonicalCodec import encode,decode
 from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_MANIFEST
 from app.dataModel.materials.enums.materialSubstrateKind import MaterialSubstrateKind as Substrate
@@ -19,11 +20,11 @@ class SupportInputTests(TestCase):
         base=captured()
         value=base.model_copy(update={"terrain_entries":(),"materials":(MaterialSupportEntry(key="water",category=base.materials[0].category,substrate=None),)})
         index=WorldRegistryIndex(materials=frozenset({"water"}),terrains=frozenset({str(base.landcover.fallback_terrain)}))
-        ctx=ResolveContext(validate_only=True,path_prefix=("support",))
+        ctx=ResolveContext(validate_only=True,location=WireLocation(parts=("support",)))
         validate_contracts(SurfaceSupportInput,value.model_dump(),ctx=ctx,references=index)
         bad=value.model_copy(update={"materials":(value.materials[0].model_copy(update={"key":"unknown"}),)})
         with self.assertRaises(UnresolvedModelError) as caught:
-            validate_contracts(SurfaceSupportInput,bad.model_dump(),ctx=ResolveContext(validate_only=True,path_prefix=("support",)),references=index)
+            validate_contracts(SurfaceSupportInput,bad.model_dump(),ctx=ResolveContext(validate_only=True,location=WireLocation(parts=("support",))),references=index)
         self.assertEqual(caught.exception.issues[0].path,("support","materials",0,"key"))
         self.assertEqual(caught.exception.issues[0].code,"REF_W_UNKNOWN")
 

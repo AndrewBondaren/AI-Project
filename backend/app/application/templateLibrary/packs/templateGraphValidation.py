@@ -6,9 +6,7 @@ fallback, runtime logging or persistence. Caller decides how to report issues.
 
 from collections.abc import Mapping
 
-from app.application.jsonValidation.types import (
-    FieldPathError, ReferenceIssueContext, ReferenceIssueReason,
-)
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError, ReferenceIssueContext, ReferenceIssueReason
 from app.application.templateLibrary.packs.domainAdapters.bodyPreparation import TemplatePreparationError
 from app.application.templateLibrary.packs.domainAdapters.building import BuildingBodyPreparation
 from app.application.templateLibrary.packs.domainAdapters.plot import PlotBodyPreparation

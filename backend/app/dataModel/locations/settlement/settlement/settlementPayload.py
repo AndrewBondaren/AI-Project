@@ -2,7 +2,8 @@
 
 from pydantic import BaseModel, ConfigDict, model_validator
 from typing import Annotated, Self
-from app.dataModel.cascade.cascadeSpec import CascadeChannel, CascadeLink, FieldRef
+from app.dataModel.cascade.cascadeSpec import CascadeChannel, CascadeLink
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.locations.context.cascadeParams import CITY_SIZE, SETTLEMENT_DENSITY, DOMINANT_MATERIAL
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry

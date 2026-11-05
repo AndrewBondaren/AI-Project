@@ -13,7 +13,8 @@ from app.dataModel.locations.context.cascadeParams import (
     FLOOR_MATERIAL,
     WALL_MATERIAL,
 )
-from app.dataModel.cascade.cascadeSpec import CascadeChannel, CascadeLink, FieldRef, RepeatScope
+from app.dataModel.cascade.cascadeSpec import CascadeChannel, CascadeLink, RepeatScope
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
 from app.dataModel.materials.worldMaterialRegistry import MaterialKey
 from app.dataModel.locations.settlement.district.districtTemplateEntry import (

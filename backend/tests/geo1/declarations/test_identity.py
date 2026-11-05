@@ -9,7 +9,7 @@ import subprocess
 import sys
 from unittest import TestCase
 
-from app.dataModel.cascade.cascadeGraph import BoundField
+from app.dataModel.fields.fieldBinding import BoundField
 from app.dataModel.policy.declarations.policyIdentity import RuleIdentity, RuleKind, ValueBranch, make_rule_id
 from tests.geo1.declarations.test_declarations import Action, Foreign, Key, Owner, OtherOwner, Settings
 

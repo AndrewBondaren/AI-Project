@@ -3,7 +3,7 @@
 from pydantic import ValidationError
 
 from app.application.jsonValidation.resolve import ResolveContext, log_issues, report_issues
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.application.worldData.placement.adapters.waterTypes import WaterPreparationCode
 from app.dataModel.hydrology.hydrologyWaypoint import HydrologyWaypoint
 from app.dataModel.hydrology.declaredBasin import DeclaredBasin
@@ -41,7 +41,7 @@ def project_water_source[S: DeclaredBasin | DeclaredCoastline | DeclaredLake](so
 def _collapse_issue(ctx: ResolveContext, world_uid: str, collection: str, index: int,
                     source_uid: str, error: Exception) -> FieldPathError:
     return FieldPathError(
-        path=ctx.path_prefix + ("hydrology", collection, index),
+        path=ctx.location.parts + ("hydrology", collection, index),
         code=WaterPreparationCode.GEOMETRY.value,
         schema_id=WorldHydrology.SCHEMA_ID,
         message=(f"world_uid={world_uid} source_uid={source_uid}; "

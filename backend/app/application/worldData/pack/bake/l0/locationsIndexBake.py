@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.jsonValidation.index.worldRegistryIndex import WorldRegistryIndex
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.jsonValidation.sourceValidation import validate_reference_value
@@ -35,10 +36,10 @@ def build_locations_index(
     for loc in rows:
         if loc.map_x is None or loc.map_y is None:
             continue
-        ctx = ResolveContext(path_prefix=("locations_index", "locations", len(pins)))
+        ctx = ResolveContext(location=WireLocation(parts=("locations_index", "locations", len(pins))))
         validate_reference_value(
             None, LocationTypeKey, loc.system_location_type, ctx,
-            ctx.path_prefix + ("system_location_type",), references,
+            ctx.location.parts + ("system_location_type",), references,
         )
         pins.append(
             LocationsIndexPin(

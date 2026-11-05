@@ -22,8 +22,8 @@ from app.dataModel.terrain.relief.surfaceCoating.surfaceSupportInput import Surf
 from app.dataModel.terrainMasks.landcoverRegionsCategoryPolicy import LandcoverRegionsCategoryPolicy, LandcoverTerrainPolicy
 
 
-from app.dataModel.cascade.cascadeGraph import bind_field
-from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.fields.fieldBinding import bind_field
+from app.dataModel.fields.fieldRef import FieldRef
 
 
 @dataclass(frozen=True)

@@ -17,9 +17,9 @@ from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
 from app.dataModel.cascade.cascadeSpec import (
     CascadeChannel,
     CascadeLink,
-    FieldRef,
     ChannelKind,
 )
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.flora.enums.cropKind import CropKind
 from app.dataModel.livestock.enums.livestockKind import LivestockKind
 from app.dataModel.registryKey import RegistryKey

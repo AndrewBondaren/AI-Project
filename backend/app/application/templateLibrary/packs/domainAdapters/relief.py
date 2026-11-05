@@ -11,7 +11,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 from app.application.jsonValidation.resolve import UnresolvedModelError
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.application.templateLibrary.packs.domainAdapters.bodyPreparation import (
     TemplateBodyPreparation,
     TemplatePreparationError,

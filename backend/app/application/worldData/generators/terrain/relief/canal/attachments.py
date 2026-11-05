@@ -8,8 +8,9 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 from app.application.worldData.generators.terrain.relief.log.events import (
     EVENT_RESOLVE_FALLBACK,
@@ -146,8 +147,8 @@ def require_canal_from_registry_ref(canal_ref: str, registry: WorldCanalTemplate
     """Resolve a required authored reference without synthesizing a canal."""
     found = canal_from_registry_ref(canal_ref, registry)
     if found is None:
-        ctx = resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("canal_template_registry",))
-        reject_unresolved(ctx, [FieldPathError(ctx.path_prefix + (canal_ref,),
+        ctx = resolve_ctx if resolve_ctx is not None else ResolveContext(location=WireLocation(parts=("canal_template_registry",)))
+        reject_unresolved(ctx, [FieldPathError(ctx.location.parts + (canal_ref,),
             "canal reference unavailable", code="REF_W_UNKNOWN")])
     return found
 

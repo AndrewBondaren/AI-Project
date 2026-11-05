@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 from app.dataModel.terrain.relief.canalObstaclePolicy import CanalObstaclePolicyRule
 from app.dataModel.terrain.relief.enums import (
@@ -73,8 +74,8 @@ def resolve_canal_obstacle_cut(
     refs = {(r.canal_ref or "").strip() or None for r in matched}
     refs.discard(None)
     if len(refs) > 1:
-        ctx = resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("canal_obstacle_policy",))
-        reject_unresolved(ctx, [FieldPathError(ctx.path_prefix, "conflicting enabled canal references",
+        ctx = resolve_ctx if resolve_ctx is not None else ResolveContext(location=WireLocation(parts=("canal_obstacle_policy",)))
+        reject_unresolved(ctx, [FieldPathError(ctx.location.parts, "conflicting enabled canal references",
                                              code="DOMAIN_CONFLICT")])
     canal_ref = next(iter(refs)) if refs else None
     return CanalObstacleCut(

@@ -4,7 +4,7 @@ from typing import Annotated, ClassVar, Self
 
 from pydantic import ConfigDict, StrictBool, field_validator, model_validator
 
-from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.hydrology.generation.categorySource import HydrologyCategoryFields
 from app.dataModel.hydrology.generation.waterGenerationDefaults import WaterGenerationDefaults
 from app.dataModel.hydrology.generation.waterGenerationSettings import WorldWaterGenerationSettings

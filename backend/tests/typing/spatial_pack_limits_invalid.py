@@ -1,5 +1,5 @@
 """Each declaration must fail Pyright and runtime contract admission."""
-from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.encoding.decodeLimits import CollectionLimit
 from app.dataModel.hydrology.pack.shard import HydrologyPackShard
 from app.dataModel.hydrology.query.source import WaterMembershipRun

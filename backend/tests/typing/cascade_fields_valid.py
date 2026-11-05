@@ -5,8 +5,9 @@ from typing import Annotated, assert_type
 from pydantic import BaseModel, computed_field
 
 from app.dataModel.cascade.cascadeSpec import (
-    CascadeChannel, CascadeDefault, CascadeLink, FieldRef,
+    CascadeChannel, CascadeDefault, CascadeLink,
 )
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.locations.context.cascadeParams import SETTLEMENT_DENSITY
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry

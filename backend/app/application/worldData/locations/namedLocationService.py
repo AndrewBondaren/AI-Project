@@ -1,4 +1,5 @@
 from dataclasses import asdict
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.jsonValidation.resolve import ResolveContext, resolve_model
 from app.application.jsonValidation.sourceValidation import validate_source
 from app.application.jsonValidation.worldRow import location_types
@@ -52,7 +53,7 @@ class NamedLocationService:
 
     @staticmethod
     def _from_wire(row: dict, *, world_uid: str, world: World | None = None, ctx: ResolveContext | None = None) -> NamedLocation:
-        active_ctx = ctx if ctx is not None else ResolveContext(path_prefix=("locations", row.get("location_uid", "?") if isinstance(row, dict) else "?"))
+        active_ctx = ctx if ctx is not None else ResolveContext(location=WireLocation(parts=("locations", row.get("location_uid", "?") if isinstance(row, dict) else "?")))
         wire = resolve_model(BundleNamedLocation,
             with_default_created_at(row),
             ctx=active_ctx,

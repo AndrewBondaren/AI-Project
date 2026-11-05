@@ -6,10 +6,11 @@ import unittest
 
 from pydantic import Field, TypeAdapter, ValidationError
 
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.jsonValidation.resolve import (
     ResolveContext, UnresolvedModelError, report_issues, resolve_patch, resolve_result,
 )
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.hydrology.enums.basinKind import BasinKind
 from app.dataModel.annotationPolicy import DefaultWhenMissing
 from app.dataModel.materials.worldMaterialRegistry import WorldMaterialRegistry
@@ -363,8 +364,8 @@ class PlacementWirePolicyTests(unittest.TestCase):
 
     def test_runtime_preview_make_identical_wire_decisions_and_share_diagnostic_sink(self):
         payload = intent_wire(placement_specificity=-1)
-        runtime = ResolveContext(path_prefix=("placements", "region-a"))
-        preview = ResolveContext(validate_only=True, path_prefix=runtime.path_prefix)
+        runtime = ResolveContext(location=WireLocation(parts=("placements", "region-a")))
+        preview = ResolveContext(validate_only=True, location=runtime.location)
         with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING") as log:
             result_runtime = resolve_result(PlacementIntent, payload, ctx=runtime)
         with self.assertNoLogs("app.application.jsonValidation.resolve", level="WARNING"):
@@ -376,7 +377,7 @@ class PlacementWirePolicyTests(unittest.TestCase):
         self.assertEqual(result_runtime.issues[0].path, ("placements", "region-a", "placement_specificity"))
         # P2 will bridge the typed spatial facts through this existing API.
         diagnostic = failure(prepared()).diagnostics[0]
-        issue = FieldPathError(path=preview.path_prefix, code=diagnostic.code.value, message=diagnostic.detail)
+        issue = FieldPathError(path=preview.location.parts, code=diagnostic.code.value, message=diagnostic.detail)
         report_issues(preview, (issue,))
         self.assertEqual(preview.report.issues[-1].code, "PLACEMENT_NO_CANDIDATES")
 

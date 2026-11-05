@@ -60,7 +60,7 @@ class WorldService:
                           validate_only: bool = False) -> World:
         from app.application.jsonValidation.worldRow import terrain_masks
         from app.application.jsonValidation.worldSlices import slice_column_key
-        from app.dataModel.cascade.cascadeGraph import bind_field
+        from app.dataModel.fields.fieldBinding import bind_field
         from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks, DECLARED_REGIONS
         from app.application.worldData.regions.declaredRegionEdit import apply_region_operation
         async with nullcontext() if validate_only else self._write_scope():

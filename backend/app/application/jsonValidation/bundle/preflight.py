@@ -5,7 +5,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved, UnresolvedModelError
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.application.templateLibrary.reliefErrors import ReliefValidationError
 
 
@@ -13,9 +13,9 @@ def validate_rows(data: Any, prepare: Callable[..., Any], *, ctx: ResolveContext
     initial_errors = len(ctx.errors)
     issues: list[FieldPathError] = []
     if not isinstance(data, list):
-        reject_unresolved(ctx, [FieldPathError(ctx.path_prefix, "expected list", code="EXPECTED_LIST")])
+        reject_unresolved(ctx, [FieldPathError(ctx.location.parts, "expected list", code="EXPECTED_LIST")])
     for index, row in enumerate(data):
-        path = ctx.path_prefix + (index,)
+        path = ctx.location.parts + (index,)
         if not isinstance(row, dict):
             issues.append(FieldPathError(path, "expected object", code="EXPECTED_OBJECT"))
             continue

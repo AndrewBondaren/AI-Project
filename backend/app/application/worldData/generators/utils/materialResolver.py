@@ -1,9 +1,10 @@
 import logging
 from random import Random
 
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.jsonValidation import economic_tiers, materials
 from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.ids import UidKind, entity_rng
 from app.application.worldData.generators.utils.tierRegistry import median_system_tier, tiers_sorted
 from app.dataModel.materials.materialRegistryEntry import MaterialRegistryEntry
@@ -46,9 +47,9 @@ def resolve_material(
     """
     registry = materials(world).root
     tiers = tiers_sorted(economic_tiers(world).root)
-    ctx = ResolveContext(path_prefix=("materials", context or use_type))
+    ctx = ResolveContext(location=WireLocation(parts=("materials", context or use_type)))
     if effective_tier is not None and not any(e.system_tier == effective_tier for e in tiers):
-        reject_unresolved(ctx, [FieldPathError(ctx.path_prefix + ("economic_tier",),
+        reject_unresolved(ctx, [FieldPathError(ctx.location.parts + ("economic_tier",),
             f"unknown reference: {effective_tier!r}", code="REF_W_UNKNOWN")])
     # Canonical completion is a catalog contract; validate authored row refs,
     # not builtin rows whose tier vocabulary may differ from a custom world.
@@ -87,7 +88,7 @@ def resolve_material(
         # a material in this world's valid vocabulary. Never invent a key.
         if any(entry.system_material == default for entry in registry):
             return default
-        reject_unresolved(ctx, [FieldPathError(ctx.path_prefix, f"no {use_type!r} material candidates or declared default {default!r}",
+        reject_unresolved(ctx, [FieldPathError(ctx.location.parts, f"no {use_type!r} material candidates or declared default {default!r}",
                                                code="DOMAIN_NO_CANDIDATE")])
 
 

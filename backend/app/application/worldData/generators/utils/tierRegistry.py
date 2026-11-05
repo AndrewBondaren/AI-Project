@@ -8,8 +8,9 @@
 """
 from __future__ import annotations
 
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.economy.economyTier.economyTierEntry import EconomyTierEntry
 
 Registry = list[EconomyTierEntry]
@@ -40,8 +41,8 @@ def tier_rank(
     for index, entry in enumerate(tiers_sorted(registry)):
         if entry.system_tier == system_tier:
             return index
-    ctx = ResolveContext(path_prefix=("world", world_uid or "?", "economic_tier"))
-    reject_unresolved(ctx, [FieldPathError(ctx.path_prefix, f"unknown reference: {system_tier!r}", code="REF_W_UNKNOWN")])
+    ctx = ResolveContext(location=WireLocation(parts=("world", world_uid or "?", "economic_tier")))
+    reject_unresolved(ctx, [FieldPathError(ctx.location.parts, f"unknown reference: {system_tier!r}", code="REF_W_UNKNOWN")])
 
 
 def tier_at_least(

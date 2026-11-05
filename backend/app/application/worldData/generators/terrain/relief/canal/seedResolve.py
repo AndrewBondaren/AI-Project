@@ -7,6 +7,7 @@ Returns typed ``Canal | None``; unknown ref → shared unresolved.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.jsonValidation.resolve import ResolveContext
 
 from app.application.worldData.generators.terrain.relief.canal.attachments import (
@@ -113,5 +114,5 @@ def _resolve_canal_ref(
     site_id: str,
     resolve_ctx: ResolveContext | None = None,
 ) -> Canal:
-    ctx = resolve_ctx if resolve_ctx is not None else ResolveContext(path_prefix=("canal", site_id))
+    ctx = resolve_ctx if resolve_ctx is not None else ResolveContext(location=WireLocation(parts=("canal", site_id)))
     return require_canal_from_registry_ref(canal_ref, registry, resolve_ctx=ctx)

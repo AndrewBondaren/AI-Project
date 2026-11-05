@@ -1,7 +1,7 @@
 """Shared prepared-input placement pass — tz_map_light_bake § Placement P2."""
 
 from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved, resolve_model
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.application.worldData.placement.constraints import check_candidate
 from app.application.worldData.placement.dependencies import DependencyQueue
 from app.application.worldData.placement.diagnostics import diagnostic, emit_diagnostics
@@ -89,7 +89,7 @@ def resolve_placements(batch: PlacementBatch, *, ctx: ResolveContext) -> Placeme
     batch = resolve_model(PlacementBatch, batch.model_dump(exclude_unset=True, warnings=False), ctx=ctx)
     geometry = PlacementGeometry(batch.topology)
     invalid = [FieldPathError(
-        path=ctx.path_prefix + ("accepted", obj.identity.region_uid, "footprint"),
+        path=ctx.location.parts + ("accepted", obj.identity.region_uid, "footprint"),
         code=PlacementIssueCode.CONSTRAINT_VIOLATION.value,
         message=f"accepted placement {obj.identity.region_uid} has a footprint outside planar topology",
         schema_id=ctx.schema_id,

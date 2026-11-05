@@ -24,7 +24,7 @@ from app.dataModel.terrainMasks.mountain.specs import (
 )
 from app.dataModel.terrainMasks.regions import LandcoverDeclareEntry
 from app.dataModel.terrainMasks.landcoverRegionsCategoryPolicy import LandcoverRegionsCategoryPolicy
-from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.fields.fieldRef import FieldRef
 
 
 def _terrain_key(system_terrain: str) -> str:

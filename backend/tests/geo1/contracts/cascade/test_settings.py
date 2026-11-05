@@ -10,8 +10,10 @@ from app.application.cascade.cascadeLink import EmptyLink, Link
 from app.application.cascade.contextResolver import extend, scope_sequence
 from app.application.policy.policyRead import PolicyReader
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError, resolve_model, resolve_patch
-from app.dataModel.cascade.cascadeGraph import bind_field, ordered_chain
-from app.dataModel.cascade.cascadeSpec import ChannelKind, FieldRef
+from app.dataModel.cascade.cascadeGraph import ordered_chain
+from app.dataModel.fields.fieldBinding import bind_field
+from app.dataModel.cascade.cascadeSpec import ChannelKind
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.cascade.cascadeVerify import verify_cascade_contract
 from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationScope as Scope
 from app.dataModel.hydrology.generation.generationContext import WaterGenerationContext

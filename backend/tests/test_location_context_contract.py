@@ -28,22 +28,22 @@ from app.dataModel.locations.settlement.enums.districtDensity import (
 )
 from app.dataModel.cascade import cascadeGraph, cascadeVerify
 from app.dataModel.cascade.cascadeGraph import (
-    bind_field,
     cascade_channels,
     check_link,
     ordered_chain,
 )
+from app.dataModel.fields.fieldBinding import bind_field
 from app.dataModel.cascade.cascadeSpec import (
     Cascade,
     CascadeChannel,
     CascadeDefault,
     CascadeLink,
-    FieldRef,
     ChannelKind,
     DefaultPolicy,
     ScopeAxis,
     RepeatScope,
 )
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.cascade.cascadeVerify import (
     verify_cascade_contract,
 )

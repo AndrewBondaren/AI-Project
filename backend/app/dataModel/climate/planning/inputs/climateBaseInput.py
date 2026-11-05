@@ -14,8 +14,8 @@ from app.dataModel.climate.planning.climatePoints import ClimateKey
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.spatial.grid.coordinateTypes import FineXY
 from app.dataModel.spatial.grid.gridBBox import GridBBox
-from app.dataModel.cascade.cascadeSpec import FieldRef
-from app.dataModel.cascade.cascadeGraph import bind_field
+from app.dataModel.fields.fieldRef import FieldRef
+from app.dataModel.fields.fieldBinding import bind_field
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 

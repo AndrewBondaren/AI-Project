@@ -7,8 +7,8 @@ from pydantic import BaseModel, TypeAdapter
 from typing_extensions import TypeAliasType
 
 from app.dataModel.annotationPolicy import unwrap_wire_type
-from app.dataModel.cascade.cascadeGraph import BoundField, bind_field
-from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.fields.fieldBinding import BoundField, bind_field
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.placement.common import Specificity
 from app.dataModel.policy.policyFacts import FactValue, KnownFact, UnknownFact, WaitingFact
 

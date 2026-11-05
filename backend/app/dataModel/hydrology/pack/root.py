@@ -5,7 +5,7 @@ from typing import ClassVar, Self
 from pydantic import BaseModel, ConfigDict, StrictInt, TypeAdapter, model_validator
 
 from app.dataModel.artifacts.references import ArtifactKind, ArtifactRef
-from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.encoding.decodeLimits import CollectionLimit
 from app.dataModel.hydrology.pack.profile import FORMAT_VERSION, MAX_CONTAINER_ITEMS, SHARD_V1, TILE_SIDE
 from app.dataModel.hydrology.physicalWaterUnion import PhysicalWaterUnion

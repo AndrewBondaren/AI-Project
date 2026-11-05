@@ -3,7 +3,7 @@ from copy import deepcopy
 from unittest.mock import patch
 
 from test_library_packs_4b import _ServiceCase, _relief_body, _plot_body, _RELIEF, _STRUCT, _PLOT
-from app.application.jsonValidation.types import ReferenceIssueReason
+from app.dataModel.validation.diagnostics.fieldPathError import ReferenceIssueReason
 from app.application.templateLibrary.packs.reinstantiate.reinstantiatePlan import build_update_plan, prepare_update
 from app.application.templateLibrary.packs.reinstantiate.reinstantiateSnapshot import load_update_snapshot
 from app.db.models.libraryPackMember import LibraryPackMemberRow

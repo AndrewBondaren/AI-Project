@@ -5,7 +5,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationCategory
 from app.dataModel.hydrology.generation.waterGenerationSettings import CategoryWaterGenerationSettings
 from app.dataModel.hydrology.lakes import HydrologyLakesPolicy

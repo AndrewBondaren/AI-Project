@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel
 
-from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.fields.fieldRef import FieldRef
 
 
 class Source(BaseModel):
