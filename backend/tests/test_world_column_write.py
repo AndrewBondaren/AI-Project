@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.jsonValidation.types import ImportValidationError
@@ -93,7 +94,7 @@ class WorldColumnWriteTests(unittest.TestCase):
     def test_invalid_registry_is_atomic_and_preserves_all_error_paths(self):
         world = self.world()
         before = copy.deepcopy(world)
-        ctx = self.ctx(path_prefix=("operation",))
+        ctx = self.ctx(location=WireLocation(parts=("operation",)))
         with self.assertRaises(ImportValidationError) as error:
             apply_world_column(world, "race_template_registry", [42, False], ctx)
         self.assertEqual([e.path for e in error.exception.errors],

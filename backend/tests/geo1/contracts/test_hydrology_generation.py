@@ -29,7 +29,7 @@ from app.dataModel.hydrology.policy.hydrologyGenerationDecision import Hydrology
 from app.dataModel.hydrology.policy.hydrologyPolicyDefinition import (
     HYDROLOGY_GENERATION_POLICY, HYDROLOGY_AUTORESOLVE, HYDROLOGY_ENABLED, HydrologyGenerationPolicy,
 )
-from app.dataModel.cascade.cascadeGraph import BoundField
+from app.dataModel.fields.fieldBinding import BoundField
 from app.dataModel.policy.declarations.fieldPolicy import SelectByValue
 from app.dataModel.policy.declarations.policyIdentity import RuleIdentity, RuleKind, ValueBranch, make_rule_id
 from app.dataModel.policy.policyBindings import PolicyFacts, PolicyInputs, PolicySource

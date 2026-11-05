@@ -5,9 +5,9 @@ from contextlib import contextmanager
 
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
-from app.core.validatorAggregationHelper import ValidatorAggregationHelper
-from app.dataModel.cascade.cascadeGraph import bind_field
-from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.validation.diagnostics.validatorAggregationHelper import ValidatorAggregationHelper
+from app.dataModel.fields.fieldBinding import bind_field
+from app.dataModel.fields.fieldRef import FieldRef
 
 from app.application.planning.service.planningService import PlanBuildFailure
 from app.application.worldData.generators.terrain.designedWater.preparation.coastlineConstraintPreparer import CoastlineConstraintPreparer

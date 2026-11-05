@@ -19,8 +19,9 @@ from app.dataModel.economy.economyTier.worldEconomyTierRegistry import (
 from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
 from app.dataModel.locations.settlement.settlement.settlementPayload import SettlementPayload
 from app.dataModel.cascade.cascadeSpec import (
-    Cascade, CascadeChannel, CascadeDefault, CascadeLink, FieldRef, DefaultPolicy, ScopeAxis, RepeatScope,
+    Cascade, CascadeChannel, CascadeDefault, CascadeLink, DefaultPolicy, ScopeAxis, RepeatScope,
 )
+from app.dataModel.fields.fieldRef import FieldRef
 from app.application.cascade import cascadeLog
 from app.dataModel.cascade import cascadeGraph
 from app.dataModel.cascade.cascadeGraph import ordered_scopes

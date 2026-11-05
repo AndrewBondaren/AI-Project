@@ -7,6 +7,7 @@ import sys
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.jsonValidation.index.worldRegistryIndex import WorldRegistryIndex
 from app.application.jsonValidation.resolve import (
     ResolveContext, UnresolvedModelError, validate_contracts,
@@ -120,7 +121,7 @@ class ImmutableSourceCollectionsTests(unittest.TestCase):
                     model.model_validate(wire | value)
 
     def test_ref_w_reaches_tuple_children_and_optional_tuple_keys(self):
-        ctx = ResolveContext(path_prefix=("payload",), validate_only=True)
+        ctx = ResolveContext(location=WireLocation(parts=("payload",)), validate_only=True)
         references = WorldRegistryIndex(materials=frozenset({"water"}))
         wire = {"lakes": [{"location_uid": "lake", "shoreline": POINTS}],
                 "materials": [None, "water"]}

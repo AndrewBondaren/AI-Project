@@ -1,7 +1,7 @@
 """Typed write actions and previews, without callbacks/SQL (packs TZ §0.3)."""
 from dataclasses import dataclass
 
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.application.templateLibrary.packs.lifecycleContracts import FieldChange
 from app.application.templateLibrary.packs.write.writeContracts import WriteItemDecision
 from app.application.templateLibrary.packs.write.writeInspectionContracts import InspectedMember, InspectedSource

@@ -5,6 +5,7 @@ from dataclasses import replace
 
 from pydantic import TypeAdapter
 
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
 from app.application.worldData.masks.regionIdentity import declared_region_identity
 from app.dataModel.spatial.regionShape import AnchorRadiusShape, BboxShape, EllipseShape, PolygonShape
@@ -24,7 +25,7 @@ class RegionIdentityTests(unittest.TestCase):
         self.anchor_uid = "anchor-region-test"
         self.seed_xy = (20, -10)
         self.path = ("terrain_masks", "declared_regions", 0)
-        self.ctx = ResolveContext(path_prefix=self.path)
+        self.ctx = ResolveContext(location=WireLocation(parts=self.path))
         self.shape = EllipseShape(cx=10, cy=20, rx=5, ry=3)
         self.spec = ForestSpec(name=self.name, shape=self.shape)
 
@@ -151,7 +152,7 @@ class RegionIdentityTests(unittest.TestCase):
         invalid_name = self.name + UID_PART_SEPARATOR + "invalid"
         unchecked = self.spec.model_copy(update={"name": invalid_name})
         for validate_only in (True, False):
-            ctx = ResolveContext(path_prefix=self.path, validate_only=validate_only)
+            ctx = ResolveContext(location=WireLocation(parts=self.path), validate_only=validate_only)
             log_context = (self.assertNoLogs(LOG, level="WARNING") if validate_only
                            else self.assertLogs(LOG, level="WARNING"))
             with self.subTest(validate_only=validate_only), log_context:

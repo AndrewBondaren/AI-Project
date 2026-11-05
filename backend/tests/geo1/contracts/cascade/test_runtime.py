@@ -9,8 +9,9 @@ from pydantic import BaseModel, Field
 from app.application.cascade.cascadeLink import EmptyLink, Link
 from app.application.cascade.contextResolver import extend, scope_sequence
 from app.dataModel.cascade.cascadeSpec import (
-    Cascade, CascadeChannel, CascadeDefault, CascadeLink, ChannelKind, DefaultPolicy, FieldRef,
+    Cascade, CascadeChannel, CascadeDefault, CascadeLink, ChannelKind, DefaultPolicy,
 )
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.cascade.cascadeVerify import verify_cascade_contract
 from app.dataModel.cascade.runtimeContext import CascadeRuntimeContext
 from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationCategory, WaterGenerationScope as Scope

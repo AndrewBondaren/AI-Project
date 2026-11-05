@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.application.jsonValidation.resolve import ResolveContext, reject_unresolved
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 
 

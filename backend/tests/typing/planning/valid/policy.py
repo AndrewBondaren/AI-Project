@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, StrictBool
 
 from app.application.policy.declarations.compiler import compile_admission_policy, compile_value_policy
 from app.application.policy.policyResolver import PolicyResolver
-from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.hydrology.enums.planning.hydrologyExecutionMode import HydrologyExecutionMode
 from app.dataModel.hydrology.generation.generationContext import WaterGenerationContext
 from app.dataModel.hydrology.generation.waterGenerationSettings import WorldHydrologyGenerationFields

@@ -8,8 +8,8 @@ from unittest import TestCase
 from pydantic import BaseModel, ConfigDict, StrictBool, ValidationError
 from typing import Annotated
 
-from app.dataModel.cascade.cascadeGraph import BoundField
-from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.fields.fieldBinding import BoundField
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.placement.common import Specificity
 from app.dataModel.policy.declarations.fieldPolicy import EnabledFor, SelectByValue, ValueCase
 from app.dataModel.policy.declarations.policyCases import PolicyCaseDeclaration

@@ -2,6 +2,7 @@
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 
+from app.dataModel.validation.diagnostics.validatorAggregationHelper import ValidatorAggregationHelper
 from app.core.validatorAggregationHelper import ValidatorAggregationHelper
 from app.application.artifacts.contracts.holderPort import IArtifactHolders
 from app.application.patch.registry.sectionRegistry import SectionRegistry

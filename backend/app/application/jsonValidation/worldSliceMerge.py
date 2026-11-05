@@ -27,7 +27,7 @@ def _slice_ctx(ctx: ResolveContext, world_slice: WorldSlice) -> ResolveContext:
         mode=ctx.mode,
         validate_only=ctx.validate_only,
         partial=ctx.partial,
-        path_prefix=ctx.path_prefix,
+        location=ctx.location,
         report=ctx.report,
         schema_id=world_slice.schema_id,
     )

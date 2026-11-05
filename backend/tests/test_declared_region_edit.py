@@ -85,7 +85,7 @@ class DeclaredRegionEditTests(unittest.IsolatedAsyncioTestCase):
         for ctx in contexts:
             self.assertIs(ctx.mode, ResolveMode.IMPORT)
             self.assertFalse(ctx.validate_only)
-            self.assertEqual(ctx.path_prefix, ("terrain_masks", "declared_regions", 0))
+            self.assertEqual(ctx.location.parts, ("terrain_masks", "declared_regions", 0))
             self.assertEqual(ctx.report.issues, [])
         rows = await self.repo.get_by_world(self.uid)
         self.assertEqual(len(rows), 1)

@@ -6,7 +6,7 @@ from typing import Generic, Literal, Protocol, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.placement.common import Specificity
 from app.dataModel.policy.declarations.policyDeclaration import DeclarationDefaults, PolicyOwner, validate_policy_owner
 from app.dataModel.policy.declarations.policyIdentity import CommonPolicyOwner, RuleIdentity, RuleKind, make_rule_id

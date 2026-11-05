@@ -11,8 +11,8 @@ from app.application.worldData.planning.composition.surfacePlanningCapture impor
 from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
 from app.application.worldData.planning.contracts.surfacePlanningView import SurfacePlanningViewKind
 from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
+from tests.planning.probeIssues import ProbeCode, probe_issue
 from tests.planning.consumers.test_wiring import Composition, Wait, capture, world
 
 
@@ -23,8 +23,8 @@ class ProbeTests(unittest.TestCase):
                 with self.subTest(no_extent=no_extent, validate=validate_only, collect=collect_only):
                     source = world(world_bounds=None) if no_extent else world()
                     baseline = capture(world())
-                    issue = FieldPathError(("probe",), "fallback", code="probe_fallback")
-                    notice = PlanDiagnostic(issue=FieldPathError(("probe",), "notice"),
+                    issue = probe_issue("fallback", code=ProbeCode.FALLBACK)
+                    notice = PlanDiagnostic(issue=probe_issue("notice", code=ProbeCode.NOTICE),
                         disposition=PlanDiagnosticDisposition.NOTICE)
                     fallback = PlanDiagnostic(issue=issue, disposition=PlanDiagnosticDisposition.FALLBACK)
                     planning = Mock()
@@ -53,7 +53,7 @@ class ProbeTests(unittest.TestCase):
         self.addCleanup(composition.service.shutdown)
         source = world()
         baseline = capture(source)
-        notice = PlanDiagnostic(issue=FieldPathError(("probe",), "notice"),
+        notice = PlanDiagnostic(issue=probe_issue("notice", code=ProbeCode.NOTICE),
             disposition=PlanDiagnosticDisposition.NOTICE)
         entry = SurfacePlanningEntry(composition.assembler, SurfacePlanningCapture())
         with patch("app.application.worldData.planning.composition.surfacePlanningCapture.resolve_base_profiles",

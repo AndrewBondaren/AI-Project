@@ -7,7 +7,7 @@ from unittest import TestCase
 
 from test_library_packs_4b import _ServiceCase, _plot_body, _relief_body, _PLOT, _RELIEF, _STRUCT
 from app.application.jsonValidation import resolve as resolve_module
-from app.application.jsonValidation.types import ReferenceIssueReason
+from app.dataModel.validation.diagnostics.fieldPathError import ReferenceIssueReason
 from app.application.templateLibrary.packs.lifecycleContracts import MemberRef
 from app.application.templateLibrary.packs.referenceResolver import reference_index
 from app.core.generationLogging import generation_world_log

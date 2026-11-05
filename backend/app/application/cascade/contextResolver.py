@@ -32,10 +32,10 @@ from app.application.worldData.generators.utils.materialResolver import (
     fold_dominant_material,
 )
 from app.dataModel.cascade.cascadeGraph import (
-    bind_field,
     check_link,
     ordered_scopes,
 )
+from app.dataModel.fields.fieldBinding import bind_field
 from app.dataModel.cascade.cascadeSpec import (
     Cascade,
     ChannelKind,

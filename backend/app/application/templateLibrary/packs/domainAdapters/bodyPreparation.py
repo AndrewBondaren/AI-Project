@@ -10,9 +10,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, ValidationError
 
+from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
 from app.application.jsonValidation.sourceValidation import validate_prepared_source
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.application.templateLibrary.packs.domainAdapters.contract import (
     SYSTEM_NAME_FIELD,
 )
@@ -73,7 +74,7 @@ class TemplateBodyPreparation[T: BaseModel]:
 
     def validate_world(self, body: T, world, path: tuple) -> None:
         ctx = ResolveContext.for_import(validate_only=True)
-        ctx.path_prefix = path
+        ctx.location = WireLocation(parts=path)
         try:
             validate_prepared_source(world, body, ctx=ctx)
         except UnresolvedModelError as exc:

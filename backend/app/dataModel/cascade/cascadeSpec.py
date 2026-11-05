@@ -39,10 +39,9 @@ verification of the declared graph — ``cascade_channels``,
 
 from dataclasses import dataclass
 from enum import StrEnum
-from collections.abc import Callable
-from typing import Any, Generic, TypeVar
+from typing import Any
 
-from pydantic import BaseModel
+from app.dataModel.fields.fieldRef import FieldRef
 
 
 class ScopeAxis(StrEnum):
@@ -83,18 +82,6 @@ class RepeatScope(StrEnum):
     """Reuse one field along the context's declared scope path."""
 
     EVERY_TAG = "every_tag"
-
-
-M = TypeVar("M", bound=BaseModel)
-T = TypeVar("T")
-
-
-@dataclass(frozen=True)
-class FieldRef(Generic[M, T]):
-    """Statically checked direct field selection, with deferred model lookup."""
-
-    model: Callable[[], type[M]]
-    select: Callable[[M], T]
 
 
 @dataclass(frozen=True)

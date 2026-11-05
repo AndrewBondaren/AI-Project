@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from app.application.jsonValidation.resolve import log_issues
-from app.application.jsonValidation.types import FieldPathError, ReferenceIssueContext, ReferenceIssueReason
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError, ReferenceIssueContext, ReferenceIssueReason
 
 from app.application.templateLibrary.packs.domainAdapters.refFields import (
     named_location_template_refs,

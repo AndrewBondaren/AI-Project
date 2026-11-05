@@ -14,7 +14,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from app.application.jsonValidation.types import FieldPathError, ImportValidationError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.application.jsonValidation.types import ImportValidationError
 from app.application.templateLibrary.packs.domainAdapters.refFields import (
     LOCATION_TEMPLATE_REF_FIELDS, LOCATION_TEMPLATE_REF_KINDS,
     RELIEF_POLICY_REF_FIELDS,

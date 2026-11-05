@@ -148,7 +148,7 @@ class SourceConsumerTests(unittest.TestCase):
     def test_preflight_retains_errors_from_independent_consumer_context(self):
         from app.application.jsonValidation.bundle.preflight import validate_rows
         from app.application.jsonValidation.resolve import reject_unresolved
-        from app.application.jsonValidation.types import FieldPathError
+        from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
         def prepare(row):
             reject_unresolved(ResolveContext(validate_only=True),
                               [FieldPathError(("field",), "invalid", code="TEST")])

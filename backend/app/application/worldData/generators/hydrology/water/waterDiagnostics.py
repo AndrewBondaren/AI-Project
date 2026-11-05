@@ -3,7 +3,7 @@
 from collections.abc import Callable
 
 from app.application.jsonValidation.resolve import ResolveContext, log_issues, report_issues
-from app.application.jsonValidation.types import FieldPathError
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
 
 

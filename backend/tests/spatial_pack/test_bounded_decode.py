@@ -4,7 +4,7 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from app.application.encoding.boundedCanonicalDecode import decode_bounded, validate_bounded
-from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.hydrology.pack.root import HydrologyPackRoot, HydrologyShardRef
 from app.dataModel.hydrology.pack.shard import HydrologyPackShard
 from app.dataModel.encoding.decodeLimits import CollectionLimit, DecodeLimits, RecordLimits

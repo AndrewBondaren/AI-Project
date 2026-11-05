@@ -10,7 +10,7 @@ from app.application.cancellation.requestPlanWait import RequestPlanWait
 import unittest
 
 from app.application.planning.service.planningService import (
-    PlanBuildFailure, PlanContractFailure, PlanWaitCancelled, PlanWaitTimeout, PlanningBusy,
+    PlanContractFailure, PlanProviderFault, PlanWaitCancelled, PlanWaitTimeout, PlanningBusy,
 )
 from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult
 from app.dataModel.planning.policy.planningExecutionPolicy import PlanningExecutionPolicy
@@ -127,12 +127,12 @@ class ConcurrencyTests(unittest.TestCase):
             finally:
                 self.release.set()
             for future in futures:
-                with self.assertRaises(PlanBuildFailure) as caught:
+                with self.assertRaises(PlanProviderFault) as caught:
                     future.result(2)
                 failures.append(caught.exception)
         self.assertTrue(all(failure is failures[0] for failure in failures))
         self.assertEqual(provider.count, 1)
-        with self.assertRaises(PlanBuildFailure):
+        with self.assertRaises(PlanProviderFault):
             self.h.get(binding)
         self.assertEqual(provider.count, 2)
 

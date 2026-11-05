@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, StrictBool
 
 from app.application.policy.policyRead import PolicyReader
 from app.application.policy.policyResolver import PolicyResolver
-from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.placement.common import Specificity
 from app.dataModel.policy.objectAdmissionPolicyDefinition import (
     EnabledGate, ObjectAdmissionBindings, ObjectAdmissionPolicyDefinition, PlacementPolicyDefaults,

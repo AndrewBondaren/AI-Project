@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validat
 from app.dataModel.spatial.regionShape import AnchorRadiusShape, RegionShape
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.ids.regionIdentity import normalize_region_name
-from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.fields.fieldRef import FieldRef
 
 
 class RegionSpecBase(BaseModel):

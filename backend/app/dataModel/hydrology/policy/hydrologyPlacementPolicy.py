@@ -6,7 +6,7 @@ from typing_extensions import TypeVar
 
 from pydantic import BaseModel, ConfigDict, StrictBool, model_validator
 
-from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.hydrology.declaredCoastline import CoastlinePurpose, DeclaredCoastline
 from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationCategory
 from app.dataModel.hydrology.enums.planning.hydrologyExecutionMode import HydrologyExecutionMode

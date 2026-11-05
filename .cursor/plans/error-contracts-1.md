@@ -1,6 +1,6 @@
 # ERROR-CONTRACTS-1 — типизированные ошибки, проверки и диагностика
 
-**Статус:** архитектурные решения по разделению семейств, размещению `<...>TypeError`, варианту B для `FieldPathError`, обязательным типизированным аргументам, политике логирования и продуктовой политике отказов **ЗАФИКСИРОВАНЫ владельцем 2026-11-04**. Обязательная последовательность **архитектура и размещение → реализация общего ядра → домены после ревью существующих POJO и ошибок и принятия необходимых контрактов** уточнена владельцем 2026-11-04. Повторное ревью от 2026-11-04 добавило requirements немедленной прямой миграции callers после C1 (без переходных состояний), семантики outcome vs transport, технологии runtime admission, policy emit/silent/aggregate, nullable paths и bounded batch. Не требуется повторный freeze неизменяемых существующих доменных POJO; конкретные новые/изменяемые error/enum/argument/path contracts, generator dispositions и полный реестр остаются DRAFT/OPEN. **Точная файловая карта A0-PROPOSAL §0.1.1–0.1.3 подготовлена на 2026-11-04, но владельцем ещё не принята; неполный impact `FieldPathError` не позволяет закрыть A0. Для несовместимого C1 заранее обязательны принятые scoped D0/D1 всех непосредственно затронутых consumers; реальный logging I0 обязателен до эксплуатационной приёмки затронутой операции. C0/C1 заблокированы до A0 acceptance.** Изменения production-кода не разрешены этим документом.
+**Статус:** архитектурные решения по разделению семейств, размещению `<...>TypeError`, варианту B для `FieldPathError`, обязательным типизированным аргументам, политике логирования и продуктовой политике отказов **ЗАФИКСИРОВАНЫ владельцем 2026-11-04**. Обязательная последовательность **архитектура и размещение → реализация общего ядра → домены после ревью существующих POJO и ошибок и принятия необходимых контрактов** уточнена владельцем 2026-11-04. Повторное ревью от 2026-11-04 добавило requirements немедленной прямой миграции callers после C1 (без переходных состояний), семантики outcome vs transport, технологии runtime admission, policy emit/silent/aggregate, nullable paths и bounded batch. Не требуется повторный freeze неизменяемых существующих доменных POJO; конкретные новые/изменяемые error/enum/argument/path contracts, generator dispositions и полный реестр остаются DRAFT/OPEN. **A0 ACCEPTED владельцем 2026-11-04:** файловая карта §0.1.1–0.1.3 и полный checkout-backed impact register §0.1.4. **C0 ACCEPTED владельцем 2026-11-04:** §3.9 C0-1…C0-8. A0-F1 решено: persisted error records при C1 пересоздаются, без legacy v1. Для несовместимого C1 заранее обязательны принятые scoped D0/D1 всех непосредственно затронутых consumers; реальный logging I0 обязателен до эксплуатационной приёмки затронутой операции. C1 больше не заблокирован A0/C0; остаётся заблокирован scoped D0/D1 затронутых consumers, которые владелец делает вместе с переездом доменов.** Изменения production-кода не разрешены этим документом.
 
 **Срез аудита:** `AndrewBondaren/AI-Project`, `master`, commit [`fa48c082`](https://github.com/AndrewBondaren/AI-Project/commit/fa48c082fb0883bed68ca9f60de83953538eb2f3), 2026-11-04; адресная перепроверка `FieldRef`, `FieldPathError`, Water Input и нового Snapshot builder на [`d031508e`](https://github.com/AndrewBondaren/AI-Project/commit/d031508ee225727be6a0f03231712c81c20df4c6). Перечень ниже фиксирует проверенные точки **накопления, передачи и преобразования** ошибок. Это первичная инвентаризация, а не доказательство полноты по всем файлам: поиск `FieldPathError(` уже достигает лимита 100 результатов. Полный реестр всех производителей диагностик — отдельный обязательный gate до массовой миграции.
 
@@ -21,7 +21,7 @@
 | Логирование / транскрипт | Existing `backend/app/core/loggingConfig.py`, `generationLogging.py`, доменные emitter/helpers | Повторно использовать фасад и sinks `docs/tz_logging.md`; exact event ownership и typed safe args фиксируются по операциям, без новой инфраструктуры logger. |
 | Pydantic, wire, API, persistence boundary | Existing `backend/app/application/jsonValidation/`, `backend/app/api/errorMapping.py` и domain codecs | Архитектурно назначить владельца каждого typed mapper и его место до изменения; внешние строки допустимы только на boundary. |
 
-### 0.1.1. Точная целевая карта общего ядра — A0-PROPOSAL (на приёмку владельца)
+### 0.1.1. Точная целевая карта общего ядра — A0 ACCEPTED (2026-11-04)
 
 **Основание:** `master` @ `d31ceed42e2b29ef4e88608c52270413ff2253d8`; проверены директории и исходные `FieldRef` / `bind_field` / `BoundField` / `FieldPathError` / `ValidatorAggregationHelper`. Это **точное предложение пакетов и файлов**, но ещё **не A0 ACCEPTED**: владелец утверждает placement до C0 и любого production-кода. Новые *доменные* error/enum/argument POJO и их имена здесь умышленно не предрешаются — только D0/D1.
 
@@ -134,7 +134,7 @@ flowchart TD
 | `backend/app/dataModel/terrain/designedWater/inputValidation.py` | `InputIssues` формирует `ValidationError.from_exception_data` из string parents и `ValueError(message)` | Scoped Water Input D0/D1: F01/F02 и Pydantic bridge с typed reasons/args; сохранить независимое накопление. |
 | `backend/app/dataModel/validation/diagnostics/fieldPathError.py` | Нейтральная `FieldPathError` содержит специфичный `ReferenceIssueContext` / `RuntimeIssueContext` | Проверить ownership/потребителей каждого контекста: общий core не зависит от чужого домена; размещение конкретных variants решает D1. |
 
-**Полный A0 impact register (обязательный deliverable, ещё OPEN):** перед A0 acceptance выполнить поиск **по актуальному checkout**, а не только ограниченным GitHub Code Search, и записать **каждый** затронутый app/test consumer: `direct import` / `re-export` / `constructor` / `type annotation` / `collector` / `carrier/adapter` / `codec/restore` / `static test`. Для каждого — точный путь + symbol, owning домен/операция, **предварительная** категория F01–F07 и applicable F08/F09 (точное решение — D0), ломающее изменение C1, ожидаемое направление миграции **без предрешения новых доменных типов**, нужный D0/D1 gate и migration test. Нельзя выводить полноту из лимита 100 GitHub Search или только из таблицы F/B/D/C. Файлы, где найдено лишь текстовое упоминание, отделять от реально вызываемого API. Неизвестный consumer блокирует A0/C1, а не получает compatibility adapter.
+**Полный A0 impact register (обязательный deliverable; DRAFT собран в [§0.1.4](#014-полный-a0-impact-register--checkout-backed-draft-на-приёмку-владельца), ждёт приёмки владельца):** перед A0 acceptance выполнить поиск **по актуальному checkout**, а не только ограниченным GitHub Code Search, и записать **каждый** затронутый app/test consumer: `direct import` / `re-export` / `constructor` / `type annotation` / `collector` / `carrier/adapter` / `codec/restore` / `static test`. Для каждого — точный путь + symbol, owning домен/операция, **предварительная** категория F01–F07 и applicable F08/F09 (точное решение — D0), ломающее изменение C1, ожидаемое направление миграции **без предрешения новых доменных типов**, нужный D0/D1 gate и migration test. Нельзя выводить полноту из лимита 100 GitHub Search или только из таблицы F/B/D/C. Файлы, где найдено лишь текстовое упоминание, отделять от реально вызываемого API. Неизвестный consumer блокирует A0/C1, а не получает compatibility adapter.
 
 **Перед C1 (обязательный impact acceptance):** повторить полный `rg` в актуальном checkout по imports (включая re-export из `jsonValidation.types`), constructors `FieldPathError(`, bare annotations `FieldPathError`, `ValidationError.from_exception_data`, `errors/issues` collectors, `ReferenceIssueContext`, `BoundField`, persistence/wire restore и static tests. Сверить результаты с **полным A0 register выше**, зафиксировать точно ломаемые consumers и получить **принятые scoped D0/D1 для каждого из них до первого несовместимого production C1**. Если изменение C1 не затрагивает конкретный домен, его D0/D1 можно не готовить; полный ERROR-CONTRACTS-1 DONE не prerequisite независимых планов.
 
@@ -146,6 +146,440 @@ flowchart TD
 
 
 **Артефакт A0 (требует согласования владельцем):** схема зависимостей без циклов, **матрица F01–F09 §2.4 с подходом для каждого типа**, обоснованные reuse/refactor/new и **точная карта пакетов/файлов общего ядра из A0-PROPOSAL §0.1.1–0.1.3 после её утверждения**, правила размещения будущих доменных error contracts, ownership generic/домен/engine/logging, границы публичных API и интеграционные gates. Дополнительно составить **полный impact register прямых и транзитивных потребителей изменяемых shared interfaces** (`FieldPathError`, collector, checked path; включая re-exports и typed carriers) и порядок **немедленной миграции**: после C1 без искусственной промежуточной архитектуры последовательно исправить все затронутые call sites, прогнать targeted tests и только после этого считать совместный кодовый срез завершённым. Не создавать временные V1-адаптеры, вторую модель `FieldPathError` или отдельный долгоживущий compatibility phase. **A0 не предрешает, какие конкретные новые доменные классы/файлы нужны:** это устанавливается после D0-review в D1. Согласовать A0 до любых production-правок. Названные выше существующие пути — evidence; новые пути не объявляются созданными без отдельного утверждения.
+
+### 0.1.4. Полный A0 impact register — checkout-backed (ACCEPTED 2026-11-04)
+
+**Основание:** локальный checkout `master` @ `ca159fc6`, полный проход `backend/app` + `backend/tests` (`*.py`) по `FieldPathError`, `ReferenceIssueContext`, `ReferenceIssueReason`, `ValidatorAggregationHelper`, `FieldRef`, `bind_field`, `BoundField`, `_FieldProbe`, включая многострочные `from … import (…)` и re-export `jsonValidation.types`. Итого: **207 файлов: 152 app + 55 tests**. `FieldPathError` — 126 app + 38 tests, из них 131 файл с прямыми конструкторами (251 вызов). Через re-export `app.application.jsonValidation.types` импортирует 46 файлов. Вне кода — `pyrightconfig.cascade.json`, `scripts/check-cascade-types.cjs`, 2 rules (`cascade-pojo.mdc`, `pojo-world-row-wire.mdc`) и 11 `docs/tz_*.md`; это документационный handoff §0.1.3, не C1.
+
+**Категория F01–F09 в таблице — предварительная, по домену-владельцу.** Точную категорию каждого конструктора ставит scoped D0. Gate `механический D2` = только смена import path, без изменения семантики (D0/D1 не нужен). Gate `scoped D0/D1 до C1` = consumer ломается от изменения схемы `FieldPathError`/collector, его D0/D1 принимается при имплементации переезда домена, но **до** несовместимого C1 (TC-24).
+
+Обозначения: FPE = `FieldPathError`, RIC/RIR = `ReferenceIssueContext`/`ReferenceIssueReason`, VAH = `ValidatorAggregationHelper`, FR = `FieldRef`, bf = `bind_field`, BF = `BoundField`; `ctor×N` — вызовы конструктора, `annot` — аннотация, `str-code` — строковый `code=`, `empty-path` — `path=()`.
+
+#### 0.1.4.1. Находки A0 (влияют на приёмку)
+
+| ID | Серьёзность | Находка (evidence) | Что требуется |
+| --- | --- | --- | --- |
+| A0-F1 | **B → RESOLVED** | `FieldPathError`, `ReferenceIssueContext`, `ReferenceIssueReason`, `RuntimeIssueContext` — **персистентные canonical records**: [`surfaceManifest.py`](../../backend/app/application/worldData/planning/encoding/surfaceManifest.py) ids 105–109; [`hydrology/encoding/sourceSchema.py`](../../backend/app/application/worldData/generators/hydrology/encoding/sourceSchema.py) `OPEN_WATER_SOURCE_SCHEMA_V1` ids 105–109 с `_SHAPE_LOCK` (sha256 от qualified name + полей); [`artifacts/encoding/coreManifest.py`](../../backend/app/application/artifacts/encoding/coreManifest.py) ids 20016/20137–20139 → `PATCH_CORE_SCHEMA` и `SNAPSHOT_CORE_SCHEMA`, а [`terminalCodec.py`](../../backend/app/db/repositories/sqlite/snapshotCore/operations/terminalCodec.py) пишет в SQL `OperationCancelled.reason: FieldPathError`. `canonicalCodec._decode_one` отвергает запись при `missing, duplicate, extra or reordered record fields`. Значит, любое изменение полей FPE или перенос RIC из `fieldPathError.py` ломает decode уже записанных pack/surface/SQL данных и проверку `require_source_schema_v1`. | **DECISION 2026-11-04 (владелец):** вариант (б) — персистентной совместимости нет; при C1 локальные БД, pack и surface **пересоздаются** (по аналогии с recreate для `0001_initial.sql`). Legacy-decoder v1 и маппинг v1→v2 **не создаются**. Новая форма записей регистрируется под существующими type_id; `_SHAPE_LOCK` и manifests обновляются в том же срезе. |
+| A0-F2 | **B** | `require_source_diagnostics_v1` проверяет `type(diagnostic.issue) is not FieldPathError`, а `_PRODUCER_DISPOSITIONS` ключуется **строковыми** кодами (`"WATER_PUDDLE"`, … — Spatial §15.18.1). Concrete `<Domain>TypeError(FieldPathError[Code])` будет отвергнут, а строковые коды v1 заморожены в wire. | Входит в решение A0-F1. Для v2 нужна exact-type таблица разрешённых concrete классов и enum вместо строк (D1 Hydrology/Planning). |
+| A0-F3 | M | AS-IS `ValidatorAggregationHelper` **не generic** (`list[FieldPathError]`, `add`, `raise_if_any`); в §0.1.1 он назван «единственный generic». Прямые users: `snapshotMetadataBuilder.py`, `worldSnapshotService.py`, `coastlineWaterSourceAdapter.py` (2 экземпляра); тестов 0 (в §0.1.3 по Code Search указан 1). | C1 = move + generify (§3.9). Snapshot и Designed Water входят в scoped D0/D1 до C1. |
+| A0-F4 | M | `CascadeNode(BoundField)` в `cascadeGraph.py` наследует dataclass `BoundField`; `isinstance(..., FieldRef)` есть в `cascadeGraph.py` и `policyReferences.py`, `isinstance(..., BoundField)` — в `policyIdentity.py`. | Extraction в `dataModel/fields` сохраняет тот же класс-объект (не копию), чтобы наследование и `isinstance` не изменились; это механический D2. |
+| A0-F5 | M | Пустой/синтетический path там, где ошибка не F01: `leaseStore.py` `OperationCancelled(reason=FieldPathError(path=(), message="cancelled"))` (F06, персистится), `artifactGc.py` `FieldPathError(path=(), message=str(exc))` (F05), `worldSnapshotService.py` `"world publication changed"` (F03/F06), `worldBundleService.py` `((), str(exc), code="BUNDLE_INVALID")`, `cacheService.py` `("cache",)`, `planningService.py` `("planning",)`/`("provider",)`. | Это не механическая замена конструктора: scoped D0/D1 Artifacts, Snapshot, Bundle, Cache и Planning выбирают свой не-F01 тип. |
+| A0-F6 | m | Re-export `jsonValidation/types.py` (`FieldPathError as FieldPathError` …) используют 46 файлов; `tests/planning/contracts/test_contracts.py` проверяет атрибуты модуля `legacy` (`types`) по именам. | D2 переводит все 46 файлов на канонический путь и удаляет re-export вместе с этим тестом-якорем. |
+| A0-F7 | m | `pyrightconfig.cascade.json` включает `dataModel/cascade/cascadeSpec.py`, но не будущий `dataModel/fields/`; positive/negative runner — `scripts/check-cascade-types.cjs` (pyright 1.1.414). | C1 добавляет `dataModel/fields/*.py` в cascade config или в новый `pyrightconfig.error-contracts.json` (§0.1.1); runner переиспользуется. |
+
+#### 0.1.4.2. Реестр по владельцам
+
+**Artifacts** — предварительно F03/F05/F06
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/application/artifacts/lifecycle/artifactGc.py` | FPE (import, ctor×1, annot×1, empty-path) | FPE: ctor: `code`→обяз. CodeT, path→checked; bare annot→concrete/union; `()` path = не F01 | scoped D0/D1 до C1 |
+| `backend/app/dataModel/artifacts/lifecycle/gc.py` | FPE (import, annot×1) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+| `backend/app/dataModel/artifacts/lifecycle/operation/record.py` | FPE (import, annot×1) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+
+**Artifacts (SQL lease)** — предварительно F06 (cancel) / F09
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/db/repositories/sqlite/artifacts/leaseStore.py` | FPE (import, ctor×1, empty-path) | FPE: ctor: `code`→обяз. CodeT, path→checked; `()` path = не F01 | scoped D0/D1 до C1 |
+
+**Cache** — предварительно F03/F05
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/application/cache/service/cacheService.py` | FPE (import, ctor×1, annot×1) | FPE: ctor: `code`→обяз. CodeT, path→checked; bare annot→concrete/union | scoped D0/D1 до C1 |
+
+**Cascade** — предварительно F02
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/application/cascade/contextResolver.py` | bf (import, call×1) | bf: import path | механический D2 (import path) |
+| `backend/app/dataModel/cascade/cascadeGraph.py` | FR (import, annot×2, isinstance); bf (DEFINITION, call×2); BF (DEFINITION, ctor×1, annot×1, SUBCLASS); probe (DEFINITION, ctor×1) | FR: import path; определение | механический D2 (import path) |
+| `backend/app/dataModel/cascade/cascadeSpec.py` | FR (DEFINITION, ctor×2, annot×2) | определение | механический D2 (import path) |
+| `backend/app/dataModel/cascade/cascadeVerify.py` | bf (import, call×1) | bf: import path | механический D2 (import path) |
+
+**Climate** — предварительно F01/F03/F07
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/application/worldData/generators/assemblers/climateAssembler/passes/anchorCollectPass.py` | FPE (import, ctor×2, str-code) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/climate/planning/climatePlanProvider.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/climate/registry.py` | FPE (import, ctor×1, str-code) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+| `backend/app/dataModel/climate/planning/inputs/climateBaseInput.py` | FPE (import, ctor×1, annot×1); FR (import, ctor×2); bf (import, call×2) | FPE: ctor: `code`→обяз. CodeT, path→checked; bare annot→concrete/union; FR: import path; bf: import path | scoped D0/D1 до C1 |
+
+**Core collector** — предварительно F08 mech
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/core/validatorAggregationHelper.py` | FPE (import, annot×3); VAH (DEFINITION) | FPE: bare annot→concrete/union; определение | scoped D0/D1 до C1 |
+
+**Core diagnostics** — предварительно —
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/dataModel/validation/diagnostics/fieldPathError.py` | FPE (DEFINITION, wire?); RIC (DEFINITION, annot×1); RIR (DEFINITION, ctor×1, annot×1) | определение | scoped D0/D1 до C1 |
+
+**Designed Water** — предварительно F01/F03/F07
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/application/worldData/generators/terrain/designedWater/fields/continentalFieldComposer.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/designedWater/fields/noiseFieldGenerator.py` | FPE (import, ctor×2) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/designedWater/fields/plateFieldGenerator.py` | FPE (import, ctor×2) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/designedWater/preparation/authoredWaterSourceAdapter.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/designedWater/preparation/coastlineConstraintPreparer.py` | FPE (import, ctor×2) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/designedWater/preparation/coastlineWaterSourceAdapter.py` | FPE (import, ctor×6); VAH (import, ctor×2); FR (import, ctor×1); bf (import, call×1) | FPE: ctor: `code`→обяз. CodeT, path→checked; VAH: move + generic admission; FR: import path; bf: import path | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/designedWater/preparation/designUniverse.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/designedWater/preparation/placementPreparation.py` | FPE (import, ctor×5, annot×1, reference=) | FPE: ctor: `code`→обяз. CodeT, path→checked; bare annot→concrete/union; ctx-поля | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/designedWater/preparation/proceduralWaterSourceAdapter.py` | FPE (import, ctor×4) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/designedWater/strategies/authoredRegionStrategy.py` | FPE (import, ctor×3) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/designedWater/strategies/procedural/continentalNoiseStrategy.py` | FPE (import, ctor×2) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/designedWater/strategies/procedural/fieldRecipeFactory.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/designedWater/strategies/procedural/plateNoiseStrategy.py` | FPE (import, ctor×2) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/designedWater/strategies/procedural/plateStrategy.py` | FPE (import, ctor×2) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/designedWater/strategies/strategyFactory.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/dataModel/terrain/designedWater/fields/field.py` | FPE (import, annot×1) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+| `backend/app/dataModel/terrain/designedWater/fields/plateLayout.py` | FPE (import, annot×1) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+| `backend/app/dataModel/terrain/designedWater/geometry/authoredGeometry.py` | FPE (import, annot×1) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+| `backend/app/dataModel/terrain/designedWater/geometry/waterDesignConstraints.py` | FPE (import, annot×1) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+| `backend/app/dataModel/terrain/designedWater/inputValidation.py` | FR (import, ctor×1); bf (import, call×1) | FR: import path; bf: import path | механический D2 (import path) |
+| `backend/app/dataModel/terrain/designedWater/preparation/result.py` | FPE (import, annot×1) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+
+**Generator registries** — предварительно F01/F02
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/application/worldData/generators/utils/economicTierBands.py` | FPE (import-via:types, ctor×3, str-code, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/utils/materialResolver.py` | FPE (import-via:types, ctor×3, str-code) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/utils/tierRegistry.py` | FPE (import-via:types, ctor×1, str-code) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+
+**Hydrology** — предварительно F01/F03/F07
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/application/worldData/generators/hydrology/boundaries/boundaryGeometry.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/hydrology/boundaries/boundaryPreparation.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/hydrology/boundaries/boundaryResult.py` | FPE (import, annot×1) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/hydrology/load/paint/declaredWaterPaintProjector.py` | FPE (import, ctor×3, str-code, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/hydrology/placement/projectDeclaredHydrology.py` | FPE (import-via:types, ctor×1, annot×2) | FPE: ctor: `code`→обяз. CodeT, path→checked; bare annot→concrete/union | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/hydrology/planning/assembly/final/riverFacts.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/hydrology/planning/assembly/hydrologyFactsAssembler.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/hydrology/planning/hydrologyPlanProvider.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/hydrology/policy/hydrologyGenerationBinding.py` | bf (import, call×1) | bf: import path | механический D2 (import path) |
+| `backend/app/application/worldData/generators/hydrology/policy/hydrologyPolicyFacts.py` | FPE (import, ctor×1, str-code) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/hydrology/query/nativeFinalWaterQuery.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/hydrology/rivers/planning/coarse/execution.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/hydrology/rivers/planning/fine/execution.py` | FPE (import, ctor×3) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/hydrology/rivers/planning/fine/publication.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/hydrology/rivers/riverPrepare.py` | FPE (import, ctor×7, str-code, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/hydrology/rivers/riverRouteDiagnostics.py` | FPE (import-via:types, ctor×1, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/hydrology/sources/proceduralSourceAdmission.py` | FPE (import, ctor×2, empty-path); bf (import, call×3) | FPE: ctor: `code`→обяз. CodeT, path→checked; `()` path = не F01; bf: import path | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/hydrology/water/planning/fine/execution.py` | FPE (import, ctor×2) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/hydrology/water/planning/fine/projection.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/hydrology/water/planning/fine/publication.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/hydrology/water/planning/geoExecution.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/hydrology/water/planning/waterBodyJob.py` | FPE (import, ctor×5) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/hydrology/water/waterDiagnostics.py` | FPE (import-via:types, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/dataModel/hydrology/boundaries/attachedCoastline.py` | FPE (import, annot×1, wire?) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+| `backend/app/dataModel/hydrology/generation/categorySource.py` | FR (import, ctor×6, annot×2) | FR: import path | механический D2 (import path) |
+| `backend/app/dataModel/hydrology/generation/waterGenerationSettings.py` | FR (import, ctor×9) | FR: import path | механический D2 (import path) |
+| `backend/app/dataModel/hydrology/pack/root.py` | FR (import, ctor×2) | FR: import path | механический D2 (import path) |
+| `backend/app/dataModel/hydrology/pack/shard.py` | FR (import, ctor×5) | FR: import path | механический D2 (import path) |
+| `backend/app/dataModel/hydrology/policy/hydrologyPlacementPolicy.py` | FR (import, ctor×9) | FR: import path | механический D2 (import path) |
+
+**JSON import** — предварительно F01/F02/F08/F09
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/application/jsonValidation/__init__.py` | FPE (import-via:types, annot×1, wire?) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+| `backend/app/application/jsonValidation/bundle/connectionGraph.py` | FPE (import-via:types, ctor×5, str-code, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+| `backend/app/application/jsonValidation/bundle/preflight.py` | FPE (import-via:types, ctor×4, annot×1, str-code, pydantic-errors()) | FPE: ctor: `code`→обяз. CodeT, path→checked; bare annot→concrete/union; str code; Pydantic mapper | scoped D0/D1 до C1 |
+| `backend/app/application/jsonValidation/declaredRegions.py` | FPE (import-via:types, ctor×1, str-code); bf (import, call×2) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code; bf: import path | scoped D0/D1 до C1 |
+| `backend/app/application/jsonValidation/facade.py` | FPE (import-via:types, ctor×1, annot×1, str-code, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked; bare annot→concrete/union; str code | scoped D0/D1 до C1 |
+| `backend/app/application/jsonValidation/index/validate.py` | FPE (import-via:types, ctor×3, annot×8, str-code) | FPE: ctor: `code`→обяз. CodeT, path→checked; bare annot→concrete/union; str code | scoped D0/D1 до C1 |
+| `backend/app/application/jsonValidation/resolve.py` | FPE (import-via:types, ctor×1, annot×8, str-code, pydantic-errors(), wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked; bare annot→concrete/union; str code; Pydantic mapper | scoped D0/D1 до C1 |
+| `backend/app/application/jsonValidation/settlementSizeResolve.py` | FPE (import-via:types, ctor×2, str-code, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+| `backend/app/application/jsonValidation/sourceValidation.py` | FPE (import-via:types, ctor×6, str-code, pydantic-errors(), wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code; Pydantic mapper | scoped D0/D1 до C1 |
+| `backend/app/application/jsonValidation/types.py` | FPE (import, RE-EXPORT, annot×4, wire?); RIC (import, RE-EXPORT); RIR (import, RE-EXPORT) | FPE: bare annot→concrete/union; re-export удалить; RIC: перенос к owner D1; RIR: перенос к owner D1 | scoped D0/D1 до C1 |
+| `backend/app/application/jsonValidation/worldColumnResolve.py` | FPE (import-via:types, ctor×3, str-code, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+
+**Landcover** — предварительно F01/F03
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/application/worldData/generators/terrain/landcover/planning/capturedSources.py` | FR (import, ctor×1); bf (import, call×1) | FR: import path; bf: import path | механический D2 (import path) |
+| `backend/app/application/worldData/generators/terrain/landcover/planning/preWaterHillHosts.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/landcover/regionCoverageValidation.py` | FPE (import-via:types, ctor×1, pydantic-errors()) | FPE: ctor: `code`→обяз. CodeT, path→checked; Pydantic mapper | scoped D0/D1 до C1 |
+
+**Locations** — предварительно F02
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/dataModel/locations/context/cascadeParams.py` | FR (import, ctor×6) | FR: import path | механический D2 (import path) |
+| `backend/app/dataModel/locations/namedLocation/bundleNamedLocation.py` | FR (import, ctor×6) | FR: import path | механический D2 (import path) |
+| `backend/app/dataModel/locations/settlement/settlement/settlementPayload.py` | FR (import, ctor×1) | FR: import path | механический D2 (import path) |
+| `backend/app/dataModel/locations/structure/building/plotLayoutTemplate.py` | FR (import, ctor×2) | FR: import path | механический D2 (import path) |
+
+**Patch** — предварительно F03
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/dataModel/patch/results/sectionResult.py` | FPE (import, annot×1) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+
+**Placement** — предварительно F01/F03/F07
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/application/worldData/placement/adapters/water.py` | FPE (import-via:types, ctor×4, annot×5, reference=) | FPE: ctor: `code`→обяз. CodeT, path→checked; bare annot→concrete/union; ctx-поля | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/placement/adapters/waterGeometry/nativeGeometry.py` | FPE (import, ctor×4) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/placement/adapters/waterTypes.py` | FPE (import-via:types, annot×2) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/placement/diagnostics.py` | FPE (import-via:types, ctor×1, annot×1) | FPE: ctor: `code`→обяз. CodeT, path→checked; bare annot→concrete/union | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/placement/resolver.py` | FPE (import-via:types, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+
+**Planning** — предварительно F02/F03/F05/F07
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/application/planning/providers/planRegistry.py` | FPE (import, ctor×2) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/planning/service/planningService.py` | FPE (import, ctor×2, annot×2) | FPE: ctor: `code`→обяз. CodeT, path→checked; bare annot→concrete/union | scoped D0/D1 до C1 |
+| `backend/app/dataModel/planning/diagnostics/planDiagnostic.py` | FPE (import, annot×1) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+
+**Policy** — предварительно F02/F07
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/application/policy/declarations/verify.py` | FR (import, ctor×3); BF (import, ctor×1, annot×3) | FR: import path; BF: import path | механический D2 (import path) |
+| `backend/app/application/policy/policyRead.py` | FPE (import, ctor×1, annot×4, pydantic-errors()) | FPE: ctor: `code`→обяз. CodeT, path→checked; bare annot→concrete/union; Pydantic mapper | scoped D0/D1 до C1 |
+| `backend/app/application/policy/policyStages.py` | FPE (import, annot×1) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+| `backend/app/dataModel/policy/declarations/policyIdentity.py` | BF (import, annot×2, isinstance) | BF: import path | механический D2 (import path) |
+| `backend/app/dataModel/policy/objectAdmissionPolicyDefinition.py` | FR (import, ctor×1) | FR: import path | механический D2 (import path) |
+| `backend/app/dataModel/policy/policyBindings.py` | FPE (import, annot×1) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+| `backend/app/dataModel/policy/policyDecision.py` | FPE (import, annot×1) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+| `backend/app/dataModel/policy/policyFacts.py` | FPE (import, annot×1) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+| `backend/app/dataModel/policy/policyReferences.py` | FR (import, annot×5, isinstance); bf (import, call×1); BF (import, annot×5) | FR: import path; bf: import path; BF: import path | механический D2 (import path) |
+
+**Relief** — предварительно F01/F03/F07
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/application/worldData/generators/terrain/relief/canal/attachments.py` | FPE (import-via:types, ctor×1, str-code) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/relief/canal/obstacleResolve.py` | FPE (import-via:types, ctor×1, str-code) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/relief/pick/gradePass.py` | FPE (import-via:types, ctor×1, str-code) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/relief/pick/templatePick.py` | FPE (import-via:types, ctor×3, str-code) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/relief/planning/naturalRelief.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/relief/planning/reliefPlanProvider.py` | FPE (import, ctor×6) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/relief/planning/river/beds.py` | FPE (import, ctor×2) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/relief/planning/river/execution.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/relief/surfaceCoatingSupport.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/dataModel/terrain/relief/surfaceCoating/surfaceCoatingPolicyDefinition.py` | FR (import, ctor×4) | FR: import path | механический D2 (import path) |
+
+**Snapshot** — предварительно F02/F03/F05
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/application/worldSnapshot/service/snapshotMetadataBuilder.py` | FPE (import, ctor×1, annot×1, str-code, pydantic-errors()); VAH (import, ctor×1); FR (import, ctor×1); bf (import, call×1) | FPE: ctor: `code`→обяз. CodeT, path→checked; bare annot→concrete/union; str code; Pydantic mapper; VAH: move + generic admission; FR: import path; bf: import path | scoped D0/D1 до C1 |
+| `backend/app/application/worldSnapshot/service/worldSnapshotService.py` | FPE (import, ctor×3, annot×1, str-code, empty-path); VAH (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked; bare annot→concrete/union; str code; `()` path = не F01; VAH: move + generic admission | scoped D0/D1 до C1 |
+| `backend/app/dataModel/worldSnapshot/results/apply.py` | FPE (import, annot×1) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+
+**Spatial read** — предварительно F03
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/dataModel/spatial/read/failure.py` | FPE (import, annot×1) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+| `backend/app/dataModel/spatial/read/result.py` | FPE (import, annot×1) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+
+**Structure** — предварительно F01/F03
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/application/worldData/generators/structure/passages/doorHeight.py` | FPE (import-via:types, ctor×1, str-code) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/structure/structureGeneratorService.py` | FPE (import-via:types, ctor×1, str-code, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+
+**Template Library** — предварительно F01/F02 (+reference)
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/application/templateLibrary/packs/domainAdapters/bodyPreparation.py` | FPE (import-via:types, ctor×5, annot×1, pydantic-errors()) | FPE: ctor: `code`→обяз. CodeT, path→checked; bare annot→concrete/union; Pydantic mapper | scoped D0/D1 до C1 |
+| `backend/app/application/templateLibrary/packs/domainAdapters/plot.py` | FPE (import-via:types, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/templateLibrary/packs/domainAdapters/relief.py` | FPE (import-via:types, ctor×1, str-code, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+| `backend/app/application/templateLibrary/packs/domainAdapters/remapRefs.py` | FPE (import-via:types, ctor×1, str-code, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+| `backend/app/application/templateLibrary/packs/lifecycleContracts.py` | FPE (import-via:types, annot×2) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+| `backend/app/application/templateLibrary/packs/refResolve.py` | FPE (import-via:types, ctor×1, annot×3, reference=, wire?); RIC (import-via:types, ctor×1); RIR (import-via:types, annot×8) | FPE: ctor: `code`→обяз. CodeT, path→checked; bare annot→concrete/union; ctx-поля; RIC: перенос к owner D1; RIR: перенос к owner D1 | scoped D0/D1 до C1 |
+| `backend/app/application/templateLibrary/packs/referenceResolver.py` | FPE (import-via:types, ctor×2, str-code, reference=); RIC (import-via:types, ctor×2); RIR (import-via:types) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code; ctx-поля; RIC: перенос к owner D1; RIR: перенос к owner D1 | scoped D0/D1 до C1 |
+| `backend/app/application/templateLibrary/packs/templateGraphValidation.py` | FPE (import-via:types, ctor×2, annot×1, reference=); RIC (import-via:types, ctor×1); RIR (import-via:types) | FPE: ctor: `code`→обяз. CodeT, path→checked; bare annot→concrete/union; ctx-поля; RIC: перенос к owner D1; RIR: перенос к owner D1 | scoped D0/D1 до C1 |
+| `backend/app/application/templateLibrary/packs/write/writePlanContracts.py` | FPE (import-via:types, annot×1) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+| `backend/app/application/templateLibrary/reliefGeomWarn.py` | FPE (import-via:types, ctor×1, str-code) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+
+**Terrain masks / regions** — предварительно F01/F02
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/application/worldData/masks/regionIdentity.py` | FPE (import-via:types, ctor×1, str-code, wire?); bf (import, call×1) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code; bf: import path | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/regions/declaredRegionEdit.py` | FPE (import-via:types, ctor×1, str-code, wire?); bf (import, call×2) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code; bf: import path | scoped D0/D1 до C1 |
+| `backend/app/dataModel/terrainMasks/regions/specs.py` | FR (import, ctor×1) | FR: import path | механический D2 (import path) |
+| `backend/app/dataModel/terrainMasks/worldTerrainMasks.py` | FR (import, ctor×1) | FR: import path | механический D2 (import path) |
+
+**Terrain planning** — предварительно F01/F03
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/application/worldData/generators/terrain/planning/preWater/prepared/provider.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/planning/projection/coarseSurface.py` | FPE (import, ctor×2) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/planning/projection/heightDelta.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/planning/waterPlacementPlanProvider.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/generators/terrain/regions/regionExtent.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/dataModel/terrain/planning/inputs/geoWaterPlacementInput.py` | FR (import, ctor×2, annot×2) | FR: import path | механический D2 (import path) |
+
+**Time** — предварительно F02/F03
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/application/time/calendar/validation.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/timeSettings/preparation/shared/candidate.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/application/worldData/timeSettings/reader.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/app/dataModel/world/calendar/projection/errors.py` | FPE (import, annot×1) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+| `backend/app/dataModel/world/settings/timeOperations/results.py` | FPE (import, annot×1) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+
+**Wire codec (artifact core)** — предварительно F09 persistence
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/application/artifacts/encoding/coreManifest.py` | FPE (import, annot×1); RIC (import, annot×1); RIR (import, annot×1) | FPE: bare annot→concrete/union; RIC: перенос к owner D1; RIR: перенос к owner D1; **wire: type_id/shape** | scoped D0/D1 до C1 |
+
+**Wire codec (hydrology source v1)** — предварительно F09 persistence (shape-lock)
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/application/worldData/generators/hydrology/encoding/sourceSchema.py` | FPE (import, annot×1, wire?); RIC (import, annot×1); RIR (import, annot×1) | FPE: bare annot→concrete/union; RIC: перенос к owner D1; RIR: перенос к owner D1; **wire: type_id/shape** | scoped D0/D1 до C1 |
+
+**Wire codec (surface manifest)** — предварительно F09 persistence
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/application/worldData/planning/encoding/surfaceManifest.py` | FPE (import); RIC (import); RIR (import) | FPE: import; RIC: перенос к owner D1; RIR: перенос к owner D1; **wire: type_id/shape** | scoped D0/D1 до C1 |
+
+**Wire codec limits** — предварительно F02
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/dataModel/encoding/decodeLimits.py` | FR (import, annot×2); bf (import, call×1); BF (import, annot×1) | FR: import path; bf: import path; BF: import path | механический D2 (import path) |
+
+**World bundle import** — предварительно F02/F03/F08/F09
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/application/worldBundle/worldBundleService.py` | FPE (import-via:types, ctor×8, str-code, empty-path, pydantic-errors(), wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code; `()` path = не F01; Pydantic mapper | scoped D0/D1 до C1 |
+
+**World registries** — предварительно F02
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/app/application/worldData/registries/worldService.py` | bf (import, call×1) | bf: import path | механический D2 (import path) |
+
+**tests: Cascade** — предварительно по владельцу
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/tests/test_context_extend.py` | FR (import, ctor×4) | FR: import path | механический D2 (import path) |
+| `backend/tests/test_location_context_contract.py` | FR (import, ctor×12); bf (import, call×8) | FR: import path; bf: import path | механический D2 (import path) |
+
+**tests: Designed Water / Hydrology (GEO-1)** — предварительно по владельцу
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/tests/geo1/composition/test_composer.py` | FPE (import, ctor×2) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/tests/geo1/contracts/cascade/test_runtime.py` | FR (import, ctor×6) | FR: import path | механический D2 (import path) |
+| `backend/tests/geo1/contracts/cascade/test_settings.py` | FR (import, ctor×1); bf (import, call×1) | FR: import path; bf: import path | механический D2 (import path) |
+| `backend/tests/geo1/contracts/strategies/test_dispatch_budget.py` | FPE (import, ctor×1, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/tests/geo1/contracts/test_hydrology_generation.py` | BF (import, ctor×4) | BF: import path | механический D2 (import path) |
+| `backend/tests/geo1/contracts/test_policy.py` | FPE (import, ctor×3, empty-path); FR (import, ctor×12) | FPE: ctor: `code`→обяз. CodeT, path→checked; `()` path = не F01; FR: import path | scoped D0/D1 до C1 |
+| `backend/tests/geo1/contracts/test_policy_resolver.py` | FPE (import, ctor×1); FR (import, ctor×7) | FPE: ctor: `code`→обяз. CodeT, path→checked; FR: import path | scoped D0/D1 до C1 |
+| `backend/tests/geo1/declarations/test_compiler.py` | FPE (import, ctor×1, wire?); FR (import, ctor×2) | FPE: ctor: `code`→обяз. CodeT, path→checked; FR: import path | scoped D0/D1 до C1 |
+| `backend/tests/geo1/declarations/test_declarations.py` | FR (import, ctor×3); BF (import, ctor×3) | FR: import path; BF: import path | механический D2 (import path) |
+| `backend/tests/geo1/declarations/test_identity.py` | BF (import, ctor×2) | BF: import path | механический D2 (import path) |
+| `backend/tests/geo1/final_publication/test_publication.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/tests/geo1/fine_water/test_review.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/tests/geo1/fine_water/test_routing.py` | FPE (import, ctor×1, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/tests/geo1/integration/support/pipeline.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/tests/geo1/integration/test_activation.py` | FPE (import, ctor×2, str-code) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+| `backend/tests/geo1/integration/test_competitor_roster.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/tests/geo1/integration/test_design_preparation.py` | FPE (import, ctor×8, str-code) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+| `backend/tests/geo1/integration/test_native_placement_dependencies.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/tests/geo1/integration/test_procedural_preparation.py` | FPE (import, ctor×2, str-code) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+| `backend/tests/geo1/integration/test_revisions.py` | FPE (import, ctor×2, str-code, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+| `backend/tests/geo1/native_relief/test_beds.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/tests/geo1/natural_preparation/test_preparation.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/tests/geo1/natural_preparation/test_publication.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/tests/geo1/source_projection/test_projection.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/tests/geo1/water_query/test_query.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+
+**tests: Generator registries** — предварительно по владельцу
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/tests/test_e6_consumers.py` | FPE (import-via:types, ctor×1, str-code, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+
+**tests: Hydrology pack codec** — предварительно по владельцу
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/tests/spatial_pack/test_bounded_decode.py` | FR (import, ctor×4) | FR: import path | механический D2 (import path) |
+| `backend/tests/spatial_pack/test_source_schema.py` | FPE (import, ctor×3, reference=, runtime_context=, wire?); RIC (import, ctor×1); RIR (import) | FPE: ctor: `code`→обяз. CodeT, path→checked; ctx-поля; RIC: перенос к owner D1; RIR: перенос к owner D1 | scoped D0/D1 до C1 |
+
+**tests: Placement** — предварительно по владельцу
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/tests/test_placement_contract.py` | FPE (import-via:types, ctor×1, reference=, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked; ctx-поля | scoped D0/D1 до C1 |
+
+**tests: Planning** — предварительно по владельцу
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/tests/planning/consumers/test_request_boundary.py` | FPE (import, ctor×3, str-code) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+| `backend/tests/planning/consumers/test_revisions.py` | FPE (import, ctor×1) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/tests/planning/contracts/test_contracts.py` | FPE (runtime_context=, wire?); RIC (annot×1); RIR (annot×1) | FPE: ctx-поля; RIC: перенос к owner D1; RIR: перенос к owner D1 | scoped D0/D1 до C1 |
+| `backend/tests/planning/contracts/test_domain_payloads.py` | FPE (import, ctor×1, str-code, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+| `backend/tests/planning/providers/test_diagnostics.py` | FPE (import, ctor×2, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/tests/planning/providers/test_domain_providers.py` | FPE (import, ctor×2, annot×1, str-code, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked; bare annot→concrete/union; str code | scoped D0/D1 до C1 |
+
+**tests: Snapshot / Artifacts** — предварительно по владельцу
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/tests/snapshotCore/contracts/test_codec.py` | FPE (import, ctor×1, reference=, runtime_context=); RIC (import, ctor×1); RIR (import) | FPE: ctor: `code`→обяз. CodeT, path→checked; ctx-поля; RIC: перенос к owner D1; RIR: перенос к owner D1 | scoped D0/D1 до C1 |
+| `backend/tests/snapshotCore/contracts/test_models.py` | FPE (import, ctor×3, str-code, empty-path, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code; `()` path = не F01 | scoped D0/D1 до C1 |
+| `backend/tests/snapshotCore/storage/artifacts/test_leases.py` | FPE (import, ctor×1, empty-path) | FPE: ctor: `code`→обяз. CodeT, path→checked; `()` path = не F01 | scoped D0/D1 до C1 |
+| `backend/tests/snapshotCore/storage/artifacts/test_staging.py` | FPE (import, ctor×2, empty-path, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked; `()` path = не F01 | scoped D0/D1 до C1 |
+| `backend/tests/snapshotCore/storage/publication/test_atomicity.py` | FPE (import, ctor×5, empty-path) | FPE: ctor: `code`→обяз. CodeT, path→checked; `()` path = не F01 | scoped D0/D1 до C1 |
+| `backend/tests/snapshotCore/storage/publication/test_cas.py` | FPE (import, ctor×2, empty-path) | FPE: ctor: `code`→обяз. CodeT, path→checked; `()` path = не F01 | scoped D0/D1 до C1 |
+
+**tests: Spatial read** — предварительно по владельцу
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/tests/test_spatial_read_contract.py` | FPE (import, ctor×3) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+
+**tests: Template Library** — предварительно по владельцу
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/tests/test_library_pack_logging.py` | RIR (import-via:types, annot×4) | RIR: перенос к owner D1 | scoped D0/D1 до C1 |
+| `backend/tests/test_library_pack_update_plan.py` | RIR (import-via:types, annot×1) | RIR: перенос к owner D1 | scoped D0/D1 до C1 |
+| `backend/tests/test_library_packs_5a.py` | RIR (import-via:types, annot×8) | RIR: перенос к owner D1 | scoped D0/D1 до C1 |
+| `backend/tests/test_template_domain_preparation.py` | RIR (import-via:types, annot×1) | RIR: перенос к owner D1 | scoped D0/D1 до C1 |
+
+**tests: static typing** — предварительно по владельцу
+
+| Путь | Символы (связь) | Ломается в C1 | Gate |
+| --- | --- | --- | --- |
+| `backend/tests/typing/cascade_fields_invalid.py` | FR (import, ctor×5, annot×3) | FR: import path | механический D2 (import path) |
+| `backend/tests/typing/cascade_fields_valid.py` | FR (import, ctor×5, annot×5) | FR: import path | механический D2 (import path) |
+| `backend/tests/typing/planning/invalid.py` | FR (import, ctor×3) | FR: import path | механический D2 (import path) |
+| `backend/tests/typing/planning/valid/policy.py` | FR (import, ctor×6) | FR: import path | механический D2 (import path) |
+| `backend/tests/typing/snapshotCore/invalid.py` | FPE (import, annot×1) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+| `backend/tests/typing/snapshotCore/valid.py` | FPE (import, annot×1) | FPE: bare annot→concrete/union | scoped D0/D1 до C1 |
+| `backend/tests/typing/spatial_pack_limits_invalid.py` | FR (import, ctor×3) | FR: import path | механический D2 (import path) |
 
 ### 0.2. Непереопределение существующих POJO
 
@@ -344,6 +778,34 @@ flowchart TD
 
 **Важная граница:** таблица — **требование провести отдельный freeze политики генератора**, а не изменение существующего поведения. `GEN-SURFACE-PLAN §4` оставляет точный тип отказов и приём warning/degraded открытыми; `GEN-BAKE-READ §7` уже предлагает `FOUND/MISSING/Error/cancellation` по разным контрактам. Согласовать их без создания одного «универсального error policy engine».
 
+### 3.9. C0 — контракты общего ядра (ACCEPTED 2026-11-04)
+
+**Основание:** код `master` @ `ca159fc6`; эксперименты на Python 3.12.13, Pydantic 2.14.2 и pyright 1.1.414 (версия из `package.json`). Решения по §3.1–3.3 и §6 C0, **приняты владельцем 2026-11-04**. Доменные `CodeT`, arguments и concrete `<...>TypeError` здесь не вводятся, их определяет D0/D1. **Wire:** A0-F1 RESOLVED — пересоздание данных, без v1-совместимости (§0.1.4.1).
+
+**Evidence выбора runtime-механизма (C0-1):**
+
+| Механизм generic `FieldPathError[CodeT]` + concrete subclass | Чужой enum в `code` | Обход через `replace`/`model_copy` | Голый generic / `FieldPathError[X](…)` |
+| --- | --- | --- | --- |
+| stdlib `@dataclass(frozen=True)` + `TypeAdapter(...).validate_python(strict=True)` (AS-IS) | **принят** (TypeVar не связывается в subclass) | `dataclasses.replace` проходит | не отличим |
+| `pydantic.dataclasses.dataclass(strict, forbid, revalidate)` | **принят** | `replace` проходит | не отличим |
+| `BaseModel, Generic[CodeT]` (`frozen`, `strict`, `extra="forbid"`, `revalidate_instances="always"`) | **отвергнут** | `model_copy(update=…)` создаёт объект, но любой strict BaseModel-carrier при приёме его **отвергает** (revalidate) | отличим по `__pydantic_generic_metadata__` (`origin`/`parameters`) → `TypeError` в `model_post_init` |
+
+| ID | Решение C0-PROPOSAL | Точный контракт | Обоснование / проверка |
+| --- | --- | --- | --- |
+| C0-1 | **Pydantic `BaseModel`** вместо stdlib dataclass для `FieldPathError` | `class FieldPathError(BaseModel, Generic[CodeT])`, `model_config = ConfigDict(frozen=True, strict=True, extra="forbid", revalidate_instances="always")`. `model_post_init` отвергает голый `FieldPathError` и параметризацию без именованного subclass (`TypeError`, ошибка программиста, F05). Admitted — только именованный `class <Domain>TypeError(FieldPathError[<DomainCode>])` в owning `dataModel`. | Только этот вариант связывает `CodeT` в runtime (таблица выше). `canonicalCodec` уже поддерживает BaseModel (`model_fields`, `model_validate(strict=True)`), carriers (`PlanDiagnostic`, `SpatialReadFailure`, …) уже strict BaseModel с revalidate. TC-03/TC-04. |
+| C0-2 | Поля generic | `code: CodeT`; `path: ValidatedFieldPath`; `message: StrictStr` (только для человека). **Удаляются из generic:** `schema_id`, `reference: ReferenceIssueContext \| None`, `runtime_context: RuntimeIssueContext \| None`. Они переходят в concrete subclass owning домена (JSON import / Template Library / GEO-1) по D1. `CodeT = TypeVar("CodeT", bound=Enum)`: закрытый enum, `StrEnum` не обязателен (§3.1). | Нейтральное ядро не зависит от домена (§0.1.1). Существующие enum-коды (`ClimateBaseIssueCode` и др.) переиспользуются как `CodeT`. TC-01. |
+| C0-3 | `ValidatedFieldPath` (`dataModel/fields/validatedFieldPath.py`) | `ModelIdentity(module: StrictStr, qualname: StrictStr)`. Сегменты — discriminated union по `kind: Literal[…]`: `FieldSegment(owner: ModelIdentity, name: StrictStr)`, `IndexSegment(index: StrictInt ≥ 0)`, `KeySegment(key: StrictStr \| StrictInt)`, `VariantSegment(owner: ModelIdentity, branch: StrictStr)`. `ValidatedFieldPath(root: ModelIdentity, segments: tuple[PathSegment, ...])`, `min_length=1`, первый сегмент — `FieldSegment` от `root`. Метод `projection() -> tuple[str \| int, ...]` — только для HTTP/лога. Все модели frozen/strict/forbid. | Callable `FieldRef` не сериализуется (§3.2 п.5). Cold restore `ModelIdentity` — только по allowlist типов manifest’а, без `importlib`. Если домену нужен путь без поля (`()`), это не F01 (A0-F5). TC-02, TC-11. |
+| C0-4 | `CheckedPath[RootT, CurrentT]` (`dataModel/fields/checkedPath.py`), construction-time, не сериализуется | `root(model: type[RM]) -> CheckedPath[RM, RM]` (staticmethod с собственным TypeVar); `field(self: CheckedPath[R, M], ref: FieldRef[M, N]) -> CheckedPath[R, N]`; `item` — `@overload` по self-типу `CheckedPath[R, tuple[E, ...]]` / `CheckedPath[R, list[E]]` / `CheckedPath[R, Sequence[E]]` → `CheckedPath[R, E]`; `key` — `@overload` `CheckedPath[R, dict[K, V]]` / `CheckedPath[R, Mapping[K, V]]` → `CheckedPath[R, V]` (по одному overload на вид контейнера, встречающийся в POJO); `present(self: CheckedPath[R, X \| None]) -> CheckedPath[R, X]`; `variant(branch: type[B]) -> CheckedPath[R, B]`; `freeze() -> ValidatedFieldPath`; `from_pydantic_loc(root: type[RM], loc: tuple[str \| int, ...]) -> ValidatedFieldPath \| None` (схемное разрешение `loc`, `None` → домен формирует typed boundary failure). `CurrentT` **инвариантен**. Runtime: `field` вызывает `bind_field` и сверяет `bound.model` с текущим типом; `item`/`key`/`present`/`variant` сверяют фактическую аннотацию (`get_origin`/`get_args`). | Pyright 1.1.414 на прототипе: `Input.metadata?.source_uid` → `CheckedPath[Inp, str]`, `items[3].source_uid` → `CheckedPath[Inp, str]`, `tags["a"]` → `CheckedPath[Inp, int]`. Отвергнуты: `field` после nullable без `present()`, `FieldRef` чужой модели, `item` на `dict`, `check(path, 5)` для `str`-пути. Почему инвариант: при covariant `CurrentT` путь `CheckedPath[R, str]` является подтипом `CheckedPath[R, object]`, и `check(p, 5)` проходит (проверено). Следствие инварианта: self-тип `Sequence[E]` не сопоставляется с полем `tuple[...]`, поэтому `item`/`key` — набор overload по видам контейнеров; проверено pyright: `tuple`/`list`/`Sequence`/`dict`/`Mapping` выводятся верно, `item` на `dict`/`str`, неверный тип ключа и значения отвергаются. Новый вид контейнера в POJO (`frozenset`/`set` индексом не адресуются) = новый overload + typing-фикстура. `variant` статически не проверяет членство в union, только runtime. TC-02, TC-20. |
+| C0-5 | `ValidatorAggregationHelper[IssueT]` → `dataModel/validation/diagnostics/validatorAggregationHelper.py` | `__init__(self, admitted: tuple[type[IssueT], ...])` (непустой, только concrete классы); `add(issue: IssueT) -> None`: `type(issue) in admitted` и `validate_immutable(issue)`, иначе `IssueAdmissionError(ValueError)` (тот же файл, F05 ошибка программиста); `snapshot() -> tuple[IssueT, ...]`; `raise_if_any(failure: Callable[[tuple[IssueT, ...]], Exception]) -> None`. Экземпляр request-local. Отдельный `IssueBatch` **не вводится**: immutable `tuple` из `snapshot()` достаточно, пока D1 не докажет нужду. | AS-IS не generic (A0-F3). Exact-type admission вместо `isinstance` на параметризованном generic (§3.3 п.2). TC-04, TC-05. |
+| C0-6 | Версия Pydantic | `backend/requirements.txt`: `pydantic>=2.7.0` → **`pydantic==2.14.2`** (`pydantic-core` pin-ится транзитивно). Python для backend — 3.12 (как `pythonVersion` в `pyrightconfig.cascade.json`; код использует `type X = …`). Матрица версий не вводится. | Пин проще, чем доказывать поведение generic/strict/`errors()` на диапазоне; эксперименты выше — на 2.14.2. Пин — единственная правка вне `dataModel` в C1. §3.3, §3.5. |
+| C0-7 | Static typing gate | Valid/invalid фикстуры `backend/tests/typing/error_contracts_{valid,invalid}.py` + `pyrightconfig.error-contracts.json`. `scripts/check-cascade-types.cjs` параметризуется списком пар (config, invalid fixture), а не копируется. `dataModel/fields/*.py` добавляются в include. | Повторное использование runner (§0.1.1). Каждый positive-кейс имеет negative (§7.1). |
+| C0-8 | Pydantic `errors()` → domain issue (§3.5) | В ядре — только `CheckedPath.from_pydantic_loc`. Таблица `type` → `DomainCode` и typed boundary failure для неизвестного `type`/`loc` — у owning домена (D1), на пинованной 2.14.2. | Без центральной таблицы доменных кодов (§0.1.1 запрет). TC-06, TC-07. |
+| C0-9 | Carrier-поля ошибок разных доменов | Поле с аннотацией `FieldPathError` / `FieldPathError[Any]` (напр. `PlanDiagnostic.issue`, `PlanBuildFailure.issues`) принимает только экземпляр named concrete-подкласса и ревалидирует его **по схеме его собственного класса** (wrap `model_validator` в базе). `FieldPathError[XCode]` дополнительно требует подкласс этой параметризации. `dict`/чужой `BaseModel`/подделка через `model_copy` отклоняются; wire-decode — кодеком по точному классу из manifest. Сериализация carrier — `SerializeAsAny[...]`. | Вариант A, принят владельцем 2026-11-04. Отклонены: union concrete-классов (обратная зависимость §0.1.2), нейтральный реестр классов (глобальное состояние, дубль manifest), `arbitrary_types_allowed` (нет ревалидации, C0-5), базовая схема (теряет `CodeT` и поля подкласса). Найдено при D0 Planning. |
+
+**C1 — ядро реализовано локально 2026-11-04 (не опубликовано):** `dataModel/fields/{fieldRef,fieldBinding,validatedFieldPath,checkedPath}.py`, generic `FieldPathError[CodeT]`, `validation/diagnostics/validatorAggregationHelper.py` (старый `core/` удалён), импорты FieldRef/bind_field/BoundField переписаны без re-export, пин `pydantic==2.14.2`, тесты `tests/errorContracts/`, typing-фикстуры `tests/typing/errorContracts/`. Отклонение от C0-3: `VariantSegment(branch: ModelIdentity)` без строкового tag. Публикация — только после D2 всех прямых потребителей (домены по списку §0.1.4).
+
+**Состав файлов `dataModel/fields/`:** `__init__.py`, `fieldRef.py`, `fieldBinding.py`, `checkedPath.py`, `validatedFieldPath.py` — 5 файлов, лимит folder-composition не превышен. **Принято владельцем 2026-11-04:** C0-1…C0-8 целиком (C0-4 — инвариантный `CurrentT` + overload по видам контейнеров; C0-6 — пин `pydantic==2.14.2` применяется в C1).
+
 ## 4. Инвентаризация мест сбора и преобразования
 
 В таблицах указаны пути относительно корня репозитория. Обозначения: **С** — собирает несколько нарушений; **П** — производит диагностику; **Т** — переносит/конвертирует; **К** — хранит итоговый контракт. Одно место может иметь несколько ролей. Наличие строки в перечне **не означает установленный дефект** — оно делает точку обязательной для проверки.
@@ -470,6 +932,24 @@ flowchart TD
 
 **Параллельность и обязательная готовность:** scoped D0/D1 по **всем непосредственно ломаемым shared C1 consumers** можно подготовить параллельно архитектурным A0/C0, но **они должны быть утверждены до начала несовместимого C1**, чтобы прямой D2 не зависел от новых решений после кода. Для остальных независимых доменов D0/D1 остаются per-domain gates перед собственным D2; глобального стопа нет. **Код D2 запрещён до реализации C1 и принятия своего D1.** Несовместимый C1 → немедленная миграция всех direct callers → targeted regression образуют единый непрерывный рабочий срез; нельзя публиковать несовместимый/сломаный master между ними, создавать compatibility layers или отдельный долгоживущий branching/merge-процесс. Междоменные изменения выполняются после согласования producer/consumer contracts; не создавать циклические gates в WORLD-PLAN-GRAPH. Тесты локальной event policy — D2, реального sink/transcript и DAG-correlation — I0 **до эксплуатации операции**, если такие события обязательны по её D1.
 
+### 6.1. Очередь выполнения и допустимый параллелизм
+
+Исходная точка — `error-contracts-c1` на `767501eb`. A0/C0 приняты, C1 реализован, для Planning D2 и jsonValidation J1/J2 в §7 записан DONE. Открытые замечания ревью проверяются отдельно от этих отметок. Таблица задаёт зависимости задач внутри общего среза §6. Для каждой строки кода обязательны принятый D1 её домена и стабильный контракт используемого механизма.
+
+| Пункт исполнения | Что требуется до старта | С чем можно вести одновременно | Результат и граница изменений |
+|---|---|---|---|
+| **R1. Ядро C1** | Список замечаний к enum, вложенной валидации и typing gate, принятый C0 | R2 в файлах Planning, D0/D1 всех доменов, подготовка J3 | Один исполнитель владеет `fields/`, общим carrier/collector, их тестами и typing runner. Изменение публичного интерфейса сначала согласовать с потребителями. |
+| **R2. Planning** | Принятый Planning D1, C1 | R1, J3, доменные D0/D1 | Классификация сбоев и неизменяемость `PlanBuildFailure` в Planning. Ошибку Cache проверять отдельно с владельцем Cache. После R1 повторить Planning smoke на общей версии. |
+| **J3a. Локальные проверки импорта** | J1, J2, принят JSON D1 | J3b, R2, доменные D0/D1 | Перевести producers в `declaredRegions.py`, `settlementSizeResolve.py`, `worldColumnResolve.py`, `sourceValidation.py` и их адресные тесты. Использовать существующие типы и `ResolveContext`. |
+| **J3b. Индекс и bundle-проверки** | Те же J1/J2 и JSON D1 | J3a, R2, доменные D0/D1 | Владеет `jsonValidation/index/validate.py`, `bundle/connectionGraph.py`, `bundle/preflight.py` и их адресными тестами. Доменный смысл внешней ошибки сохраняет её producer. |
+| **J3c. Общая JSON-граница** | J1/J2 и исправления mapper из `767501eb`; результаты J3a и J3b для сборки фасада | Проверки J1 можно вести рядом с J3a/b при сохранении интерфейса. Изменения общей формы пути согласовать с R1 до их использования. | Один владелец `types.py`, `resolve.py`, `importIssues/`, `facade.py` и общих JSON-тестов. Проверить регрессии wire loc и неизменяемости отчёта после `767501eb`, сверить остаток producers по реестру, проверить весь J3 через фасад. |
+| **J4. World Bundle** | Интегрированы J3a/b/c, доступны итоговые результаты фасада | D0/D1 остальных доменов, локальные тесты Planning | Владеет `worldBundleService.py` и bundle-тестами. Проверить validate-only и 422 на общем срезе. |
+| **D0/D1. Остальные владельцы** | Реестр §0.1.4, для D1 — аудит D0 своего scope | Snapshot/Artifacts, Cache, Water Input/Hydrology, Template Library/reference могут независимо инвентаризировать producers, callers и тесты параллельно R/J и друг другу | Для каждого домена получить решение владельца по типам, policy и границам до его D2. Согласовать общие persisted records между владельцами до изменения manifest. |
+| **D2. Доменные реализации** | C1, принятый D1 данного домена и согласованный интерфейс каждого затрагиваемого соседа | С J3/J4 или другим D2 только для непересекающихся файлов и уже согласованных входов/выходов. Локальные тесты запускаются с работой соседнего домена. | Snapshot/Artifacts совместно планируют `coreManifest` и terminal codec. Water Input/Hydrology владеют `GENERATION_SETTINGS_CONFLICT`, source schema и shape lock. Перенос reference-контекста согласуется с потребителями и владельцами manifests. |
+| **Интеграция и I0** | Все producer/consumer D2 для проверяемой цепочки сведены на одной ревизии | Независимые цепочки I0 могут проверяться одновременно | Прогнать регрессии §0.1.3–0.1.4, wire/restore и требуемый D1 реальный sink/transcript. Публикация общего среза — по §6 после миграции всех прямых callers. |
+
+Если двум пунктам нужен один enum, manifest, общий тест или новая сигнатура, назначить одного владельца файла. Сначала интегрировать его контракт, затем обновлять зависимые callers. Остальные перечисленные независимые пункты продолжаются.
+
 ## 7. Критерии приёмки
 
 - Проверена **полнота F01–F09** из §2.4: для каждого типа принят собственный подход (reuse/extend/new, owner, representation, accumulation, execution policy, logging/boundary). Ни одна категория не получает `FieldPathError` или `NodeError` исключительно ради единообразия. F08 batch и F09 wire указаны как способы обработки, а не замена основного семейства ошибки.
@@ -490,6 +970,16 @@ flowchart TD
 
 - **Эксплуатационный gate EC-10:** для изменённой/новой публичной операции, которой D1 предписывает обязательные sink/transcript/audit события, нельзя считать product path готовым или подключать его к реальным callers по одному D2. Приёмка требует I0 проверок реального маршрута, correlation и необходимой аудиторской записи; для явно тихих операций ложные логи не создаются.
 - **Planning gate:** отдельно классифицированы `PlanDiagnostic.issue`, `PlanContractFailure.issues`, `PlanBuildFailure.issues` и synthetic `("planning",)/("provider",)` paths. После C1 ни один F02/F03/F05/F07 не маскируется фиктивной F01, бездумным generic или string-only `FieldPathError`; existing contract reuse имеет приоритет.
+  - **Planning D1 (ACCEPTED 2026-11-04):** `PlanContractFailure(reason: PlanContractFailureReason, message: str)` без `issues`, `str()` = `"{reason}: {message}"` (отдельного `Source` enum нет); synthetic `("planning",)/("dependencies",)/("contract",)` → F02 reason+message. Сбой провайдера → `PlanProviderFault(Exception)` с `__cause__`, без `("provider",)`. `PlanBuildFailure.issues` и `PlanDiagnostic.issue` — carrier по C0-9. Своего enum кодов у Planning нет; test-only `ProbeTypeError` в `tests/planning`. `surfaceManifest` Planning-records не добавляет.
+  - **Planning D2 DONE (2026-11-04, ветка `error-contracts-c1`):** `PlanContractFailure(reason, message)`, `PlanProviderFault`, carrier в `PlanBuildFailure`/`PlanDiagnostic`; test-only `tests/planning/probeIssues.py`. `tests/planning`: 81→55 ERROR/FAIL, новых нет; оставшиеся — старые конструкторы `FieldPathError` в доменах (hydrology/terrain/placement/jsonValidation) и их тесты.
+  - **R2 DONE (2026-11-05):** `PlanBuildFailure.issues` — read-only property; при создании carrier + рекурсивный `validate_immutable` (EC-06). Cache (`CacheFailure`, импорт `_complete_record`/`_immutable` из `cacheService`) не менялся — домен владельца Cache. R1 без новых замечаний; Planning smoke на общей версии: `tests/planning` 54 ERROR/FAIL до и после, набор совпадает.
+- **jsonValidation/worldBundle gate:**
+  - **jsonValidation D1 (ACCEPTED 2026-11-04):** две координаты — `WireLocation(parts)` (F09, позиция POJO в документе, может быть `()`, заменяет `ResolveContext.path_prefix`) + `ValidatedFieldPath` от проверяемого POJO-класса. `JsonFieldError(FieldPathError[JsonValidationCode])` (F01) с `location`, `schema_id: str | None`, `pydantic_type: pydantic_core ErrorType | None`; `WireShapeIssue(code, location, message)` (F09, не `FieldPathError`) для ошибок без POJO/поля (expected list/object на сыром ряду, `map_cells`, `REMOVED_FROM_WIRE`, `BUNDLE_INVALID`, `LIBRARY_INVALID`, сырой `REF-W-CONN`, неразрешимый Pydantic `loc`). `JsonValidationCode` — только существующие wire-строки + `SCHEMA_VIOLATION`. Контейнеры (`ResolveReport`, `ctx.errors`, `ImportValidationError`, `ImportValidationReport`, `UnresolvedModelError`, `ResolveResult`) — `FieldPathError[Any] | WireShapeIssue` через carrier; `ctx.errors` остаётся request-local списком. `StrictFieldError(issue)`. 422 mapper — единственное место строк: `loc` = `location.parts` + путь в wire-именах, `code` = `code.value`; для `SCHEMA_VIOLATION` `code` = `pydantic_type` (wire не меняется, решение A). `_error_code` и re-export `jsonValidation.types` удаляются. Порядок: J1 POJO + `types.py` + mapper + re-export → J2 `ResolveContext`/`resolve.py` → J3 остальные producers → J4 `worldBundleService`. Папка: `dataModel/validation/importIssues/`.
+  - **Core (C0-4, ACCEPTED 2026-11-04, вариант A):** `CheckedPath.from_pydantic_loc` сопоставляет wire alias (`alias`, str `validation_alias`, str-члены `AliasChoices`) с полем; в путь пишется имя поля; неоднозначность или `AliasPath` → `None`.
+  - **jsonValidation J1 DONE (2026-11-04, ветка `error-contracts-c1`):** `dataModel/validation/importIssues/` (`JsonValidationCode`, `WireLocation`, `JsonFieldError`, `WireShapeIssue`); `jsonValidation/types.py` — `ImportIssue` carrier в `ResolveReport`/`ImportValidationError`/`ImportValidationReport`, 422 mapper (`loc` через alias владельца поля, `SCHEMA_VIOLATION` → `pydantic_type`), `_error_code` и re-export удалены; 46 импортов переведены на `diagnostics.fieldPathError`.
+  - **jsonValidation J2 DONE (2026-11-04, ветка `error-contracts-c1`):** `ResolveContext.location: WireLocation` вместо `path_prefix` (47 файлов механически); `resolve.py` переводит Pydantic `errors()` через `CheckedPath.from_pydantic_loc` в `JsonFieldError` (enum → `UNKNOWN_ENUM`, тип из `ErrorType` → `SCHEMA_VIOLATION`+`pydantic_type`, custom → `VALIDATION_ERROR`), неразрешённый loc → `WireShapeIssue` (+`pydantic_type`); `StrictFieldError(issue: ImportIssue)`, `report_issues`/`log_issues` с carrier admission; `reference`-extras в логе сняты до домена 5.
+  - **Решение J2 (C):** `PydanticCustomError("GENERATION_SETTINGS_CONFLICT")` в `dataModel/hydrology/generation/legacySettings.py` выдаётся concrete-ошибкой hydrology в домене Water Input; в `JsonValidationCode` не добавляется. До миграции Water Input custom-тип Pydantic в jsonValidation даёт `VALIDATION_ERROR` (`test_legacy.test_shared_wire_engine_uses_the_owning_before_validator` ожидаемо падает).
+  - **OPEN (вне ERROR-CONTRACTS-1):** `BundleSection` — `ClassVar[str]`, не enum; типизировать отдельной задачей по `type-kind-str-fields`. До неё секция в `WireLocation` остаётся wire-строкой.
 
 ### 7.1. Адресные тест-кейсы для следующего design gate
 

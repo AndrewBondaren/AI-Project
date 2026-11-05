@@ -5,7 +5,7 @@ from pydantic import StrictInt, model_validator
 
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
-from app.dataModel.cascade.cascadeSpec import FieldRef
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.encoding.decodeLimits import CollectionLimit, RecordLimits
 from app.dataModel.hydrology.pack.profile import TILE_CELLS, TILE_SIDE
 from app.dataModel.hydrology.pack.root import _PackRecord, require_source_ref

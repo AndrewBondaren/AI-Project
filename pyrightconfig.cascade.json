@@ -6,6 +6,8 @@
     "backend/app/dataModel/hydrology/enums/planning/waterGenerationScope.py",
     "backend/app/application/cascade/contextResolver.py",
     "backend/app/dataModel/cascade/cascadeSpec.py",
+    "backend/app/dataModel/fields/fieldRef.py",
+    "backend/app/dataModel/fields/fieldBinding.py",
     "backend/app/dataModel/locations/context/cascadeParams.py",
     "backend/app/dataModel/locations/namedLocation/bundleNamedLocation.py",
     "backend/app/dataModel/locations/locationType/locationTypeEntry.py",
