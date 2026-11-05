@@ -7,6 +7,7 @@ from pydantic import TypeAdapter
 
 from app.dataModel.validation.importIssues.wireLocation import WireLocation
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
+from app.application.jsonValidation.types import wire_loc
 from app.application.worldData.masks.regionIdentity import declared_region_identity
 from app.dataModel.spatial.regionShape import AnchorRadiusShape, BboxShape, EllipseShape, PolygonShape
 from app.dataModel.spatial.regionShape import RegionShape, RegionShapeKind
@@ -146,7 +147,7 @@ class RegionIdentityTests(unittest.TestCase):
         with self.assertNoLogs(LOG, level="WARNING"), self.assertRaises(UnresolvedModelError):
             declared_region_identity(self.world_uid, ForestSpec(shape=self.shape), ctx=author_ctx)
         self.assertEqual(len(author_ctx.report.issues), 1)
-        self.assertEqual(author_ctx.report.issues[0].path, self.path + ("name",))
+        self.assertEqual(wire_loc(author_ctx.report.issues[0]), self.path + ("name",))
 
     def test_invalid_name_reaches_shared_issue_sink_even_for_unchecked_typed_input(self):
         invalid_name = self.name + UID_PART_SEPARATOR + "invalid"
@@ -158,7 +159,7 @@ class RegionIdentityTests(unittest.TestCase):
             with self.subTest(validate_only=validate_only), log_context:
                 with self.assertRaises(UnresolvedModelError):
                     declared_region_identity(self.world_uid, unchecked, ctx=ctx)
-            self.assertEqual(ctx.report.issues[0].path, self.path + ("name",))
+            self.assertEqual(wire_loc(ctx.report.issues[0]), self.path + ("name",))
 
     def test_fingerprint_is_wire_based_repeatable_and_key_order_independent(self):
         wire = self.spec.model_dump(mode="json")
