@@ -1,21 +1,28 @@
 """P2R-B through the public reader, real SQLite guard/holders and file backend."""
 import asyncio
+import sqlite3
 import threading
+from contextlib import closing
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import patch
 
 from app.application.artifacts.lifecycle.artifactGc import ArtifactGarbageCollector
+from app.application.engine.runtime.invocations.invocationCoordinator import InvocationCoordinator
 from app.application.artifacts.logging.artifactLog import ArtifactLifecycleLog
 from app.application.artifacts.registry.artifactRegistry import ArtifactFormatRegistryBinding
 from app.application.worldData.generators.hydrology.encoding.packFormats import ROOT_FORMAT, SHARD_FORMAT
 from app.application.worldData.pack.spatial.openWaterBlobReader import OpenWaterBlobReader, SpatialBlobReadError
 from app.dataModel.artifacts.lifecycle.holders import OperationHolder
+from app.dataModel.engine.dag.identity import ExecutionId, PlanRevision
+from app.dataModel.engine.dag.invocations.record import InvocationStatus
+from app.db.repositories.sqlite.dagExecutions.executionStore import SQLiteExecutionStore
 from app.dataModel.hydrology.pack.profile import ROOT_V1
 from app.dataModel.spatial.readFailureReason import SpatialReadFailureReason as Reason
 from app.storage.artifacts.blobBackend import ContentAddressedBlobBackend
 from app.storage.artifacts.blobRead import read_verified_file
 from tests.snapshotCore.storage.artifacts.test_staging import SqliteBlobFixture
+from tests.dag_typing.invocations.test_world_calls import runtime
 from tests.snapshotCore.support.fixtures import live_database
 from tests.spatial_pack.test_verified_blob_read import descriptor
 
@@ -44,6 +51,55 @@ class GuardedReadTests(IsolatedAsyncioTestCase):
         with self.assertRaises(SpatialBlobReadError) as failure:
             await awaitable
         self.assertIs(failure.exception.reason, reason)
+
+    async def test_precheck_before_guard_allows_stale_open_after_failed(self):
+        """Counterexample for the fixture's proposed check-then-read composition."""
+        ref = await self.seal(ROOT_FORMAT, await self.reserve(ROOT_FORMAT))
+        target = self.registry.resolve(ROOT_FORMAT)._path(ref)
+        checked, resume = asyncio.Event(), asyncio.Event()
+        opened = []
+        real_open = Path.open
+
+        def observe_open(path, *args, **kwargs):
+            stream = real_open(path, *args, **kwargs)
+            if path == target:
+                opened.append(stream)
+            return stream
+
+        with closing(sqlite3.connect(self.bundle[0].path, timeout=0)) as conn:
+            store = SQLiteExecutionStore(conn)
+            execution = ExecutionId("precheck")
+            _, plan = runtime()
+            graph = InvocationCoordinator.create(plan, execution, PlanRevision("1"), plan.invocation_root, 16, None).graph
+            await store.create(execution, graph.model_dump_json().encode())
+            claim = await store.claim(execution, "worker", 60)
+
+            async def checked_read():
+                if (await store.load(execution)).status == InvocationStatus.FAILED:
+                    raise ValueError("execution closed")
+                checked.set()
+                await resume.wait()
+                return await self.reader.read_root(ref, self.holder)
+
+            with patch.object(Path, "open", observe_open):
+                async with asyncio.TaskGroup() as tasks:
+                    worker = tasks.create_task(checked_read())
+                    try:
+                        await asyncio.wait_for(checked.wait(), 5)
+                        self.assertFalse(self.bundle[0].conn.in_transaction)
+                        graph.failure = "fixture revocation"
+                        graph.records[graph.root].status = InvocationStatus.FAILED
+                        await store.checkpoint(claim, 0, graph.checkpoint_status(), graph.model_dump_json().encode())
+                        self.assertEqual((await store.load(execution)).status, InvocationStatus.FAILED)
+                        self.assertTrue(await self.state.holders.is_held(ref, self.holder))
+                        with self.assertRaisesRegex(ValueError, "execution closed"):
+                            await checked_read()
+                        self.assertEqual(len(opened), 0)
+                    finally:
+                        resume.set()
+                self.assertEqual(worker.result(), b"data")
+                self.assertEqual(len(opened), 1)
+                self.assertTrue(opened[0].closed)
 
     async def test_admission_and_verified_content(self):
         for contract, read in ((ROOT_FORMAT, self.reader.read_root), (SHARD_FORMAT, self.reader.read_shard)):

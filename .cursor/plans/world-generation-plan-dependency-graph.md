@@ -821,7 +821,7 @@ flowchart TD
 |---|---|---|
 | [GEO](./geo-1-designed-water.md) | I11.3: обе notices №4/5 и тесты есть в рабочем дереве. | Для остальных трёх P1 требуется D1, затем D2 и повтор штатных сценариев. |
 | [Snapshot](./world-domain-patches-snapshots.md) | Прямой handoff подтверждён. На e7a30e1b штатный путь падает до транзакции на старом импорте. | Согласовать scoped D1 для трёх типов причин metadata, затем мигрировать service и builder и повторить интеграцию. |
-| [Spatial](./spatial-distribution-domain.md) | Принят §15.95: pin живёт до окончательного terminal execution, открытый BLOB защищён до закрытия файла. | Проверить конкуренцию child failure, shard IO, cleanup и позднего acquire. |
+| [Spatial](./spatial-distribution-domain.md) | §15.95 принят. В §15.96 две пробы с открытым BLOB прошли: при общем файле SQLite запись FAILED получила SQLITE_BUSY, в раздельных базах cleanup дождался закрытия файла. | DAG определяет событие окончательности execution. Pack упорядочивает допуск к каждому BLOB относительно отзыва права чтения. |
 | [Time](./time-domain.md) | Изолированные T3-A/T3-C, подготовка T4 и World settings проверены: 25 тестов, Pyright без ошибок по отчёту. | Политика STANDARD для суток в 1–3 часа открыта. Production T4 требует SN-TIME-READ и Time reader, T5 — SN-TIME-APPLY и handler, создание ветки — SN-TIME-BRANCH. |
 | [Physics](./physics-spatial-dynamics.md) | PS-CORE-1: P2 исправлен, 19 адресных проверок прошли. В широком прогоне до и после переноса совпали 40 неуспешных test IDs. | Независимая проверка P2. Production storage и интеграция остаются отдельными шагами. |
 | [API-1](./api-1-transport-boundary.md) | Проверено покрытие полей storage и wire. Climate C1 содержит девять scalars, десять после переноса lapse. | Сопоставить вход каждой операции с версией и выходом владельца, включая presence/aliases. |
@@ -837,7 +837,7 @@ flowchart TD
 | План | Номер трека | О чём трек | Следующий трек или внешняя зависимость |
 |---|---|---|---|
 | GEO | I11.3 | Два адресных теста notices прошли на рабочем дереве. | Полная сверка трёх стратегий после D2 №1–3. |
-| Spatial / World Pack | SP-P2W §15.95 | Пользователь принял lifetime pins и порядок допуска IO. | Проверить гонку, reopen/повтор cleanup и сохранность общего shard версии B. |
+| Spatial / World Pack | SP-P2W §15.96 | Artifact guard сохранил hold до закрытия файла. | Проверить гонку между проверкой terminal и входом в guard: отозвать право чтения после проверки и подтвердить отказ до открытия BLOB по старому ref. Для cleanup DAG подтверждает завершение либо отзыв полномочий consumers, включая children/retry/pass. |
 | Time | T3-A / T3-C, подготовка T4 проверена | Арифметика, календарь, World settings, чтение через закреплённые тестовые источники. | Внутри Time открыта политика STANDARD для 1–3 часов. Production T4 ждёт SN-TIME-READ, T5 — SN-TIME-APPLY, ветвление — SN-TIME-BRANCH. |
 | Snapshot | 4D2, scoped D1 на согласовании | Прямой handoff проверен, штатный сервис блокирует миграция metadata diagnostics. | После решения по D1 проверить handoff через сервис со второго соединения. |
 | ERROR-CONTRACTS-1 | D2 №4/5 реализуется, D1 №1–3 предъявлен | Scope №1–3 включает два полевых типа, точный admission и перенос причин policy. | Решение по №1–3 открывает их D2; результат №4/5 предъявляется отдельно. |
