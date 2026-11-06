@@ -330,6 +330,43 @@ class AtomicSnapshotCommitTests(unittest.TestCase):
 
 
 class AssignedPublicationTests(unittest.TestCase):
+    def test_conflict_rollback_requires_acknowledgement(self):
+        from app.application.publication.errors import UnknownCommitOutcome
+        from app.application.worldSnapshot.service.worldSnapshotService import SnapshotCasConflict
+        from app.dataModel.worldSnapshot.results.publication import (
+            CasConflictTrace, CasDecision, CasStep, CasTransactionOutcome,
+            ObservedPublication, WorldCasMismatch,
+        )
+
+        async def check(mode):
+            async with live_database() as bundle:
+                db, commits, world, *_ = bundle
+                base = await live_started(bundle)
+                mismatch = WorldCasMismatch("candidate", base, base,
+                                            ObservedPublication(base.publication_id, "start"), ())
+                conflict = SnapshotCasConflict(CasConflictTrace(
+                    mismatch, (CasStep("candidate", base, CasDecision.MISMATCH),)))
+                rollback = commits.driver.rollback
+
+                async def rollback_fault(conn):
+                    self.assertIs(conflict.trace.transaction_outcome, CasTransactionOutcome.PENDING)
+                    if mode == "active":
+                        return False
+                    await rollback(conn)
+                    raise OSError("lost rollback acknowledgement")
+
+                with patch.object(commits.driver, "rollback", side_effect=rollback_fault):
+                    with self.assertRaises(UnknownCommitOutcome):
+                        async with commits.transaction("candidate"):
+                            if mode == "ended":
+                                await rollback(db.main_conn)
+                            raise conflict
+                self.assertIs(conflict.trace.transaction_outcome, CasTransactionOutcome.PENDING)
+                self.assertEqual(conflict.trace.steps[0].decision, CasDecision.MISMATCH)
+        for mode in ("error", "active", "ended"):
+            with self.subTest(mode=mode):
+                run_async(check(mode))
+
     def test_handlers_and_sqlite_cas_share_target_and_rollback(self):
         from unittest.mock import Mock, AsyncMock
         from app.application.publication.errors import PublicationInfrastructureError
@@ -442,6 +479,7 @@ class AssignedPublicationTests(unittest.TestCase):
                             await execute()
                         self.assertIs(error.exception.category, SnapshotApplyOutcomeKind.CONFLICT)
                         trace = error.exception.trace
+                        self.assertEqual(trace.transaction_outcome.value, "rolled_back")
                         mismatch = trace.mismatch
                         self.assertEqual(mismatch.operation_id, op)
                         self.assertEqual(trace.steps[0].target, targets[0])

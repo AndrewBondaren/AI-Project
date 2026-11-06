@@ -1,4 +1,6 @@
 from copy import replace
+import json
+from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -19,6 +21,9 @@ from app.dataModel.hydrology.planning.stages.riverRoutePlans import CoarseRiverP
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.hydrology.riverDrainageLink import RiverDrainageLink
 from app.dataModel.hydrology.riverRouting import RiverRouteDiagnostic, RiverRoutingCode, RiverRoutingFailure
+from app.dataModel.hydrology.waterKindMismatchIssue import HydrologyMaterializationCode, WaterKindMismatchIssue
+from app.dataModel.hydrology.waterBody import WaterBody
+from app.dataModel.fields.checkedPath import CheckedPath
 from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
 from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnosticDisposition
 from app.dataModel.spatial.grid.coordinateTypes import SurfaceGridCoord
@@ -151,16 +156,44 @@ class ProceduralRefinementTests(TestCase):
             route(physical, water, coarse=coarse(proposal("outside", ((-1, 0), (1, 0)))))
 
     def test_declared_membership_and_historical_results_do_not_depend_on_segment_flag(self):
-        expected = ("1ccb025f9dbc28083d7751293bec109823d7970836ce4eee6c882aef07c8eeb2",
+        golden = json.loads(Path(__file__).with_name("river_route_golden.json").read_text())
+        expected = (golden["digest"],
             "36204c395f88de16bcce6fd87990059e7554bd1402c26c8879560e4b9beee067",
             "a5fcf7d389a726efbcfa4eeaca352a9bc9030f7a64826abf6775ee0d22fa4da6")
         for settings, fingerprint in zip(({}, {"lake": False}, {"mouth": (8, 11)}), expected, strict=True):
-            _, physical, water = scenario(**settings)
-            result = route(physical, water)
-            self.assertEqual(digest((result.payload, result.diagnostics), SURFACE_MANIFEST).hex(), fingerprint)
-            again = route(physical, water, coarse=coarse(proposal("river", ((0, 0), (1, 0)), declared=False)))
-            self.assertEqual(again.payload, result.payload)
-            self.assertEqual(again.diagnostics, result.diagnostics)
+            with self.subTest(settings=settings):
+                _, physical, water = scenario(**settings)
+                result = route(physical, water)
+                self.assertEqual(digest((result.payload, result.diagnostics), SURFACE_MANIFEST).hex(), fingerprint)
+                again = route(physical, water, coarse=coarse(proposal("river", ((0, 0), (1, 0)), declared=False)))
+                self.assertEqual(again.payload, result.payload)
+                self.assertEqual(again.diagnostics, result.diagnostics)
+
+    def test_kind_mismatch_migration_preserves_historical_river_payload(self):
+        golden = json.loads(Path(__file__).with_name("river_route_golden.json").read_text())
+        _, physical, water = scenario()
+        result = route(physical, water)
+        # Payload captured from 9ed3bba6; only the accepted diagnostic migration changes the digest.
+        self.assertEqual(result.payload, FineRiverPlan.model_validate_json(json.dumps(golden["payload"])))
+        self.assertEqual(digest(result.payload, SURFACE_MANIFEST).hex(), golden["payload_digest"])
+        self.assertEqual(result.diagnostics, water.diagnostics)
+        self.assertEqual(len(result.diagnostics), 1)
+        diagnostic = result.diagnostics[0]
+        issue = diagnostic.issue
+        self.assertIs(type(issue), WaterKindMismatchIssue)
+        self.assertIs(issue.code, HydrologyMaterializationCode.WATER_KIND_MISMATCH)
+        self.assertEqual(issue.source_uid, "lake")
+        self.assertIs(issue.authored_kind, BasinKind.LAKE)
+        self.assertIs(issue.physical_kind, BasinKind.OCEAN)
+        self.assertEqual(issue.path, CheckedPath.from_pydantic_loc(WaterBody, ("kind",)))
+        self.assertEqual(issue.message, "authored kind=lake retained; physical class=ocean")
+        self.assertIs(diagnostic.disposition, PlanDiagnosticDisposition.FALLBACK)
+        self.assertEqual(digest((result.payload, result.diagnostics), SURFACE_MANIFEST).hex(), golden["digest"])
+        self.assertEqual(result, route(physical, water))
+        wire = encode(result, SURFACE_MANIFEST)
+        restored = decode(wire, PlanEnvelope[FineRiverPlan], SURFACE_MANIFEST)
+        self.assertIs(type(restored.diagnostics[0].issue), WaterKindMismatchIssue)
+        self.assertEqual(encode(restored, SURFACE_MANIFEST), wire)
 
     def test_projection_handles_negative_coordinates_and_wrapped_seams(self):
         topology = WorldTopology(mode=WorldTopologyMode.WRAPPED,

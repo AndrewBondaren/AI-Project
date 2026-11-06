@@ -4,6 +4,8 @@ import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, AbstractAsyncContextManager
 
+from app.application.worldSnapshot.service.worldSnapshotService import SnapshotCasConflict
+from app.dataModel.worldSnapshot.results.publication import CasTransactionOutcome
 from app.application.publication.errors import PublicationInfrastructureError, UnknownCommitOutcome
 from app.application.worldSnapshot.contracts.commitScope import CommitReadScope, CommitScope
 from app.dataModel.identity.uid import EntityUid
@@ -46,16 +48,22 @@ class SqlitePublicationCommitStore:
                 try:
                     await self.driver.begin(conn, write=write)
                     yield self.registry.issue(write, operation_id)
-                except BaseException:
+                except BaseException as error:
                     cancelled = False
                     try:
                         if conn.in_transaction:
                             cancelled = await self.driver.rollback(conn)
+                        elif isinstance(error, SnapshotCasConflict):
+                            raise UnknownCommitOutcome("conflict transaction ended without rollback acknowledgement")
+                        if conn.in_transaction:
+                            raise UnknownCommitOutcome("rollback left the transaction active")
                     except BaseException as rollback_error:
                         await self._quarantine(conn)
                         raise UnknownCommitOutcome("rollback could not be confirmed") from rollback_error
                     if cancelled:
                         raise asyncio.CancelledError
+                    if isinstance(error, SnapshotCasConflict):
+                        error.trace = error.trace._replace(transaction_outcome=CasTransactionOutcome.ROLLED_BACK)
                     raise
                 else:
                     try:

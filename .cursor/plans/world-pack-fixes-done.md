@@ -115,3 +115,5 @@ Related: [WP-MERGE](../docs/tz_world_pack_storage.md#merge-backlog-wp-merge), [m
 - [ ] `schedule_tile_background` priority: tile `(gx≠0)` — центр chunk совпадает с метрами  
 - [ ] WP-A9 spawn scene load ≤ 30s (master)  
 - [ ] WP-A12 climate fields на scene без L2  
+
+[Принятие карты F3 и отдельный срез identity](./spatial-f3-implementation-report.md).

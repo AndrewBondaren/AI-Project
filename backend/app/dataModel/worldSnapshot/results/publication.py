@@ -51,9 +51,15 @@ class CasStep(NamedTuple):
     decision: CasDecision
 
 
+class CasTransactionOutcome(StrEnum):
+    PENDING = "pending"
+    ROLLED_BACK = "rolled_back"
+
+
 class CasConflictTrace(NamedTuple):
     mismatch: WorldCasMismatch | PlayerCasMismatch
     steps: tuple[CasStep, ...]
+    transaction_outcome: CasTransactionOutcome = CasTransactionOutcome.PENDING
 
 
 class PackActivationResult(BaseModel):

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Protocol
+from uuid import UUID
 
 from app.dataModel.engine.dag.identity import ExecutionId, WaitId
 from app.dataModel.engine.dag.invocations.record import ExecutionCheckpointStatus, ExecutionStopIntent, InvocationGraph, StopOutcome
@@ -45,6 +46,7 @@ class Checkpoint:
 
 
 class ExecutionStore(Protocol):
+    async def get_store_id(self) -> UUID: ...
     async def create(self, execution_id: ExecutionId, blob: bytes) -> None: ...
     async def load(self, execution_id: ExecutionId) -> Checkpoint: ...
     async def claim(self, execution_id: ExecutionId, owner_id: str, seconds: int) -> Claim: ...

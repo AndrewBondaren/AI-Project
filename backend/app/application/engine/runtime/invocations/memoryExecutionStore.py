@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from time import monotonic
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from app.application.engine.contracts.invocation.executionStore import Checkpoint, Claim, OwnershipConflict
 from app.dataModel.engine.dag.identity import ExecutionId, WaitId
@@ -19,6 +19,9 @@ class MemoryExecutionStore:
     def __init__(self) -> None:
         self._store_id = uuid4()
         self._entries: dict[ExecutionId, _Entry] = {}
+
+    async def get_store_id(self) -> UUID:
+        return self._store_id
 
     async def create(self, execution_id: ExecutionId, blob: bytes) -> None:
         self._entries.setdefault(execution_id, _Entry(Checkpoint(0, InvocationStatus.READY, blob)))

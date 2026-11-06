@@ -1,0 +1,145 @@
+{
+  "baseline_commit": "9ed3bba6",
+  "historical_digest": "1ccb025f9dbc28083d7751293bec109823d7970836ce4eee6c882aef07c8eeb2",
+  "payload_digest": "12843e8818af8ef750edd2fa509d51860e700d34eea4ce4aac5d56cf4f87a533",
+  "digest": "d632ae064d4cc12d76da2ac032b3a35d7642f40140c1471d99aa02428f2f99a7",
+  "payload": {
+    "routes": [
+      {
+        "river_uid": "river",
+        "segments": [
+          {
+            "path": [
+              [
+                2,
+                11
+              ],
+              [
+                3,
+                11
+              ],
+              [
+                4,
+                11
+              ],
+              [
+                5,
+                11
+              ],
+              [
+                6,
+                11
+              ],
+              [
+                7,
+                11
+              ],
+              [
+                8,
+                11
+              ],
+              [
+                9,
+                11
+              ],
+              [
+                10,
+                11
+              ]
+            ],
+            "connection_type": "river",
+            "edge_uid": "dr-river-0",
+            "location_uid": "river",
+            "declared": true
+          }
+        ],
+        "receiver_cell": [
+          10,
+          11
+        ],
+        "drainage": {
+          "river_uid": "river",
+          "river_type": "river",
+          "receiver_uid": "lake",
+          "receiver_kind": "lake",
+          "receiver_cell": [
+            10,
+            11
+          ]
+        }
+      }
+    ],
+    "base_surface_z": [
+      [
+        [
+          2,
+          11
+        ],
+        11
+      ],
+      [
+        [
+          3,
+          11
+        ],
+        11
+      ],
+      [
+        [
+          4,
+          11
+        ],
+        11
+      ],
+      [
+        [
+          5,
+          11
+        ],
+        10
+      ],
+      [
+        [
+          6,
+          11
+        ],
+        10
+      ],
+      [
+        [
+          7,
+          11
+        ],
+        10
+      ],
+      [
+        [
+          8,
+          11
+        ],
+        10
+      ],
+      [
+        [
+          9,
+          11
+        ],
+        10
+      ],
+      [
+        [
+          10,
+          11
+        ],
+        -5
+      ],
+      [
+        [
+          11,
+          11
+        ],
+        -5
+      ]
+    ]
+  }
+}

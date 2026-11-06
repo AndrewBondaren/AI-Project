@@ -24,7 +24,7 @@ from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
 from app.dataModel.worldSnapshot.identity.refs import PlayerSnapshotRef, SnapshotRef, WorldSnapshotRef
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
 from app.dataModel.worldSnapshot.results.publication import (
-    CasConflictTrace, CasDecision, CasStep, PlayerCasMismatch, WorldCasMismatch,
+    CasConflictTrace, CasDecision, CasStep, CasTransactionOutcome, PlayerCasMismatch, WorldCasMismatch,
 )
 from app.ids.deterministicIds import runtime_uid
 
@@ -127,12 +127,12 @@ class WorldSnapshotService:
         world_result = await self._world.compare_append(scope, expected, target)
         if isinstance(world_result, WorldCasMismatch):
             step = CasStep(world_result.operation_id, target, CasDecision.MISMATCH)
-            raise SnapshotCasConflict(CasConflictTrace(world_result, (step,)))
+            raise SnapshotCasConflict(CasConflictTrace(world_result, (step,), CasTransactionOutcome.PENDING))
         steps = [CasStep(operation_id, target, world_result)]
         for head in validation.expected_players:
             player_target = assigned_players[head.player_uid]
             result = await self._players.compare_append(scope, head, player_target, operation_id)
             if isinstance(result, PlayerCasMismatch):
                 steps.append(CasStep(result.operation_id, player_target, CasDecision.MISMATCH))
-                raise SnapshotCasConflict(CasConflictTrace(result, tuple(steps)))
+                raise SnapshotCasConflict(CasConflictTrace(result, tuple(steps), CasTransactionOutcome.PENDING))
             steps.append(CasStep(operation_id, player_target, result))

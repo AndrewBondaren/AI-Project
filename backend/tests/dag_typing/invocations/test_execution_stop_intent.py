@@ -75,3 +75,29 @@ class StopIntentTests(unittest.IsolatedAsyncioTestCase):
                 for key, expected in saved.items():
                     self.assertEqual(await store.load(key), expected)
             self.assertEqual(len({cp.stop_intent.store_id for cp in saved.values()}), 1)
+
+    async def test_identity_before_stop(self):
+        schema = (Path(__file__).resolve().parents[3] / "app/db/migrations/0001_initial.sql").read_text("utf-8")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "dag.sqlite"
+            with closing(sqlite3.connect(path)) as a, closing(sqlite3.connect(path)) as b:
+                a.executescript(schema)
+                first, second = SQLiteExecutionStore(a), SQLiteExecutionStore(b)
+                identity = await first.get_store_id()
+                self.assertEqual(await second.get_store_id(), identity)
+                self.assertFalse(a.in_transaction)
+            with closing(sqlite3.connect(path)) as db, closing(sqlite3.connect(":memory:")) as other:
+                store = SQLiteExecutionStore(db)
+                self.assertEqual(await store.get_store_id(), identity)
+                self.assertNotEqual(await SQLiteExecutionStore(other).get_store_id(), identity)
+                key = ExecutionId("identity")
+                await store.create(key, b"checkpoint")
+                claim = await store.claim(key, "owner", 60)
+                intent = await store.record_stop_intent(claim, 0, self.outcomes[0])
+                self.assertEqual(intent.store_id, identity)
+                self.assertEqual(await store.get_store_id(), identity)
+        memory = MemoryExecutionStore()
+        identity = await memory.get_store_id()
+        await memory.create(ExecutionId("memory"), b"checkpoint")
+        claim = await memory.claim(ExecutionId("memory"), "owner", 60)
+        self.assertEqual((await memory.record_stop_intent(claim, 0, self.outcomes[0])).store_id, identity)

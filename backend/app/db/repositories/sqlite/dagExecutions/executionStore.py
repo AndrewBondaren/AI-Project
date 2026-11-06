@@ -28,6 +28,18 @@ class SQLiteExecutionStore:
             raise RuntimeError("execution store requires a connection without an active transaction")
         return self.db
 
+    def _ensure_identity(self) -> UUID:
+        self.db.execute("CREATE TABLE IF NOT EXISTS dag_store_identity "
+                        "(singleton INTEGER PRIMARY KEY CHECK(singleton=1), store_id TEXT NOT NULL)")
+        self.db.execute("INSERT OR IGNORE INTO dag_store_identity VALUES (1,?)", (str(uuid4()),))
+        return UUID(self.db.execute("SELECT store_id FROM dag_store_identity WHERE singleton=1").fetchone()[0])
+
+    async def get_store_id(self) -> UUID:
+        """Return the durable namespace, including before the first execution or stop."""
+        with self._transaction():
+            self.db.execute("BEGIN IMMEDIATE")
+            return self._ensure_identity()
+
     async def create(self, execution_id: ExecutionId, blob: bytes) -> None:
         with self._transaction():
             self.db.execute(
@@ -81,12 +93,8 @@ class SQLiteExecutionStore:
                 return saved.replay_stop(revision, outcome)
             if saved.revision != revision:
                 raise OwnershipConflict(claim.execution_id)
-            # Created lazily so existing v2 databases can acquire their durable namespace.
-            self.db.execute("CREATE TABLE IF NOT EXISTS dag_store_identity "
-                            "(singleton INTEGER PRIMARY KEY CHECK(singleton=1), store_id TEXT NOT NULL)")
-            self.db.execute("INSERT OR IGNORE INTO dag_store_identity VALUES (1,?)", (str(uuid4()),))
-            store_id = self.db.execute("SELECT store_id FROM dag_store_identity WHERE singleton=1").fetchone()[0]
-            intent = ExecutionStopIntent(store_id=UUID(store_id), execution_id=claim.execution_id,
+            store_id = self._ensure_identity()
+            intent = ExecutionStopIntent(store_id=store_id, execution_id=claim.execution_id,
                                          stop_revision=revision + 1, outcome=outcome)
             blob = _StoppedCheckpoint(graph_blob=saved.blob, intent=intent).model_dump_json().encode()
             updated = self.db.execute(

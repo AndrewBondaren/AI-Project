@@ -821,9 +821,9 @@ flowchart TD
 
 | Трек | Последнее решение и evidence | Следующая работа |
 |---|---|---|
-| [GEO](./geo-1-designed-water.md) | [D2 mismatch реализован](./geo-water-kind-mismatch-d2.md). Прежние 58 traceback исчезли; полный geo1: 894 теста, 229 errors, 2 failures. | Разобрать новый river-route digest failure, затем выбрать следующий scoped producer. |
-| [Snapshot](./world-domain-patches-snapshots.md) | [Независимое ревью](./world-domain-snapshot-cas-trace-review.md) подтвердило причину CAS и rollback в БД. Trace сохраняет applied без признака отката. | После подтверждения rollback явно отразить судьбу предыдущих шагов в trace для caller, проверить player_conflict. |
-| [Spatial](./spatial-distribution-domain.md) | Карта F3 предъявлена (§15.102). | До кода согласовать close receipt/pin binding, тип holder в journal и доверенную identity store до первого acquire. |
+| [GEO](./geo-1-designed-water.md) | [Разбор digest](./geo-river-route-digest-verification.md): смена первого эталона обусловлена принятой миграцией diagnostics, payload сохранён. | Следующий scoped D1 — River diagnostics, cold boundary. Группа: 9 тестов, 5 errors, 0 failures. |
+| [Snapshot](./world-domain-patches-snapshots.md) | [Rollback trace исправлен](./world-domain-snapshot-rollback-trace.md): caller получает transaction_outcome=ROLLED_BACK после подтверждённого отката. 7 адресных OK. | Повторное независимое ревью исправления. Полный набор: 171 тест, прежние 8 errors, 1 failure, 1 skip. |
+| [Spatial](./spatial-distribution-domain.md) | Карта F3 принята (§15.103). get_store_id добавлен отдельным срезом. | Подтвердить identity tests, затем реализовать F3 receipt, binding, holder journal и admission. |
 | [Time](./time-domain.md) | Проверены изолированные T3 и подготовка T4. Выполнено ревью политики Time/World settings для validate и runtime. | Миграция диагностики и runtime resolver впереди. Production T4/T5 требуют соответствующих Snapshot gates. |
 | [Physics](./physics-spatial-dynamics.md) | [Повторная проверка P2](./ps-error-1-d2-review.md) пройдена для обеих операций. 2/2 регрессии, профиль 71/71. | Предъявить D2 на отдельную пользовательскую приёмку. |
 | [API-1](./api-1-transport-boundary.md) | Проверено покрытие полей storage и wire. Climate C1 содержит девять scalars, десять после переноса lapse. | Сопоставить вход каждой операции с версией и выходом владельца, включая presence/aliases. |
@@ -838,19 +838,31 @@ flowchart TD
 
 | План | Номер трека | О чём трек | Следующий трек или внешняя зависимость |
 |---|---|---|---|
-| GEO | Water Input, D2 реализован | Mismatch передаётся в fine-water envelope, старый отказ исчез. | Разбор изменившегося digest river route, затем следующий producer по диагностике geo1. |
+| GEO | River diagnostics, подготовка D1 | Digest разобран и первый эталон обновлён, 3 регрессии OK. | Согласовать тип River diagnostic и persisted boundary для оставшихся отказов riverPrepare. |
 | Physics | PS-ERROR-1 D2 / P2 | P2 прошёл независимую перепроверку. | Отдельное решение по D2. |
-| Spatial / World Pack | SP-P2W / F3 | Карта хранения готова к согласованию (§15.102). | World Pack, Artifacts и DAG согласуют три решения перед кодом F3. |
-| DAG / Pack | F2 проверен | [Отчёт F2](./sp-p2w-f2-verification.md): финальный DAG-набор 401/401. | DAG-вход для F3 готов. До реализации Pack подтвердить карту хранения pin/holder. |
+| Spatial / World Pack | SP-P2W / F3 | Карта принята. [Минимальный срез](./spatial-f3-implementation-report.md) добавил стабильный store_id. | Верификация identity, затем production F3. |
+| DAG / Pack | F3 вход identity | F1/F2 проверены ранее; добавленный get_store_id требует отдельного прогона. | Reopen, два соединения, разные БД и совпадение с stop intent, затем Pack F3. |
 | Time | T3-A / T3-C, подготовка T4 проверена | Арифметика, календарь, World settings, чтение через закреплённые тестовые источники. | Внутри Time открыта политика STANDARD для 1–3 часов. Production T4 ждёт SN-TIME-READ, T5 — SN-TIME-APPLY, ветвление — SN-TIME-BRANCH. |
-| Snapshot | 4D2 / CAS | При конфликте p2 первые шаги world и p1 видны как applied, хотя вся транзакция откатилась. | Добавить в trace подтверждённый rollback и проверить выход caller вместе с состоянием второго соединения. |
+| Snapshot | 4D2 / CAS rollback trace | transaction_outcome отделяет сравнения от подтверждённого rollback. | Независимо проверить исправление и случай ошибки rollback. |
 | ERROR-CONTRACTS-1 | D2 GEO / Snapshot / Physics | Пять GEO-сценариев и Snapshot metadata проверены. Physics D2 предъявлен. | Каждому срезу — своё ревью и отдельная приёмка. |
 
 API-1 ведёт пользователь. GEN-BAKE-READ после решения по D1–D7 переходит к проектированию R1/R2 по операциям.
 
 ### 12.2. ERROR-CONTRACTS-1: горизонтальные gates (v6.14)
 
-**Прикладные зависимости на 6 ноября.** GEO mismatch реализован; Snapshot CAS trace требует явной отметки rollback. F1/F2 проверены; для F3 нужна приёмка карты §15.102 и согласование store identity.
+**Прикладные зависимости на 6 ноября.** Для следующих River producers нужен scoped D1. Исправление Snapshot rollback trace предъявлено. Отдельный Artifacts D1 должен определить причину cancel как управляющий исход F06 и отказ GC как технический исход F05, включая DTO и terminal codec. Карта Pack F3 принята, production F3 следует после проверки нового входа store identity. Зависимость F3 от исправления cancel/GC вводится только при подтверждении соответствующего caller в F3.
+
+### 12.3. Artifacts — миграция cancel и GC после C1
+
+По [уточнённому отчёту](./world-domain-snapshot-rollback-trace.md) семь ошибок cancel возникают в leaseStore.py при создании причины, одна ошибка GC — в artifactGc.py при упаковке исходного отказа удаления. Это два producers. Владелец — artifact lifecycle.
+
+| Шаг | Вход | Результат и передача |
+|---|---|---|
+| Scoped D1 cancel/GC | Классификация F06/F05 в ERROR-CONTRACTS и trace обоих callers | Определить тип управляющей причины для OperationCancelled.reason и технического отказа для GcReport.failed. Уточнить хранение terminal результата и logging. |
+| D2 cancel | Принятый D1 cancel | Мигрировать producer, DTO, OperationTerminalCodec и consumers одним срезом. Проверить запись и восстановление terminal, семь исходных сценариев. |
+| D2 GC | Принятый D1 GC | При ошибке physical delete вернуть failed candidate и записать GC_FAILED. Проверить повтор и сохранность catalog/holds по существующему контракту. |
+
+Последующая проверка snapshotCore должна подтвердить устранение исходных восьми ошибок и оценить typing gate. Это отдельный результат от проверки rollback trace.
 
 | Локальный consumer-gate | Непосредственные prerequisite | Что не следует требовать |
 |---|---|---|

@@ -3054,6 +3054,8 @@ Evidence гонок получено на отдельных соединени�
 
 [Независимое ревью D1: контрпример для обозначения откаченных CAS](world-domain-snapshot-cas-trace-review.md).
 
+[Исправление D1: типизированный итог транзакции и подтверждение rollback](world-domain-snapshot-rollback-trace.md).
+
 ## Контракты Snapshot для интеграции Time (2026-11-03)
 
 Входящий запрос из [Time §§14.2, 34, 37, 44–46, 48](./time-domain.md). Ниже три отдельных результата с владельцем Snapshot. Статус каждого — OPEN до согласования контракта и проверки соответствующего пути. Эти работы лежат вне среза leases 4C3-C.
@@ -3065,3 +3067,8 @@ Evidence гонок получено на отдельных соединени�
 | SN-TIME-BRANCH | Определить публичный контракт создания ветки, его OperationKind и сохраняемый terminal outcome. По ним Snapshot восстанавливает результат и передаёт новому timeline время точки ветвления. | Crash после commit до ответа и повтор с прежним ID возвращают ту же ветку и тот же исходный момент. История родителя сохраняется. |
 
 Исходная граница видна в [SnapshotApplyContext](../../backend/app/application/worldSnapshot/contracts/context.py), [SQLite CAS](../../backend/app/db/repositories/sqlite/snapshotCore/publications/worldPublicationStore.py) и [OperationKind](../../backend/app/dataModel/artifacts/lifecycle/operation/kinds.py). Следующий документальный шаг Snapshot owner — согласовать сигнатуры и показать вызовы от read/apply/branch до хранилища и ledger. Владельцу Time передаются утверждённые контракты и затем отдельное integration evidence.
+
+
+### Scoped D1 artifacts cancel / GC — на согласовании
+
+[Предложение D1: cancel F06, GC failure F05, terminal/reopen и пересечение с Pack F3](world-domain-artifacts-cancel-gc-d1.md). Исследование и документы; D2 не начат. Требуются решения по concrete contracts и совместимости cancelled terminal v1/v2.

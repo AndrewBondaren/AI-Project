@@ -72,3 +72,5 @@ Focused-тест завершает Pipeline через штатный `DAGEngin
 ## Принятое решение и передача в реализацию
 
 Вариант A и порядок для раздельных хранилищ приняты пользователем. Последовательность срезов — F1 intent → F2 остановка DAG → F3 Pack CLOSED → F4 DAG finalized и replay → F5 release → F6 приёмка на двух БД. Входные gates, точные файлы, наблюдаемый результат и граница каждого среза находятся у соответствующих владельцев. [DAG F1/F2/F4](./dag-invocations-bake-admission.md#sp-p2w--шаги-dag-после-принятия-варианта-a) · [Pack F3/F5 и совместная приёмка F6](./spatial-distribution-domain.md#15100-sp-p2w--шаги-pack-для-раздельных-хранилищ)
+
+[Принятие карты F3 и отдельный срез identity](./spatial-f3-implementation-report.md).
