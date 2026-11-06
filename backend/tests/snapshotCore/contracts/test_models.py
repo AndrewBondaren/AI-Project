@@ -58,7 +58,8 @@ from app.dataModel.artifacts.lifecycle.holders import (
 from app.dataModel.artifacts.lifecycle.gc import GcReport, ArtifactStorageEventKind
 from app.application.worldSnapshot.logging.snapshotLog import SnapshotLifecycleLog
 from app.application.artifacts.logging.artifactLog import ArtifactLifecycleLog
-from app.core.loggingConfig import JsonLogFormatter, request_id_var
+from app.core.logging.formatting import JsonLogFormatter
+from app.core.logging.context import request_id_var
 
 class CoreModelTests(unittest.TestCase):
     def setUp(self) -> None:

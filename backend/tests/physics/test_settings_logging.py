@@ -14,8 +14,11 @@ from app.application.physics.settings.input import (
 )
 from app.core.generationLogging import generation_world_log
 from app.core.loggingConfig import (
-    _remove_facade_handlers, flush_console_queue, request_id_var, setup_logging, route_for,
+    _remove_facade_handlers, setup_logging,
 )
+from app.core.logging.context import request_id_var
+from app.core.logging.routes import route_for
+from app.core.logging.console import flush_console_queue
 
 
 class SettingsLoggingTests(unittest.TestCase):

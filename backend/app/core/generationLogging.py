@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
 
-from app.core.loggingConfig import JsonLogFormatter
+from app.core.logging.formatting import JsonLogFormatter
 
 # Active bake/refine world for this asyncio Task / thread.
 generation_world_var: ContextVar[str | None] = ContextVar("generation_world", default=None)

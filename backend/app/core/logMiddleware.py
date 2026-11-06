@@ -5,7 +5,7 @@ import uuid
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
-from app.core.loggingConfig import request_id_var
+from app.core.logging.context import request_id_var
 
 logger = logging.getLogger("http")
 

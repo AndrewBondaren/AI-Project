@@ -25,6 +25,7 @@ from app.application.engine.runtime.validation.contractValidator import Contract
 from app.application.engine.runtime.validation.nodeValidator import NodeValidator
 from app.application.engine.taskType import TaskType
 from app.core import loggingConfig
+from app.core.logging import routes, console
 from app.dataModel.engine.dag.diagnostics import (
     CancellationReason, CancellationRequest, CancellationSource, ExecutionDiagnostic,
     ExecutionEventCode as Code, ExecutionSeverity,
@@ -310,9 +311,9 @@ class EmitterTests(unittest.TestCase):
             request.message = "changed"
 
     def test_server_route_writes_one_structured_line_to_existing_facade(self):
-        self.assertEqual(loggingConfig.route_for("app.engine.dag"), ("engine", "dagExecution"))
-        self.assertEqual(loggingConfig.route_for("app.engine.dag.child"), ("engine", "dagExecution"))
-        self.assertIsNone(loggingConfig.route_for("app.engine.dagOther"))
+        self.assertEqual(routes.route_for("app.engine.dag"), ("engine", "dagExecution"))
+        self.assertEqual(routes.route_for("app.engine.dag.child"), ("engine", "dagExecution"))
+        self.assertIsNone(routes.route_for("app.engine.dagOther"))
         root = logging.getLogger()
         old_level = root.level
         loggingConfig._remove_facade_handlers()
@@ -321,7 +322,7 @@ class EmitterTests(unittest.TestCase):
                 try:
                     loggingConfig.setup_logging(level=logging.INFO, profile="server", logs_dir=directory, stream=io.StringIO())
                     dagLog.emit(self.event())
-                    loggingConfig.flush_console_queue()
+                    console.flush_console_queue()
                     for handler in root.handlers:
                         handler.flush()
                     path = Path(directory) / "engine" / "dagExecution.log"

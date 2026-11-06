@@ -68,6 +68,10 @@ policy-resolve эмиттер и sink `jsonValidation/resolve`; settlement и re
 
 ## Каталог консьюмеров
 
+### Time — TL-R (2026-11-07)
+
+`app.time.operations` → `time/operations`, server sink `backend/logs/time/operations.log`. Producer — `application/time/logging/timeOperationLog.py`, зарегистрирован существующими prefix router и SERVER_SINKS. DEBUG candidate/cancel фильтруется общим уровнем; refusal WARNING, fault ERROR. Общий formatter добавляет request_id. Script profile сохраняет свой script sink. Time не добавлен в generation transcript allowlist: это отдельное решение, не часть TL-R. Production bindings TL-B ещё не подключены; регистрация не означает runtime acceptance.
+
 ### Patch/Snapshot и artifacts — target регистрации шага 2 (2026-10-30)
 
 Статус: contract freeze принят 2026-10-30. Маршрут app.artifacts и transcript allowlist реализованы подготовительным срезом D2-3 2026-11-06 (21 logging-тест OK); маршрут app.snapshot этим срезом не реализован. Полный artifact GC emitter/failure correlation и локальный I0 ещё требуют D2-2.
@@ -124,7 +128,7 @@ rejected и не запускает повторное применение; out
 
 - Logger: `app.engine.dag`; domain `engine`, service `dagExecution`, профиль `server`; файл `backend/logs/engine/dagExecution.log`.
 - Producer: единый `backend/app/application/engine/diagnostics/dagLog.py`, owner engine runtime. Координатор формирует итоговые события; причины/поля — `docs/tz_engine_node_context.md` §10.
-- Регистрация маршрута в существующем `_PREFIX_ROUTES`/`route_for` файла `backend/app/core/loggingConfig.py`; тот же JsonLogFormatter и router, без нового handler/собственного файла на ноду. L1–L8 действуют без исключений.
+- Регистрация маршрута в существующем `_PREFIX_ROUTES`/`route_for` файла `backend/app/core/logging/routes.py`; тот же JsonLogFormatter и router, без нового handler/собственного файла на ноду. L1–L8 действуют без исключений.
 - Статус: route, server allowlist и emitter реализованы и проверены 2026-10-31 (DAG-TYPING-1 A2.5). Используются прежние router/JsonLogFormatter, без нового handler. Payload Input/Output/error POJO в лог не копируется; обязательная диагностика отмены доступна без DEBUG. Production handoff runtime — GEN-DAG-1.
 
 ### Существующие консьюмеры
@@ -199,15 +203,23 @@ rejected и не запускает повторное применение; out
 
 ## Код (ориентиры)
 
+Разделение существующего механизма (согласованный план logging-facade-decomposition): `core/loggingConfig.py` сохраняет setup/lifecycle; `core/logging/context.py` владеет единственным request_id ContextVar; `formatting.py` — JSON; `routes.py` — каталог и выбор sink; `fileRouter.py` — пути/ротация; `console.py` — drop-queue и listener. Направление импортов идёт от composition к этим компонентам, без обратных импортов и compatibility re-export. Доменные adapters и generation transcript используют прежний механизм. Перенос не меняет L1–L8.
+
 | Модуль | Роль |
 |---|---|
-| [`loggingConfig.py`](../backend/app/core/loggingConfig.py) | фасад, JSON, handlers по ключу |
+| [`loggingConfig.py`](../backend/app/core/loggingConfig.py) | process setup/lifecycle |
+| [`logging/routes.py`](../backend/app/core/logging/routes.py) | каталог и выбор sink |
+| [`logging/context.py`](../backend/app/core/logging/context.py), [`formatting.py`](../backend/app/core/logging/formatting.py) | единый request_id и JSON formatter |
+| [`logging/fileRouter.py`](../backend/app/core/logging/fileRouter.py) | файловая доставка, пути и ротация |
+| [`logging/console.py`](../backend/app/core/logging/console.py) | drop-queue, фильтр и listener |
 | [`generationLogging.py`](../backend/app/core/generationLogging.py) | транскрипт `bake-{mode}` |
 | [`logMiddleware.py`](../backend/app/core/logMiddleware.py) | `http` / `api` |
 
 ---
 
 ## Связанные документы
+
+- [Разделение logging facade по ответственностям — DONE](../.cursor/plans/logging-facade-decomposition-done.md) — реализовано, предъявлено на приёмку; 105 тестов, те же 6 внешних baseline ошибок, typing чистый. Без legacy re-export и изменения runtime.
 
 | Документ | Консьюмеры / зачем |
 |---|---|

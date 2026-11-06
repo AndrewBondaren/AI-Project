@@ -947,6 +947,8 @@ API-1 ведёт пользователь. GEN-BAKE-READ после решени
 
 ## Решение пользователя: без legacy-компонентов — 2026-11-07
 
+Результат следующего среза: [Water diagnostics / source D1](geo-water-diagnostics-source-d1.md) подготовлен на приёмку; это предложение конкретных Water facts, source/Pack admission и границ отказа/reporting, не разрешение River/Water production cutover. Общие материализаторы и оба режима доставки переводятся целостно, без legacy ветки. Time TL-R реализован отдельно: server route time/operations, 24 logging/generation tests OK; Time transcript registration не добавлялась по согласованному §5, TL-B остаётся отдельным. [Time evidence](time-log-implementation.md#5-отдельная-регистрация-tl-r-после-независимого-среза).
+
 Итог Time: TL-1…TL-3 реализованы в шести новых файлах; 36 unittest OK. Production typing 0 errors; общая область с tests/time содержит 320 ошибок в неизменённом test_time_core.py, поэтому общий typing gate не закрыт. [Evidence и дальнейшие TL-R/TL-B](time-log-implementation.md#evidence-реализации-tl-1tl-3). Runtime wiring не менялся.
 
 Проверка исполнения: Time TL-1…TL-3 разрешён командой пользователя «Делай». Planning/source P1 требует дополнительного freeze concrete water diagnostics и их регистрации: текущий River D1 не определяет замену старого water_issue/source admission. Подробности и воспроизведённый baseline 24 tests / 11 errors / 5 failures — [River D1: проверка допуска P1](geo-river-routing-diagnostics-d1.md#проверка-допуска-planningsource-p1-после-команды-делай). Это независимый от legacy блокер; River D2 и production P2 не запускать до закрытия зависимостей.

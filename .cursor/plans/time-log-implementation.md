@@ -1,6 +1,6 @@
 # TIME-LOG — отдельный implementation-план
 
-Дата ревью: 2026-11-07. Статус: TL-1…TL-3 реализованы по поручению пользователя; общий typing gate имеет существующие ошибки tests/time/test_time_core.py (см. evidence ниже). TL-R/TL-B не реализованы.
+Дата ревью: 2026-11-07. Статус: TL-1…TL-3 и TL-R реализованы по поручению пользователя; общий typing gate имеет существующие ошибки tests/time/test_time_core.py (см. evidence ниже). TL-B не реализован.
 Основание: [Time §47](time-domain.md#47-time-log--обязательное-логирование-через-общий-фасад-проекта-2026-11-03), §48; [logging](../../docs/tz_logging.md).
 
 ## 1. Границы и фактическая база
@@ -95,7 +95,9 @@ rg -n 'TimeOperationLog|app.time.operations' backend/app/application/time backen
 
 ## 5. Отдельная регистрация TL-R (после независимого среза)
 
-Предложить владельцу общего logging минимальный diff: loggingConfig.py — prefix (app.time.operations,time,operations) и SERVER_SINKS (time,operations); docs/tz_logging.md — consumer catalog; tests/test_logging_routes.py — адресные проверки. До этого unknown prefix уходит в core/runtime и не удовлетворяет Time contract. Известная пара без allowlist отбрасывается. Не включать producer в production раньше регистрации.
+**Выполнено, предъявлено на приёмку 2026-11-07.** Добавлены prefix/server allowlist Time и запись каталога; два теста используют настоящий TimeOperationLog и временные файлы. Проверены request_id, DEBUG/INFO filtering, отсутствие Time в core/runtime и transcript, отсутствие дублирования и сохранение script sink. Из backend с TEMP/TMP=backend/.tmp_snapshot_core: `.\.venv\Scripts\python.exe -m unittest tests.test_logging_routes tests.test_generation_logging` — **24 tests OK** (0.934s), включая прежние Artifacts/Physics проверки. Generation allowlist и runtime wiring не менялись. Production TL-B/acceptance не закрыты.
+
+Состав TL-R: loggingConfig.py — prefix (app.time.operations,time,operations) и SERVER_SINKS (time,operations); docs/tz_logging.md — consumer catalog; tests/test_logging_routes.py — адресные проверки. До регистрации unknown prefix уходил в core/runtime; этот пробел закрыт. Подключение producer к production остаётся отдельным TL-B.
 
 Сохранить текущий Artifacts route и transcript allowlist. Time transcript регистрацию не добавлять автоматически: §47 согласует server sink backend/logs/time/operations.log. Никакого нового router/formatter/handler.
 

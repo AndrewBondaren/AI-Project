@@ -11,7 +11,8 @@ from app.dataModel.validation.diagnostics.fieldPathError import ReferenceIssueRe
 from app.application.templateLibrary.packs.lifecycleContracts import MemberRef
 from app.application.templateLibrary.packs.referenceResolver import reference_index
 from app.core.generationLogging import generation_world_log
-from app.core.loggingConfig import _remove_facade_handlers, flush_console_queue, setup_logging
+from app.core.loggingConfig import _remove_facade_handlers, setup_logging
+from app.core.logging.console import flush_console_queue
 from app.ids import runtime_uid
 
 _LOGGER = resolve_module.__name__

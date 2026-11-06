@@ -9,7 +9,8 @@ from app.dataModel.time.diagnostics.events import CurrentLogContext, HistoricalL
 from app.dataModel.time.results.errors import TimeStateUnavailable, TimeUnavailableReason
 from tests.time.test_time_core import publication
 from tests.time.test_time_core import point, custom_settings
-from app.core.loggingConfig import JsonLogFormatter, request_id_var
+from app.core.logging.formatting import JsonLogFormatter
+from app.core.logging.context import request_id_var
 from app.dataModel.time.changes.advance import PrepareAdvance, TimeAdvanceProposal
 from app.dataModel.time.values.duration import TimeDuration
 from app.dataModel.time.values.interval import TimeInterval

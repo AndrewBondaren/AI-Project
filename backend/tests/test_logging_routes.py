@@ -5,6 +5,8 @@ from __future__ import annotations
 import io
 import json
 import logging
+import queue
+import threading
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,11 +18,11 @@ from app.core.generationLogging import generation_world_log
 from app.core.loggingConfig import (
     _remove_facade_handlers,
     ensure_script_logging,
-    flush_console_queue,
-    route_for,
     set_logging_level,
     setup_logging,
 )
+from app.core.logging.routes import route_for
+from app.core.logging.console import flush_console_queue
 
 
 def _flush_facade() -> None:
@@ -39,6 +41,79 @@ def _read_json_msgs(path: Path) -> list[str]:
 
 
 class RouteTableTests(unittest.TestCase):
+    def test_formatter_preserves_factory_extras_and_traceback(self) -> None:
+        import importlib
+        import sys
+        from app.core.logging import formatting
+
+        previous_factory = logging.getLogRecordFactory()
+
+        def factory(*args, **kwargs):
+            record = previous_factory(*args, **kwargs)
+            record.correlation_token = "domain-correlation"
+            return record
+
+        try:
+            logging.setLogRecordFactory(factory)
+            importlib.reload(formatting)
+            try:
+                raise OSError("source failure")
+            except OSError:
+                record = logging.getLogger("factory.probe").makeRecord(
+                    "factory.probe", logging.ERROR, __file__, 1, "failed %s", ("operation",),
+                    sys.exc_info(), extra={"failure": {"code": "io_error"}},
+                )
+            # Another handler may already have formatted this same record.
+            logging.Formatter("%(asctime)s %(message)s").format(record)
+            data = json.loads(formatting.JsonLogFormatter().format(record))
+            self.assertEqual(set(data), {"ts", "level", "logger", "request_id", "msg",
+                                         "correlation_token", "failure", "exc"})
+            self.assertEqual(data["msg"], "failed operation")
+            self.assertEqual(data["correlation_token"], "domain-correlation")
+            self.assertEqual(data["failure"], {"code": "io_error"})
+            self.assertIn("OSError: source failure", data["exc"])
+        finally:
+            logging.setLogRecordFactory(previous_factory)
+            importlib.reload(formatting)
+
+    def test_default_log_root_and_shared_request_context(self) -> None:
+        from app.core.logging.fileRouter import backend_logs_dir, consumer_log_path
+        from app.core.logging.formatting import JsonLogFormatter
+        from app.core.logging.context import request_id_var
+        from app.core import logMiddleware
+
+        expected = Path(__file__).resolve().parents[1] / "logs"
+        self.assertEqual(backend_logs_dir(), expected)
+        self.assertEqual(consumer_log_path("time", "operations"), expected / "time" / "operations.log")
+        before = request_id_var.get()
+        token = logMiddleware.request_id_var.set("shared-request")
+        record = logging.LogRecord("probe", logging.INFO, __file__, 1, "probe", (), None)
+        try:
+            self.assertEqual(json.loads(JsonLogFormatter().format(record))["request_id"], "shared-request")
+        finally:
+            logMiddleware.request_id_var.reset(token)
+        self.assertEqual(json.loads(JsonLogFormatter().format(record))["request_id"], before)
+
+    def test_full_console_queue_drops_without_blocking(self) -> None:
+        from app.core.logging.console import _DropQueueHandler
+
+        pending = queue.Queue(maxsize=1)
+        record = logging.LogRecord("probe", logging.INFO, __file__, 1, "probe", (), None)
+        pending.put_nowait(record)
+        handler = _DropQueueHandler(pending)
+        worker = threading.Thread(target=handler.enqueue, args=(record,), daemon=True)
+        worker.start()
+        worker.join(timeout=1)
+        blocked = worker.is_alive()
+        try:
+            self.assertFalse(blocked)
+            self.assertEqual(pending.qsize(), 1)
+        finally:
+            if blocked:
+                pending.get_nowait()
+                worker.join(timeout=1)
+            handler.close()
+
     def test_http_and_relief_split(self) -> None:
         self.assertEqual(route_for("http"), ("http", "api"))
         self.assertEqual(route_for("http.access"), ("http", "api"))
@@ -101,6 +176,69 @@ class _LogDirCase(unittest.TestCase):
 
 
 class ServerRouteFileTests(_LogDirCase):
+    def test_reconfigure_preserves_transcript_and_stops_old_listener(self) -> None:
+        from app.core.logging import console
+
+        self._install_server()
+        assert console._console_listener is not None
+        old_thread = console._console_listener._thread
+        assert old_thread is not None
+        with generation_world_log("reconfigure", mode="light", root=self.logs / "generation") as transcript:
+            logging.getLogger("app.artifacts").warning("before")
+            self._install_server()
+            self.assertFalse(old_thread.is_alive())
+            logging.getLogger("app.artifacts").warning("after")
+            _flush_facade()
+            self.assertEqual(_read_json_msgs(self.logs / "artifacts" / "artifactLifecycle.log"), ["before", "after"])
+        messages = _read_json_msgs(transcript)
+        self.assertEqual(messages.count("before"), 1)
+        self.assertEqual(messages.count("after"), 1)
+        assert console._console_listener is not None
+        current_thread = console._console_listener._thread
+        assert current_thread is not None
+        _remove_facade_handlers()
+        self.assertFalse(current_thread.is_alive())
+
+    def test_time_emitter_server_route_and_filtering(self) -> None:
+        from app.application.time.logging.timeOperationLog import TimeOperationLog
+        from app.dataModel.time.diagnostics.events import CurrentLogContext
+        from app.core.logging.context import request_id_var
+        from tests.time.test_time_core import publication
+
+        self._install_server()
+        self.assertEqual(route_for("app.time.operations"), ("time", "operations"))
+        producer = TimeOperationLog()
+        context = CurrentLogContext(expected=publication())
+        token = request_id_var.set("time-route")
+        try:
+            with generation_world_log("world", mode="light", root=self.logs / "generation") as transcript:
+                producer.emit_cancelled(context)
+                set_logging_level(logging.INFO)
+                producer.emit_cancelled(context)
+                producer.emit_fault(context)
+            _flush_facade()
+        finally:
+            request_id_var.reset(token)
+        rows = [json.loads(line) for line in (self.logs / "time" / "operations.log").read_text(encoding="utf-8").splitlines()]
+        self.assertEqual([row["activity"] for row in rows], ["operation_cancelled", "operation_failed"])
+        self.assertTrue(all(row["request_id"] == "time-route" for row in rows))
+        self.assertTrue(all(row["publication_id"] == "publication" for row in rows))
+        runtime = self.logs / "core" / "runtime.log"
+        if runtime.exists():
+            self.assertNotIn("app.time.operations", runtime.read_text(encoding="utf-8"))
+        self.assertNotIn("app.time.operations", transcript.read_text(encoding="utf-8"))
+
+    def test_time_emitter_preserves_script_profile(self) -> None:
+        from app.application.time.logging.timeOperationLog import TimeOperationLog
+        from app.dataModel.time.diagnostics.events import CurrentLogContext
+        from tests.time.test_time_core import publication
+
+        self._install_script()
+        TimeOperationLog().emit_fault(CurrentLogContext(expected=publication()))
+        _flush_facade()
+        self.assertEqual(_read_json_msgs(self.logs / "script" / "detailedBake.log"), ["operation_failed"])
+        self.assertFalse((self.logs / "time" / "operations.log").exists())
+
     def test_artifacts_route_preserves_traceback_in_domain_file_and_transcript(self) -> None:
         self._install_server()
         self.assertEqual(route_for("app.artifacts"), ("artifacts", "artifactLifecycle"))

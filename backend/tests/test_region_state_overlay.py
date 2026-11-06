@@ -15,7 +15,8 @@ from app.application.worldData.pack import WorldPackPaths, WorldPackWriter
 from app.application.worldData.pack.read.packReadServices import build_pack_read_services
 from app.application.worldData.pack.read.regionStateOverlay import RegionStateOverlay, overlay_terrain
 from app.application.worldData.regions.regionStateMapping import state_to_row
-from app.core.loggingConfig import setup_logging, _remove_facade_handlers, flush_console_queue
+from app.core.loggingConfig import setup_logging, _remove_facade_handlers
+from app.core.logging.console import flush_console_queue
 from app.dataModel.regions.regionState import RegionState
 from app.dataModel.terrain.worldTerrainRegistry import TerrainKey
 from app.dataModel.worldPack import WorldMapCellWire
