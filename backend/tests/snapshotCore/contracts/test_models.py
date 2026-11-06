@@ -626,12 +626,47 @@ class CoreModelTests(unittest.TestCase):
                         SnapshotLogRecord.model_validate({**record.model_dump(), **changes})
         for activity in ArtifactLogActivity:
             record = ArtifactLogRecord(activity=activity, operation_id="maintenance", world_uid=None,
-                preparation_fingerprint=None, request_fingerprint=None, artifact_hash=None)
+                preparation_fingerprint=None, request_fingerprint=None, artifact_hash=self.artifact.content_hash,
+                gc_failure=self._gc_failure() if activity is ArtifactLogActivity.GC_FAILED else None)
             self.assertEqual(ArtifactLogRecord.model_validate_json(record.model_dump_json()), record)
         for changes in ({"activity": "apply_started"}, {"payload": {}}, {"logger": object()},
                         {"outcome": SnapshotApplyOutcomeKind.COMMITTED}):
             with self.assertRaises(ValidationError):
                 SnapshotLogRecord.model_validate({**values, "activity": SnapshotLogActivity.APPLY_STARTED, **changes})
+
+    def _gc_failure(self):
+        from app.dataModel.artifacts.lifecycle.gc import GcFailureStage
+        return ArtifactLifecycleLog.create_gc_failure(ref=self.artifact, stage=GcFailureStage.DELETE, cause=OSError("IO"))
+
+    def test_gc_failure_contract_and_delivery(self):
+        from app.dataModel.artifacts.lifecycle.gc import ArtifactGcFailure, GcFailureCode, GcFailureStage
+        from app.application.artifacts.encoding.coreManifest import ARTIFACT_CORE_SCHEMA
+        from app.encoding.canonicalCodec import encode, decode
+        failure = self._gc_failure()
+        for value in (failure, GcReport(deleted=(), retained=(), failed=(failure,)),
+                      ArtifactLogRecord(activity=ArtifactLogActivity.GC_FAILED, operation_id="gc",
+                          world_uid=None, preparation_fingerprint=None, request_fingerprint=None,
+                          artifact_hash=self.artifact.content_hash, gc_failure=failure)):
+            self.assertEqual(decode(encode(value, ARTIFACT_CORE_SCHEMA), type(value), ARTIFACT_CORE_SCHEMA), value)
+        for changes in ({"stage": "delete"}, {"code": "unknown"}, {"message": 1},
+                        {"code": GcFailureCode.VALUE_ERROR, "errno": 5}):
+            with self.assertRaises(ValidationError):
+                ArtifactGcFailure.model_validate({**failure.model_dump(), **changes})
+        for changes in ({"deleted": (self.artifact,)}, {"retained": (self.artifact,)},
+                        {"failed": (failure, failure)}):
+            with self.assertRaises(ValidationError):
+                GcReport.model_validate({"deleted": (), "retained": (), "failed": (failure,), **changes})
+        emitter = ArtifactLifecycleLog()
+        with patch("app.application.artifacts.logging.artifactLog._LOGGER.log") as sink:
+            with self.assertRaises(ValueError):
+                emitter.emit_gc_failure(operation_id="gc", failure=failure, cause=ValueError("IO"))
+            sink.assert_not_called()
+        with patch("app.application.artifacts.logging.artifactLog._LOGGER.log", side_effect=RuntimeError("sink")) as sink:
+            emitter.emit_gc_failure(operation_id="gc", failure=failure, cause=OSError("IO"))
+            sink.assert_called_once()
+        for stage in GcFailureStage:
+            for cause in (OSError(5, "IO"), ValueError("invalid")):
+                self.assertIs(emitter.create_gc_failure(ref=self.artifact, stage=stage, cause=cause).stage, stage)
 
     def test_cancellation_reason_is_strict_and_closed(self) -> None:
         for reason in ("requested", "unknown", None, 1, target_issue("cancelled")):
@@ -653,9 +688,10 @@ class CoreModelTests(unittest.TestCase):
             PublicationOwner(lease=lease), PublicationBusy(record=ready), PublicationTerminal(record=terminal),
             OperationHolder(lease=lease), ArtifactRetentionHolder(artifact=self.artifact), SnapshotHolder(snapshot=self.player),
             VerifiedArtifactRef(ref=self.artifact, holder=SnapshotHolder(snapshot=self.world)),
-            GcReport(deleted=(), retained=(self.artifact,), failed=(diagnostic,)),
+            GcReport(deleted=(), retained=(), failed=(self._gc_failure(),)),
             ArtifactLogRecord(activity=ArtifactLogActivity.GC_FAILED, operation_id="gc", world_uid=None,
-                              preparation_fingerprint=None, request_fingerprint=None, artifact_hash=None),
+                              preparation_fingerprint=None, request_fingerprint=None, artifact_hash=self.artifact.content_hash,
+                              gc_failure=self._gc_failure()),
             SnapshotLogRecord(activity=SnapshotLogActivity.APPLY_STARTED, operation_id="op", world_uid="world",
                 request_fingerprint=None, timeline_id=None, snapshot_id=None, section_key=None, outcome=None),
             GameplayStarted(operation_id="op", request_fingerprint="b" * 64,
@@ -665,7 +701,7 @@ class CoreModelTests(unittest.TestCase):
         )
         for record in records:
             with self.subTest(model=type(record).__name__):
-                if record is refusal or isinstance(record, GcReport):
+                if record is refusal:
                     self.assertEqual(diagnostic_roundtrip(record), record)
                 else:
                     self.assertEqual(type(record).model_validate_json(record.model_dump_json()), record)
@@ -736,9 +772,10 @@ class CoreModelTests(unittest.TestCase):
                   ArtifactLogActivity.GC_FAILED: logging.ERROR}
         for activity in ArtifactLogActivity:
             event = ArtifactLogRecord(activity=activity, operation_id="maintenance", world_uid=None,
-                preparation_fingerprint="b" * 64, request_fingerprint=None, artifact_hash="a" * 64)
+                preparation_fingerprint="b" * 64, request_fingerprint=None, artifact_hash=self.artifact.content_hash,
+                gc_failure=self._gc_failure() if activity is ArtifactLogActivity.GC_FAILED else None)
             with self.subTest(activity=activity), self.assertLogs("app.artifacts", level="DEBUG") as captured:
-                ArtifactLifecycleLog().emit(event)
+                ArtifactLifecycleLog().emit(event, cause=OSError("IO") if activity is ArtifactLogActivity.GC_FAILED else None)
             self.assertEqual(len(captured.records), 1)
             record = captured.records[0]
             self.assertEqual(record.levelno, levels[activity])
@@ -746,6 +783,8 @@ class CoreModelTests(unittest.TestCase):
             self.assertIsNone(fields["world_uid"])
             self.assertIsNone(fields["request_fingerprint"])
             for name, value in event.model_dump(mode="json").items():
+                if name == "gc_failure" and value is not None:
+                    value.pop("message")
                 self.assertEqual(fields[name], value)
 
     def test_terminal_retry_event_and_unknown_outcome_never_add_a_commit_event(self) -> None:
@@ -786,7 +825,7 @@ class CoreModelTests(unittest.TestCase):
     def test_emitters_reject_wrong_models_and_untyped_payloads_before_logging(self) -> None:
         event = SnapshotLogRecord(activity=SnapshotLogActivity.APPLY_STARTED, operation_id="op", world_uid="world",
             request_fingerprint=None, timeline_id=None, snapshot_id=None, section_key=None, outcome=None)
-        artifact = ArtifactLogRecord(activity=ArtifactLogActivity.GC_FAILED, operation_id="maintenance", world_uid=None,
+        artifact = ArtifactLogRecord(activity=ArtifactLogActivity.GC_DELETED, operation_id="maintenance", world_uid=None,
             preparation_fingerprint=None, request_fingerprint=None, artifact_hash=None)
         for emitter, wrong, target in (
             (SnapshotLifecycleLog(), artifact, "app.application.worldSnapshot.logging.snapshotLog._LOGGER.log"),

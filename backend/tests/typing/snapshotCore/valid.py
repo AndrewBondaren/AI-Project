@@ -325,3 +325,10 @@ from app.dataModel.artifacts.lifecycle.operation.record import OperationCancella
 
 def valid_cancellation_reason() -> OperationCancellationReason:
     return OperationCancelled(operation_id="op", reason=OperationCancellationReason.REQUESTED).reason
+
+
+from app.dataModel.artifacts.lifecycle.gc import ArtifactGcFailure
+
+
+def valid_gc_failure(failure: ArtifactGcFailure) -> GcReport:
+    return GcReport(deleted=(), retained=(), failed=(failure,))

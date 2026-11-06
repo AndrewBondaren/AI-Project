@@ -97,7 +97,7 @@ is_runtime_river_context требует mode=RUNTIME и not validate_only. В pl
 
 Текущий PlanDiagnostic.issue = SerializeAsAny[FieldPathError[Any]] не принимает RiverRouteDiagnostic. Изолированная замена конструктора в emitter недостаточна. Предлагается согласовать с владельцем Planning/ERROR-CONTRACTS **параметризацию существующего PlanDiagnostic по конкретной модели причины**, без обратного импорта Hydrology в Planning:
 
-Точный вариант на согласование (альтернатив в реализации D2 нет):
+Точный вариант на согласование. **Проверка §10 выявила конфликт с frozen source schema; вариант не готов к реализации D2.**
 
 ```python
 # dataModel/planning/diagnostics/planDiagnostic.py
@@ -209,6 +209,10 @@ Reuse RiverRouteDiagnostic предполагает strict revalidation, extra=f
 
 ## 9. Envelope scope, handoff и решения владельцев
 
+**Обязательное ограничение пользователя: новые typed errors не переписывают текущую runtime-логику.** Routing принимает решение до публикации диагностики; carrier описывает уже выбранный исход и не становится новым управляющим входом. Сохранить условия запуска fallback, выбор receiver, принятые routes/specs/drainage, область отклонения intent и продолжение обработки остальных intents. Нельзя выводить новый отказ всей операции из наличия ERROR в envelope, повторять поиск из-за diagnostic reason или менять runtime/validate_only policy ради нового типа ошибки. Успешный fallback сохраняет существующий успешный runtime-исход.
+
+Done для шагов 4–7: на одинаковых входах сравнить routing outcome до публикации с результатом после миграции — accepted/rejected intents, маршрут, receiver, specs и drainage совпадают. Существующий TypeError при конструировании FieldPathError — дефект публикации, который устраняется; он не является бизнес-поведением, которое надо сохранять. Изменения общей reporting policy не входят в этот D2. Если существующий sink нельзя подключить без изменения runtime-исхода, handoff остаётся заблокированным и предъявляется отдельно; нельзя подгонять runtime под carrier.
+
 **Envelope-only D2:** создание typed facts/carrier, callback collector, PlanBuildResult, штатная публикация PlanningService/FineRiverPublicationJob, fingerprint, SURFACE_MANIFEST restore. ERROR блокирует соответствующий intent; наличие ERROR не делает весь envelope невалидным. FALLBACK — continuation с принятым маршрутом; исходный reason сохраняется и не превращается в blocking issue. Field issue остаётся отдельной категорией: operational ERROR нельзя добавлять в tuple FieldPathError.
 
 **Отдельный downstream handoff, не шаг D2:** `backend/app/application/worldData/planning/composition/surfacePlanningAssembler.py::report_surface_diagnostics`, runtime/import `riverRouteDiagnostics.py::emit_river_diagnostic`. Владельцы reporting/ERROR-CONTRACTS должны назвать существующий typed sink operational rejection и отдельную доставку continuation. До решения не менять resolve_ctx.errors, не придумывать path/message и не выпускать river carrier в неподдержанный production consumer. При необходимости production выпуска envelope-only scope расширяется новым согласованным D1, а не скрытым adapter в этом срезе.
@@ -219,7 +223,39 @@ Reuse RiverRouteDiagnostic предполагает strict revalidation, extra=f
 |---|---|---|---|
 | O1 | Planning + ERROR-CONTRACTS | Точный generic carrier/admission §4 и operational reuse без checked path | **Не согласовано**; блокирует шаг 1 и весь D2 |
 | O2 | Surface codec + source/Pack | IDs 325–328; неизменные binding 105, bytes и source lock; совместимость проверить до emitter cutover | **Не согласовано**; блокирует D2; несовместимость требует возврата D1 владельцу, не регенерации locks |
-| O3 | Hydrology + заказчик среза | Envelope-only boundary и сохранение ERROR/continuation; принять этот D1 для реализации | **Не согласовано**; блокирует D2 |
-| O4 | Reporting + ERROR-CONTRACTS | Назвать существующие typed sinks и согласовать отдельную карту runtime/import migration | **Решение отсутствует**; блокирует production prepare_surface/prepare_geo handoff, не выдаётся за выполненную часть envelope D2 |
+| O3 | Hydrology + заказчик среза | Envelope-only boundary и сохранение ERROR/continuation | **Scope принят пользователем**; не означает принятия O1/O2 или разрешения D2 |
+| O4 | Reporting + ERROR-CONTRACTS | Доставка через существующие typed sinks с сохранением текущих runtime-исходов; без пересмотра runtime policy | **Неизменность runtime задана пользователем**; совместимый sink пока не определён, production handoff заблокирован |
 
 Имена конкретных ответственных и их решения в доступных материалах не подтверждены; роли не означают полученного approval. Текущая работа заканчивается предъявлением D1. Код, codec bindings, locks и golden в этой задаче не изменяются.
+
+## 10. Проверка соседних контрактов и решения пользователя — 2026-11-06
+
+Этот раздел уточняет статусы §9. **O3: пользователь принял envelope-only scope**; это не принятие O1/O2 и не разрешение D2. **O4:** пользователь подчеркнул, что успешный fallback — важный критерий runtime. Принятый redirect с land specs обязан сохранять маршрут и typed причину FALLBACK/continuation; он не добавляется в blocking errors и сам по себе не вызывает отказ runtime операции. Неуспешный поиск остаётся ERROR. Выбор существующего reporting sink остаётся открытым; suppression diagnostics не является решением.
+
+**O1 согласуется семантически, но не подтверждён технически.** ERROR-CONTRACTS допускает owning-domain operational facts и требует concrete-class revalidation без обратного импорта Hydrology. Однако принятое admission FieldPathError использует wrap-validator базы; предлагаемый PlainValidator alias — дополнительное изменение Planning admission, не автоматически принятое соседним контрактом. PlanningService включает diagnostics в fingerprint и повторно валидирует envelope, поэтому проверки одного emitter недостаточно.
+
+**O2 проверен на текущем checkout:** SURFACE_MANIFEST max ID=324; IDs 325–328 свободны. CanonicalCodec использует точный type(value), восстанавливает вложенные records до проверки владельца и повторно валидирует модель при encode. Это поддерживает concrete delivery, но ещё не доказывает round-trip предложенного carrier.
+
+Найден конкретный конфликт: sourceSchema._snapshot() хеширует repr(field.annotation) и metadata, начиная с PlanEnvelope[CanonicalOpenWaterSource]. Замена PlanDiagnostic.issue на TypeVar меняет shape 105 даже при прежних wire fields. Замена envelope diagnostics на Annotated alias также меняет frozen shape. Поэтому обещание неизменного source lock нельзя совместить с §4 без дополнительного решения владельца. Не регенерировать locks и не начинать D2 по этой спецификации.
+
+Более того, **baseline уже падает**: require_source_schema_v1() → CanonicalEncodingError: open-water source v1 closure drift. Дополнительные closure types: FieldPathError[Any], FieldSegment, IndexSegment, KeySegment, ModelIdentity, ValidatedFieldPath, VariantSegment. Отсутствуют прежние Facing, FieldPathError, ReferenceIssueContext, ReferenceIssueReason, RuntimeIssueContext. Из присутствующих registered types изменён shape 105 (PlanDiagnostic). Это существующий drift checkout, не результат River D2.
+
+Проверка замены аннотации на TypeVar выполнялась только в памяти отдельного Python-процесса с восстановлением поля: shape 105 изменился. Полноценная generic-модель, bytes compatibility и её round-trip этим экспериментом не проверены. Код не менялся.
+
+Повторить baseline из backend: `.\.venv\Scripts\python -c "from app.application.worldData.generators.hydrology.encoding.sourceSchema import require_source_schema_v1; require_source_schema_v1()"`.
+
+**Конкретное оставшееся решение O1/O2:** владельцам определить принятый совместимый Planning/source контракт с учётом существующего drift и нового изменения shape. Если требуется изменение frozen source schema, отдельно согласовать расширение scope. Свободные IDs не снимают этот блокер. Новая общая инфраструктура здесь не проектируется; шаги §8 остаются проектом до разрешения противоречия.
+
+
+## Инвариант миграции диагностики: runtime не меняется (2026-11-06)
+
+**Прямое требование пользователя, обязательное для error/logging треков этого домена:** новые типы ошибок, доменные адаптеры, collectors, события и logging integrations не должны переписывать текущую логику runtime. Условия fallback и продолжения обработки не меняются.
+
+- Сохраняются существующие условия допустимости default/None, fallback и выбора альтернативного результата, продолжения batch/независимых проверок, отказа и распространения исключения. Нельзя ужесточать или ослаблять их из-за нового типа диагностики, severity, наличия лога или удобства нового адаптера.
+- Сохраняются вычисленные значения/UID, порядок и условия доменных действий, права на запись, commit/rollback, cancellation и retry. Диагностика отражает фактический исход; не становится новой причиной выбора исхода.
+- В POJO/import-цепочках переиспользуются ResolveContext/ResolveReport: blocking issues и continuations не смешиваются; collect_only меняет только эмиссию, а validate_only сохраняет принятую политику соответствующего режима. Разрешённое runtime-продолжение не превращается в blocking error после миграции.
+- До переключения producer закрепить characterization текущих сценариев: обычный успех, штатный default/None, разрешённый fallback/continuation, blocking отказ и независимая последующая обработка. После переключения сопоставить значения, эффекты и outcome; допустимы только согласованные изменения формы/доставки диагностики. Изменение диагностики в fingerprint проверяется отдельно и не оправдывает изменение доменного payload/маршрута.
+- Исправление сломанного конструктора диагностики должно восстановить уже предусмотренную ветвь, а не сохранять случайный TypeError как доменную политику. Где текущая поломка мешает получить результат, evidence берётся из утверждённого доменного контракта, фактов до сбоя и адресных тестов; новый fallback не придумывается.
+- Если для реализации требуется изменить runtime-условие, это **отдельный явно согласуемый поведенческий срез**: зафиксировать расхождение и остановить зависимую правку. Не вносить его попутно под названием error migration или logging. Отрицательная проверка нового диагностического контракта не расширяет область перехвата операционных ошибок.
+
+Приёмка каждого затронутого шага включает evidence сохранения runtime-семантики. Это ограничение миграции ошибок и логов, а не запрет ранее согласованной самостоятельной функциональной разработки домена. Статус реализации и пользовательская приёмка этим пунктом не изменяются.

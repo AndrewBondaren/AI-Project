@@ -1472,3 +1472,76 @@ Verification из backend:
 **P3.21 / P2 corrective follow-up (2026-11-05):** воспроизведён int-key -1 через обе публичные input operations; строковый ключ "-1" проверен отдельно. Минимальная правка _read_full_input: invalid_key → existing WireShapeIssue на containing object, extra_forbidden сохраняет точный строковый loc. Новые регрессии проверяют exact refusal/cause, отсутствие mutation/continuation и policy emit/collect_only; mixed invalid gravity + int key также отказывает без fallback. Новые tests 2/2 PASS; полный профиль §P3.21 **71/71 PASS** (69+2). Статус P2 — FIXED candidate, требуется независимое повторное ревью, не приёмка D2. [Отдельный отчёт, diff и evidence](./ps-error-1-d2-p2-fix-report.md); [исходное независимое ревью](./ps-error-1-d2-review.md) сохранено. Storage/I0/DAG bindings не начаты.
 
 **P3.21 · независимая проверка P2 от 2026-11-06.** [P2 — FIXED, результаты публичных вызовов и проверок](./ps-error-1-d2-review.md#повторная-проверка-p2--2026-11-06). Профиль 71/71. Пользовательская приёмка D2 остаётся открытой.
+
+### P3.22 Подготовительный I0: отдельный Physics sink (2026-11-06)
+
+**Согласованный scope, не реализация и не приёмка:** следующий срез проверяет Physics input → reporting → реальные файловые sink/transcript без production activation. PS-ERROR D2 и P2 не реализовывать повторно; пользовательскую приёмку D2 не закрывать. Пользователь подтвердил отдельный файл Physics и отдельное DAG lifecycle event. Прежний reuse jsonValidation channel в P3.21 описывает текущий код, но не целевой маршрут этого среза. Точная техническая карта ниже — предложение реализации в согласованных границах; эта запись код не меняет.
+
+**Settings остаются AS-IS:** сохранить WorldPhysicsSettings и STANDARD_GRAVITY_M_S2, не заменять authored settings безусловной константой. Требование — настройки принадлежат миру и предоставляются DAG через открытый typed contract. Не считать это доказательством уже выполненного world JSON → POJO → DAG binding. В [ТЗ Physics §8](../../docs/tz_physics.md#8-lod-grade-и-стоимость-вычислений) упомянуты typed settings, но exact world JSON contract не описан; P3.13–P3.14 содержат ownership и storage proposals. Их cutover, переработка POJO, SQL и синхронизация полного world wire остаются вне этого среза.
+
+#### Evidence и граница caller
+
+- [input.py](../../backend/app/application/physics/settings/input.py): публичные validate_world_physics_settings_input / resolve_world_physics_settings_input_runtime; production caller этих операций в backend/app поиском не найден. Проверочный caller следующего среза — интеграционный тест публичной операции с настоящими logging handlers, а не фиктивная production DAG-нода.
+- [diagnostics.py](../../backend/app/application/jsonValidation/resolution/diagnostics.py): ResolveContext и существующая policy validate_only/collect_only; report_issues дедуплицирует входной batch, но не обещает межвызовный dedup отказов. [ResolveReport](../../backend/app/application/jsonValidation/types.py) уже хранит typed facts и возвращает признак новой continuation из record_continuation.
+- [loggingConfig.py](../../backend/app/core/loggingConfig.py): общий facade, route_for, SERVER_SINKS, JsonLogFormatter, request_id_var. [generationLogging.py](../../backend/app/core/generationLogging.py): world-scoped transcript через allowlist. Это reuse инфраструктуры, не основание расширять jsonValidation/resolve Physics-правилами.
+
+#### Минимальная файловая карта будущей реализации
+
+| Файл | Изменение / ограничение |
+|---|---|
+| `backend/app/application/physics/settings/input.py` | Перевести доставку input facts на Physics-owned reporting/emitter, сохранив public signatures, outcomes, report facts, selected default и input policies D2. Не оставить старую jsonValidation эмиссию параллельно новой. |
+| `backend/app/application/physics/settings/reporting.py` — новый | Узкий adapter для этих двух input operations: запись в существующий ResolveReport и единственная Physics эмиссия. Reuse admission/continuation identity; не создавать второй collector, глобальный suppression или универсальный error framework. Конкретный logger предложен `app.application.physics.settings`; никаких собственных handlers. |
+| `backend/app/core/loggingConfig.py` | Предложенный route `app.application.physics` → `(physics, physicsLog)`, соответствующий SERVER_SINKS entry; результат `backend/logs/physics/physicsLog.log`. Reuse formatter/router. |
+| `backend/app/core/generationLogging.py` | Добавить Physics prefix в существующий allowlist. Transcript возникает только внутри активного world scope, не открывается самой input operation. |
+| `backend/tests/physics/test_settings_policy.py` | Адаптировать assertions канала; сохранить D2 matrix и regression P2. |
+| `backend/tests/physics/test_settings_logging.py` — новый | Интеграционная проверка публичных input operations через реальные facade и transcript handlers во временном каталоге. |
+| `backend/tests/test_logging_routes.py`, `backend/tests/test_generation_logging.py` | Проверить новый route, server sink и world-scoped transcript; сохранить existing routes. |
+| `docs/tz_logging.md` | Отразить Physics consumer/sink и ownership, сверившись с существующим каталогом. |
+
+`jsonValidation/resolution/diagnostics.py` и `jsonValidation/types.py` — reuse, не место Physics event policy. Предложенная граница: Physics adapter записывает blocking facts без shared emit; для continuation использует существующий boolean record_continuation и emit только при новой причине. validate_only/collect_only подавляют emit, но не сбор facts. Не менять чужие callers/shared policy ради Physics. Не вводить новую межвызовную dedup-семантику blocking отказов под видом сохранения D2.
+
+**События:** fallback — один WARNING с concrete F01 и выбранным default из typed F07; structural refusal — по одной записи на distinct причину текущего вызова; missing/valid/explicit zero — без warning; validation и collect_only — без emit. Adapter/aggregate consumer не переиздаёт уже доставленные причины. Поля события — безопасная явная проекция typed facts, без raw input и обратного разбора message. Admission failure и boundary fault не превращать в input fallback; новые глобальные severity/retry/skip policies для них не вводить.
+
+**Correlation:** в подготовительном тесте проверить установленный request_id, отсутствие утечки контекста между вызовами и изоляцию transcript по world scope. World scope фильтра не выдавать за execution correlation. Реальная [ExecutionIdentity](../../backend/app/dataModel/engine/dag/identity.py) и её связь с Physics событиями — будущий caller binding; сейчас execution IDs не выдумывать. [ExecutionEvents](../../backend/app/application/engine/diagnostics/executionEvents.py) и [dagLog.emit](../../backend/app/application/engine/diagnostics/dagLog.py) остаются владельцами lifecycle metadata; DAG event — другой факт, не повтор root cause. Полный production I0 требует совместного trace реального caller и проверяемой execution correlation.
+
+#### Внешние зависимости — не включать автоматически
+
+- **Execution:** P3.21, открытые public DAG bindings; настоящий caller, typed adapter и контекстная реакция на результат ещё не выбраны. Refusal не означает завершение сессии; отсутствие disconnect требует отдельного E2E. Существующий execution checkpoint не заменяет принятие состояния мира.
+- **Storage:** P3.14 S2 — proposal world storage projection. [prepare.py](../../backend/app/application/physics/settings/prepare.py) сравнивает переданный current, не читает authoritative state и не выполняет CAS. REVISION_MISMATCH не доказывает freshness.
+- **World:** P3.13 ownership, P3.14 callers/wire и S3 public read/capture. [WorldService](../../backend/app/application/worldData/registries/worldService.py), [worldSlices](../../backend/app/application/jsonValidation/worldSlices.py), [World](../../backend/app/db/models/world.py) — существующие владельцы интеграционных участков, но не готовые Physics bindings. Exact JSON placement/pinning и миграция legacy g требуют отдельного среза.
+- **Snapshot:** P3.14 S3 pinned view/publication и внешний acceptance contract. [IWorldSnapshotApply](../../backend/app/application/worldSnapshot/contracts/applyPort.py) принимает PatchSet; [SnapshotApplyResult/CommitRefs](../../backend/app/dataModel/worldSnapshot/results/apply.py) описывают publication outcome. Settings PreparedChange не является PatchSet или commit receipt; adapter/coherence/CAS остаются отдельно.
+
+#### Команды и Done только этого среза
+
+Из корня, повторить evidence callers перед реализацией:
+
+```powershell
+rg -n 'validate_world_physics_settings_input|resolve_world_physics_settings_input_runtime' backend/app
+rg -n 'report_issues|report_continuation|record_continuation' backend/app/application/physics backend/app/application/jsonValidation
+rg -n 'generation_world_log\(' backend/app
+```
+
+Из backend, после создания нового тестового модуля:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest tests.physics.test_settings_policy tests.physics.test_settings_logging tests.test_logging_routes tests.test_generation_logging
+.\.venv\Scripts\python.exe -m unittest tests.physics.test_settings_core tests.physics.test_settings_typing tests.errorContracts.test_import_issues tests.errorContracts.test_resolve_issues
+```
+
+Это будущие команды проверки, не выполненный PASS этой документальной записи. Профиль D2 из P3.21 сохраняется как baseline, новый тест не заменяет его evidence.
+
+**Done подготовительного среза:** реальные файлы подтверждают отдельный Physics sink, применимый transcript, request correlation, отсутствие Physics warning в jsonValidation sink и повторного producer emit; typed values/issues/diagnostics одинаковы в emit/collect_only; validation тихая, fallback default сохранён, P2 не регрессировал. Одна эмиссия может доставляться в domain sink и transcript: это не дублирование причины и не обещание exactly-once доставки при crash/retry. Tests используют настоящие handlers и scoped cleanup, не один mock logger. Кодовая реализация среза пока TODO. Production I0, activation, storage/World/Snapshot integration и пользовательская приёмка D2 этим Done не закрываются.
+
+
+## Инвариант миграции диагностики: runtime не меняется (2026-11-06)
+
+**Прямое требование пользователя, обязательное для error/logging треков этого домена:** новые типы ошибок, доменные адаптеры, collectors, события и logging integrations не должны переписывать текущую логику runtime. Условия fallback и продолжения обработки не меняются.
+
+- Сохраняются существующие условия допустимости default/None, fallback и выбора альтернативного результата, продолжения batch/независимых проверок, отказа и распространения исключения. Нельзя ужесточать или ослаблять их из-за нового типа диагностики, severity, наличия лога или удобства нового адаптера.
+- Сохраняются вычисленные значения/UID, порядок и условия доменных действий, права на запись, commit/rollback, cancellation и retry. Диагностика отражает фактический исход; не становится новой причиной выбора исхода.
+- В POJO/import-цепочках переиспользуются ResolveContext/ResolveReport: blocking issues и continuations не смешиваются; collect_only меняет только эмиссию, а validate_only сохраняет принятую политику соответствующего режима. Разрешённое runtime-продолжение не превращается в blocking error после миграции.
+- До переключения producer закрепить characterization текущих сценариев: обычный успех, штатный default/None, разрешённый fallback/continuation, blocking отказ и независимая последующая обработка. После переключения сопоставить значения, эффекты и outcome; допустимы только согласованные изменения формы/доставки диагностики. Изменение диагностики в fingerprint проверяется отдельно и не оправдывает изменение доменного payload/маршрута.
+- Исправление сломанного конструктора диагностики должно восстановить уже предусмотренную ветвь, а не сохранять случайный TypeError как доменную политику. Где текущая поломка мешает получить результат, evidence берётся из утверждённого доменного контракта, фактов до сбоя и адресных тестов; новый fallback не придумывается.
+- Если для реализации требуется изменить runtime-условие, это **отдельный явно согласуемый поведенческий срез**: зафиксировать расхождение и остановить зависимую правку. Не вносить его попутно под названием error migration или logging. Отрицательная проверка нового диагностического контракта не расширяет область перехвата операционных ошибок.
+
+Приёмка каждого затронутого шага включает evidence сохранения runtime-семантики. Это ограничение миграции ошибок и логов, а не запрет ранее согласованной самостоятельной функциональной разработки домена. Статус реализации и пользовательская приёмка этим пунктом не изменяются.

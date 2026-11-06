@@ -145,6 +145,7 @@ class ArtifactStagingTests(unittest.TestCase):
         self.operations.read.return_value = None
         self.ledger = OperationLedger(self.operations, self.state)
         self.log = create_autospec(ArtifactLifecycleLog, instance=True)
+        self.log.create_gc_failure.side_effect = ArtifactLifecycleLog.create_gc_failure
         self.gc = ArtifactGarbageCollector(self.registry, self.state, self.state, self.log)
         self.service = ArtifactStagingService(self.registry, self.state, self.state, self.state,
                                              self.gc, self.ledger, self.log)
@@ -283,6 +284,12 @@ class ArtifactStagingTests(unittest.TestCase):
                     if isinstance(error, OSError):
                         report = await self.gc.collect("op", (ref,))
                         self.assertEqual(len(report.failed), 1)
+                        from app.dataModel.artifacts.lifecycle.gc import GcFailureStage, GcFailureCode
+                        self.assertEqual(report.failed[0].ref, ref)
+                        self.assertIs(report.failed[0].stage, GcFailureStage.DELETE)
+                        self.assertIs(report.failed[0].code, GcFailureCode.IO_ERROR)
+                        self.assertEqual(report.failed[0].message, str(error))
+                        self.log.emit_gc_failure.assert_called_once_with(operation_id="op", failure=report.failed[0], cause=error)
                         self.assertEqual(report.deleted, ())
                     else:
                         with self.assertRaises(type(error)):
@@ -290,6 +297,61 @@ class ArtifactStagingTests(unittest.TestCase):
                 self.assertIn(ref, self.state.sealed)
             with self.assertRaises(ValueError):
                 await self.gc.collect("op", (ref, ref))
+            self.assertEqual((await self.gc.collect("op", (ref,))).deleted, (ref,))
+        run_async(check())
+
+    def test_gc_failure_stages_and_event_admission(self):
+        from app.dataModel.artifacts.lifecycle.gc import GcFailureStage
+
+        async def check():
+            ref = await self.stager.stage(self.state.lease, b"prepared")
+            await self.service.cancel("op", 1)
+            for owner, method, stage in (
+                (self.registry, "validate", GcFailureStage.VALIDATE),
+                (self.state, "read", GcFailureStage.CATALOG_READ),
+                (self.state, "holders", GcFailureStage.HOLDERS_READ),
+                (self.registry, "delete", GcFailureStage.DELETE),
+                (self.state, "mark_deleted", GcFailureStage.MARK_DELETED),
+            ):
+                with self.subTest(stage=stage), patch.object(owner, method, side_effect=OSError(5, "fault")):
+                    report = await self.gc.collect("gc", (ref,))
+                    self.assertIs(report.failed[0].stage, stage)
+                    self.assertEqual(report.failed[0].errno, 5)
+                    self.assertEqual(report.deleted, ())
+            for entering in (True, False):
+                @asynccontextmanager
+                async def guard(candidate):
+                    if entering:
+                        raise ValueError("enter")
+                    yield
+                    raise ValueError("exit")
+                with patch.object(self.state, "guard", guard):
+                    report = await self.gc.collect("gc", (ref,))
+                    self.assertIs(report.failed[0].stage,
+                                  GcFailureStage.GUARD_ENTER if entering else GcFailureStage.GUARD_EXIT)
+                    self.assertEqual(report.deleted, ())
+            @asynccontextmanager
+            async def unknown_exit(candidate):
+                try:
+                    yield
+                finally:
+                    raise UnknownCommitOutcome("exit unknown")
+            with patch.object(self.state, "guard", unknown_exit), patch.object(self.registry, "delete", side_effect=OSError("body")):
+                with self.assertRaises(UnknownCommitOutcome):
+                    await self.gc.collect("gc", (ref,))
+            self.log.reset_mock()
+            with patch.object(self.registry, "delete", new_callable=AsyncMock) as delete:
+                self.log.emit.side_effect = ValueError("event contract")
+                with self.assertRaisesRegex(ValueError, "event contract"):
+                    await self.gc.collect("gc", (ref,))
+                delete.assert_awaited_once()
+                self.log.emit_gc_failure.assert_not_called()
+            self.log.emit.side_effect = None
+            with patch.object(self.registry, "delete", side_effect=OSError("body")):
+                self.log.emit_gc_failure.side_effect = ValueError("failure contract")
+                with self.assertRaisesRegex(ValueError, "failure contract"):
+                    await self.gc.collect("gc", (ref,))
+                self.log.emit_gc_failure.assert_called_once()
         run_async(check())
 
     def test_terminal_recovery_does_not_resume_or_republish(self):

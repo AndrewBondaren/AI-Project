@@ -7,10 +7,9 @@ from app.application.artifacts.contracts.holderPort import IArtifactHolders
 from app.application.artifacts.logging.artifactLog import ArtifactLifecycleLog
 from app.application.publication.errors import PublicationInfrastructureError
 from app.dataModel.artifacts.references import ArtifactRef
-from app.dataModel.artifacts.lifecycle.gc import GcReport
+from app.dataModel.artifacts.lifecycle.gc import GcReport, ArtifactGcFailure, GcFailureStage
 from app.dataModel.artifacts.events import ArtifactLogRecord, ArtifactLogActivity
 from app.dataModel.identity.uid import EntityUid
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 
 class ArtifactGarbageCollector:
@@ -25,27 +24,46 @@ class ArtifactGarbageCollector:
             raise ValueError("duplicate GC candidates")
         deleted: list[ArtifactRef] = []
         retained: list[ArtifactRef] = []
-        failed: list[FieldPathError] = []
+        failed: list[ArtifactGcFailure] = []
         for ref in candidates:
+            held = False
+            stage = GcFailureStage.VALIDATE
+            body_error: OSError | ValueError | None = None
+            body_stage = stage
             try:
                 self._registry.validate(ref)
+                stage = GcFailureStage.GUARD_ENTER
                 async with self._catalog.guard(ref):
-                    actual = await self._catalog.read(ref)
-                    if actual is None:
-                        raise ValueError("unknown artifact catalog identity")
-                    if actual != ref:
-                        raise PublicationInfrastructureError("catalog identity differs from GC candidate")
-                    if await self._holders.holders(ref):
-                        retained.append(ref)
-                        continue
-                    # Storage must exclude surviving claims when there are no holds.
-                    await self._registry.delete(ref)
-                    await self._catalog.mark_deleted(ref)
-                    deleted.append(ref)
-                self._emit(operation_id, ref, ArtifactLogActivity.GC_DELETED)
+                    try:
+                        stage = GcFailureStage.CATALOG_READ
+                        actual = await self._catalog.read(ref)
+                        if actual is None:
+                            raise ValueError("unknown artifact catalog identity")
+                        if actual != ref:
+                            raise PublicationInfrastructureError("catalog identity differs from GC candidate")
+                        stage = GcFailureStage.HOLDERS_READ
+                        held = bool(await self._holders.holders(ref))
+                        if not held:
+                            stage = GcFailureStage.DELETE
+                            await self._registry.delete(ref)
+                            stage = GcFailureStage.MARK_DELETED
+                            await self._catalog.mark_deleted(ref)
+                    except (OSError, ValueError) as exc:
+                        body_error, body_stage = exc, stage
+                        raise
+                    finally:
+                        stage = GcFailureStage.GUARD_EXIT
             except (OSError, ValueError) as exc:
-                failed.append(FieldPathError(path=(), message=str(exc)))
-                self._emit(operation_id, ref, ArtifactLogActivity.GC_FAILED)
+                failure = self._log.create_gc_failure(ref=ref,
+                    stage=body_stage if exc is body_error else stage, cause=exc)
+                failed.append(failure)
+                self._log.emit_gc_failure(operation_id=operation_id, failure=failure, cause=exc)
+            else:
+                if held:
+                    retained.append(ref)
+                else:
+                    deleted.append(ref)
+                    self._emit(operation_id, ref, ArtifactLogActivity.GC_DELETED)
         return GcReport(deleted=tuple(deleted), retained=tuple(retained), failed=tuple(failed))
 
     def _emit(self, operation_id: EntityUid, ref: ArtifactRef, activity: ArtifactLogActivity) -> None:

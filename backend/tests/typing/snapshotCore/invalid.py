@@ -241,3 +241,10 @@ from app.dataModel.artifacts.lifecycle.operation.record import OperationCancelle
 def invalid_cancellation_reason(diagnostic: FieldPathError) -> None:
     OperationCancelled(operation_id="op", reason="requested")  # EXPECT: reportArgumentType
     OperationCancelled(operation_id="op", reason=diagnostic)  # EXPECT: reportArgumentType
+
+
+from app.dataModel.artifacts.lifecycle.gc import GcReport
+
+
+def invalid_gc_failure(diagnostic: FieldPathError) -> None:
+    GcReport(deleted=(), retained=(), failed=(diagnostic,))  # EXPECT: reportArgumentType

@@ -8,7 +8,7 @@ from app.dataModel.artifacts.lifecycle.lease import OperationLeaseRef, StagingRe
 from app.dataModel.artifacts.lifecycle.holders import (
     ArtifactHolderKind, OperationHolder, ArtifactRetentionHolder, SnapshotHolder, VerifiedArtifactRef,
 )
-from app.dataModel.artifacts.lifecycle.gc import ArtifactStorageEventKind, GcReport
+from app.dataModel.artifacts.lifecycle.gc import ArtifactStorageEventKind, GcReport, ArtifactGcFailure, GcFailureCode, GcFailureStage
 from app.dataModel.artifacts.events import ArtifactLogActivity, ArtifactLogRecord
 from app.dataModel.worldSnapshot.identity.refs import SnapshotChainKind, WorldSnapshotRef, PlayerSnapshotRef
 from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef, PlayerHeadExpectation
@@ -41,6 +41,9 @@ ARTIFACT_CORE_SCHEMA = CanonicalSchemaManifest(entries=tuple(
         (20016, ReferenceIssueReason, CanonicalTypeKind.ENUM),
         (20017, ArtifactStorageEventKind, CanonicalTypeKind.ENUM),
         (20018, OperationCancellationReason, CanonicalTypeKind.ENUM),
+        (20019, GcFailureCode, CanonicalTypeKind.ENUM),
+        (20020, GcFailureStage, CanonicalTypeKind.ENUM),
+        (20140, ArtifactGcFailure, CanonicalTypeKind.RECORD),
         (20101, WorldSnapshotRef, CanonicalTypeKind.RECORD),
         (20102, PlayerSnapshotRef, CanonicalTypeKind.RECORD),
         (20103, WorldPublicationRef, CanonicalTypeKind.RECORD),
