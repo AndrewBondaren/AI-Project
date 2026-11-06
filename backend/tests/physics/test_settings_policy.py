@@ -35,7 +35,7 @@ from app.dataModel.fields.checkedPath import CheckedPath
 from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.physics.settings.settingsCapture import WorldPhysicsSettingsRef
 
-LOG = "app.application.jsonValidation.resolve"
+LOG = "app.application.physics.settings"
 
 
 class SettingsPolicyTests(unittest.TestCase):
@@ -52,7 +52,7 @@ class SettingsPolicyTests(unittest.TestCase):
                             before = deepcopy(raw)
                             ctx = ResolveContext(validate_only=validate, collect_only=collect_only,
                                                  location=WireLocation(parts=prefix))
-                            with patch(f"{LOG}.logger.warning") as warning:
+                            with patch("app.application.physics.settings.reporting.logger.warning") as warning:
                                 result = operation(raw, ctx=ctx)
                             self.assertIs(type(result), PhysicsSettingsInputRefused)
                             self.assertEqual(len(result.issues), 1)

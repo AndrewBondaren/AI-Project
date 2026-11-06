@@ -1530,7 +1530,7 @@ rg -n 'generation_world_log\(' backend/app
 
 Это будущие команды проверки, не выполненный PASS этой документальной записи. Профиль D2 из P3.21 сохраняется как baseline, новый тест не заменяет его evidence.
 
-**Done подготовительного среза:** реальные файлы подтверждают отдельный Physics sink, применимый transcript, request correlation, отсутствие Physics warning в jsonValidation sink и повторного producer emit; typed values/issues/diagnostics одинаковы в emit/collect_only; validation тихая, fallback default сохранён, P2 не регрессировал. Одна эмиссия может доставляться в domain sink и transcript: это не дублирование причины и не обещание exactly-once доставки при crash/retry. Tests используют настоящие handlers и scoped cleanup, не один mock logger. Кодовая реализация среза пока TODO. Production I0, activation, storage/World/Snapshot integration и пользовательская приёмка D2 этим Done не закрываются.
+**Done подготовительного среза:** реальные файлы подтверждают отдельный Physics sink, применимый transcript, request correlation, отсутствие Physics warning в jsonValidation sink и повторного producer emit; typed values/issues/diagnostics одинаковы в emit/collect_only; validation тихая, fallback default сохранён, P2 не регрессировал. Одна эмиссия может доставляться в domain sink и transcript: это не дублирование причины и не обещание exactly-once доставки при crash/retry. Tests используют настоящие handlers и scoped cleanup, не один mock logger. Подготовительный срез реализован и проверен 2026-11-07; evidence и ограничения — в [отчёте I0](./physics-i0-report.md). Production I0, activation, storage/World/Snapshot integration и пользовательская приёмка D2 этим Done не закрываются.
 
 
 ## Инвариант миграции диагностики: runtime не меняется (2026-11-06)
@@ -1545,3 +1545,21 @@ rg -n 'generation_world_log\(' backend/app
 - Если для реализации требуется изменить runtime-условие, это **отдельный явно согласуемый поведенческий срез**: зафиксировать расхождение и остановить зависимую правку. Не вносить его попутно под названием error migration или logging. Отрицательная проверка нового диагностического контракта не расширяет область перехвата операционных ошибок.
 
 Приёмка каждого затронутого шага включает evidence сохранения runtime-семантики. Это ограничение миграции ошибок и логов, а не запрет ранее согласованной самостоятельной функциональной разработки домена. Статус реализации и пользовательская приёмка этим пунктом не изменяются.
+
+
+### P3.22 · реализация подготовительного I0 (2026-11-07)
+
+Отдельный Physics sink и scoped transcript реализованы через existing facade; input delivery перенесена в Physics reporting adapter без изменения runtime-ветвей D2/P2. [Отчёт и команды](./ps-error-1-i0-report.md): baseline 71/71, file/transcript + generation 7/7, финальные policy/typing/file 19/19; existing route tests 16/16 при исключении зависающего параллельного Artifact GC case (полный suite PASS не заявляется). Кодовый TODO выше заменён этой записью; исходная карта сохранена как история scope. Production activation, execution binding/correlation, World/Snapshot integration и пользовательская приёмка D2 не закрыты.
+
+
+### P3.22 — результат подготовительного I0 (2026-11-07)
+
+Завершён отдельный Physics adapter/sink через существующий facade и world-scoped
+transcript. Input остаётся единственным producer; shared diagnostics не изменён.
+Production caller повторным поиском не найден. D2/P2 не переимплементированы.
+79 профильных tests PASS (включая D2/P2, typing, реальные файлы), 16 route tests
+PASS. Один чужой незакоммиченный Artifacts GC test зависает и исключён из
+отдельного route-run; полный общий запуск не объявляется PASS.
+[Отчёт](./physics-i0-report.md) содержит scope, проверки и ограничения.
+Production I0/execution correlation, activation, World/Snapshot/storage integration
+и пользовательская приёмка D2 остаются открытыми.

@@ -1,6 +1,6 @@
 # TIME-LOG — отдельный implementation-план
 
-Дата: 2026-11-06. Статус: план для ревью; код не реализуется этой итерацией.
+Дата ревью: 2026-11-07. Статус: ожидает согласования implementation-плана; код не реализуется этой итерацией.
 Основание: [Time §47](time-domain.md#47-time-log--обязательное-логирование-через-общий-фасад-проекта-2026-11-03), §48; [logging](../../docs/tz_logging.md).
 
 ## 1. Границы и фактическая база
@@ -9,9 +9,9 @@
 
 Уже существуют TimeRecord (strict/frozen/extra=forbid/revalidate_instances=always), I64/Nano, TimeCapture/HistoricalTimeCapture, PrepareAdvance/TimeAdvanceProposal и типизированные отказы. Использовать их из dataModel/time, без копий. CalendarFieldIssue/CalendarIssueCode, ValidatedFieldPath и ValidatorAggregationHelper уже реализуют календарную диагностику; resolve_world_time_settings использует общий resolver с WarningError. Это не новые logging events и не повод повторять их сообщения. Отдельного dataModel/time/diagnostics/events.py и application/time/logging пока нет.
 
-Общие LogLevel/to_logging_level, JsonLogFormatter, request_id_var и router остаются единственным механизмом. SnapshotLifecycleLog и DAG emit служат образцами best-effort delivery и строгого admission, но целые Time POJO через model_dump в extra не передаются.
+Общие LogLevel/to_logging_level, JsonLogFormatter, request_id_var и router остаются единственным механизмом. SnapshotLifecycleLog служит образцом best-effort delivery и строгого admission; DAG emit — только проекции по объявленной схеме (его logger.log не защищён try/except), но целые Time POJO через model_dump в extra не передаются.
 
-Artifacts уже имеет prefix app.artifacts → artifacts/artifactLifecycle и SERVER_SINKS entry; docs/tz_logging.md отмечает выполненную регистрацию D2-3. loggingConfig.py, generationLogging.py, docs/tz_logging.md и общие logging-тесты уже имеют рабочие изменения. Их не менять и не откатывать в независимом срезе. Не переносить устаревший список routes целиком и не добавлять Artifacts повторно.
+Artifacts уже имеет prefix app.artifacts → artifacts/artifactLifecycle и SERVER_SINKS entry; docs/tz_logging.md отмечает выполненную регистрацию D2-3. В текущем рабочем дереве изменены loggingConfig.py, generationLogging.py, docs/tz_logging.md и tests/test_logging_routes.py. Их не менять и не откатывать в независимом срезе. Не переносить устаревший список routes целиком и не добавлять Artifacts повторно.
 
 ## 2. Контракты событий (TL-1)
 
@@ -26,7 +26,7 @@ Artifacts уже имеет prefix app.artifacts → artifacts/artifactLifecycle
 | Вариант / activity | Уровень | Дополнительные поля / условие |
 |---|---|---|
 | TimeCandidateLog / ADVANCE_PREPARED | DEBUG | start_seconds:I64, start_nanoseconds:Nano, end_seconds:I64, end_nanoseconds:Nano из proposal.interval; только успешная подготовка |
-| TimeRefusalLog / OPERATION_REFUSED | WARNING | code:TimeRefusalCode; только возвращённый typed отказ |
+| TimeRefusalLog / OPERATION_REFUSED | WARNING | code:TimeRefusalCode; только возвращённый typed отказ наблюдаемой операции; не WarningError и не continuation |
 | TimeCancelledLog / OPERATION_CANCELLED | DEBUG | Нет; cancellation до результата |
 | TimeFaultLog / OPERATION_FAILED | ERROR | Нет; непредвиденное исключение |
 
@@ -70,17 +70,17 @@ Owning boundary — вызывающая application-граница конкре
 
 ## 4. Независимые проверки (TL-3)
 
-Новые файлы: backend/tests/time/test_time_logging_contracts.py и test_time_operation_log.py. Существующий test_time_core.py — регрессия без обязательных изменений. Production composition/factory.py, reads, pure, calendar, changes и World resolver не менять.
+Новые файлы: backend/tests/time/test_time_logging_contracts.py и backend/tests/time/test_time_operation_log.py. Существующий test_time_core.py — регрессия без обязательных изменений. Production composition/factory.py, reads, pure, calendar, changes и World resolver не менять.
 
 Проверить все четыре схемы, пять operations, каждую допустимую пару отказа и запрещённые пары; strict enum/scalars, I64/Nano bounds, extra fields, fixed activity, candidate-only operation, operation_id policy, malformed constructed экземпляры и subclass payload. Семантические методы проверять на реальных typed requests/outcomes.
 
 Перехват logger.log в тесте: одна запись, точный level, allowlist полей; текущий headless source, унаследованный head и historical без publication_id. Форматировать перехваченный LogRecord существующим JsonLogFormatter под заданным request_id_var, проверяя JSON и отсутствие payload/exception. Это не доказательство server routing. Ошибка доставки не вызывает retry; чистые операции и штатные defaults не вызывают producer. Не устанавливать собственный production handler.
 
-Команды из backend, в проектном Python environment (если .venv неактивен, использовать его python.exe; pyright должен быть установлен):
+Команды из backend, явно через backend/.venv (Python 3.12+ для существующих type aliases; зависимости backend/requirements.txt и pyright должны быть установлены). Отсутствующий pyright — незавершённая проверка, не PASS:
 
 ```powershell
-python -m unittest discover -s tests/time -p 'test_*.py'
-python -m pyright app/dataModel/time app/application/time app/dataModel/world/calendar app/application/worldData/timeSettings tests/time
+.\.venv\Scripts\python.exe -m unittest discover -s tests/time -p 'test_*.py'
+.\.venv\Scripts\python.exe -m pyright app/dataModel/time app/application/time app/dataModel/world/calendar app/application/worldData/timeSettings tests/time
 ```
 
 Из корня репозитория — проверка границ изменений:
@@ -102,8 +102,8 @@ rg -n 'TimeOperationLog|app.time.operations' backend/app/application/time backen
 Проверки TL-R: фактический JSON-файл во временном logs_dir с общим setup_logging(profile=server), request_id, DEBUG/INFO filtering, отсутствие fallback/дублирования; сохранение script profile и Artifacts route/transcript. Из backend:
 
 ```powershell
-python -m unittest discover -s tests -p 'test_logging_routes.py'
-python -m unittest discover -s tests -p 'test_generation_logging.py'
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p 'test_logging_routes.py'
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p 'test_generation_logging.py'
 ```
 
 Регистрация сама по себе не зависит от SN-TIME и может быть принята отдельно; runtime proof требует binding.
@@ -121,9 +121,9 @@ python -m unittest discover -s tests -p 'test_generation_logging.py'
 
 Для bindings проверить сохранение исходного результата/исключения/cancellation при отказе producer; ровно одну запись на наблюдаемый отказ/candidate; отсутствие повторного resolver WarningError; отсутствие записи при успехе read/project/resolve/default. Две конкурентные подготовки и retry после unknown commit: candidate count соответствует завершенным подготовкам при исправном DEBUG sink; число публикаций подтверждает только Snapshot. Проверить унаследованный head, historical source, нагрузку и отсутствие per-tick/stdout DEBUG storm.
 
-Будущий integration suite: backend/tests/time/test_time_logging_bindings.py; команда из backend: `python -m unittest discover -s tests/time -p 'test_time_logging_bindings.py'`. Создавать и запускать этот suite вместе с реальными bindings; пустой discover не является пройденным gate. Приёмка §47.3 отдельно от TL-1…3 и отдельно от закрытия SN-TIME самим Snapshot owner.
+Будущий integration suite: backend/tests/time/test_time_logging_bindings.py; команда из backend: `.\.venv\Scripts\python.exe -m unittest discover -s tests/time -p 'test_time_logging_bindings.py'`. Создавать и запускать этот suite вместе с реальными bindings; пустой discover не является пройденным gate. Приёмка §47.3 отдельно от TL-1…3 и отдельно от закрытия SN-TIME самим Snapshot owner.
 
-## 7. Решения для ревью
+## 7. Предлагаемая фиксация реализации (не новое согласование §47.1–2)
 
 1. Сохранить §47 events, route и severity без расширения Time error unions.
 2. Переиспользовать реализованную диагностику; новый logging слой отображает outcomes, не заменяет resolver/validator.
@@ -134,6 +134,47 @@ python -m unittest discover -s tests -p 'test_generation_logging.py'
 7. Принять независимый срез без production и SN-TIME; регистрацию и интеграционные доказательства учитывать отдельно.
 8. Общие logging-файлы сейчас не менять; будущий минимальный route diff должен сохранить уже добавленный Artifacts.
 
+
+## 8. Результат сверки TL-1…TL-3 и точные зависимости (2026-11-07)
+
+Все пути в таблице относительно `backend/app`; это существующие источники для импорта/чтения, не список правок.
+
+| Reuse | Файл |
+|---|---|
+| TimeRecord, I64, Nano, TimeScope | `dataModel/time/values/point.py` |
+| PrepareAdvance, TimeAdvanceProposal | `dataModel/time/changes/advance.py` |
+| TimeCapture, HistoricalTimeCapture | `dataModel/time/reads/capture.py` |
+| Time typed отказы | `dataModel/time/results/errors.py` |
+| EntityUid | `dataModel/identity/uid.py` |
+| WorldPublicationRef / WorldSnapshotRef | `dataModel/worldSnapshot/identity/publication.py` / `refs.py` |
+| CalendarProjectionInput, CalendarResolveInput, ResolvedCalendarAt | `dataModel/world/calendar/projection/request.py` |
+| Calendar отказы, CalendarFieldIssue, CalendarIssueCode | `dataModel/world/calendar/projection/errors.py` |
+| CheckedPath / ValidatedFieldPath | `dataModel/fields/checkedPath.py` / `validatedFieldPath.py` |
+| ValidatorAggregationHelper | `dataModel/validation/diagnostics/validatorAggregationHelper.py` |
+| LogLevel, to_logging_level | `core/logLevel.py` |
+| JsonLogFormatter, request_id_var, router/setup | `core/loggingConfig.py` |
+
+Фактические операции для сверки unions: `application/time/changes/advancePipelineOpenPipeline.py`, `application/time/reads/reader.py`, `application/time/reads/sourcePort.py`, `application/time/calendar/projection.py`. Матрица §2 совпадает с ними. RESOLVE здесь означает CalendarProjector.resolve, а не jsonValidation.resolve. `application/worldData/timeSettings/admission/settings.py` вызывает общий resolver и reject_unresolved; этот World-owned путь не включается в пять Time operations. CalendarFieldIssue.at уже использует CheckedPath; TL не мигрирует его повторно.
+
+Разрешённый diff TL-1…3 — ровно шесть новых файлов: `backend/app/dataModel/time/diagnostics/{__init__.py,events.py}`, `backend/app/application/time/logging/{__init__.py,timeOperationLog.py}` и два тестовых файла §4. Существующие публичные экспорты и runtime wiring не нужны. Документация отражает фактическую реализацию после её отдельного согласования.
+
+Done по шагам:
+
+- TL-1: четыре строгих варианта и пять контекстов; discriminator activity для record и operation для context; imports из таблицы; обязательные nullable поля допускают явный None, но не подстановку ID; все допустимые/запрещённые пары проверены.
+- TL-2: восемь семантических методов §3 и единый emit; точный тип варианта и повторная строгая валидация перед delivery; явная проекция snapshot kind/world_uid/timeline_id/snapshot_id. Статическое сообщение без входных payload; общий formatter добавляет стандартные поля. Ошибка доставки не меняет результат и не повторяется.
+- TL-3: оба новых suite действительно обнаружены и содержат выполненные тесты; полный tests/time и typing проходят. Unit-тесты producer доказывают схему/проекцию/delivery, но не поведение ещё отсутствующей binding. Проверка неизменности runtime здесь — ограниченный diff и регрессия существующего core; characterization fallback/continuation и сохранения исходной cancellation при сбое producer обязательны перед TL-B, а не объявляются доказанными mock emitter-тестом.
+
+Пересечения: TL-R владеет общими routes/catalog/tests; TL-B — наблюдением вызова и защитой outcome; Snapshot — COMMIT, unknown commit и SN-TIME gates; DAG — execution/cancellation после candidate. Error/World resolver треки владеют issues/collect_only/validate_only, TL не меняет их условия. TIME-DEBT-01…06 из `time-domain-review-debt.md` не устраняются под видом logging (writers, history markers, counters, batch remainder, legacy требования, branch storage). Чужие Physics/Artifacts правки сохраняются.
+
+## 9. Оставшиеся решения для согласования
+
+1. Принять независимый объём TL-1…3 и предложенный API/context из §3; архитектура событий и route уже согласована в time-domain §47, её повторно открывать не требуется.
+2. Утвердить предложенную политику admission: точный тип четырёх record-вариантов (subclass отвергается), повторная валидация вложенных ссылок, отсутствие утечки extras. Отказ admission виден в unit-тесте, но будущая binding обязана защищать первичный outcome.
+3. До TL-R назначить владельца/очерёдность минимального изменения общих logging-файлов. Это не блокер изолированного среза.
+4. До TL-B назвать конкретные bindings, composition и путь однократной эмиссии: какой owner уже сообщил resolver отказ и где Time event подавляется. Это устанавливается call graph, без runtime cache/dedup и без изменения domain outcomes. Конкретных production binding файлов данный план пока не утверждает.
+5. До TL-B закрепить characterization для реально затронутых default/None/fallback/continuation и cancellation путей. Если для диагностики потребуется изменить условие продолжения, остановить зависимую работу и вынести отдельное поведенческое решение.
+
+Стоп этой итерации — согласование плана. Код, тесты и runtime не изменены; команды реализации приведены для будущего запуска, результаты PASS не заявляются.
 
 ## Инвариант миграции диагностики: runtime не меняется (2026-11-06)
 

@@ -244,3 +244,25 @@ rejected и не запускает повторное применение; out
 ### Artifact emitter — уточнение ответственности 2026-11-06
 
 В [Artifacts D1](../.cursor/plans/world-domain-artifacts-cancel-gc-d1.md#14-freeze-и-атомарные-шаги-после-ревью) producer activity/severity — доменный emitter ArtifactLifecycleLog: emit_gc_failure фиксирует GC_FAILED/ERROR и проекцию ArtifactGcFailure. GC service определяет факт и момент эмиссии, не собирает ArtifactLogRecord и не передаёт произвольный LogLevel. create_gc_failure не логирует. Emit валидирует контракт до best-effort sink boundary; исходный exception передаётся через exc_info существующему formatter. Это уточнение целевого контракта; реализация route/transcript и локальный EC-I0 проверяются в D2-3, route/transcript registration выполнена подготовительным срезом; полная проверка нового GC emitter и локальный I0 остаются открыты.
+
+## Physics settings: подготовительный I0 (2026-11-07)
+
+Input operations Physics используют единственный emitter `app.application.physics.settings` в `application/physics/settings/reporting.py`. Общий facade маршрутизирует `app.application.physics` в `physics/physicsLog`, файл `logs/physics/physicsLog.log` (server sink). Prefix включён в existing generation transcript только внутри активного world scope. Settings input больше не emit через `jsonValidation/resolve`; общий ResolveReport и его continuation identity сохранены.
+
+Runtime fallback пишет WARNING с concrete cause и selected default; structural refusal — distinct причины вызова. Validation/collect_only не emit; обычный успех/missing/zero тихие. Без raw input: явные code/type/location/path, gravity arguments и selected default. Request correlation — existing request_id; DAG execution correlation и production binding этим срезом не вводятся. DAG lifecycle event остаётся отдельным фактом. Доставка одного события в sink и transcript не означает повтор producer emit или exactly-once delivery.
+
+
+### Physics: подготовительный I0 (§P3.22)
+
+`app.application.physics` → `physics/physicsLog`: server file
+`backend/logs/physics/physicsLog.log`. Prefix входит в world-scoped transcript
+allowlist; scope открывает caller. Script profile сохраняет script sink.
+Handlers, formatter и request_id принадлежат общему logging facade.
+
+Единственный producer — settings input через `physics/settings/reporting.py`.
+Adapter сохраняет ResolveReport; новая continuation даёт один WARNING с concrete
+F01 и selected default из F07. Blocking причины дедуплицируются внутри вызова,
+не между вызовами. Validation/collect_only собирают facts без emit. Raw input
+не пишется. Параллельной эмиссии этих причин в jsonValidation нет.
+DAG lifecycle остаётся отдельным фактом существующего владельца.
+Это подготовительная проверка, не production activation или execution binding.

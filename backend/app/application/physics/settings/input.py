@@ -5,10 +5,11 @@ from dataclasses import replace
 from pydantic import ValidationError
 
 from app.application.jsonValidation.resolution.diagnostics import (
-    ResolveContext, ResolveMode, report_continuation, report_issues,
+    ResolveContext, ResolveMode,
 )
 from app.application.jsonValidation.resolution.wireIssues import field_issue
 from app.application.physics.settings.capture import PhysicsSettingsBoundaryFault
+from app.application.physics.settings.reporting import report_continuation, report_issues
 from app.dataModel.physics.settings.settingsInput import (
     PhysicsGravityDefaultApplied, PhysicsSettingsInputRefused, PhysicsSettingsInputResolved,
 )
@@ -98,5 +99,5 @@ def resolve_world_physics_settings_input_runtime(
     resolved = PhysicsSettingsInputResolved(settings=WorldPhysicsSettings(), diagnostics=(
         PhysicsGravityDefaultApplied(cause=cause, selected=STANDARD_GRAVITY_M_S2),
     ))
-    report_continuation(replace(ctx, schema_id=WorldPhysicsSettings.SCHEMA_ID), cause)
+    report_continuation(replace(ctx, schema_id=WorldPhysicsSettings.SCHEMA_ID), resolved.diagnostics[0])
     return resolved

@@ -124,6 +124,53 @@ class ServerRouteFileTests(_LogDirCase):
             self.assertIn("test_artifacts_route_preserves_traceback", record["exc"])
         self.assertEqual(rows[0]["exc"], copies[0]["exc"])
 
+    def test_real_gc_emitter_preserves_failure_in_file_and_transcript(self) -> None:
+        from tests.snapshotCore.support.fixtures import run_async
+        from unittest.mock import AsyncMock, create_autospec
+        from app.application.artifacts.lifecycle.artifactGc import ArtifactGarbageCollector
+        from app.application.artifacts.logging.artifactLog import ArtifactLifecycleLog
+        from app.application.artifacts.registry.artifactRegistry import ArtifactFormatRegistryBinding
+        from tests.snapshotCore.storage.artifacts.test_staging import LifecycleFixture
+        from tests.snapshotCore.support.artifactFixtures import descriptor
+
+        self._install_server()
+        state = LifecycleFixture()
+        ref, next_ref = descriptor("failed"), descriptor("next")
+        state.refs.update({ref: ref, next_ref: next_ref})
+        registry = create_autospec(ArtifactFormatRegistryBinding, instance=True)
+        cause = OSError(5, "GC original failure")
+
+        async def delete(candidate):
+            if candidate == ref:
+                raise cause
+
+        registry.delete = AsyncMock(side_effect=delete)
+        gc = ArtifactGarbageCollector(registry, state, state, ArtifactLifecycleLog())
+        with generation_world_log("gc-world", mode="light", root=self.logs / "generation") as transcript:
+            report = run_async(gc.collect("gc-operation", (ref, next_ref)))
+        self.assertEqual(report.deleted, (next_ref,))
+        self.assertEqual(len(report.failed), 1)
+        failure = report.failed[0]
+        self.assertEqual(failure.ref, ref)
+        self.assertEqual(failure.stage.value, "delete")
+        _flush_facade()
+        paths = (self.logs / "artifacts" / "artifactLifecycle.log", transcript)
+        failures = []
+        for path in paths:
+            rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+            failed = [row for row in rows if row.get("activity") == "gc_failed"]
+            self.assertEqual(len(failed), 1)
+            self.assertEqual(sum(row.get("activity") == "gc_deleted" for row in rows), 1)
+            row = failed[0]
+            self.assertEqual(row["operation_id"], "gc-operation")
+            self.assertIsNone(row["world_uid"])
+            self.assertEqual(row["gc_failure"], failure.model_dump(mode="json", exclude={"message"}))
+            self.assertIn('raise cause', row["exc"])
+            self.assertIn('in delete', row["exc"])
+            self.assertIn(str(cause), row["exc"])
+            failures.append(row)
+        self.assertEqual(failures[0]["exc"], failures[1]["exc"])
+
     def test_http_writes_api_log(self) -> None:
         self._install_server()
         logging.getLogger("http").info("request_start method=GET path=/api/worlds")

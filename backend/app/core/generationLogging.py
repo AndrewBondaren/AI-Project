@@ -39,6 +39,7 @@ _GENERATION_PREFIXES: tuple[str, ...] = (
     "app.application.worldData.render",
     "app.application.cascade",
     "app.application.jsonValidation",
+    "app.application.physics",
     "app.core.generationLogging",
     "app.relief",
 )
