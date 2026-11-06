@@ -12,7 +12,7 @@
 |---|---|
 | [GEO-1](./geo-1-designed-water.md) — `.cursor/plans/geo-1-designed-water.md` | Hydrology canonical final source: water identity, levels, resolved membership/connectivity, final bed/geometry, proven coverage, refs/revisions. Task1–10 verified isolated; **EF-1 и joint приняты документально; GEO-I1 принят пользователем; G10-A cutover OPEN**. Контракт данных и representation выбираются **до следующего зависимого producer code step**. |
 | [SPATIAL-1](./spatial-distribution-domain.md) — `.cursor/plans/spatial-distribution-domain.md` | Общая typed read форма и требования к bounded query/materialization; конкретный Hydrology reader/index принадлежит Hydrology. **SP-0 — DONE; SP-1 принят документально; SP-P0 принят документально (§15.19); SP-M принят документально (§16.16); SP-P1-A…D, SP-P2R-A/B и SP-1C приняты (§§15.61–68, 15.82); SP-P2W на этапе проектирования и интеграционных проб (§§15.83–92)**. Water Pack/root steps отдельно от runtime Snapshot и gameplay. |
-| [Domain Patches & Snapshots](./world-domain-patches-snapshots.md) — `.cursor/plans/world-domain-patches-snapshots.md` | **Актуальный owning-план Snapshot** (наряду с нормативным [World Snapshot ТЗ](../../docs/tz_world_snapshot.md)): архитектура принята, core/runtime **не DONE**. 4C2-R/H приняты 2026-11-01; 4C2-O принят 2026-11-02; 4C3-A принят, 4C3-B после исправления REV-1 прошёл повторное review и принят пользователем; C принят, D предъявлен, общий SN-CORE/production integration OPEN. 4C4 и 4D1/4D1-L приняты только в выполненных backend/port scopes; 4D2 не начат. После GEN-DAG остаётся отдельный B-2 gate первичного bake (§1.1). |
+| [Domain Patches & Snapshots](./world-domain-patches-snapshots.md) | 4C3-D и SN-CORE приняты 2026-11-04 в объёме storage core 4C2–4C4. 4D2 в работе, приняты assigned Q, player CAS и metadata builder со scoped append. Текущие срезы и evidence приведены в §12. SN-STAGE, SN-RUNTIME и B-2 имеют собственные gates. |
 | [DAG-TYPING-1](./dag-typing-1.md) — `.cursor/plans/dag-typing-1.md` | Общая typed инфраструктура `NodeContract`, OutputRef, runtime, NodeRegistry, parallelism: **A1–A3 implemented/verified**, **B1–B3 не завершены**, B зависит от конкретной интеграции GEN-DAG-1. |
 | [GEN-DAG-1](./gen-dag-1-post-geo-ws.md) — `.cursor/plans/gen-dag-1-post-geo-ws.md` | **Совместный дизайн нового production DAG**, точные Input/Output/Error POJO, factories, публичные domain operations и единый cutover. Старые 15 ID — AS-IS inventory, **все legacy concrete-ноды под удаление, кроме перерабатываемой `check_scene`**; нет 1:1 миграции. **GEN-NODE-JOINT-REVIEW** обязателен с мастером: Mermaid-карта зависимостей, решения keep/split публичных pipelines и per-node contracts до кода. **DRAFT/DEFERRED**: GEO-1, необходимые Patch/Snapshot gates и concrete contracts/приёмка OPEN. |
 | [PHYSICS-1](./physics-spatial-dynamics.md) — `.cursor/plans/physics-spatial-dynamics.md` | **Owning план PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-HANDOFF/PH-PUBLISH**: DAG-node-only trigger, FAR/MEDIUM/NEAR через DAG+settings, **Grade/SQL только bounded NEAR (FAR/MEDIUM — без Grade)**; фоновая aggregate и локальная подробная стратегии; typed input/output, изменения только через domain-owned operations → Patch/Snapshot. Материалы — отдельный mutable-property owner и внешний контракт, не внутренний поддомен Physics; Physics формирует effects, DAG маршрутизирует Materials/domain change. PH-0 принят статически; направления P1.6, D1–D5 P2.10, SI/scope P2.11 и public pipelines boundary P2.12 приняты; полный PH-ARCH **OPEN**, exact freeze и runtime **OPEN**. В §5 выделены будущие water-first acceptance aliases `PH-AGG-RUNTIME`, `PH-LOCAL-RUNTIME`, `PH-GAMEPLAY-E2E`; это **не implementation steps** и не prerequisite GEO/Pack/GEN initial cutover. |
@@ -29,7 +29,7 @@
 
 | Gate owning Snapshot | Текущий статус / что именно разблокирует |
 |---|---|
-| **SN-CORE / 4C2-R + 4C2-H → 4C2-O → 4C3 → 4C4** | `4C2-R/H` **ПРИНЯТЫ 2026-11-01**, `4C2-O` **ПРИНЯТ 2026-11-02**. `4C3-A` принят; `4C3-B` реализован, REV-1 исправлен и повторное review PASS; B/C приняты, D предъявлен. Полная приёмка 4C3 впереди. BLOB backend `4C4` уже принят изолированно, но его concrete 4C3 integration и SN-CORE OPEN. |
+| **SN-CORE / 4C2-R + 4C2-H → 4C2-O → 4C3 → 4C4** | Цепочка storage core принята. Пользователь принял 4C3-D и SN-CORE 2026-11-04, owning-план Snapshot §8.14. |
 | **SN-STAGE / 4D1 + 4D3 + 4E2** | Shared artifact staging/lease/GC `4D1`, **pregame** `PreparedPackActivation/GameplayStart` `4D3`, core composition `4E2`. Внешний **accepted staged Pack publication port** нужен `SP-P2W`; одних DTO и изолированных тестов недостаточно. |
 | **SN-RUNTIME / 4D2 + 4E2 + применимый domain handler** | `Snapshot.apply` `4D2`, composition и принятое доменное применение (read overlay принимается отдельно в SP-3S) дают runtime gate для `SP-3S`, `SP-4R`, `SP-R1` и нужных GEN-DAG операций. Нельзя подменять его SessionSnapshot из DAG-TYPING или Pack pregame activation. |
 | **SN-B-2 / GEN-DAG bake integration acceptance** | [Snapshot §7.2](./world-domain-patches-snapshots.md) требует перенести L0 → C23 / bake orchestration в GEN-DAG для **полной приёмки Snapshot-плана**. Это **поздний E2E gate после GEN-DAG**, а не prerequisite `GEN-DAG ← весь Snapshot DONE`. |
@@ -316,7 +316,7 @@ Owners: PH-* — PHYSICS-1 §6 (PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-H
 
 **Готовность:** ГОТОВ — prerequisites, exact contracts и необходимые проверки приняты для названного следующего действия; ГОТОВ К АНАЛИЗУ — разрешена только read-only/документальная работа, не code start; BLOCKED — названные prerequisites/приёмка не закрыты; НЕ ПОДТВЕРЖДЕНА — evidence недостаточно. «НА ПРИЁМКЕ / ГОТОВ К АНАЛИЗУ» означает, что можно проводить review, а не принимать результат автоматически. Разрешение на конкретное изменение остаётся отдельным gate.
 
-**Общее ограничение:** legacy-реестры всех шести планов предварительные, общий LEGACY-AC OPEN. Он не запрещает анализ/дизайн, но блокирует полную приёмку затронутых планов и production cutover. Явно принятые мастером изолированные Snapshot-итерации (4C2-R/H/O, DB-FIELDS-1A, 4C4 backend scope, 4D1/4D1-L port scope) сохраняют свою локальную приёмку; это не DONE общего SN-CORE, 4D1 integration gate или всего Snapshot-плана. В таблице «до кода freeze/legacy» означает exact contract + file/POJO/enum freeze и применимую legacy-проверку по owning-плану.
+**Общее ограничение:** LEGACY-AC проверяется по применимым срезам владельцев. Принятые 4C3-D и SN-CORE сохраняют статус принятого storage core. Остальные integration и production gates требуют собственного evidence. В таблице «до кода freeze/legacy» относится к конкретному срезу.
 
 | Gate | Prerequisites (AND, §5) | Выполнение | Готовность / следующее действие | Блокер / evidence owning-плана |
 |---|---|---|---|---|
@@ -326,7 +326,7 @@ Owners: PH-* — PHYSICS-1 §6 (PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-H
 | 4C3 | 4C2-O | A–D приняты | Storage core принят | Crash takeover вне scope. |
 | 4C4 | 4C3 | Принят | SN-CORE принят | Snapshot §8.14. |
 | 4D1 | SN-CORE | Port-scope принят | SQL+BLOB проверены в 4C3-D | 4D2 в работе. |
-| 4D2 | 4D1 | В работе | Assigned Q и player CAS приняты | Открыты metadata builder, validation, apply(), terminal/retry. |
+| 4D2 | 4D1 | В работе | Assigned Q, player CAS, metadata builder и scoped append приняты | Открытые срезы и evidence — §12 и owning-план Snapshot. |
 | 4D3 | 4D2 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [Snapshot §8.3, §8.13–8.14](./world-domain-patches-snapshots.md) |
 | 4E2 | 4D3 | НЕ УТОЧНЁН | BLOCKED | Prerequisites не приняты; до кода freeze/legacy. [Snapshot §8.3, §8.13–8.14](./world-domain-patches-snapshots.md) |
 | DT-A | Внешние условия / критерии owning-плана | РЕАЛИЗОВАН | ГОТОВ К АНАЛИЗУ: handoff/legacy review | A1–A3 implemented/verified; B не выполнен. Новый LEGACY-AC OPEN, DONE не выставлен. [DAG-TYPING execution evidence A3.6 / этап B](./dag-typing-1.md) |
@@ -389,6 +389,8 @@ Owners: PH-* — PHYSICS-1 §6 (PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-H
 **Обновление:** сначала owner фиксирует статус, дату и evidence у себя; затем обновляются эта строка, readiness и blockers downstream. Перед запуском повторно проверить исходный план/изменения кода. «В РАБОТЕ» ставится только по подтверждённому старту; «ГОТОВ» не выводится из отсутствия входов; DONE требует явной приёмки. При расхождении источник — owning-план, статус карты временно НЕ УТОЧНЁН. Проверка покрытия: каждый ID §5 представлен ровно одной строкой; условные prerequisites §4.1 проверяются отдельно.
 
 ## 6. Практический приоритет (не подмена hard gates)
+
+Для назначения текущих работ использовать §12. Этот раздел задаёт общий порядок веток.
 
 1. **P0 — совместная архитектура / GEO-SPATIAL-CONTRACT:** GEO canonical source semantics, Task11 coarse/fine coordinate+revision, выбор compact representation/cost-quality; SPATIAL contract/reuse/layout review. **До кода:** все нужные POJO/enum/target paths согласованы в owning plans.
 2. **P0-S — актуальный Snapshot (параллельный критический путь):** R/H/O и 4C3-A приняты; принять B по актуальному diff, затем C/D по owning-порядку, затем принять интеграцию уже выполненных 4C4/4D1 scopes перед 4D2/4D3/4E2 и нужными domain handlers. Эта ветка не ждёт GEO; `SN-STAGE` и `SN-RUNTIME` разблокируют **разные** downstream steps. `SN-B-2` ожидает будущей GEN-DAG bake-интеграции.
@@ -468,9 +470,18 @@ from graphlib import TopologicalSorter
 import re
 p = Path('.cursor/plans/world-generation-plan-dependency-graph.md')
 s = p.read_text(encoding='utf-8')
-registry = s.split('## 5.', 1)[1].split('## 6.', 1)[0]
-edges = re.findall(r'^\| ([A-Z0-9-]+) \| ([A-Z0-9-]+) \|$', registry, re.M)
+registries = {
+    '5': s.split('\n## 5.', 1)[1].split('\n## 6.', 1)[0],
+    '10.3': s.split('\n### 10.3.', 1)[1].split('\n### 10.4.', 1)[0],
+}
+edges = []
+for section, registry in registries.items():
+    section_edges = re.findall(r'^\| ([A-Z0-9-]+) \| ([A-Z0-9-]+) \|$', registry, re.M)
+    assert section_edges, f'empty registry {section}'
+    edges.extend(section_edges)
+    print(f'Section {section}: {len(section_edges)} edges')
 assert edges and len(edges) == len(set(edges)), 'empty/duplicate edges'
+vertices = {node for edge in edges for node in edge}
 for extra in [[], [('SP-R1', 'GEN-CUTOVER')], [('GEN-CUTOVER', 'SP-R2')]]:
     graph = {}
     for producer, consumer in edges + extra:
@@ -486,7 +497,8 @@ owners = ['geo-1-designed-water', 'spatial-distribution-domain',
 for owner in owners:
     assert '](./world-generation-plan-dependency-graph.md)' in (
         p.parent / (owner + '.md')).read_text(encoding='utf-8'), owner
-print('PASS:', len(edges), 'edges; base and separate cutover alternatives')
+print('PASS:', len(edges), 'edges;', len(vertices),
+      'vertices; base and separate cutover alternatives')
 ```
 
 **Mermaid ↔ реестр (ручная проверка).** В §3/§4/§4.2 подписи сопоставляются с IDs §5: G10-A/SP-H/SP-*, GEN = GEN-CUTOVER, A = DT-A, B = последовательность DT-B1…B3; BASE = опубликованный SP-3 после SP-P3. Остальные именованные labels сохраняют свои gate IDs. Допустимо опускать транзитивное ребро, если путь уже есть; цепочку можно свернуть только с сохранением порядка и всех внешних входов. Диаграммы — проекции bootstrap/runtime, не полная копия §5: внутренние prerequisites внешнего порта сверяются с определением порта в §1/§5. Нельзя скрывать независимый prerequisite показанного consumer; условие §4.1 всегда остаётся явно указанным рядом. Сверить все стрелки и входы; выполнить Mermaid parse/render доступным renderer. При отсутствии renderer записать «визуальная проверка не выполнена», а не PASS рендеринга.
@@ -739,6 +751,8 @@ flowchart TD
 
 Этот дополнительный реестр расширяет §5. External arrows не включаются в hard-edge count до принятия конкретных контрактов и точных downstream gates. Не добавлять `TIME-T7 → весь PH-ARCH/GEN`, `Snapshot DONE → TIME-T0` или `GEN-CUTOVER → Time design`.
 
+**Повторная автоматическая проверка 2026-11-06.** Скрипт §7.2 охватывает оба реестра: §5 — 86 рёбер, §10.3 — 12. Всего 98 уникальных рёбер и 67 вершин. Объединённый граф и каждый вариант cutover ацикличны. Локальные ссылки и перечисленные в скрипте обратные ссылки прошли. Рендер Mermaid в этой сверке не выполнялся.
+
 ### 10.4. Конкретные внешние handoffs и runtime gates
 
 | Owner / получатель | Что требуется передать / граница |
@@ -767,7 +781,7 @@ Runtime acceptance позднее требует **конкретных** ready 
 
 **Команда Time owner:** «Продолжи time-domain.md §§17–18: предъяви A1/A2/A3/A5, не переоткрывая принятые §1/A4; закрой по отдельным slices World calendar projection и Snapshot state/init/acceptance agreements. Различай public prepare, internal bound append и durable accepted result. Уточни exact errors/imports и legacy migration; затем T6 review/T7 приёмка. Pure arithmetic не ждёт calendar grammar или полного Physics/GEN/Snapshot. Stop: документальный freeze proposal, без кода/DDL/ports/nodes/cutover; межплановые изменения отдельными предложениями».
 
-**Проверка v6.9:** общий hard-edge реестр §5 + §10.3: 97 рёбер / 66 вершин; базовый граф и обе отдельные cutover-альтернативы ацикличны. Все 9 новых Time aliases имеют статусные строки; 12 внутренних рёбер отражены в Mermaid. External handoffs остаются пунктирными contract requirements. Mermaid render и runtime не проверялись; GRAPH-AC остаётся OPEN.
+**Проверка v6.9:** общий hard-edge реестр §5 + §10.3: 98 рёбер / 67 вершин (пересчёт 2026-11-06); базовый граф и обе отдельные cutover-альтернативы ацикличны. Все 9 новых Time aliases имеют статусные строки; 12 внутренних рёбер отражены в Mermaid. External handoffs остаются пунктирными contract requirements. Mermaid render и runtime не проверялись; GRAPH-AC остаётся OPEN.
 
 ## 11. LOD-SIM-1 — общий LOD Handoff и проверка неизменности мира (v6.10, 2026-11-03)
 
@@ -802,7 +816,7 @@ flowchart TD
     GEN["GEN: concrete node binding"] -.-> R
 ```
 
-Все стрелки в §11.1 — **draft prerequisites/agreements**, а не принятые hard edges §5. После review owner-а только подтверждённые обязательные связи добавляются в единый реестр §5 и пересчитываются cycles/статусы. **Текущий hard graph §5 + §10.3 неизменён: 97 рёбер / 66 вершин**; LOD-ветка пока не входит в count. Не объявлять LOD-R1 prerequisite для initial GEN-CUTOVER, GEO G10-A, SP-PACK/base reader или Snapshot core.
+Все стрелки в §11.1 — **draft prerequisites/agreements**, а не принятые hard edges §5. После review owner-а только подтверждённые обязательные связи добавляются в единый реестр §5 и пересчитываются cycles/статусы. **Текущий hard graph §5 + §10.3 неизменён: 98 рёбер / 67 вершин (пересчёт 2026-11-06)**; LOD-ветка пока не входит в count. Не объявлять LOD-R1 prerequisite для initial GEN-CUTOVER, GEO G10-A, SP-PACK/base reader или Snapshot core.
 
 ### 11.2. Параллельность и локальные блокировки
 

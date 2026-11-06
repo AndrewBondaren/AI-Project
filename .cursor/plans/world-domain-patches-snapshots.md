@@ -3071,4 +3071,4 @@ Evidence гонок получено на отдельных соединени�
 
 ### Scoped D1 artifacts cancel / GC — на согласовании
 
-[Предложение D1: cancel F06, GC failure F05, terminal/reopen и пересечение с Pack F3](world-domain-artifacts-cancel-gc-d1.md). Исследование и документы; D2 не начат. Требуются решения по concrete contracts и совместимости cancelled terminal v1/v2.
+[Предложение D1: cancel F06, GC failure F05, terminal/reopen и пересечение с Pack F3](world-domain-artifacts-cancel-gc-d1.md). Исследование и документы; D2 не начат. Причина cancel принята; пользователь уточнил прямой переход внутреннего контракта без legacy decoder и cancelled v2. D1 остаётся на согласовании по остальным пунктам.
