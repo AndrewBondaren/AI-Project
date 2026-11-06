@@ -1,6 +1,6 @@
 # WORLD-PLAN-GRAPH-1 — Граф зависимостей GEO-1 / SPATIAL-1 / GEN-DAG-1 / PHYSICS-1 / TIME / LOD-SIM-1
 
-**Статус:** архитектурная карта межплановых gates, v6.15 (2026-11-05), с cross-cutting навигацией ERROR-CONTRACTS-1; **не** разрешение на код, изменение POJO/enum, cutover или закрытие owning-планов. Путь документа: `.cursor/plans/world-generation-plan-dependency-graph.md`.
+**Статус:** архитектурная карта межплановых gates, v6.16 (2026-11-06), с cross-cutting навигацией ERROR-CONTRACTS-1; **не** разрешение на код, изменение POJO/enum, cutover или закрытие owning-планов. Путь документа: `.cursor/plans/world-generation-plan-dependency-graph.md`.
 
 **Текущая очередь и источники приёмки приведены в §12.** Разделы 9–11 сохраняют историю последовательных сверок.
 
@@ -300,7 +300,7 @@ Owners: PH-* — PHYSICS-1 §6 (PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-H
 - **GRAPH-Q07 / cutover:** evidence §4.1 включает inventory node IDs/callers, cold-Pack ocean, accepted Snapshot и typed missing/unsupported outcomes. Unsupported не заменяет обязательные water facts. Если они нужны действующим callers, SP-R1 предшествует первому switch. Выбор и evidence OPEN в GEN-P0.
 - **GRAPH-Q10 / Physics node contract:** §4.2/§7.1: для будущего `PH-AGG-RUNTIME` нужен accepted concrete GEN-DAG Physics node binding (input/read/settings/output/effects), Hydrology runtime change contract и решение initial vs later activation. В рамках PH-0/PH-ORCH/PH-LOD также OPEN exact bounded NEAR Grade-read contract и evidence отсутствия прямых/косвенных Grade-access в FAR/MEDIUM; это **read-policy acceptance**, не новый внешний hard edge. До появления у owners точных gate names не создавать вымышленные hard edges; activation BLOCKED, PH design независим.
 
-### 5.2. Единый реестр выполнения и готовности — 2026-11-01
+### 5.2. Единый реестр выполнения и готовности — актуализация 2026-11-06
 
 Это снимок по owning-планам, а не новый источник приёмки. **Статус выполнения и готовность независимы:** «НЕ ВЗЯТ» может сочетаться с «ГОТОВ» или «BLOCKED». OPEN не означает автоматически «не взят»; без подтверждения начала/назначения используется «НЕ УТОЧНЁН». Строка без входных рёбер не становится готовой автоматически.
 
@@ -380,9 +380,9 @@ Owners: PH-* — PHYSICS-1 §6 (PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-H
 | SP-R2 | SP-R1, GEN-CONTRACTS, SN-RUNTIME | НЕ УТОЧНЁН | BLOCKED | SP-R1, contracts/runtime и выбор §4.1 OPEN; совместная активация либо позднее расширение, не два runtime. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
 
 
-**Сверка фактической приёмки владельца 2026-11-02:** Snapshot DB-FIELDS-1A принят в своём typed-row scope, но весь DB-FIELDS-1 остаётся OPEN. 4C2-O принят; `4C4` BLOB backend и `4D1/4D1-L` port/logging scope приняты отдельно. Нельзя отождествлять эти локальные приёмки с завершением `4C3`, общим `SN-CORE` или полным `4D1` integration gate. `4D2` явно **НЕ НАЧАТ**. Нормативная запись — [Snapshot: актуальный статус выполненных итераций](./world-domain-patches-snapshots.md).
+**Актуализация 2026-11-06:** 4C3-D и SN-CORE приняты пользователем 2026-11-04; 4D2 продолжается. Assigned Q, player CAS и metadata builder со scoped append приняты в своём объёме. Это не закрывает SN-STAGE, SN-RUNTIME или применимые handlers. Историческое «4D2 НЕ НАЧАТ» от 2 ноября не задаёт текущую очередь.
 
-**Порядок работы:** актуальная очередь — §12; сортировка ID не задаёт очередь. Snapshot C принят, D предъявлен; принятые P0/M разрешают preflight/design, не код. Production остаётся за конкретными gates §5.
+**Порядок работы:** актуальная очередь — §12; сортировка ID не задаёт очередь. Принятые P0/M разрешают независимый design по своим gates. Production остаётся за конкретными gates §5.
 
 **Вне основного реестра рёбер:** GEO Task11 — дизайн OPEN, доступен анализ; PHYSICS PH-AGG/PH-LOCAL и SP-H2 river-volume — архитектурные контракты OPEN, code readiness не подтверждена; Q01/Q07 — решение OPEN, анализ допустим. Это не новые prerequisites ocean/lake ветки.
 
@@ -493,10 +493,14 @@ for target in re.findall(r'\]\(([^)]+)\)', prose):
         assert (p.parent / target.split('#')[0]).exists(), target
 owners = ['geo-1-designed-water', 'spatial-distribution-domain',
           'world-domain-patches-snapshots', 'dag-typing-1',
-          'gen-dag-1-post-geo-ws', 'physics-spatial-dynamics']
+          'gen-dag-1-post-geo-ws', 'physics-spatial-dynamics',
+          'lod-simulation-handoff', 'error-contracts-1']
 for owner in owners:
     assert '](./world-generation-plan-dependency-graph.md)' in (
         p.parent / (owner + '.md')).read_text(encoding='utf-8'), owner
+status_sections = s.split('\n### 5.2.', 1)[1].split('## 6.', 1)[0] + s.split('\n### 10.2.', 1)[1].split('### 10.3.', 1)[0]
+for vertex in vertices:
+    assert re.search(r'^\| (?:\*\*)?' + re.escape(vertex) + r'(?:\*\*)? \|.+\|.+\|', status_sections, re.M), vertex
 print('PASS:', len(edges), 'edges;', len(vertices),
       'vertices; base and separate cutover alternatives')
 ```
@@ -893,3 +897,11 @@ API-1 ведёт пользователь. GEN-BAKE-READ после решени
 [Owning D1 §9](world-domain-artifacts-cancel-gc-d1.md#9-trace-и-доставка-причины--уточнение-d1) определяет локальный EC-I0 artifact logging **внутри рабочего среза и приёмки D2**. D2 реализует DTO/producers, семантические методы существующего ArtifactLifecycleLog и регистрации route/transcript. Локальный I0 отдельно подтверждает настоящий sink/transcript, traceback, failure correlation и отсутствие дублирования owning emit. В отчёте результаты D2 и локального I0 перечисляются раздельно.
 
 Это не закрывает общий EC-I0 или эксплуатационную готовность отсутствующей production binding. Перед эксплуатацией конкретного entrypoint остаются обязательными назначение runtime/infra root-cause owner, фактическая корреляция и проверка domain/DAG lifecycle без дублирования причин. [D1 §11](world-domain-artifacts-cancel-gc-d1.md#11-принятое-направление-reuse-инфраструктуры-и-доменные-адаптеры-ошибок-и-диагностики) задаёт границу владения. Глобальный ERROR-CONTRACTS DONE не становится prerequisite локального D2. Новая общая инфраструктура и массовая унификация не вводятся. Статус: документы уточнены; D2 и его локальный I0 не выполнены.
+
+### 12.5. Независимая сверка 2026-11-06
+
+[Отчёт проверки, границы доказательств, задания владельцам и команды](./world-generation-plan-dependency-graph-review-2026-11-06.md). Проверенный HEAD: `a15e502eeb87fe1c51994a08ce0bf1e42071b241`. Структурная проверка: 86 + 12 = 98 уникальных рёбер, 67 вершин, обе отдельные cutover-альтернативы ацикличны. Это датированное evidence, не приёмка implementation. GRAPH-AC остаётся OPEN: полный legacy/caller audit и Mermaid render не выполнены; у Time не найдена Markdown-обратная ссылка на граф.
+
+**Точная передача finality:** проверенные F1/F2 → проверка нового store identity → Pack F3 (durable CLOSED, без release) → DAG F4 (durable finalized и terminal replay) → Pack F5 (release по перечитанному finalized) → F6 (две БД, recovery/retention) → отдельное разрешение production binding. Карта F3 принята; реализация одного get_store_id не закрывает F3. Эти локальные шаги уточняют SP-P2W, не заменяют SN-STAGE.
+
+**Покрытие машинной проверки:** §5 и §10.3 — действующие hard-edge реестры. §11.1 и пооперационные предложения GEN-BAKE-READ §17.10.3 остаются proposals и не включаются в hard count. Локальные F1–F6, EC-D2/I0 и определения внешних портов проверяются семантически: численный PASS сам по себе их не проверяет. Предложение владельцу Time — добавить обратную ссылку; owning-файл этой сверкой не меняется.
