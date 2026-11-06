@@ -38,3 +38,13 @@ DAG lifecycle принадлежит прежнему владельцу; execut
 из-за указанного чужого зависания. Production activation, реальный DAG caller
 и execution correlation, World/Snapshot/storage integration не выполнялись.
 Пользовательская приёмка D2 остаётся открытой.
+
+## Совместная проверка Artifacts / Physics — 2026-11-07
+
+После объединения изменений выполнена команда из `backend`:
+` .\.venv\Scripts\python.exe -m unittest tests.physics.test_settings_policy tests.physics.test_settings_logging tests.test_logging_routes tests.test_generation_logging`.
+TEMP/TMP установлены в `E:/AI Project/backend/.tmp_snapshot_core`.
+Результат: **40 tests OK**, 1.582s, без исключения GC-теста.
+Оговорка выше о зависании общего logging-набора снята для этой команды:
+настоящий GC emitter и Physics logging проверены в одном процессе.
+Это не повтор полного snapshotCore и не production activation.

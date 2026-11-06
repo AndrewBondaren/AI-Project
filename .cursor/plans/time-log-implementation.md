@@ -1,6 +1,6 @@
 # TIME-LOG — отдельный implementation-план
 
-Дата ревью: 2026-11-07. Статус: ожидает согласования implementation-плана; код не реализуется этой итерацией.
+Дата ревью: 2026-11-07. Статус: TL-1…TL-3 реализованы по поручению пользователя; общий typing gate имеет существующие ошибки tests/time/test_time_core.py (см. evidence ниже). TL-R/TL-B не реализованы.
 Основание: [Time §47](time-domain.md#47-time-log--обязательное-логирование-через-общий-фасад-проекта-2026-11-03), §48; [logging](../../docs/tz_logging.md).
 
 ## 1. Границы и фактическая база
@@ -44,7 +44,7 @@ Artifacts уже имеет prefix app.artifacts → artifacts/artifactLifecycle
 
 Создать application/time/logging/timeOperationLog.py и __init__.py. TimeOperationLog.emit(record:TimeLogRecord) → None — единственная точка доставки в logger app.time.operations. Семантические методы того же producer выбирают activity/level и создают record; вызывающий код не собирает произвольные dict и не выбирает severity.
 
-Планируемый API (каждый метод возвращает None):
+Контракт доменного адаптера (каждый метод возвращает None):
 
 | Метод | Typed вход |
 |---|---|
@@ -166,15 +166,15 @@ Done по шагам:
 
 Пересечения: TL-R владеет общими routes/catalog/tests; TL-B — наблюдением вызова и защитой outcome; Snapshot — COMMIT, unknown commit и SN-TIME gates; DAG — execution/cancellation после candidate. Error/World resolver треки владеют issues/collect_only/validate_only, TL не меняет их условия. TIME-DEBT-01…06 из `time-domain-review-debt.md` не устраняются под видом logging (writers, history markers, counters, batch remainder, legacy требования, branch storage). Чужие Physics/Artifacts правки сохраняются.
 
-## 9. Оставшиеся решения для согласования
+## 9. Решения и оставшиеся границы
 
-1. Принять независимый объём TL-1…3 и предложенный API/context из §3; архитектура событий и route уже согласована в time-domain §47, её повторно открывать не требуется.
-2. Утвердить предложенную политику admission: точный тип четырёх record-вариантов (subclass отвергается), повторная валидация вложенных ссылок, отсутствие утечки extras. Отказ admission виден в unit-тесте, но будущая binding обязана защищать первичный outcome.
+1. Независимый объём TL-1…3 и контракт доменного адаптера / контекст из §3 разрешены командой пользователя «Делай» 2026-11-07; архитектура событий и route уже согласована в time-domain §47.
+2. Реализована политика admission: точный тип четырёх record-вариантов (subclass отвергается), повторная валидация вложенных ссылок, отсутствие утечки extras. Отказ admission виден в unit-тесте, но будущая binding обязана защищать первичный outcome.
 3. До TL-R назначить владельца/очерёдность минимального изменения общих logging-файлов. Это не блокер изолированного среза.
 4. До TL-B назвать конкретные bindings, composition и путь однократной эмиссии: какой owner уже сообщил resolver отказ и где Time event подавляется. Это устанавливается call graph, без runtime cache/dedup и без изменения domain outcomes. Конкретных production binding файлов данный план пока не утверждает.
 5. До TL-B закрепить characterization для реально затронутых default/None/fallback/continuation и cancellation путей. Если для диагностики потребуется изменить условие продолжения, остановить зависимую работу и вынести отдельное поведенческое решение.
 
-Стоп этой итерации — согласование плана. Код, тесты и runtime не изменены; команды реализации приведены для будущего запуска, результаты PASS не заявляются.
+Предыдущая итерация завершилась согласованием; после команды «Делай» реализованы TL-1…3 с evidence ниже. Полная приёмка typing остаётся открытой; TL-R/TL-B и production wiring не входят в выполненный срез.
 
 ## Инвариант миграции диагностики: runtime не меняется (2026-11-06)
 
@@ -188,3 +188,22 @@ Done по шагам:
 - Если для реализации требуется изменить runtime-условие, это **отдельный явно согласуемый поведенческий срез**: зафиксировать расхождение и остановить зависимую правку. Не вносить его попутно под названием error migration или logging. Отрицательная проверка нового диагностического контракта не расширяет область перехвата операционных ошибок.
 
 Приёмка каждого затронутого шага включает evidence сохранения runtime-семантики. Это ограничение миграции ошибок и логов, а не запрет ранее согласованной самостоятельной функциональной разработки домена. Статус реализации и пользовательская приёмка этим пунктом не изменяются.
+
+
+## Решение пользователя: без legacy-компонентов — 2026-11-07
+
+### Evidence реализации TL-1…TL-3
+
+Уточнение после ревью пользователя: поля logging.extra не собирать вручную в словарь и не дублировать отдельным DTO. После exact-type admission и strict revalidation единственный TimeLogRecord сериализуется через model_dump(mode="json", serialize_as_any=False) на границе stdlib logging. Allowlist — объявленные поля четырёх concrete событий и WorldSnapshotRef; subclass records отвергаются, дополнительные поля вложенного subclass не сериализуются. Полные requests/captures/outcomes в extra не передаются. Доменные вычисления и event schema не меняются.
+
+Созданы только шесть файлов §2–4: events, emitter, package markers и два тестовых модуля. Runtime wiring, pure operations, общие routes и другие домены не менялись. Semantic methods покрывают все объявленные typed refusal mappings, candidate и cancellation/fault; admission предшествует best-effort delivery. Проверены strict activity/context enums, forged records/nested refs, subclass rejection, корреляция inherited/headless/historical и JsonLogFormatter/request_id без payload/exception.
+
+Из backend: `.\.venv\Scripts\python.exe -m unittest discover -s tests/time -p 'test_*.py'` — **36 tests OK**, 0.220s. Sandbox-запуск завис в существующем ReadPortTests.test_pinned_reads; faulthandler подтвердил socket.accept → _fallback_socketpair → proactor _make_self_pipe до выполнения теста. Повтор той же команды вне sandbox прошёл; runtime/test loop не менялись. Адресные новые модули — **7 tests OK**.
+
+`python -m pyright` недоступен (No module named pyright). Установленный `node ../node_modules/pyright/index.js` по точной области §4, включая tests/time: **320 errors**, все в неизменённом tests/time/test_time_core.py; новых diagnostic файлов ошибок нет. Отдельно та же production область без tests: **0 errors, 0 warnings**. Общий typing gate не объявляется зелёным; исправление старых test annotations вне шестифайлового scope. TL-R, TL-B, production/SN-TIME acceptance остаются открытыми.
+
+Для текущего перехода внутренних error/logging и Planning/source контрактов используется один целевой контракт. Не создавать старые декодеры, compatibility adapters/re-exports, двойные readers или параллельные версии компонентов. Действующих потребителей переводить вместе с контрактом; тестовые fixtures обновлять или пересоздавать. Суффикс v1 сам по себе не означает legacy и не требует ни поддержки старого формата, ни косметического переименования.
+
+Для Planning/source P1 проверяются целевая schema closure, явный diff lock, encode/decode и согласованность fingerprint; поддержка прежнего внутреннего source wire не является критерием Done. Изменения bytes объяснять, а не скрывать регенерацией эталонов. Runtime, условия fallback и продолжение обработки сохраняются.
+
+Это решение не отменяет отдельное требование docs/tz_world_snapshot.md §20 к читаемости snapshot-оболочек и доменных секций. Если переход затрагивает именно эту границу, отдельно показать пересечение; не распространять её автоматически на внутренние контракты движка. Код и сохранённые пользовательские данные этой документальной правкой не удаляются. Остальные gates согласования и реализации сохраняются.
