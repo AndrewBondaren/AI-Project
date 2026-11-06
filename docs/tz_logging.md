@@ -70,7 +70,7 @@ policy-resolve эмиттер и sink `jsonValidation/resolve`; settlement и re
 
 ### Patch/Snapshot и artifacts — target регистрации шага 2 (2026-10-30)
 
-Статус: contract freeze принят 2026-10-30; **маршруты ещё не реализованы**.
+Статус: contract freeze принят 2026-10-30. Маршрут app.artifacts и transcript allowlist реализованы подготовительным срезом D2-3 2026-11-06 (21 logging-тест OK); маршрут app.snapshot этим срезом не реализован. Полный artifact GC emitter/failure correlation и локальный I0 ещё требуют D2-2.
 Используется тот же loggingConfig/JsonLogFormatter/router, без локальных
 handlers и без общего app.log. Domain emitters не дублируются.
 
@@ -243,4 +243,4 @@ rejected и не запускает повторное применение; out
 
 ### Artifact emitter — уточнение ответственности 2026-11-06
 
-В [Artifacts D1](../.cursor/plans/world-domain-artifacts-cancel-gc-d1.md#14-freeze-и-атомарные-шаги-после-ревью) producer activity/severity — доменный emitter ArtifactLifecycleLog: emit_gc_failure фиксирует GC_FAILED/ERROR и проекцию ArtifactGcFailure. GC service определяет факт и момент эмиссии, не собирает ArtifactLogRecord и не передаёт произвольный LogLevel. create_gc_failure не логирует. Emit валидирует контракт до best-effort sink boundary; исходный exception передаётся через exc_info существующему formatter. Это уточнение целевого контракта; реализация route/transcript и локальный EC-I0 проверяются в D2-3, текущая регистрация не объявляется выполненной.
+В [Artifacts D1](../.cursor/plans/world-domain-artifacts-cancel-gc-d1.md#14-freeze-и-атомарные-шаги-после-ревью) producer activity/severity — доменный emitter ArtifactLifecycleLog: emit_gc_failure фиксирует GC_FAILED/ERROR и проекцию ArtifactGcFailure. GC service определяет факт и момент эмиссии, не собирает ArtifactLogRecord и не передаёт произвольный LogLevel. create_gc_failure не логирует. Emit валидирует контракт до best-effort sink boundary; исходный exception передаётся через exc_info существующему formatter. Это уточнение целевого контракта; реализация route/transcript и локальный EC-I0 проверяются в D2-3, route/transcript registration выполнена подготовительным срезом; полная проверка нового GC emitter и локальный I0 остаются открыты.

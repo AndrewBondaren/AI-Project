@@ -1,23 +1,27 @@
 """Immutable operation observations, not a state machine or publication entry."""
 
+from enum import StrEnum
 from typing import Annotated, Self
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 from app.dataModel.artifacts.references import ArtifactRef
 from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind, OperationPhase
 from app.dataModel.identity.uid import EntityUid
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.validation.diagnostics.runtimeIssueContext import RevisionHex
 from app.dataModel.worldSnapshot.results.apply import SnapshotApplyResult
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
 from app.dataModel.worldSnapshot.results.publication import GameplayStarted, PackActivationResult
 
 
+class OperationCancellationReason(StrEnum):
+    REQUESTED = "requested"
+
+
 class OperationCancelled(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
 
     operation_id: EntityUid
-    reason: FieldPathError
+    reason: OperationCancellationReason
 
 
 class OperationRecord(BaseModel):

@@ -457,3 +457,13 @@ rg -n '20018|20019|20020|20140' backend .cursor/plans/spatial-f3-implementation-
 ### Дополнение по формальным замечаниям ревью
 
 В таблице D2-0…D2-4 теперь указаны запускаемые команды, cwd/ожидаемые результаты и ссылки на конкретные разделы ТЗ. Evidence binding исправлен на SqliteBlobFixture.__init__; вспомогательные SQL/catalog fixtures не названы полной композицией. Stage/code объявлены независимыми, проверяется code/cause и фактическая фаза, а не выдуманная допустимость пар. Обоснование StrictStr и граница преобразования перенесены в owning ТЗ Snapshot. Это документальная корректировка; команды тестов здесь не запускались и D2 не объявляется выполненным.
+
+
+## Параллельный запуск по поручению пользователя — 2026-11-06
+
+В рабочем дереве уже выполняется D2-1 другим исполнителем: reason/lease producer/manifest/fixtures/typing. Этот чат не перезаписывает его изменения и не объявляет D2-1 завершённым без evidence. D2-2 не запускается параллельно D2-1 из-за общих coreManifest.py, test_models.py, test_codec.py, test_staging.py и typing fixtures.
+
+Разрешённое пользователем уточнение порядка: независимая **подготовительная часть D2-3** выполняется параллельно. Её точный scope: app/core/loggingConfig.py, app/core/generationLogging.py, tests/test_logging_routes.py, tests/test_generation_logging.py (пути от backend). Только route/server allowlist/transcript app.artifacts и проверки независимой маршрутизации. Не создавать placeholder GC contracts и не трогать snapshotCore fixtures. Полный D2-3 и локальный EC-I0 остаются открыты до D2-2: реальные failure/cause/correlation проверяются после появления согласованного emitter. Это отдельная контрольная точка; выполнение D2-4 раньше объединения запрещено.
+
+
+Подготовка D2-3 выполнена в четырёх заявленных файлах: route/server sink app.artifacts и transcript allowlist. Два новых теста проверяют реальный domain JSON/transcript с operation_id и исходным traceback, один emit и изоляцию scope. Команда из backend: `python -m unittest -v tests.test_logging_routes tests.test_generation_logging` — 21 OK. Для sandbox заданы TEMP/TMP в `E:/AI Project/backend/.tmp_snapshot_core` (штатный Temp дал PermissionError); тестовый механизм и production logic не подменялись. Scoped diff --check PASS. Это evidence независимой маршрутизации, не нового GC emitter/failure_id; полный D2-3/локальный I0 остаётся OPEN до D2-2. Чужой D2-1 не редактировался этим треком.

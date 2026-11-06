@@ -3,7 +3,7 @@
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest, CanonicalTypeKind, RegisteredTypeEntry
 from app.dataModel.artifacts.references import ArtifactKind, ArtifactRef
 from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind, OperationPhase, OperationClaimKind
-from app.dataModel.artifacts.lifecycle.operation.record import OperationCancelled, OperationRecord
+from app.dataModel.artifacts.lifecycle.operation.record import OperationCancellationReason, OperationCancelled, OperationRecord
 from app.dataModel.artifacts.lifecycle.lease import OperationLeaseRef, StagingReservation
 from app.dataModel.artifacts.lifecycle.holders import (
     ArtifactHolderKind, OperationHolder, ArtifactRetentionHolder, SnapshotHolder, VerifiedArtifactRef,
@@ -40,6 +40,7 @@ ARTIFACT_CORE_SCHEMA = CanonicalSchemaManifest(entries=tuple(
         (20015, ArtifactLogActivity, CanonicalTypeKind.ENUM),
         (20016, ReferenceIssueReason, CanonicalTypeKind.ENUM),
         (20017, ArtifactStorageEventKind, CanonicalTypeKind.ENUM),
+        (20018, OperationCancellationReason, CanonicalTypeKind.ENUM),
         (20101, WorldSnapshotRef, CanonicalTypeKind.RECORD),
         (20102, PlayerSnapshotRef, CanonicalTypeKind.RECORD),
         (20103, WorldPublicationRef, CanonicalTypeKind.RECORD),

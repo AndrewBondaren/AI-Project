@@ -112,6 +112,7 @@ _PREFIX_ROUTES: tuple[tuple[str, str, str], ...] = tuple(
             ),
             ("http", "http", "api"),
             ("app.engine.dag", "engine", "dagExecution"),
+            ("app.artifacts", "artifacts", "artifactLifecycle"),
         ),
         key=lambda row: len(row[0]),
         reverse=True,
@@ -122,6 +123,7 @@ _PREFIX_ROUTES: tuple[tuple[str, str, str], ...] = tuple(
 # Do not include script/* or render/dumpLog (script-only).
 SERVER_SINKS: frozenset[tuple[str, str]] = frozenset({
     ("engine", "dagExecution"),
+    ("artifacts", "artifactLifecycle"),
     ("region_state", "regionStateLog"),
     ("http", "api"),
     ("pack", "packBakeLog"),

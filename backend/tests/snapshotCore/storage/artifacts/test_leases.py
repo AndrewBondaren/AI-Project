@@ -166,6 +166,30 @@ class ConcreteLeaseTests(unittest.TestCase):
                 self.assertEqual((await bundle[-1].read("prepare")).leased_artifacts, (ref,))
         run_async(check())
 
+    def test_cancel_reason_survives_reopen_and_repeat(self):
+        import tempfile
+        from pathlib import Path
+        from app.dataModel.artifacts.lifecycle.operation.record import OperationCancellationReason
+
+        async def check():
+            with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[3] / ".tmp_snapshot_core") as directory:
+                path = str(Path(directory) / "cancel.db")
+                async with live_database(path) as bundle:
+                    leases, catalog, _ = self.stores(bundle)
+                    lease = await leases.open_operation("prepare", "w1", OperationKind.SNAPSHOT_APPLY, "a" * 64)
+                    await catalog.reserve(lease, descriptor())
+                    result = await leases.cancel("prepare", 1)
+                    self.assertIs(result.terminal.reason, OperationCancellationReason.REQUESTED)
+                async with live_database(path, seed=False) as bundle:
+                    leases, _, _ = self.stores(bundle)
+                    self.assertEqual(await leases.recover("prepare"), result)
+                    before = bundle[0].conn.total_changes
+                    self.assertEqual(await leases.cancel("prepare", 1), result)
+                    self.assertEqual(bundle[0].conn.total_changes, before)
+                    with self.assertRaises(ValueError):
+                        await leases.cancel("prepare", 2)
+        run_async(check())
+
     def test_two_connections_cancel_while_owner_writes(self):
         async def check():
             import asyncio
@@ -297,8 +321,7 @@ class ConcreteLeaseTests(unittest.TestCase):
     def test_cancelled_terminal_requires_released_holds_on_write_and_both_cancel_reads(self):
         from unittest.mock import patch
         from app.application.publication.service.operationLedger import OperationLedger
-        from app.dataModel.artifacts.lifecycle.operation.record import OperationCancelled
-        from tests.snapshotCore.support.diagnostics import target_issue
+        from app.dataModel.artifacts.lifecycle.operation.record import OperationCancellationReason, OperationCancelled
 
         async def check():
             async with live_database() as first, live_database(first[0].path, seed=False) as second:
@@ -308,7 +331,7 @@ class ConcreteLeaseTests(unittest.TestCase):
                 await sealed(first, catalog, lease, ref)
                 await leases.finish_preparation(lease, (ref,))
                 op = lease.operation_id
-                outcome = OperationCancelled(operation_id=op, reason=target_issue("cancelled"))
+                outcome = OperationCancelled(operation_id=op, reason=OperationCancellationReason.REQUESTED)
                 operations = second[-1]
                 async with second[1].transaction(op) as scope:
                     with self.assertRaises(ValueError):

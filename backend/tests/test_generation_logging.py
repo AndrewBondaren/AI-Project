@@ -50,6 +50,28 @@ class GenerationWorldLogTests(unittest.TestCase):
         self.assertTrue(any("generation log close" in m for m in msgs))
         self.assertFalse(any("request_end" in m for m in msgs))
 
+    def test_artifacts_are_copied_only_to_active_world_scope(self) -> None:
+        logger = logging.getLogger("app.artifacts")
+        old_level = logger.level
+        logger.setLevel(logging.INFO)
+        try:
+            logger.info("artifact-outside-before")
+            with generation_world_log("artifact-a", mode="light", root=self.root) as a_path:
+                logger.info("artifact-only-a")
+            logger.info("artifact-outside-between")
+            with generation_world_log("artifact-b", mode="light", root=self.root) as b_path:
+                logger.info("artifact-only-b")
+            logger.info("artifact-outside-after")
+        finally:
+            logger.setLevel(old_level)
+        a = a_path.read_text(encoding="utf-8")
+        b = b_path.read_text(encoding="utf-8")
+        self.assertIn("artifact-only-a", a)
+        self.assertNotIn("artifact-only-b", a)
+        self.assertIn("artifact-only-b", b)
+        self.assertNotIn("artifact-only-a", b)
+        self.assertNotIn("artifact-outside", a + b)
+
     def test_generation_world_log_isolates_worlds(self) -> None:
         pack_log = logging.getLogger("app.application.worldData.pack.bake.packBakeLog")
 

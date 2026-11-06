@@ -47,7 +47,7 @@ from app.dataModel.worldSnapshot.results.publication import (
 from app.dataModel.worldSnapshot.events import SnapshotLogActivity, SnapshotLogRecord
 from app.dataModel.artifacts.events import ArtifactLogActivity, ArtifactLogRecord
 from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind, OperationPhase, OperationClaimKind
-from app.dataModel.artifacts.lifecycle.operation.record import OperationRecord, OperationCancelled
+from app.dataModel.artifacts.lifecycle.operation.record import OperationRecord, OperationCancellationReason, OperationCancelled
 from app.dataModel.artifacts.lifecycle.operation.claim import (
     PublicationOwner, PublicationTerminal, PublicationBusy, OperationClaim,
 )
@@ -532,7 +532,7 @@ class CoreModelTests(unittest.TestCase):
 
     def test_operation_phase_terminal_and_binding_matrix(self) -> None:
         _, _, diagnostic, success, refusal, _, ready, terminal = self._snapshot_dto_fixtures()
-        cancelled = OperationCancelled(operation_id="op", reason=diagnostic)
+        cancelled = OperationCancelled(operation_id="op", reason=OperationCancellationReason.REQUESTED)
         for phase in OperationPhase:
             for result in (None, success, refusal, cancelled):
                 values = {**terminal.model_dump(), "phase": phase, "terminal": result}
@@ -633,6 +633,13 @@ class CoreModelTests(unittest.TestCase):
             with self.assertRaises(ValidationError):
                 SnapshotLogRecord.model_validate({**values, "activity": SnapshotLogActivity.APPLY_STARTED, **changes})
 
+    def test_cancellation_reason_is_strict_and_closed(self) -> None:
+        for reason in ("requested", "unknown", None, 1, target_issue("cancelled")):
+            with self.subTest(reason=reason), self.assertRaises(ValidationError):
+                OperationCancelled(operation_id="op", reason=reason)
+        with self.assertRaises(ValidationError):
+            OperationCancelled.model_validate_json('{"operation_id":"op","reason":"unknown"}')
+
     def test_new_dtos_frozen_strict_roundtrip_and_nested_revalidation(self) -> None:
         publication, commit, diagnostic, success, refusal, lease, ready, terminal = self._snapshot_dto_fixtures()
         metadata = WorldSnapshotMetadata(ref=self.world, parent=None, operation_id="op", turn_id=1,
@@ -641,7 +648,7 @@ class CoreModelTests(unittest.TestCase):
         player = PlayerSnapshotMetadata(**{key: value for key, value in metadata.model_dump().items()
                                           if key not in ("ref", "base_pack_hash")}, ref=self.player)
         records = (metadata, player, commit, success, refusal, lease, ready, terminal,
-            OperationCancelled(operation_id="op", reason=diagnostic),
+            OperationCancelled(operation_id="op", reason=OperationCancellationReason.REQUESTED),
             StagingReservation(artifact_id="artifact", lease=lease, ref=self.artifact),
             PublicationOwner(lease=lease), PublicationBusy(record=ready), PublicationTerminal(record=terminal),
             OperationHolder(lease=lease), ArtifactRetentionHolder(artifact=self.artifact), SnapshotHolder(snapshot=self.player),
@@ -658,7 +665,7 @@ class CoreModelTests(unittest.TestCase):
         )
         for record in records:
             with self.subTest(model=type(record).__name__):
-                if record is refusal or isinstance(record, (OperationCancelled, GcReport)):
+                if record is refusal or isinstance(record, GcReport):
                     self.assertEqual(diagnostic_roundtrip(record), record)
                 else:
                     self.assertEqual(type(record).model_validate_json(record.model_dump_json()), record)

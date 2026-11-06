@@ -59,6 +59,16 @@ class CanonicalRequestCodecTests(unittest.TestCase):
             parent=None, operation_id="o", turn_id=1, created_at="2026-10-30T00:00:00.000000Z",
             envelope_format_version=1, base_pack_hash="a" * 64, state_refs=(), history_refs=(), retained_artifacts=())
 
+    def test_cancelled_terminal_uses_production_codec(self):
+        from app.dataModel.artifacts.lifecycle.operation.record import OperationCancellationReason, OperationCancelled
+        from app.db.repositories.sqlite.snapshotCore.operations.terminalCodec import StoredTerminalCodec
+        codec = StoredTerminalCodec()
+        result = OperationCancelled(operation_id="op", reason=OperationCancellationReason.REQUESTED)
+        row = codec.encode(result)
+        self.assertEqual(row.format_version, 1)
+        self.assertEqual(codec.decode(row), result)
+        self.assertIs(codec.decode(row).reason, OperationCancellationReason.REQUESTED)
+
     def _projection(self, request=None):
         return decode(self.codec.encode(request or self.request), tuple, self.registry.manifest)
 
@@ -85,7 +95,7 @@ class CanonicalRequestCodecTests(unittest.TestCase):
 
     def test_core_manifests_have_exact_reserved_ids_and_shared_dependencies(self):
         by_id = {entry.type_id: entry for entry in SNAPSHOT_CORE_SCHEMA.entries}
-        self.assertEqual(set(by_id), {110, *range(20001, 20018), *range(20101, 20140)})
+        self.assertEqual(set(by_id), {110, *range(20001, 20019), *range(20101, 20140)})
         self.assertIs(by_id[20101].python_type, WorldSnapshotRef)
         self.assertIs(by_id[20133].python_type, WorldSnapshotMetadata)
         self.assertIs(by_id[20139].python_type, RuntimeIssueContext)
@@ -93,7 +103,7 @@ class CanonicalRequestCodecTests(unittest.TestCase):
         self.assertNotIn(PatchSet, {entry.python_type for entry in SNAPSHOT_CORE_SCHEMA.entries})
         self.assertNotIn(FakeSection, {entry.python_type for entry in SNAPSHOT_CORE_SCHEMA.entries})
         combined = merge_manifests(ARTIFACT_CORE_SCHEMA, PATCH_CORE_SCHEMA, SNAPSHOT_CORE_SCHEMA)
-        self.assertEqual(len(combined.entries), 57)
+        self.assertEqual(len(combined.entries), 58)
         self.assertEqual(encode(self.snapshot, combined), encode(self.snapshot, SNAPSHOT_CORE_SCHEMA))
         # Manifest iteration order and Python names are not wire identities.
         reversed_schema = CanonicalSchemaManifest(entries=tuple(reversed(SNAPSHOT_CORE_SCHEMA.entries)))

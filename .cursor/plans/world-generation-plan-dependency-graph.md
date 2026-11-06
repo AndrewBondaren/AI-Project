@@ -842,7 +842,7 @@ flowchart TD
 | [GEO](./geo-1-designed-water.md) | [Разбор digest](./geo-river-route-digest-verification.md): смена первого эталона обусловлена принятой миграцией diagnostics, payload сохранён. | Следующий scoped D1 — River diagnostics, cold boundary. Группа: 9 тестов, 5 errors, 0 failures. |
 | [Snapshot](./world-domain-patches-snapshots.md) | [Rollback trace исправлен](./world-domain-snapshot-rollback-trace.md): caller получает transaction_outcome=ROLLED_BACK после подтверждённого отката. 7 адресных OK. | Повторное независимое ревью исправления. Полный набор: 171 тест, прежние 8 errors, 1 failure, 1 skip. |
 | [Spatial](./spatial-distribution-domain.md) | Карта F3 принята (§15.103). get_store_id добавлен отдельным срезом. | Подтвердить identity tests, затем реализовать F3 receipt, binding, holder journal и admission. |
-| [Time](./time-domain.md) | Проверены изолированные T3 и подготовка T4. Выполнено ревью политики Time/World settings для validate и runtime. | Миграция диагностики и runtime resolver впереди. Production T4/T5 требуют соответствующих Snapshot gates. |
+| [Time](./time-domain.md) | Проверены изолированные T3 и подготовка T4. Выполнено ревью политики Time/World settings для validate и runtime. | По owning Time плану диагностика и resolve_world_time_settings уже реализованы; не запускать повторную миграцию. Production T4/T5 требуют соответствующих Snapshot gates. |
 | [Physics](./physics-spatial-dynamics.md) | [Повторная проверка P2](./ps-error-1-d2-review.md) пройдена для обеих операций. 2/2 регрессии, профиль 71/71. | Предъявить D2 на отдельную пользовательскую приёмку. |
 | [API-1](./api-1-transport-boundary.md) | Проверено покрытие полей storage и wire. Climate C1 содержит девять scalars, десять после переноса lapse. | Сопоставить вход каждой операции с версией и выходом владельца, включая presence/aliases. |
 | [GEN-BAKE-READ](./generator-public-bake-reads.md) | Исправленный пакет D1–D7 предъявлен в §17.10.4 | Получить решение пользователя, затем R1/R2 отдельно по операциям. Handoff light, full L0+C23, named terrain и coordinate terrain описан в §17.10.3 |
@@ -860,7 +860,7 @@ flowchart TD
 | Physics | PS-ERROR-1 D2 / P2 | P2 прошёл независимую перепроверку. | Отдельное решение по D2. |
 | Spatial / World Pack | SP-P2W / F3 | Карта принята. [Минимальный срез](./spatial-f3-implementation-report.md) добавил стабильный store_id. | Верификация identity, затем production F3. |
 | DAG / Pack | F3 вход identity | F1/F2 проверены ранее; добавленный get_store_id требует отдельного прогона. | Reopen, два соединения, разные БД и совпадение с stop intent, затем Pack F3. |
-| Time | T3-A / T3-C, подготовка T4 проверена | Арифметика, календарь, World settings, чтение через закреплённые тестовые источники. | Внутри Time открыта политика STANDARD для 1–3 часов. Production T4 ждёт SN-TIME-READ, T5 — SN-TIME-APPLY, ветвление — SN-TIME-BRANCH. |
+| Time | T3-A / T3-C, подготовка T4 проверена | Арифметика, календарь, World settings, чтение через закреплённые тестовые источники. | STANDARD для 1–3 часов по owning-плану уже согласована и реализована. Production T4 ждёт SN-TIME-READ, T5 — SN-TIME-APPLY, ветвление — SN-TIME-BRANCH. |
 | Snapshot | 4D2 / CAS rollback trace | transaction_outcome отделяет сравнения от подтверждённого rollback. | Независимо проверить исправление и случай ошибки rollback. |
 | ERROR-CONTRACTS-1 | D2 GEO / Snapshot / Physics | Пять GEO-сценариев и Snapshot metadata проверены. Physics D2 предъявлен. | Каждому срезу — своё ревью и отдельная приёмка. |
 
@@ -868,7 +868,7 @@ API-1 ведёт пользователь. GEN-BAKE-READ после решени
 
 ### 12.2. ERROR-CONTRACTS-1: горизонтальные gates (v6.14)
 
-**Прикладные зависимости на 6 ноября.** Для следующих River producers нужен scoped D1. Исправление Snapshot rollback trace предъявлено. Отдельный Artifacts D1 должен определить причину cancel как управляющий исход F06 и отказ GC как технический исход F05, включая DTO и terminal codec. Карта Pack F3 принята, production F3 следует после проверки нового входа store identity. Зависимость F3 от исправления cancel/GC вводится только при подтверждении соответствующего caller в F3.
+**Прикладные зависимости на 6 ноября.** Для следующих River producers нужен scoped D1. Исправление Snapshot rollback trace предъявлено. Artifacts D1 принят в своём направлении и содержит exact freeze F06/F05; D2-1 уже изменяется в рабочем дереве, независимая подготовка logging выделена параллельно. Это не evidence Done. Карта Pack F3 принята, production F3 следует после проверки нового входа store identity. Зависимость F3 от исправления cancel/GC вводится только при подтверждении соответствующего caller в F3.
 
 | Локальный consumer-gate | Непосредственные prerequisite | Что не следует требовать |
 |---|---|---|
@@ -905,3 +905,20 @@ API-1 ведёт пользователь. GEN-BAKE-READ после решени
 **Точная передача finality:** проверенные F1/F2 → проверка нового store identity → Pack F3 (durable CLOSED, без release) → DAG F4 (durable finalized и terminal replay) → Pack F5 (release по перечитанному finalized) → F6 (две БД, recovery/retention) → отдельное разрешение production binding. Карта F3 принята; реализация одного get_store_id не закрывает F3. Эти локальные шаги уточняют SP-P2W, не заменяют SN-STAGE.
 
 **Покрытие машинной проверки:** §5 и §10.3 — действующие hard-edge реестры. §11.1 и пооперационные предложения GEN-BAKE-READ §17.10.3 остаются proposals и не включаются в hard count. Локальные F1–F6, EC-D2/I0 и определения внешних портов проверяются семантически: численный PASS сам по себе их не проверяет. Предложение владельцу Time — добавить обратную ссылку; owning-файл этой сверкой не меняется.
+
+
+### 12.6. Проверка готовности параллельных доменных треков — 2026-11-06
+
+Пользователь разрешил запускать реализацию только готовых независимых треков. Проверены owning-планы и текущий diff; разрешение не заменяет отсутствующий доменный freeze. Новые общие error-механизмы не создаются.
+
+| Трек | Фактическая готовность / запуск | Чего не хватает |
+|---|---|---|
+| Artifacts D2-1 cancel | Уже выполняется другим исполнителем в рабочем дереве; не запущен повторно | Итоговые tests/evidence и контрольная точка D2-1. Наличие diff не равно Done |
+| Artifacts подготовка D2-3 | Выполнена параллельно по 4 независимым logging-файлам; 21 logging-тест OK | Полный D2-3/локальный I0 после D2-2: реальный emitter/failure/cause/correlation; предварительная маршрутизация не закрывает этот gate |
+| Artifacts D2-2 GC | Не запущен: общие manifest, models/codec/staging/typing tests с активным cancel | Завершение и контрольная точка D2-1, затем единый локальный GC contract slice |
+| River diagnostics D2 | Не запущен | [Owning D1](geo-river-routing-diagnostics-d1.md): принятие D1, exact Planning carrier без «например», codec IDs/shape compatibility, downstream disposition/reporting handoff, атомарная карта команд/Done |
+| Physics PS-ERROR D2 | Уже реализован; независимое P2-review сообщает 71/71, повторная реализация не нужна | Отдельная пользовательская приёмка; I0/execution/storage/production bindings остаются самостоятельными gates; для следующего implementation scope требуется собственная exact step/file/test map, которой аудит здесь не выявил |
+| Time diagnostics | Уже реализованы resolve_world_time_settings, CalendarFieldIssue и collector; owning evidence 29 Time + 14 resolve | Production binding и SN-TIME-READ/APPLY/BRANCH по owning §48; предыдущие записи графа о неготовности runtime resolver и STANDARD устарели |
+| Time TIME-LOG §47 | Архитектура принята, реализация не запущена | Нет атомарного implementation шага с полным набором точных команд/files/Done; §47.3 привязывает integration checks к будущим bindings. Общие loggingConfig.py/generationLogging.py сейчас принадлежат подготовке Artifacts; до запуска согласовать владельца правок |
+
+Одновременные правки общих coreManifest.py и loggingConfig.py/generationLogging.py выполняет один владелец соответствующего среза. Данный запуск не добавляет Time/Physics routes поверх активного artifact logging writer и не стартует Pack F3 под видом error-domain migration. Для новых внешних треков требуется собственная принятая exact map. Статусы и проверки здесь — ограниченный readiness audit, а не новая приёмка доменов.

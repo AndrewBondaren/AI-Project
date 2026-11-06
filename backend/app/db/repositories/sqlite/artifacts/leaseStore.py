@@ -10,9 +10,8 @@ from app.application.publication.errors import OperationBusyError, PublicationIn
 from app.dataModel.artifacts.references import ArtifactRef
 from app.dataModel.artifacts.lifecycle.lease import OperationLeaseRef, StagingReservation
 from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind, OperationPhase
-from app.dataModel.artifacts.lifecycle.operation.record import OperationRecord, OperationCancelled
+from app.dataModel.artifacts.lifecycle.operation.record import OperationRecord, OperationCancellationReason, OperationCancelled
 from app.dataModel.identity.uid import EntityUid
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.validation.diagnostics.runtimeIssueContext import RevisionHex
 from app.db.models.artifacts.leaseRows import ArtifactLeaseEventRow, ArtifactWriterClaimRow
 from app.db.models.snapshotCore.operationRows import PublicationOperationEventRow, PublicationOperationRow
@@ -162,7 +161,7 @@ class SqliteArtifactLeases:
 
     async def cancel(self, operation_id: EntityUid, fence: int) -> OperationRecord:
         fence = TypeAdapter(PositiveInt).validate_python(fence, strict=True)
-        outcome = OperationCancelled(operation_id=operation_id, reason=FieldPathError(path=(), message="cancelled"))
+        outcome = OperationCancelled(operation_id=operation_id, reason=OperationCancellationReason.REQUESTED)
         async with self._transaction(operation_id) as scope:
             record = await self._record(scope, operation_id)
             if record.fence != fence:

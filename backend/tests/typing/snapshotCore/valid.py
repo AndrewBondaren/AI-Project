@@ -318,3 +318,10 @@ def artifact_storage_ports(scopes: SqliteArtifactScope, operations: SqliteOperat
                            artifacts: SqliteOperationArtifacts, history: SqliteSnapshotHistoryStore
                            ) -> tuple[IArtifactCatalog, IArtifactHolders, IArtifactLeases]:
     return SqliteArtifactCatalog(scopes, operations, artifacts), SqliteArtifactHolders(scopes, operations, artifacts, history), SqliteArtifactLeases(scopes, operations, artifacts)
+
+
+from app.dataModel.artifacts.lifecycle.operation.record import OperationCancellationReason, OperationCancelled
+
+
+def valid_cancellation_reason() -> OperationCancellationReason:
+    return OperationCancelled(operation_id="op", reason=OperationCancellationReason.REQUESTED).reason

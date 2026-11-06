@@ -97,10 +97,44 @@ is_runtime_river_context требует mode=RUNTIME и not validate_only. В pl
 
 Текущий PlanDiagnostic.issue = SerializeAsAny[FieldPathError[Any]] не принимает RiverRouteDiagnostic. Изолированная замена конструктора в emitter недостаточна. Предлагается согласовать с владельцем Planning/ERROR-CONTRACTS **параметризацию существующего PlanDiagnostic по конкретной модели причины**, без обратного импорта Hydrology в Planning:
 
-- PlanDiagnostic[IssueT], bound=BaseModel; прежний default — FieldPathError[Any]. Сохранить прежние issue/disposition поля и прежний конкретный wire binding 105 для существующих field diagnostics.
-- В hydrology/riverRouting.py объявить именованный `RiverPlanDiagnostic(PlanDiagnostic[RiverRouteDiagnostic])`. Это обёртка доставки существующего факта, не новая копия его полей. Валидатор проверяет точную пару code/disposition: только REDIRECTED/FALLBACK, остальные пять codes/ERROR; NOTICE и несовместимые пары запрещены и при восстановлении.
-- На границах PlanBuildResult/PlanEnvelope нужен сохраняющий concrete type carrier, например SerializeAsAny[PlanDiagnostic[Any]], **с обязательной валидацией конкретного carrier**, а не свободный BaseModel/dict/Any. Повторно валидировать в исходном конкретном классе; отвергать bare Any specialization и произвольные модели. Hydrology emitter принимает RiverRouteDiagnostic и возвращает RiverPlanDiagnostic; его сигнатуру не размывать.
-- Кодек должен восстановить зарегистрированный concrete carrier до валидации envelope, сохранив точный тип. Generic revalidation Pydantic не должна превращать RiverPlanDiagnostic в PlanDiagnostic[Any] или обрезать issue. Проверка этого — обязательный gate общей зависимости, а не предположение.
+Точный вариант на согласование (альтернатив в реализации D2 нет):
+
+```python
+# dataModel/planning/diagnostics/planDiagnostic.py
+IssueT = TypeVar("IssueT", bound=BaseModel, default=FieldPathError[Any])  # typing_extensions
+class PlanDiagnostic(BaseModel, Generic[IssueT]):
+    issue: SerializeAsAny[IssueT]
+    disposition: PlanDiagnosticDisposition
+
+# тот же модуль; локальная функция admission, не новый registry/framework
+def require_concrete_diagnostic(value: object) -> PlanDiagnostic[Any]: ...
+DiagnosticCarrier = Annotated[
+    SerializeAsAny[PlanDiagnostic[Any]], PlainValidator(require_concrete_diagnostic)
+]
+
+# dataModel/hydrology/riverRouting.py
+class RiverPlanDiagnostic(PlanDiagnostic[RiverRouteDiagnostic]): ...
+```
+
+В примере `def` — функция уровня модуля. Обе модели сохраняют `extra="forbid", frozen=True, strict=True, revalidate_instances="always"`. Для `RiverPlanDiagnostic.issue` явно повторить аннотацию `SerializeAsAny[RiverRouteDiagnostic]`. Его after-validator допускает только REDIRECTED/FALLBACK и остальные пять codes/ERROR; NOTICE запрещён.
+
+Admission принимает **только уже восстановленные экземпляры**: (а) `type(value) is PlanDiagnostic`, issue — именованный concrete FieldPathError; (б) именованный негeneric subclass PlanDiagnostic с concrete BaseModel-аннотацией issue, без Any/TypeVar/union и без незакрытых generic parameters. Специализации `PlanDiagnostic[Any]`, `PlanDiagnostic[BaseModel]`, bare BaseModel/dict и незарегистрированный wire ID отклоняются. Проверка конкретной issue-модели выполняется самим concrete carrier, не общей таблицей причин. Admission вызывает `type(value).model_validate(value, strict=True)` и проверяет сохранение точного типа; plain-validator исключает последующее generic slicing. Не доверять model_construct: тестами предъявить повторную проверку вложенного fact. Python admission не занимается codec registration; отсутствие binding отклоняет штатный codec. Сырой JSON envelope не становится новым входным протоколом.
+
+Точные поля/сигнатуры прямой границы:
+
+```python
+# planEnvelope.py: одинаково в PlanBuildResult[T] и PlanEnvelope[T]
+diagnostics: tuple[DiagnosticCarrier, ...]
+# planFingerprints.py
+def output_fingerprint(payload: object, dependencies: tuple[PlanDependency, ...],
+                       diagnostics: tuple[DiagnosticCarrier, ...],
+                       manifest: CanonicalSchemaManifest) -> OutputFingerprint: ...
+# riverPrepare.py
+def _emit_diagnostic(fact: RiverRouteDiagnostic, disposition: PlanDiagnosticDisposition,
+                      emit: Callable[[RiverPlanDiagnostic], None] | None) -> None: ...
+```
+
+`_emit_diagnostic` сохраняет return None: при callback создаёт ровно один RiverPlanDiagnostic и передаёт его callback; при emit=None ничего не публикует. В `_invalid_type`, `prepare_river_from_inputs`, `prepare_river_requests_from_inputs` заменить **только** тип параметра emit на `Callable[[RiverPlanDiagnostic], None] | None` (defaults сохранить); в `plan_prepared_routes` collector — `list[RiverPlanDiagnostic]`. Остальные параметры и возвращаемые PreparedRiver/PlanBuildResult[RiverRouteBatch] неизменны. Никаких новых универсальных outcome-классов, dispatch-сервисов или registry для diagnostics.
 
 Это **предложение изменения transport-контракта**, а не уже принятое расширение ERROR-CONTRACTS. До согласования владельцем Planning/ERROR-CONTRACTS нельзя реализовать обход через фиктивный checked path, union с импортом Hydrology в Planning, произвольный BaseModel или message JSON. Если владелец выберет иной существующий F07 carrier, D1 и wire ID 328 должны быть пересогласованы до D2.
 
@@ -141,3 +175,51 @@ Reuse RiverRouteDiagnostic предполагает strict revalidation, extra=f
 ## 7. Решения для согласования
 
 Принять reuse RiverRouteDiagnostic и существующих enum как operational facts без искусственного checked path; согласовать generic PlanDiagnostic + hydrology-owned RiverPlanDiagnostic и строгий concrete carrier с владельцем Planning/ERROR-CONTRACTS; согласовать surface IDs 325–328 и boundary совместимости с владельцем codec. После этого разрешить D2 только четырёх caller sites общего emitter и необходимых прямых моделей/consumers/tests. Прямые PlanBuildFailure, runtime/import sinks, source/Pack locks и следующий producer не входят. Этот документ не является разрешением на реализацию до принятия D1.
+
+
+## История проверки готовности — до уточнения D1 2026-11-06
+
+**River D2 НЕ ЗАПУЩЕН.** Ниже исторические замечания; точный предлагаемый контракт теперь задан в §4, файловые шаги — §8. Согласования всё ещё отсутствуют. Проверка текущего checkout по поручению пользователя запускать только готовые треки:
+
+- D1 остаётся предложением (§§1/7), пользовательская приёмка отсутствует.
+- В §4 требуется принятый exact Planning carrier: generic PlanDiagnostic / RiverPlanDiagnostic, admission и envelope shape; формулировка «например SerializeAsAny» не является freeze.
+- Surface IDs 325–328 и совместимость с binding 105 / OPEN_WATER_SOURCE_SCHEMA_V1 требуют решения codec owner.
+- `surfacePlanningAssembler.report_surface_diagnostics` смешивает ERROR/FALLBACK в blocking report и не принимает River operational fact. До production handoff нужно согласовать сохранение disposition/continuation; envelope-only scope не закрывает эту границу.
+- До кода нужна атомарная карта шагов с ТЗ, точными файлами/сигнатурами, запускаемыми командами и Done (§6 пока содержит только общие наборы).
+
+Отсутствие пересечения файлов с Artifacts не снимает эти gates. Следующая допустимая работа — завершение документа D1 и его принятие, а не изменение общего Planning transport по догадке. Read-only аудит production подтвердил прежний FieldPathError constructor в riverPrepare._emit_diagnostic. Код в рамках проверки готовности не менялся.
+
+
+## 8. Атомарная карта D2 (не разрешение начать код)
+
+Нормативные ссылки: [ERROR-CONTRACTS §2.4 F03/F07 и scoped D1 gate](error-contracts-1.md), [ТЗ Hydrology](../../docs/tz_terrain_hydrology.md) (river routing и receiver semantics), [ТЗ DAG: контракты Input/Output](../../docs/tz_world_generation_dag.md#контракты-inputoutput-engine-dag-самостоятельный-dag-typing-1), [ТЗ validation](../../docs/tz_json_validation.md). Ни один шаг не меняет алгоритм маршрутизации. Все пути ниже от корня репозитория; команды — из `backend`, после `$env:PYTHONPATH='.;tests'`. Новые test-файлы явно помечены; команды для них запускаются после их создания в D2.
+
+| Шаг / зависимость | Точные файлы и работа | Норма | Команда | Done |
+|---|---|---|---|---|
+| 0 / принятие D1 | Этот документ: записать решения O1–O3 из §9; снять baseline до изменений | ERROR-CONTRACTS scoped D1 gate | `.\.venv\Scripts\python -m unittest tests.geo1.procedural_refinement.test_proposals -q` | Записаны фактические ошибки и baseline, согласованы O1–O3; исторический прогноз не выдан за результат |
+| 1 / 0 | `backend/app/dataModel/planning/diagnostics/planDiagnostic.py`, `backend/app/dataModel/planning/contracts/planEnvelope.py`, `backend/app/application/planning/service/planFingerprints.py`; контракт §4. Расширить `backend/tests/planning/contracts/test_contracts.py` | F03/F07; ТЗ DAG | `.\.venv\Scripts\python -m unittest tests.planning.contracts.test_contracts -q` | Concrete type сохраняется в build result/envelope; bare/Any/forged input отвергается; прежний field carrier работает |
+| 2 / 1 | `backend/app/dataModel/hydrology/riverRouting.py`; RiverPlanDiagnostic, strict fact invariants §4; новый `backend/tests/geo1/fine_water/test_river_diagnostics.py` | ТЗ Hydrology; F03/F07 | `.\.venv\Scripts\python -m unittest tests.geo1.fine_water.test_river_diagnostics -q` | Все шесть code, четырнадцать reason, nullable receiver level и пустая rejected string покрыты; неверные пары disposition отклоняются |
+| 3 / 2 | `backend/app/application/worldData/planning/encoding/surfaceManifest.py`; четыре bindings §5. Расширить `backend/tests/planning/encoding/test_canonical_codec.py` | ТЗ DAG; §5 данного D1 | `.\.venv\Scripts\python -m unittest tests.planning.encoding.test_canonical_codec -q` | Новый процесс штатно восстанавливает concrete carrier; bounded decode и unknown-ID negatives; binding 105/его bytes и source shape lock неизменны |
+| 4 / 3 | `backend/app/application/worldData/generators/hydrology/rivers/riverPrepare.py`; четыре sites §2 и callback signatures §4. Расширить новый `backend/tests/geo1/fine_water/test_river_diagnostics.py` | ТЗ Hydrology; F03/F07 | `.\.venv\Scripts\python -m unittest tests.geo1.fine_water.test_river_diagnostics tests.geo1.fine_water.test_routing -q` | ERROR и FALLBACK доходят до collector; без callback сохранены facts; нет двойного emit, алгоритмическая дельта отсутствует |
+| 5 / 4 | `backend/tests/test_hydrology_fine_river_planning.py`, `backend/tests/planning/providers/test_planning_service.py`: mixed water/river, fine/coarse publication через штатный service, fingerprint; production service менять не требуется | ТЗ DAG; §5 | `.\.venv\Scripts\python -m unittest tests.test_hydrology_fine_river_planning tests.planning.providers.test_planning_service -q` | Обе ветви §1 опубликованы; порядок/dedup/type сохранены; изменение cause меняет fingerprint; source compatibility предъявлена |
+| 6 / 5 | `backend/tests/geo1/procedural_refinement/test_proposals.py`: два JSON-message reader заменить concrete issue; `backend/tests/geo1/procedural_refinement/river_route_golden.json`: только два разрешённых эталона после анализа §6 | ТЗ Hydrology; §6 | `.\.venv\Scripts\python -m unittest tests.geo1.procedural_refinement.test_proposals.ProceduralRefinementTests.test_declared_membership_and_historical_results_do_not_depend_on_segment_flag tests.geo1.procedural_refinement.test_proposals.ProceduralRefinementTests.test_kind_mismatch_migration_preserves_historical_river_payload -q` | Два независимых запуска совпадают; payload неизменен; mismatch-only d632ae06… сохранён; каждая diagnostic/wire дельта объяснена |
+| 7 / 6 | Этот документ: фактический отчёт D2; код вне карты не менять без пересмотра scope | ERROR-CONTRACTS D2 gate | `.\.venv\Scripts\python -m unittest discover -s tests/geo1/procedural_refinement -t . -q`; `.\.venv\Scripts\python -m unittest tests.geo1.fine_water.test_kind_mismatch tests.test_hydrology_river_routing tests.test_hydrology_river_round2 -q` | Новые тесты проходят; прежние ошибки и остаток disabled fine routing предъявлены отдельно; production reporting не объявлен готовым |
+
+В §5 bindings означают точные записи `(325, RiverRouteDiagnostic, CanonicalTypeKind.RECORD)`, `(326, RiverRoutingCode, CanonicalTypeKind.ENUM)`, `(327, RiverRoutingFailure, CanonicalTypeKind.ENUM)`, `(328, RiverPlanDiagnostic, CanonicalTypeKind.RECORD)` в существующем SURFACE_MANIFEST. Imports — из `app.dataModel.hydrology.riverRouting`. ID 105 остаётся привязан к **непараметризованному PlanDiagnostic**, а не к новой специализации. Проверить доступность ID перед D2; конфликт требует нового решения O2, автоматического перенумерования нет. `backend/app/application/worldData/generators/hydrology/encoding/sourceSchema.py` — read-only compatibility boundary; изменение shape lock требует отдельного scope. Если plain-validator alias несовместим со штатным codec/schema introspection, шаг 3 блокируется: не обходить проверку и не проектировать новую инфраструктуру.
+
+## 9. Envelope scope, handoff и решения владельцев
+
+**Envelope-only D2:** создание typed facts/carrier, callback collector, PlanBuildResult, штатная публикация PlanningService/FineRiverPublicationJob, fingerprint, SURFACE_MANIFEST restore. ERROR блокирует соответствующий intent; наличие ERROR не делает весь envelope невалидным. FALLBACK — continuation с принятым маршрутом; исходный reason сохраняется и не превращается в blocking issue. Field issue остаётся отдельной категорией: operational ERROR нельзя добавлять в tuple FieldPathError.
+
+**Отдельный downstream handoff, не шаг D2:** `backend/app/application/worldData/planning/composition/surfacePlanningAssembler.py::report_surface_diagnostics`, runtime/import `riverRouteDiagnostics.py::emit_river_diagnostic`. Владельцы reporting/ERROR-CONTRACTS должны назвать существующий typed sink operational rejection и отдельную доставку continuation. До решения не менять resolve_ctx.errors, не придумывать path/message и не выпускать river carrier в неподдержанный production consumer. При необходимости production выпуска envelope-only scope расширяется новым согласованным D1, а не скрытым adapter в этом срезе.
+
+Приёмка handoff отдельно доказывает: ERROR operational rejection не теряется; FALLBACK ни при runtime, ни при validate_only не попадает в blocking field issues; NOTICE не требует выдуманного field path; каждый факт доставлен ровно один раз. Это обязательный gate production включения, но не заявление о выполненной миграции reporting в D2.
+
+| Решение | Владелец | Предлагается утвердить | Статус / что блокирует |
+|---|---|---|---|
+| O1 | Planning + ERROR-CONTRACTS | Точный generic carrier/admission §4 и operational reuse без checked path | **Не согласовано**; блокирует шаг 1 и весь D2 |
+| O2 | Surface codec + source/Pack | IDs 325–328; неизменные binding 105, bytes и source lock; совместимость проверить до emitter cutover | **Не согласовано**; блокирует D2; несовместимость требует возврата D1 владельцу, не регенерации locks |
+| O3 | Hydrology + заказчик среза | Envelope-only boundary и сохранение ERROR/continuation; принять этот D1 для реализации | **Не согласовано**; блокирует D2 |
+| O4 | Reporting + ERROR-CONTRACTS | Назвать существующие typed sinks и согласовать отдельную карту runtime/import migration | **Решение отсутствует**; блокирует production prepare_surface/prepare_geo handoff, не выдаётся за выполненную часть envelope D2 |
+
+Имена конкретных ответственных и их решения в доступных материалах не подтверждены; роли не означают полученного approval. Текущая работа заканчивается предъявлением D1. Код, codec bindings, locks и golden в этой задаче не изменяются.

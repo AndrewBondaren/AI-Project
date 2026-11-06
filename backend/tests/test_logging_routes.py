@@ -101,6 +101,29 @@ class _LogDirCase(unittest.TestCase):
 
 
 class ServerRouteFileTests(_LogDirCase):
+    def test_artifacts_route_preserves_traceback_in_domain_file_and_transcript(self) -> None:
+        self._install_server()
+        self.assertEqual(route_for("app.artifacts"), ("artifacts", "artifactLifecycle"))
+        with generation_world_log("artifact-world", mode="light", root=self.logs / "generation") as run_path:
+            try:
+                raise OSError("artifact route probe")
+            except OSError:
+                logging.getLogger("app.artifacts").exception(
+                    "artifact failure probe", extra={"operation_id": "maintenance-probe", "world_uid": None})
+        _flush_facade()
+        domain = self.logs / "artifacts" / "artifactLifecycle.log"
+        rows = [json.loads(line) for line in domain.read_text(encoding="utf-8").splitlines()]
+        copies = [json.loads(line) for line in run_path.read_text(encoding="utf-8").splitlines()
+                  if json.loads(line).get("msg") == "artifact failure probe"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(len(copies), 1)
+        for record in (rows[0], copies[0]):
+            self.assertEqual(record["operation_id"], "maintenance-probe")
+            self.assertIsNone(record["world_uid"])
+            self.assertIn("artifact route probe", record["exc"])
+            self.assertIn("test_artifacts_route_preserves_traceback", record["exc"])
+        self.assertEqual(rows[0]["exc"], copies[0]["exc"])
+
     def test_http_writes_api_log(self) -> None:
         self._install_server()
         logging.getLogger("http").info("request_start method=GET path=/api/worlds")

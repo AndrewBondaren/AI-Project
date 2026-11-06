@@ -29,6 +29,7 @@ generation_world_var: ContextVar[str | None] = ContextVar("generation_world", de
 # Logger name prefixes captured into the generation file (not HTTP/chat).
 # ``app.relief`` = reliefLog / canal / road_shoulder events (not under generators.*).
 _GENERATION_PREFIXES: tuple[str, ...] = (
+    "app.artifacts",
     "app.application.worldData.pack",
     "app.application.worldData.generators",
     "app.application.worldData.materialize.terrain.terrainBatchOrchestrator",

@@ -21,7 +21,7 @@ from app.application.publication.service.operationLedger import OperationLedger
 from app.dataModel.artifacts.lifecycle.holders import OperationHolder, ArtifactRetentionHolder
 from app.dataModel.artifacts.lifecycle.lease import OperationLeaseRef, StagingReservation
 from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind, OperationPhase
-from app.dataModel.artifacts.lifecycle.operation.record import OperationRecord, OperationCancelled
+from app.dataModel.artifacts.lifecycle.operation.record import OperationRecord, OperationCancellationReason, OperationCancelled
 from app.dataModel.artifacts.references import ArtifactKind, ArtifactFormatRegistry
 from app.dataModel.artifacts.events import ArtifactLogActivity
 from app.dataModel.worldSnapshot.results.apply import SnapshotApplyResult
@@ -124,7 +124,7 @@ class LifecycleFixture:
         await self.drained.wait()
         for holders in self.holds.values():
             holders.discard(OperationHolder(lease=self.lease))
-        self.terminal = OperationCancelled(operation_id="op", reason=target_issue("cancelled"))
+        self.terminal = OperationCancelled(operation_id="op", reason=OperationCancellationReason.REQUESTED)
         return self.record(OperationPhase.TERMINAL)
 
 

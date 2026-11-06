@@ -233,3 +233,11 @@ def invalid_history_projection(metadata: WorldSnapshotMetadata, player: PlayerSn
     validate_receipt_provenance(metadata, [receipt], None, metadata.operation_id)  # EXPECT: reportArgumentType
     encode_history_row(player, player, codec)  # EXPECT: reportArgumentType
     decode_history_row({}, publication, codec)  # EXPECT: reportArgumentType
+
+
+from app.dataModel.artifacts.lifecycle.operation.record import OperationCancelled
+
+
+def invalid_cancellation_reason(diagnostic: FieldPathError) -> None:
+    OperationCancelled(operation_id="op", reason="requested")  # EXPECT: reportArgumentType
+    OperationCancelled(operation_id="op", reason=diagnostic)  # EXPECT: reportArgumentType
