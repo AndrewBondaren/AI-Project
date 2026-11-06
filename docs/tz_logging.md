@@ -219,6 +219,8 @@ rejected и не запускает повторное применение; out
 
 ## Связанные документы
 
+- [Stable logging consumers — D1](../.cursor/plans/logging-stable-consumers-d1.md) — предложение типизированной идентичности consumers/sinks вместо маршрутов по Python-папкам; код не реализован, требуется приёмка.
+
 - [Разделение logging facade по ответственностям — DONE](../.cursor/plans/logging-facade-decomposition-done.md) — реализовано, предъявлено на приёмку; 105 тестов, те же 6 внешних baseline ошибок, typing чистый. Без legacy re-export и изменения runtime.
 
 | Документ | Консьюмеры / зачем |
