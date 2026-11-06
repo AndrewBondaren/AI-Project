@@ -528,7 +528,7 @@ Fence не даёт writer прежней попытки записать/seal �
 и ready_inactive artifact не освобождаются операцией cancel.
 
 `GcReport(deleted: tuple[ArtifactRef, ...], retained: tuple[ArtifactRef, ...],
-failed: tuple[FieldPathError, ...])` сообщает фактические удаления, а не
+failed: tuple[ArtifactGcFailure, ...])` сообщает фактические удаления, а не
 обещание фоновой задачи. Writer fence/GC не требуют независимого scheduler:
 все операции явно вызывает DAG/domain application по принятым границам.
 
@@ -543,7 +543,8 @@ fence, leased_artifacts: tuple[ArtifactRef, ...],
 terminal: SnapshotApplyResult | PackActivationResult | GameplayStarted |
 OperationCancelled | None.
 `OperationCancelled` — отдельный frozen record с operation_id и reason:
-FieldPathError; это не четвёртый SnapshotApplyOutcomeKind. TERMINAL требует
+OperationCancellationReason (StrEnum, REQUESTED="requested"); это управляющий
+исход F06, не ошибка поля и не четвёртый SnapshotApplyOutcomeKind. TERMINAL требует
 terminal, остальные phases его не содержат; APPLYING требует publication_fingerprint.
 Kind и оба bindings immutable; terminal type обязан соответствовать kind.
 SnapshotApplyResult с CONFLICT/REJECTED может описывать общий refusal
@@ -1152,3 +1153,10 @@ read/guard — обязанность caller boundary, не обещание т�
 существующего file writer самого по себе. Future restore adapter меняет
 эту boundary, не создаёт terrain-local snapshot/restore/branch service.
 Новые schemas не означают реализацию WorldSnapshotService.
+
+
+### Artifact diagnostics — уточнение контракта 2026-11-06
+
+Целевой контракт cancel/GC уточнён в [Artifacts D1 §14](../.cursor/plans/world-domain-artifacts-cancel-gc-d1.md#14-freeze-и-атомарные-шаги-после-ревью); это синхронизация ТЗ до реализации, не отметка DONE. OperationCancelled.reason — обязательный OperationCancellationReason.REQUESTED. GcReport.failed — tuple[ArtifactGcFailure, ...]; frozen/strict failure содержит failure_id, ArtifactRef, stage, code, exception_type, message, обязательные nullable errno/winerror без defaults. GcFailureCode: IO_ERROR="io_error", VALUE_ERROR="value_error"; stage: validate, guard_enter, catalog_read, holders_read, delete, mark_deleted, guard_exit. Exact types/registrations и сигнатуры — указанная контрактная карта.
+
+Это прямой переход внутреннего контракта, без legacy decoder или новой версии terminal. Создание failure не эмитирует событие; существующий ArtifactLifecycleLog получает семантические create_gc_failure/emit_gc_failure. Операционный catch GC не охватывает построение/валидацию событий: GC_DELETED эмитируется после успешного выхода guard вне catch OSError/ValueError операций. Contract errors распространяются, sink failures не меняют результат. UnknownCommitOutcome не превращается в GcReport.failed. Проверки сохранения и reopen относятся к новому terminal.

@@ -239,3 +239,8 @@ rejected и не запускает повторное применение; out
 | 2026-08-22 | SoT sinks: `{domain}/{service}.log`; один писатель на файл; каталог консьюмеров; скрипт ≠ серверный `app.log`. |
 | 2026-08-22 | unmatched server → `core`/`runtime` (не `app.log`). |
 | 2026-08-23 | **L7/L8:** консоль не блокирует bake (drop-queue); storm R44 / T-3c — файл; heartbeat sidecar/validate/emit — `packBakeLog` на консоль. |
+
+
+### Artifact emitter — уточнение ответственности 2026-11-06
+
+В [Artifacts D1](../.cursor/plans/world-domain-artifacts-cancel-gc-d1.md#14-freeze-и-атомарные-шаги-после-ревью) producer activity/severity — доменный emitter ArtifactLifecycleLog: emit_gc_failure фиксирует GC_FAILED/ERROR и проекцию ArtifactGcFailure. GC service определяет факт и момент эмиссии, не собирает ArtifactLogRecord и не передаёт произвольный LogLevel. create_gc_failure не логирует. Emit валидирует контракт до best-effort sink boundary; исходный exception передаётся через exc_info существующему formatter. Это уточнение целевого контракта; реализация route/transcript и локальный EC-I0 проверяются в D2-3, текущая регистрация не объявляется выполненной.

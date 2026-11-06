@@ -3072,3 +3072,6 @@ Evidence гонок получено на отдельных соединени�
 ### Scoped D1 artifacts cancel / GC — архитектурное направление принято
 
 [Предложение D1: cancel F06, GC failure F05, terminal/reopen и пересечение с Pack F3](world-domain-artifacts-cancel-gc-d1.md). Исследование и документы; D2 не начат. Пользователь принял текущую архитектурную основу и направление D1; новую общую инфраструктуру отклонил. Унификация доменных адаптеров выполняется постепенно в конкретных доменных срезах. Сохраняются reuse resolve/report/collect_only, blocking issues / continuations и прямой переход внутреннего контракта без legacy decoder. [Итоговое решение](world-domain-artifacts-cancel-gc-d1.md#12-решение-пользователя--2026-11-06). [Граница изменений и порядок локального D2](world-domain-artifacts-cancel-gc-d1.md#граница-изменений-и-порядок-d2): семантические методы существующего адаптера, reuse context/report, без нового framework и переноса решений об исходе. D2 не начат.
+
+
+Artifacts D1: [§14 — exact freeze, атомарные шаги и проверяемый callers inventory](world-domain-artifacts-cancel-gc-d1.md#14-freeze-и-атомарные-шаги-после-ревью). Целевые reason/failed синхронизированы в docs/tz_world_snapshot.md, роль emitter уточнена в docs/tz_logging.md. Документальный D2-0 подготовлен; кодовые D2-1…D2-4 не начаты.

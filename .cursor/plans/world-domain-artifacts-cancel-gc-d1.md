@@ -16,13 +16,7 @@
 
 Унификация не означает одинаковую форму всех доменных причин или обязательный адаптер для каждой ошибки. В POJO/import цепочках report_issues/report_continuation уже выполняют доставку с учётом контекста; их не обходят новым emit. В Artifacts GC применяется объявленная семантика collect без навязывания ResolveContext.
 
-После отдельной команды на D2 выполнять единый локальный срез:
-
-1. Сверить текущие consumers, baseline и пересечение manifest с Pack F3. Не начинать общий инфраструктурный проект.
-2. Обновить artifact DTO и manifest, producers cancel/GC, семантические create/emit методы существующего ArtifactLifecycleLog и все затронутые fixtures вместе. Не оставлять опубликованный промежуточный контракт со сломанными callers.
-3. Подключить существующие artifact route/transcript и согласованную проекцию причины/traceback. Ошибки контрактов отделить от best-effort sink failures.
-4. Проверить исходные cancel/GC сценарии, повтор/reopen, codec, caller ↔ log correlation, typing и snapshotCore по §§5/9/11. Зафиксировать отличия от исторической базы и текущее evidence.
-5. Обновить отчёт/owning-план. Остальные домены унифицировать при их собственных работах; не включать массовую миграцию DAG/Snapshot/jsonValidation в Artifacts D2.
+После отдельной команды на D2 следовать атомарным шагам §14. Один шаг — одна проверяемая контрактная группа, краткий отчёт и ожидание подтверждения по code-gates.mdc. Связанные producer/consumer/fixtures переводятся внутри своей группы одновременно. Общий framework и массовая миграция не входят в шаги.
 
 ## 1. Причина и reuse
 
@@ -52,7 +46,7 @@ ArtifactStagingService.cancel → OperationLedger.cancel (валидация ide
 
 **Уточнение пользователя: прямой переход внутреннего контракта.** Пункт 20 ТЗ Snapshot — задел на будущую совместимость изменяемых форматов мира, а не требование поддерживать прежний внутренний контракт OperationCancelled. По legacy-folder.mdc потребители и fixtures переводятся на новый контракт одним срезом. Legacy decoder, миграция старых terminal и отдельная ветка cancelled v2 не вводятся. Существующий format_version=1 сохраняется для текущего целевого terminal-контракта; это не обещание чтения исторических bytes с прежним reason.
 
-В ARTIFACT_CORE_SCHEMA зарегистрировать новый enum причины и concrete GC DTO/enums; существующие identities OperationCancelled (20127) и GcReport (20129) сохраняются при прямом обновлении внутренних shapes. Свободные IDs новых типов проверить и согласовать с F3. ID 20137 базового FieldPathError не переопределять. Наличие аннотации SnapshotApplyResult.diagnostics: tuple[FieldPathError, ...] не доказывает необходимость регистрации самого carrier: canonical codec выбирает конкретный type(value). Эта регистрация не служит compatibility reader для cancel/GC; её общий аудит относится к Snapshot diagnostics, не к этому переходу. Canonical TLV, checksum и проверки operation_id/category сохраняются. Codec проверяет текущую модель и отклоняет неподдерживаемые/невалидные данные без fallback. Новые записи должны восстанавливаться после reopen; исторические cancelled payload не входят в контракт совместимости этого D2. Тестовые данные обновляются или создаются заново. Удаление пользовательской БД этим решением не разрешается.
+В ARTIFACT_CORE_SCHEMA зарегистрировать новый enum причины и concrete GC DTO/enums; существующие identities OperationCancelled (20127) и GcReport (20129) сохраняются при прямом обновлении внутренних shapes. Новые IDs зафиксированы в §14; перед кодом повторить collision check с изменениями F3, без автоматического переназначения. ID 20137 базового FieldPathError не переопределять. Наличие аннотации SnapshotApplyResult.diagnostics: tuple[FieldPathError, ...] не доказывает необходимость регистрации самого carrier: canonical codec выбирает конкретный type(value). Эта регистрация не служит compatibility reader для cancel/GC; её общий аудит относится к Snapshot diagnostics, не к этому переходу. Canonical TLV, checksum и проверки operation_id/category сохраняются. Codec проверяет текущую модель и отклоняет неподдерживаемые/невалидные данные без fallback. Новые записи должны восстанавливаться после reopen; исторические cancelled payload не входят в контракт совместимости этого D2. Тестовые данные обновляются или создаются заново. Удаление пользовательской БД этим решением не разрешается.
 
 После закрытия и reopen БД: OperationLedger.recover → operationStore.read → _load → codec.decode → evidence и проверка holds → OperationRecord с тем же enum reason. Recover не запускает cancel заново. Повтор cancel с тем же fence возвращает ту же запись и не добавляет release/terminal/phase rows. Lost commit acknowledgement остаётся UnknownCommitOutcome; новое соединение устанавливает факт из durable terminal, а не из локальной причины запроса.
 
@@ -94,7 +88,7 @@ GC report сейчас не пишется в operation terminal, и D2 этог
 
 ### Logging
 
-GC_FAILED (ERROR) принадлежит ArtifactGarbageCollector: один явный emit_gc_failure на пойманный отказ кандидата после create_gc_failure и добавления результата в report (§11). Передать тот же ArtifactGcFailure, который включён в GcReport.failed, в расширенный ArtifactLogRecord.gc_failure: ArtifactGcFailure | None = None. Инвариант: GC_FAILED требует gc_failure, artifact_hash совпадает с gc_failure.ref.content_hash; для других activities gc_failure отсутствует. Новый failure_id создаётся один раз через runtime_uid. Caller и лог связываются по failure_id; operation_id связывает вызов с maintenance operation, ref — с кандидатом. При повторе GC новый отказ имеет новый failure_id даже при том же operation_id/ref. Это диагностическая identity, не новый persisted state и не ключ дедупликации удаления.
+По терминологии ТЗ logging producer уровня/структуры события — доменный emitter ArtifactLifecycleLog: он фиксирует GC_FAILED → ERROR. ArtifactGarbageCollector владеет обнаружением исхода и моментом вызова; LogLevel вручную не выбирает. GC_FAILED (ERROR) принадлежит ArtifactGarbageCollector как владельцу момента эмиссии: один явный emit_gc_failure на пойманный отказ кандидата после create_gc_failure и добавления результата в report (§11). Передать тот же ArtifactGcFailure, который включён в GcReport.failed, в расширенный ArtifactLogRecord.gc_failure: ArtifactGcFailure | None = None. Инвариант: GC_FAILED требует gc_failure, artifact_hash совпадает с gc_failure.ref.content_hash; для других activities gc_failure отсутствует. Новый failure_id создаётся один раз через runtime_uid. Caller и лог связываются по failure_id; operation_id связывает вызов с maintenance operation, ref — с кандидатом. При повторе GC новый отказ имеет новый failure_id даже при том же operation_id/ref. Это диагностическая identity, не новый persisted state и не ключ дедупликации удаления.
 
 Расширить существующий ArtifactLifecycleLog.emit(record, *, cause: Exception | None = None) как механизм отправки. Producer вызывает семантический emit_gc_failure; тот сам собирает ArtifactLogRecord и вызывает emit. Producer не собирает event вручную. Для GC_FAILED producer передаёт исходный пойманный exception непосредственно из except; для остальных событий cause отсутствует. Facade проверяет согласованность activity/cause до отправки: GC_FAILED требует cause, остальные activities его не принимают. Ошибки построения event — ошибки контракта, не ошибки sink; они не подавляются. Facade использует существующий logger app.artifacts и `_LOGGER.log(..., exc_info=(type(cause), cause, cause.__traceback__))`. Exception и traceback живут только на границе logging, не входят в DTO/manifest/terminal. Связанный typed gc_failure, напротив, входит в ArtifactLogRecord и должен проходить его canonical round-trip через существующий ID 20136; ID события не меняется. JsonLogFormatter уже сериализует exc_info в JSON-поле exc: сохраняются traceback и цепочка причин. Не восстанавливать exception из exception_type и не выдавать новый stack в emitter за исходное место отказа.
 
@@ -133,7 +127,7 @@ Fake cancel найден в tests/snapshotCore/storage/artifacts/test_staging.py
 
 StoredTerminalCodec уже вызывает model_validate и canonical encode/decode с manifest; новая аннотация reason проверяется через эту цепочку. Изменение terminalCodec.py не требуется только ради смены типа: файл входит в проверку round-trip, а не в обязательный production diff.
 
-Не менять operationStore.py, operationLedger.py, artifactStaging.py, SQL migration и holderStore.py ради этого D1: их существующие переходы/логирование переиспользуются и проверяются тестами. Если D2 обнаружит необходимость их менять по иной причине — отдельное уточнение D1, не расширение по ходу. Test codec fixtures должны использовать production manifest для новых типов, а не маскировать отсутствие регистрации TEST_ISSUE_SCHEMA. Документы D2: этот файл (evidence), Snapshot owning-план (статус/ссылка), docs/tz_logging.md (статус фактически реализованного artifact route; snapshot route не объявлять реализованным заодно).
+Не менять operationStore.py, operationLedger.py, artifactStaging.py, SQL migration и holderStore.py ради этого D1: их существующие переходы/логирование переиспользуются и проверяются тестами. Если D2 обнаружит необходимость их менять по иной причине — отдельное уточнение D1, не расширение по ходу. Test codec fixtures должны использовать production manifest для новых типов, а не маскировать отсутствие регистрации TEST_ISSUE_SCHEMA. Документы D2: этот файл (evidence), Snapshot owning-план (статус/ссылка), docs/tz_world_snapshot.md (синхронизация целевых contracts до моделей), docs/tz_logging.md (статус фактически реализованного artifact route; snapshot route не объявлять реализованным заодно).
 
 ## 5. Критерии D2
 
@@ -258,7 +252,7 @@ D2 реализует конкретные DTO/producers, методы суще�
 
 DAG, Snapshot и Artifacts — владельцы, а не взаимоисключающие семейства ошибок. У одного владельца могут быть F01 field validation, F02 model invariant, F03 conflict, F05 technical fault, F06 control outcome. Поэтому единого универсального «создать/залогировать/выбросить всё» механизма не предлагается. Удобство проектируется для конкретного семейства и сценария, а общие механизмы переиспользуются.
 
-### Обязательный reuse ResolveContext / ResolveReport
+### Обязательное переиспользование ResolveContext / ResolveReport в POJO/import-цепочках
 
 Уточнение пользователя: архитектура §11 явно переиспользует существующие принципы resolve, не создаёт параллельные mode/context/report/disposition-механизмы. Нормативная политика: [ERROR-CONTRACTS-1, EC-10/EC-11 и «Применение EC-11 к полям POJO»](error-contracts-1.md#L679). Доменный адаптер сохраняет различие между политикой исхода операции и политикой доставки диагностики. Переключение collect_only не изменяет типизированную причину, результат операции или право на запись. Проверены [ResolveContext и reporting functions](../../backend/app/application/jsonValidation/resolution/diagnostics.py), [ResolveReport](../../backend/app/application/jsonValidation/types.py) и ERROR-CONTRACTS EC-11.
 
@@ -388,3 +382,69 @@ Reuse для Artifacts: расширить существующий ArtifactLife
 | P2 D2/I0 | §9 и граф зависимостей явно включают локальный EC-I0 artifact logging в рабочий срез/приёмку D2; общая эксплуатационная готовность не объявляется. |
 
 Это документальная коррекция по ревью, не независимый PASS, не отчёт реализации и не начало D2. Принятые пользователем архитектурные решения сохраняются.
+
+
+## 14. Freeze и атомарные шаги после ревью
+
+### Точные контракты до кода
+
+Owner всех следующих DTO — dataModel/artifacts. OperationCancellationReason в lifecycle/operation/record.py: StrEnum REQUESTED="requested". OperationCancelled.operation_id: EntityUid и reason: OperationCancellationReason — обязательные, без defaults; существующий frozen/strict/extra-forbid/revalidate_instances="always" сохраняется.
+
+В lifecycle/gc.py: GcFailureCode(StrEnum): IO_ERROR="io_error", VALUE_ERROR="value_error". GcFailureStage(StrEnum): VALIDATE="validate", GUARD_ENTER="guard_enter", CATALOG_READ="catalog_read", HOLDERS_READ="holders_read", DELETE="delete", MARK_DELETED="mark_deleted", GUARD_EXIT="guard_exit". ArtifactGcFailure — frozen/strict/extra-forbid/revalidate_instances="always"; все поля из §3 обязательные, **включая nullable errno: StrictInt | None и winerror: StrictInt | None, без default=None**. failure_id/ref/stage/code/exception_type/message также без defaults. Значение None явно передаёт фабрика. Для VALUE_ERROR errno/winerror обязаны быть None. GcReport сохраняет конфигурацию; deleted/retained/failed обязательные tuples без defaults. ArtifactLogRecord сохраняет конфигурацию; только новое gc_failure: ArtifactGcFailure | None имеет default=None; для GC_FAILED валидатор требует ненулевое значение, для остальных activities — None.
+
+Сигнатуры в существующем application/artifacts/logging/artifactLog.py:
+
+```python
+@staticmethod
+def create_gc_failure(*, ref: ArtifactRef, stage: GcFailureStage,
+                      cause: OSError | ValueError) -> ArtifactGcFailure: ...
+
+def emit_gc_failure(self, *, operation_id: EntityUid,
+                    failure: ArtifactGcFailure,
+                    cause: OSError | ValueError) -> None: ...
+
+def emit(self, record: ArtifactLogRecord, *,
+         cause: Exception | None = None) -> None: ...
+```
+
+Runtime admission проверяет типы независимо от аннотаций. Ошибочный аргумент/DTO отклоняется до sink (TypeError для неподдерживаемого cause, ValueError для рассогласованных фактов; ошибки Pydantic валидации сохраняются как ValidationError). Неизвестные stage/code/строки вместо enum не coercе. Эти методы не являются универсальным exception mapper.
+
+Регистрация в ARTIFACT_CORE_SCHEMA: OperationCancellationReason — ENUM 20018; GcFailureCode — ENUM 20019; GcFailureStage — ENUM 20020; ArtifactGcFailure — RECORD 20140. Существующие 20127/20129/20136 сохраняются. На checkout cb1a945f поиск этих четырёх чисел в backend не выявил регистраций; test_codec содержит только прежний ожидаемый диапазон IDs, который обновляется вместе с manifest. Новые IDs закреплены этим документом, а не оставлены на произвольный выбор D2. Если F3 успеет занять номер, остановить конфликтующий шаг и явно скорректировать карту, не переиспользовать чужой identity.
+
+### Точная граница catch GC
+
+Операционный try охватывает только registry/catalog/holders/delete/mark_deleted и вход/выход guard. Создание failure, проверка event, emit_gc_failure и **успешный emit GC_DELETED находятся вне этого try**. Success event строится только после успешного выхода guard. Contract ValueError при создании/проверке события не может попасть обратно в catch операций GC и стать ArtifactGcFailure. Ошибка sink остаётся внутри best-effort участка emitter. Тест: после успешного delete/mark_deleted инъекция contract ValueError при GC_DELETED должна распространиться, без GC_FAILED и без повторного delete; peer подтверждает уже committed storage event. Для failure event аналогично: отказ admission не создаёт второй failure и не маскируется sink error.
+
+### Шаги — цель → ТЗ → файлы → контракт → проверка → Done
+
+Пути ниже относительно backend/, кроме явно указанных docs/. Общая карта §4 задаёт предел scope; следующие группы задают порядок и контрольные точки.
+
+| Шаг / цель | ТЗ | Файлы | Контракт | Проверка | Done |
+|---|---|---|---|---|---|
+| D2-0, синхронизировать owning SoT до моделей | docs/tz_world_snapshot.md: «Operation storage, CAS и capability ports» и GcReport в staged lifecycle; docs/tz_logging.md: Patch/Snapshot/artifacts | docs/tz_world_snapshot.md, docs/tz_logging.md, этот D1, Snapshot owning-план | Новые reason/failed, emitter владеет severity; no legacy; §14 exact freeze | Сверка символов/значений/ссылок с D1, diff --check | Только документы; целевые contracts согласованы, реализация не объявлена |
+| D2-1, прямой переход cancel F06 | ТЗ Snapshot: Operation storage; D1 §2/14 | app/dataModel/artifacts/lifecycle/operation/record.py; app/db/repositories/sqlite/artifacts/leaseStore.py; app/application/artifacts/encoding/coreManifest.py; tests/snapshotCore/contracts/test_models.py, test_codec.py; tests/snapshotCore/storage/artifacts/test_leases.py, test_staging.py; tests/snapshotCore/storage/publication/test_atomicity.py; tests/typing/snapshotCore/valid.py, invalid.py | Enum reason, producer, регистрация и fixtures переключаются вместе; codec reuse | Семь cancel scenarios, production codec round-trip/reopen/повтор, соответствующие typing cases | Cancel больше не строит FieldPathError; нет сломанного промежуточного consumer; оставшийся GC baseline отдельно указан |
+| D2-2, целостный контракт GC failure и его события | ТЗ Snapshot: GcReport; ТЗ logging: artifact events; D1 §3/14 | app/dataModel/artifacts/lifecycle/gc.py; app/dataModel/artifacts/events.py; app/application/artifacts/encoding/coreManifest.py; app/application/artifacts/logging/artifactLog.py; app/application/artifacts/lifecycle/artifactGc.py; tests/snapshotCore/contracts/test_models.py, test_codec.py; tests/snapshotCore/storage/artifacts/test_staging.py; tests/typing/snapshotCore/valid.py, invalid.py | Одна связанная группа producer→failure→report/event, create/emit и ограниченный catch; не отделять новый failed DTO от его consumer | GC исходный сценарий, повтор, mismatched cause/failure, sink vs admission, GC_DELETED ValueError вне catch, canonical round-trip, typing | GC возвращает конкретную причину и исходный trace без fake path; unit/fault tests зелёные |
+| D2-3, маршрутизация существующего artifact logger | ТЗ logging: sinks / Patch-Snapshot-artifacts; D1 §9 | app/core/loggingConfig.py; app/core/generationLogging.py; tests/test_logging_routes.py; tests/test_generation_logging.py; docs/tz_logging.md | Только route/server allowlist/transcript registration, без нового formatter/handler | Настоящий временный JSON sink и transcript, correlation/traceback, изоляция scope, один owning emit | Локальный EC-I0 artifact logging подтверждён отдельно; production binding readiness не заявлена |
+| D2-4, итоговая регрессия и фиксация evidence | ТЗ Snapshot: lifecycle contracts; D1 §§5/9/14 | Этот D1, Snapshot owning-план; код без новых изменений | Проверка объединённого среза, не новая реализация | Адресные leases/staging/GC/codec/models/atomicity, logging routes/transcript, typing positive/negative, snapshotCore; сравнение с историческими 171/8/1/1 и фактической базой | Краткий итог по каждому набору, локальный I0 отдельно, оставшиеся внешние defects/production gates перечислены |
+
+Каждый шаг — отдельная контрольная точка: отчёт и ожидание подтверждения согласно code-gates.mdc. D2-1 и D2-2 — отдельные согласованные контрактные группы; DTO, producer и их fixtures не разделяются на неработающие версии. Эта таблица заменяет прежний укрупнённый шаг «все DTO/producers/адаптеры сразу». D2-0 документально подготовлен настоящей правкой; кодовые шаги не начаты.
+
+### Дополнение legacy inventory: реальные callers и cutover
+
+| Определение / AS-IS | Callers / регистрация | TARGET и точка переключения |
+|---|---|---|
+| [SqliteArtifactLeases.cancel](../../backend/app/db/repositories/sqlite/artifacts/leaseStore.py) создаёт прежний reason | [ArtifactStagingService.cancel](../../backend/app/application/artifacts/staging/artifactStaging.py) → [OperationLedger.cancel](../../backend/app/application/publication/service/operationLedger.py) → lease port; concrete binding [live_database](../../backend/tests/snapshotCore/support/fixtures.py) и [adapters](../../backend/tests/snapshotCore/support/artifactFixtures.py) | TARGET OperationCancellationReason в [record.py](../../backend/app/dataModel/artifacts/lifecycle/operation/record.py); D2-1 меняет constructor и все cancel fixtures; alias/reader не оставлять |
+| [OperationCancelled](../../backend/app/dataModel/artifacts/lifecycle/operation/record.py) переносится как terminal | [SqliteOperationStore.record_terminal/_save/_load](../../backend/app/db/repositories/sqlite/snapshotCore/operations/operationStore.py), [StoredTerminalCodec.encode/decode](../../backend/app/db/repositories/sqlite/snapshotCore/operations/terminalCodec.py), [ARTIFACT_CORE_SCHEMA](../../backend/app/application/artifacts/encoding/coreManifest.py) | Те же consumers читают новый reason через model/manifest в D2-1; old wire compatibility не вводится |
+| [ArtifactGarbageCollector.collect/_emit](../../backend/app/application/artifacts/lifecycle/artifactGc.py) строит FPE и ручной event | [ArtifactStagingService.collect](../../backend/app/application/artifacts/staging/artifactStaging.py), [GcReport](../../backend/app/dataModel/artifacts/lifecycle/gc.py), [ArtifactLifecycleLog.emit](../../backend/app/application/artifacts/logging/artifactLog.py), [ArtifactLogRecord](../../backend/app/dataModel/artifacts/events.py) | TARGET create_gc_failure/emit_gc_failure в том же artifactLog.py; D2-2 заменяет старый producer и failed carrier; `_emit` не используется для failed, success helper переиспользуется вне catch |
+| Fake cancel и старые DTO/event constructors | [test_staging.py](../../backend/tests/snapshotCore/storage/artifacts/test_staging.py), [test_leases.py](../../backend/tests/snapshotCore/storage/artifacts/test_leases.py), [test_models.py](../../backend/tests/snapshotCore/contracts/test_models.py), [test_codec.py](../../backend/tests/snapshotCore/contracts/test_codec.py) | Переводятся вместе со своим контрактом D2-1/D2-2; исторические test worlds обновляются, compatibility слой отсутствует |
+
+Evidence на cb1a945f, 2026-11-06: определения прочитаны; область backend/app и backend/tests/snapshotCore + tests/typing/snapshotCore. Воспроизводимые команды из корня:
+
+```powershell
+rg -n 'OperationCancelled|GcReport|FieldPathError' backend/app/dataModel/artifacts backend/app/application/artifacts backend/app/db/repositories/sqlite/artifacts backend/tests/snapshotCore backend/tests/typing/snapshotCore
+rg -n 'async def cancel|async def collect|_leases.cancel|_ledger.cancel|_gc.collect' backend/app/application/artifacts backend/app/application/publication backend/app/db/repositories/sqlite/artifacts
+rg -n 'StoredTerminalCodec|record_terminal|_codec.encode|_codec.decode' backend/app/db/repositories/sqlite/snapshotCore backend/tests/snapshotCore
+rg -n '20018|20019|20020|20140' backend .cursor/plans/spatial-f3-implementation-report.md
+```
+
+Последняя команда не нашла production registrations этих IDs. Constructor usages остаются AS-IS: target типы/методы не реализованы. Перед Done каждого шага повторить поиск в той же области и отдельно подтвердить отсутствие old constructor в его producer/fixtures. Реестр не разрешает очистку общего FieldPathError ID 20137 вне scope. Production bindings не подменять test binding: D2 не объявляет подключённым отсутствующий maintenance entrypoint.
