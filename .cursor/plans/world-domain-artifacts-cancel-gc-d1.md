@@ -8,13 +8,13 @@
 
 Reuse сохраняется для OperationCancelled, OperationRecord, GcReport, ArtifactRef, OperationPhase, ArtifactLogRecord, ArtifactLogActivity, существующих ledger/store/codec и инфраструктурных исключений. Новый универсальный Error, второй ledger или codec не нужны.
 
-Проверены `dataModel/engine/dag/diagnostics.py`: CancellationReason / CancellationRequest описывают DAG request с source, deadline и node/parent context. Их импорт в artifact lifecycle создаёт зависимость от чужого owner и обещает причины, которых текущий cancel API не получает. Не переиспользуем. FieldPathError и тестовый target_issue не подходят по природе события. PublicationInfrastructureError / UnknownCommitOutcome остаются транспортом инфраструктурного отказа, не становятся причиной успешной отмены. В dataModel/artifacts подходящего concrete cancel reason или GC failure сейчас нет.
+Проверены `dataModel/engine/dag/diagnostics.py`: CancellationReason / CancellationRequest описывают DAG request с source, deadline и node/parent context. Их импорт в artifact lifecycle создаёт зависимость от чужого owner и обещает причины, которых текущий доменный адаптер ошибок и диагностики отмены не получает. Не переиспользуем. FieldPathError и тестовый target_issue не подходят по природе события. PublicationInfrastructureError / UnknownCommitOutcome остаются транспортом инфраструктурного отказа, не становятся причиной успешной отмены. В dataModel/artifacts подходящего concrete cancel reason или GC failure сейчас нет.
 
 ## 2. Cancel — F06
 
 ### Контракт
 
-В существующем `dataModel/artifacts/lifecycle/operation/record.py` добавить `OperationCancellationReason(StrEnum)` с единственным членом `REQUESTED = "requested"`. Поле `OperationCancelled.reason: OperationCancellationReason`; operation_id остаётся EntityUid. Это конкретный enum, не field issue. Без message, path, времени, источника user и исключения: текущий API сообщает лишь явный запрос caller. Не выводить USER или deadline из факта вызова. Другие причины требуют отдельного подтверждённого producer.
+В существующем `dataModel/artifacts/lifecycle/operation/record.py` добавить `OperationCancellationReason(StrEnum)` с единственным членом `REQUESTED = "requested"`. Поле `OperationCancelled.reason: OperationCancellationReason`; operation_id остаётся EntityUid. Это конкретный enum, не field issue. Без message, path, времени, источника user и исключения: текущий доменный адаптер ошибок и диагностики сообщает лишь явный запрос caller. Не выводить USER или deadline из факта вызова. Другие причины требуют отдельного подтверждённого producer.
 
 Owner причины — artifact lifecycle. Runtime producer — SqliteArtifactLeases.cancel. Сигнатура cancel(operation_id, fence) сохраняется. asyncio.CancelledError не превращается в OperationCancelled: отмена coroutine и durable отмена операции — разные факты.
 
@@ -198,3 +198,54 @@ StoredTerminalCodec уже вызывает model_validate и canonical encode/d
 Новых production/test файлов D2 не добавляет. Текущие → планируемые количества непосредственных файлов: dataModel/artifacts/lifecycle/operation 4→4; dataModel/artifacts/lifecycle 4→4; dataModel/artifacts 3→3; application/artifacts/lifecycle 2→2; application/artifacts/logging 2→2; application/artifacts/encoding 2→2; db/repositories/sqlite/artifacts 5→5; core 13→13; tests 280→280; tests/snapshotCore/contracts 5→5; tests/snapshotCore/storage/artifacts 5→5; tests/snapshotCore/storage/publication 4→4; tests/typing/snapshotCore 4→4. Каталог документов .cursor/plans 228→228 в этой ревизии. По folder-composition.mdc WARN для переполненных каталогов сообщён в чат; дополнительных файлов туда не планируется, реорганизация вне scope. Пути существующих модулей и импортов сохраняются; новые зависимости только events → lifecycle.gc и emitter → concrete DTO, без обратного импорта gc → events.
 
 Проверка выполнена чтением D1 и production definitions, поиском consumers/fixtures и git diff --check документов. Runtime-тесты не запускались, код не менялся. Эта ревизия не является приёмкой реализации или общего Snapshot diagnostics scope.
+
+
+### Терминология
+
+Внутренняя доменная обвязка именуется «доменный адаптер ошибок и диагностики». Общая инфраструктура предоставляет механизмы, доменный адаптер ошибок и диагностики задаёт применение для конкретного семейства и сценария владельца. Это терминологическое уточнение; новые классы и общие механизмы им не объявляются реализованными или согласованными для D2.
+
+
+## 11. На архитектурное ревью: общая инфраструктура и доменные адаптеры ошибок и диагностики
+
+**Статус: предложение на ревью, не разрешение реализации.** Поручение пользователя — закрепить архитектурное направление отдельно от исправления двух constructors artifacts. Владельцем общих механизмов остаётся ERROR-CONTRACTS вместе с существующей инфраструктурой logging; Artifacts D1 предъявляет конкретный сценарий применения.
+
+### Предлагаемое разделение
+
+1. **Общая инфраструктура** предоставляет существующие проверенные механизмы: typed field paths, admission immutable diagnostics, сбор фактов, корреляцию и logging transport/formatter/sinks. Общий слой не импортирует конкретные причины Artifacts, Snapshot или DAG и не выбирает за них исход операции.
+2. **Доменный адаптер ошибок и диагностики** связывает эти механизмы для конкретного владельца и семейства. Он предоставляет короткие типизированные методы, собирает повторяющийся контекст, формирует конкретные причины/события и передаёт исходное исключение в logging там, где это предусмотрено политикой. Сначала reuse/extend существующего адаптера; новый класс или файл требует доказательства недостаточности существующего.
+3. **Сервис или валидатор** сообщает факты и остаётся владельцем решения: накопить диагностику, вернуть исход, прервать выполнение, дождаться commit/rollback. Момент подтверждения durable результата не переносится в logging. Модели причин не эмитируют события при конструировании.
+
+DAG, Snapshot и Artifacts — владельцы, а не взаимоисключающие семейства ошибок. У одного владельца могут быть F01 field validation, F02 model invariant, F03 conflict, F05 technical fault, F06 control outcome. Поэтому единого универсального «создать/залогировать/выбросить всё» механизма не предлагается. Удобство проектируется для конкретного семейства и сценария, а общие механизмы переиспользуются.
+
+### Сценарии, которые предъявить на ревью
+
+| Семейство / сценарий | Ответственность доменного адаптера ошибок и диагностики | Что остаётся у caller |
+|---|---|---|
+| F01, проверка поля | Concrete причина с проверенным selector/path и typed arguments; возможность чистого накопления без emit | Продолжение независимых проверок, решение о возврате/отказе |
+| F02, правило модели | Concrete причина с предметными аргументами, без выдуманного field path | Применение правила и итог операции |
+| F03, Snapshot CAS | Сохранение expected/observed, порядка достигнутых сравнений и корреляции | Transaction owner подтверждает rollback/commit; адаптер не делает это по факту исключения |
+| F05, обработанный GC fault | Один typed failure для caller и log, исходный traceback, согласованные ref/stage/failure_id | Решение продолжить batch; инфраструктурная неопределённость остаётся out-of-band |
+| F05, распространяемое исключение | Причинное событие на объявленной owning boundary, без потери exception chain | raise/re-raise и управление транзакцией |
+| F06, cancel/busy | Представление управляющего исхода и предусмотренного lifecycle event | Fence/drain/commit и выбор фактически подтверждённого исхода |
+| DAG execution | Существующий доменный адаптер ошибок и диагностики DAG сообщает факт исполнения и связывает его с доменной причиной | Execution policy, retry/replan и lifecycle DAG; без повторной эмиссии той же domain root cause |
+
+### Предмет решения: удобство вызова и побочные эффекты
+
+На ревью сравнить два варианта **в существующем доменном адаптере**, не создавая заранее две параллельные реализации:
+
+- Раздельные действия: создать typed failure, добавить его в report, вызвать семантический метод `gc_failed(operation_id, failure, cause)`. Метод сам выбирает activity/level, получает ref/hash из failure и строит event. Producer не заполняет неприменимые поля общего LogRecord.
+- Совмещённый метод на owning boundary: сформировать typed failure, один раз эмитировать его и вернуть тот же failure для report. Такой метод допустим только с явной семантикой эмиссии; не является конструктором DTO или общим validator helper. Нужна возможность чистого формирования/сбора там, где событие эмитировать ещё рано или не требуется.
+
+Имена методов здесь иллюстрируют вызовы, не фиксируют новую production-схему. Общий `emit(record, cause=...)` из §3 остаётся описанием низкоуровневой передачи события; итоговое ревью должно определить удобный доменный вызов над ним либо уточнить его форму. §3 не следует читать как уже выбранную единственную форму вызова из сервисов. После решения обновить §3, карту файлов §4 и тестовые критерии одним изменением.
+
+### Критерии архитектурного ревью
+
+- Показать конкретный код вызова для ошибки поля, накопленного GC failure, raise/re-raise технического исключения и подтверждённого cancel. Для каждого указать существующие типы/модули reuse и только необходимые изменения.
+- Один причинный факт не пересобирается отдельно для caller и лога; идентичность, typed arguments и исходная причина совпадают. Проверенный путь обязателен для F01, но не синтезируется для F05/F06.
+- Неприменимые поля, activity и severity не приходится повторять в каждом producer; машинные решения не принимаются по тексту сообщения.
+- Чистое создание/агрегация не логируют автоматически. Если выбран совмещённый метод, его побочный эффект явен, он вызывается ровно на согласованной owning boundary; collector и вышестоящий caller не эмитируют ту же причину повторно.
+- Traceback сохраняется без сериализации Exception в доменный DTO; sink failure не меняет результат, не запускает повтор эффекта и не выдаёт rollback/commit за подтверждённый.
+- Нет нового общего logger/router, дубля collector, универсального outcome wrapper или зависимости shared слоя от доменных enum. Новые файлы/классы не считаются необходимыми только из-за появления термина «адаптер».
+- Проверить соответствие EC-09/EC-10/EC-11 и существующим domain emitters. Предъявить обновлённую exact file map, минимальные meaningful tests и logging policy для каждого затронутого исхода.
+
+**Выход ревью:** согласованная ответственность общих механизмов и доменных адаптеров, выбранная форма вызова для Artifacts и перечень изменений в owning ERROR-CONTRACTS/Artifacts документах. Принятие направления не означает глобальную миграцию DAG/Snapshot и не расширяет D2 без обновления его карты. До решения этого пункта удобство доменного вызова остаётся OPEN; код в данном чате не начинается.
