@@ -428,3 +428,20 @@ $env:PYTHONPATH='.;tests'
 WaterDiagnosticReport хранит обязательный ordered и проверяет точное равенство каждой группы стабильному фильтру ordered. Прямой конструктор отвергает пропущенный блокирующий факт и чужой field issue. Типизированный collector apply и отчёт используют одну доменную проверку. Она принимает точный PlanDiagnostic только с точным WaterKindMismatchIssue. Operational delivery идёт по ordered. Реальные LogRecord проверены на сообщение `water diagnostic`, уровень WARNING и payload в атрибуте diagnostic, включая порядок двух записей. Ошибка operational sink сохраняет исход операции, validate_only и collect_only подавляют эмиссию.
 
 На итоговом дереве повторены три команды unittest из предыдущего раздела. Адресный набор — **61/61 OK**, включая дополнительную регрессию на чужой field issue. Расширенный — **163 теста, 54 errors, 0 failures**. Для всех 54 совпали полные имена с параметрами subtest и конечные исключения с сообщениями относительно первого ревью S4. Discover procedural_refinement — **9 тестов, 1 прежний error**. Дополнительно из backend: `python -m unittest tests.spatial_pack.test_source_schema tests.spatial_pack.test_storage_schema -q` — **29/29 OK**. Pyright по 17 production-файлам — **18 errors, 0 warnings**, на базе в независимом ревью было 21.
+
+### Повторная независимая приёмка исправлений S4, 2026-11-08
+
+**Вердикт — REVISE** для изменений `55b6d093 → eaefa7e0`. Из четырёх замечаний первого ревью закрыты три. Отчёт сохраняет общий порядок фактов и проверяет группы по `ordered`. Чужой field issue отклоняется до доставки. Operational logging выдаёт WARNING с сообщением `water diagnostic` и проверенным payload в атрибуте `diagnostic`, сохраняя порядок событий.
+
+1. **P1 остаётся блокером выпуска через surface planning.** Отдельный запуск из backend команды `python -m unittest tests.test_hydrology_hy12_rivers.RiverWaterlineTests.test_pipeline_supplies_pre_river_elevation_to_fine_profiles -q` дал один error. При обработке валидного NOTICE функция `report_surface_diagnostics` обращается к `WaterWorldOcean.path` и прерывает подготовку плана с `AttributeError`. Для выпуска требуется реализовать согласованный контракт этапа P2 и повторить этот сценарий. [Обработчик](../../backend/app/application/worldData/planning/composition/surfacePlanningAssembler.py#L188) · [Контракт P2 в River D1](geo-river-routing-diagnostics-d1.md#проверка-контракта-p2-2026-11-08).
+2. **Новый P2 в локальном отчёте S4.** В `report_water_diagnostics` передан точный `PlanDiagnostic` с `WaterKindMismatchIssue.retained("A", BasinKind.LAKE, BasinKind.SEA)` и disposition `ERROR`. В режиме `collect_only` вызов вернул этот факт в `blocking`. Штатный producer и source-валидатор для этого факта используют `FALLBACK`. Независимый субагент по профилю Bugbot повторил воспроизведение. Критерий закрытия — общая проверка `require_water_diagnostic` принимает mismatch только с `FALLBACK`, а тесты прямого конструктора отчёта и helper подтверждают отказ для `ERROR` и `NOTICE` до доставки. [Проверка отчёта](../../backend/app/dataModel/hydrology/waterDiagnostics.py#L194) · [Source-валидатор](../../backend/app/application/worldData/generators/hydrology/encoding/sourceSchema.py#L49).
+
+| Независимый прогон на `eaefa7e0` | Результат |
+|---|---|
+| Адресный набор S4 | 61/61 OK |
+| Source и storage schema | 29/29 OK |
+| Расширенный набор | 163 теста, 54 errors, 0 failures |
+| Discover procedural_refinement | 9 тестов, 1 error в disabled fine routing |
+| Pyright по 17 изменённым production-файлам | 18 errors, 0 warnings. Все 18 — `reportCallIssue` при позиционном вызове `FieldPathError`. |
+
+Количество ошибок совпало с самопроверкой. Сопоставление исключений с исторической базой приведено в первом ревью выше. В повторном ревью команды запускались на `eaefa7e0`.
