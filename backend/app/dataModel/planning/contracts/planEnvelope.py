@@ -5,7 +5,7 @@ from typing import Generic, TypeVar
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.dataModel.planning.contracts.planDependency import PlanDependency, require_canonical_dependencies
-from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic
+from app.dataModel.planning.diagnostics.planDiagnostic import DiagnosticCarrier
 from app.dataModel.planning.identity.planRef import PlanRef
 
 
@@ -16,7 +16,7 @@ class PlanBuildResult(BaseModel, Generic[T]):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
 
     payload: T
-    diagnostics: tuple[PlanDiagnostic, ...]
+    diagnostics: tuple[DiagnosticCarrier, ...]
 
 
 class PlanEnvelope(BaseModel, Generic[T]):
@@ -25,6 +25,6 @@ class PlanEnvelope(BaseModel, Generic[T]):
     ref: PlanRef
     dependencies: tuple[PlanDependency, ...]
     payload: T
-    diagnostics: tuple[PlanDiagnostic, ...]
+    diagnostics: tuple[DiagnosticCarrier, ...]
 
     _canonical_dependencies = field_validator("dependencies")(require_canonical_dependencies)

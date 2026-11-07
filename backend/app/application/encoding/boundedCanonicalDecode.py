@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from app.encoding.canonicalCodec import CanonicalCodec, CanonicalEncodingError, _decode_scalar, encode, validate_decoded_identity
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest, CanonicalTypeKind
+from app.dataModel.planning.diagnostics.planDiagnostic import IssueT, PlanDiagnostic, admits_diagnostic_type
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.encoding.decodeLimits import DecodeLimits
 
@@ -39,7 +40,16 @@ def _options(annotation):
     return tuple(_alternatives(annotation, {}))
 
 
+_PLAN_CARRIER = PlanDiagnostic[Any]
+
+
 def _matches(option, owner, value=None):
+    # ID 105 is the unparameterized field carrier. Its IssueT uses the
+    # declared field-issue default even when the enclosing envelope is generic.
+    if option is IssueT:
+        return _matches(IssueT.__default__, owner, value)
+    if option is _PLAN_CARRIER:
+        return admits_diagnostic_type(owner)
     if get_origin(option) is Literal:
         return any(type(member) is owner and member == value for member in get_args(option))
     target = get_origin(option) or option

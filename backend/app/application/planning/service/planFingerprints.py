@@ -6,7 +6,7 @@ from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.planning.contracts.planContract import PlanContractMetadata
 from app.dataModel.planning.contracts.planDependency import PlanDependency, require_canonical_dependencies
-from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic
+from app.dataModel.planning.diagnostics.planDiagnostic import DiagnosticCarrier
 from app.dataModel.planning.identity.planKey import InputFingerprint, OutputFingerprint, PlanKey, PlanScope
 
 
@@ -19,7 +19,7 @@ def input_fingerprint(metadata: PlanContractMetadata, world_uid: EntityUid, scop
 
 
 def output_fingerprint(payload: object, dependencies: tuple[PlanDependency, ...],
-                       diagnostics: tuple[PlanDiagnostic, ...], manifest: CanonicalSchemaManifest) -> OutputFingerprint:
+                       diagnostics: tuple[DiagnosticCarrier, ...], manifest: CanonicalSchemaManifest) -> OutputFingerprint:
     require_canonical_dependencies(dependencies)
     return OutputFingerprint(digest((payload, dependencies, diagnostics), manifest))
 

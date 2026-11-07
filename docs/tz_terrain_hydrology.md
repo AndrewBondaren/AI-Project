@@ -696,7 +696,30 @@ Identity источники: declared → `location_uid` (включая Declare
 
 - Мир целиком `z >= level` без carve — воды нет; сам факт all-land не ошибка. При включённом ocean-autoresolve отсутствие океанской впадины диагностируется отдельно, GEO-1 не эмулируется.
 - Все `z == level` — суша; вода не создаётся ни paint, ни присваиванием role.
-- `floor_z >= resolved requested_level` — невалидный declare; post-carve footprint без клеток ниже уровня либо с дном выше spill — warning без фиктивного WaterBody.
+- `floor_z >= resolved requested_level` — невалидный declare. Для authored-источника материализатор проверяет `not any(surface_z[cell] < resolved.levels[i] for cell in source.seeds)`. При выполнении условия он сообщает WATER_CANNOT_HOLD с UID источника и итоговым уровнем, продолжает независимые проверки и не создаёт фиктивный WaterBody. Runtime-лог использует WARNING. В Fine Water disposition этого факта — ERROR, поэтому публикация водной ревизии отклоняется. Проверка declare и проверка удержания воды выполняются на своих границах.
+
+#### Water diagnostics — контракты переноса
+
+Planning переносит concrete причину вместе с disposition через PlanBuildResult и PlanEnvelope. Для существующего WATER_KIND_MISMATCH используется PlanDiagnostic с WaterKindMismatchIssue и проверенным полем WaterBody.kind. Для operational facts Hydrology объявляет именованные специализации PlanDiagnostic, по одной на конкретный тип причины. При приёме уже восстановленного carrier Planning повторно валидирует его и вложенный факт с сохранением их типов. Запись codec определяется конкретным зарегистрированным типом.
+
+Целевые Water facts для S2–S4 имеют обязательный code соответствующего WaterDiagnosticCode, строгие типы, frozen и extra=forbid. UID использует EntityUid, уровни — StrictInt. Все поля обязательны, nullable только parent_system_uid. Домен фиксирует следующие поля и disposition.
+
+| Код | Поля причины | Disposition |
+|---|---|---|
+| WATER_PUDDLE | source_uid, cell_count ≥ 0, minimum_cells > 0; cell_count < minimum_cells | ERROR |
+| WATER_CANNOT_HOLD | source_uid, effective_level | ERROR |
+| WATER_TERRAIN_UNRESOLVED | world_uid, message: StrictStr — открытый диагностический текст из str(error) существующей границы ValueError; выбор исхода по тексту запрещён | ERROR |
+| WATER_NO_OCEAN_DEPRESSION | world_uid, default_water_level | ERROR |
+| WATER_LEVEL_SPILL | source_uid, requested_level, spill_limited_level < requested_level | FALLBACK |
+| WATER_LEVEL_SUPERSEDED | source_uid, declared_level, effective_level, parent_system_uid: EntityUid или None; уровни различны | FALLBACK |
+| WATER_WORLD_OCEAN | world_uid, water_cells ≥ 0, world_cells > 0; 2 × water_cells ≥ world_cells | NOTICE |
+| WATER_PLACEMENT_REQUIRED | world_uid; runtime-вход HydrologyGeneratorService.apply | ERROR |
+
+Счётчики — строгие целые. resolve_water_levels формирует WaterLevelSpill из собственного удерживаемого уровня источника до учёта окончательного уровня union. Materializer передаёт готовый факт в прежней точке проверки. Для источника сохраняется порядок cannot-hold, spill, superseded.
+
+Целевой source manifest включает семь публикуемых новых Water facts и их concrete carriers, существующий mismatch и согласованные River facts. WATER_PLACEMENT_REQUIRED относится к runtime. Проверка closure охватывает source envelope и объявленные concrete roots, Pack добавляет свои storage roots. Предлагаемые ID — 329 для WaterDiagnosticCode, 330–337 для фактов в порядке таблицы и 338–345 для их carriers. 337 и 345 исключены из source. Перед регистрацией проверяется занятость ID. Изменение lock и fingerprint предъявляется вместе с round-trip целевой схемы. [Water D1, §4](../.cursor/plans/geo-water-diagnostics-source-d1.md)
+
+При отказе Fine Water caller получает ERROR carriers в исходном порядке через PlanBuildFailure.diagnostics, успешная ревизия и запись в кеш отсутствуют. HydrologyGeneratorService.apply возвращает результат с локальным отчётом. collect_only управляет доставкой. Приёмка включает сухой authored A и корректный B: материализация обрабатывает B, а Fine Water отклоняет общую ревизию с причиной A. Реализация этих доменных границ относится к S4.
 - Разные уровни несвязанных тел допустимы; непосредственный merge разрешает уровень и предупреждает о superseded значениях.
 - Footprint больше мира, а в compact-мире покрытие >=50% уникальных клеток — warning «мир — океан», не повторный счёт топологических образов.
 - Достижение area/extent cap, empty water-side, неоднозначная closed-loop или отсутствие данных для полного борта диагностируются с UID и причиной; bounds не расширяются молча.

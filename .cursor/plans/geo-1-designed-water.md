@@ -16111,4 +16111,4 @@ GEO-I9.1 принят в границах authored geometry. G10-A и итого
 
 Приёмка каждого затронутого шага включает evidence сохранения runtime-семантики. Это ограничение миграции ошибок и логов, а не запрет ранее согласованной самостоятельной функциональной разработки домена. Статус реализации и пользовательская приёмка этим пунктом не изменяются.
 
-Water/source handoff: [D1 конкретных Water facts, source/Pack и publication/runtime границ](geo-water-diagnostics-source-d1.md) подготовлен на приёмку 2026-11-07. Код этого D1 не реализован; no-legacy и неизменность вычислений/fallback сохраняются.
+Water/source handoff: [D1 конкретных Water facts, source/Pack и publication/runtime границ](geo-water-diagnostics-source-d1.md) подготовлен на приёмку 2026-11-07. D2-0 и транспорт S1 реализованы. Результаты и вопрос стабильного source shape записаны в Water D1. Следующий доменный срез — S2.

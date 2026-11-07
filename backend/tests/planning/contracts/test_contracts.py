@@ -6,7 +6,8 @@ import subprocess
 import sys
 import unittest
 
-from pydantic import TypeAdapter, ValidationError
+from typing import Any
+from pydantic import BaseModel, ConfigDict, SerializeAsAny, TypeAdapter, ValidationError
 
 from app.application.jsonValidation import types as legacy
 from app.dataModel.cache.contracts.cacheContract import (
@@ -28,7 +29,8 @@ from app.dataModel.planning.identity.planKey import (
 from app.dataModel.planning.identity.planRef import PlanRef
 from app.dataModel.planning.policy.planningExecutionPolicy import PlanningExecutionPolicy
 from app.dataModel.registryKey import RegistryKey, registry_key_target
-from app.dataModel.validation.diagnostics import fieldPathError as shared
+from app.dataModel.hydrology.enums.basinKind import BasinKind
+from app.dataModel.hydrology.waterKindMismatchIssue import WaterKindMismatchIssue
 from app.dataModel.validation.diagnostics.runtimeIssueContext import RevisionHex, RuntimeIssueContext
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
 from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot
@@ -50,6 +52,15 @@ class Action(StrEnum):
 
 class Reason(StrEnum):
     INVALID = "invalid"
+
+
+class ProbeFact(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
+    level: int
+
+
+class ProbeDiagnostic(PlanDiagnostic[ProbeFact]):
+    issue: SerializeAsAny[ProbeFact]
 
 
 def plan_key(**update):
@@ -153,11 +164,11 @@ class PlanningContractTests(unittest.TestCase):
         context = RuntimeIssueContext[Action, Reason](world_uid="w", snapshot_uid=None,
             content_revision=None, source_uid=None, body_uids=(), cell=None, face=None,
             fallback_action=Action.DISABLE, fallback_reason=Reason.INVALID)
-        issue = shared.FieldPathError(("terrain", 0), "invalid", runtime_context=context)
+        issue = WaterKindMismatchIssue.retained("lake", BasinKind.LAKE, BasinKind.SEA)
         self.assertEqual(legacy.import_validation_http_detail(legacy.ImportValidationError([issue])),
-                         [{"loc": ["terrain", 0], "msg": "invalid", "code": "VALIDATION_ERROR"}])
+                         [{"loc": ["kind"], "msg": issue.message, "code": "WATER_KIND_MISMATCH"}])
         diagnostic = PlanDiagnostic(issue=issue, disposition=PlanDiagnosticDisposition.FALLBACK)
-        self.assertEqual(diagnostic.issue.runtime_context, context)
+        self.assertEqual(diagnostic.issue, issue)
         with self.assertRaises(FrozenInstanceError):
             context.source_uid = "changed"
         valid = dict(world_uid="w", snapshot_uid=None, content_revision=None, source_uid=None,
@@ -170,6 +181,54 @@ class PlanningContractTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             RuntimeIssueContext[Action, Reason](world_uid="w")
         self.assertEqual([mode.value for mode in ResolutionMode], ["runtime", "validate_only"])
+
+    def test_concrete_causes_survive_result_and_envelope_revalidation(self):
+        field = WaterKindMismatchIssue.retained("lake", BasinKind.LAKE, BasinKind.SEA)
+        diagnostics = (PlanDiagnostic(issue=field, disposition=PlanDiagnosticDisposition.FALLBACK),
+                       ProbeDiagnostic(issue=ProbeFact(level=7), disposition=PlanDiagnosticDisposition.ERROR))
+        result = PlanBuildResult[int](payload=1, diagnostics=diagnostics)
+        envelope = PlanEnvelope[int](ref=plan_ref(), payload=result.payload, dependencies=(),
+                                     diagnostics=result.diagnostics)
+        for stage in (result, envelope, type(envelope).model_validate(envelope)):
+            self.assertEqual(stage.diagnostics, diagnostics)
+            self.assertIs(type(stage.diagnostics[0].issue), WaterKindMismatchIssue)
+            self.assertIs(type(stage.diagnostics[1]), ProbeDiagnostic)
+            self.assertEqual(stage.model_dump()["diagnostics"][1]["issue"], {"level": 7})
+
+    def test_boundary_rejects_untyped_and_forged_carriers(self):
+        fact = ProbeFact(level=7)
+        fields = dict(issue=fact, disposition=PlanDiagnosticDisposition.ERROR)
+        for bad in (fields, fact, PlanDiagnostic[Any](**fields), PlanDiagnostic[BaseModel](**fields),
+                    PlanDiagnostic.model_construct(**fields),
+                    ProbeDiagnostic(**fields).model_copy(update={"issue": fact.model_copy(update={"level": "7"})})):
+            with self.subTest(kind=type(bad)), self.assertRaises(ValidationError):
+                PlanBuildResult[int](payload=1, diagnostics=(bad,))
+            with self.assertRaises(ValidationError):
+                PlanEnvelope[int](ref=plan_ref(), payload=1, dependencies=(), diagnostics=(bad,))
+
+    def test_bounded_decode_preserves_registered_operational_fact(self):
+        from app.application.encoding.boundedCanonicalDecode import decode_bounded
+        from app.dataModel.encoding.decodeLimits import DecodeLimits
+        from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest, CanonicalTypeKind, RegisteredTypeEntry
+        from app.encoding.canonicalCodec import CanonicalEncodingError, encode
+
+        result_type = PlanBuildResult[int]
+        manifest = CanonicalSchemaManifest(entries=tuple(
+            RegisteredTypeEntry(type_id=i, python_type=model, kind=kind)
+            for i, (model, kind) in enumerate((
+                (result_type, CanonicalTypeKind.RECORD), (ProbeDiagnostic, CanonicalTypeKind.RECORD),
+                (ProbeFact, CanonicalTypeKind.RECORD), (PlanDiagnosticDisposition, CanonicalTypeKind.ENUM),
+            ), start=1)))
+        fact = ProbeFact(level=3)
+        result = result_type(payload=0, diagnostics=(
+            ProbeDiagnostic(issue=fact, disposition=PlanDiagnosticDisposition.ERROR),))
+        limits = DecodeLimits(100000, 10000, 100, 1024)
+        restored = decode_bounded(encode(result, manifest), result_type, manifest, limits=limits)
+        self.assertEqual(restored, result)
+        self.assertIs(type(restored.diagnostics[0]), ProbeDiagnostic)
+        forged = result.model_copy(update={"diagnostics": (fact,)})
+        with self.assertRaises(CanonicalEncodingError):
+            decode_bounded(encode(forged, manifest), result_type, manifest, limits=limits)
 
     def test_modules_import_from_either_public_entry_without_application(self):
         for module in ("app.dataModel.planning.identity.planKey", "app.dataModel.planning.contracts.planContract",
