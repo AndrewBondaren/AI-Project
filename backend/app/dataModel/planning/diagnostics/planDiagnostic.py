@@ -1,7 +1,7 @@
 """A diagnostic fact and its declared disposition, with no logging behavior."""
 
 from enum import StrEnum
-from typing import Annotated, Any, Generic
+from typing import Annotated, Any, Generic, get_args
 from typing_extensions import TypeVar
 
 from pydantic import BaseModel, ConfigDict, PlainValidator, SerializeAsAny
@@ -25,6 +25,15 @@ class PlanDiagnostic(BaseModel, Generic[IssueT]):
     disposition: PlanDiagnosticDisposition
 
 
+def _closed_argument(arg: object) -> bool:
+    if arg is Any or isinstance(arg, TypeVar):
+        return False
+    if isinstance(arg, type) and issubclass(arg, BaseModel):
+        metadata = arg.__pydantic_generic_metadata__
+        return not metadata["parameters"] and all(_closed_argument(a) for a in metadata["args"])
+    return all(_closed_argument(a) for a in get_args(arg))
+
+
 def admits_diagnostic_type(kind: type) -> bool:
     if kind is PlanDiagnostic:
         return True
@@ -34,8 +43,7 @@ def admits_diagnostic_type(kind: type) -> bool:
     fact = kind.model_fields["issue"].annotation
     return (metadata["origin"] is None and not metadata["parameters"]
             and isinstance(fact, type) and issubclass(fact, BaseModel) and fact is not BaseModel
-            and not fact.__pydantic_generic_metadata__["parameters"]
-            and Any not in fact.__pydantic_generic_metadata__["args"]
+            and _closed_argument(fact)
             and fact.model_config.get("revalidate_instances") == "always"
             and kind.model_config.get("revalidate_instances") == "always")
 

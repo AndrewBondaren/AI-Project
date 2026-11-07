@@ -63,6 +63,19 @@ class ProbeDiagnostic(PlanDiagnostic[ProbeFact]):
     issue: SerializeAsAny[ProbeFact]
 
 
+class LeafFact[T](BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
+    leaf: T
+
+
+class LooseDiagnostic(PlanDiagnostic[LeafFact[tuple[Any, ...]]]):
+    pass
+
+
+class IntegerDiagnostic(PlanDiagnostic[LeafFact[tuple[int, ...]]]):
+    pass
+
+
 def plan_key(**update):
     return PlanKey.model_validate({"world_uid": "world", "scope": WorldPlanScope(),
         "contract_id": "surface.climate_base", "schema_version": 1, "algorithm_version": 1,
@@ -74,6 +87,18 @@ def plan_ref(**update):
 
 
 class PlanningContractTests(unittest.TestCase):
+    def test_nested_any_is_rejected_at_both_planning_boundaries(self):
+        loose = LooseDiagnostic(issue=LeafFact[tuple[Any, ...]](leaf=(42,)),
+                                disposition=PlanDiagnosticDisposition.ERROR)
+        concrete = IntegerDiagnostic(issue=LeafFact[tuple[int, ...]](leaf=(42,)),
+                                     disposition=PlanDiagnosticDisposition.ERROR)
+        for boundary, fields in ((PlanBuildResult[int], {}), (PlanEnvelope[int], dict(ref=plan_ref(), dependencies=()))):
+            with self.subTest(boundary=boundary):
+                with self.assertRaises(ValidationError):
+                    boundary(payload=1, diagnostics=(loose,), **fields)
+                result = boundary(payload=1, diagnostics=(concrete,), **fields)
+                self.assertIs(type(result.diagnostics[0]), IntegerDiagnostic)
+
     def test_scopes_are_tagged_and_required_values_are_not_defaulted(self):
         adapter = TypeAdapter(PlanScope)
         self.assertIsInstance(adapter.validate_python({"kind": "world"}), WorldPlanScope)
@@ -218,12 +243,19 @@ class PlanningContractTests(unittest.TestCase):
             for i, (model, kind) in enumerate((
                 (result_type, CanonicalTypeKind.RECORD), (ProbeDiagnostic, CanonicalTypeKind.RECORD),
                 (ProbeFact, CanonicalTypeKind.RECORD), (PlanDiagnosticDisposition, CanonicalTypeKind.ENUM),
+                (LooseDiagnostic, CanonicalTypeKind.RECORD), (LeafFact[tuple[Any, ...]], CanonicalTypeKind.RECORD),
             ), start=1)))
         fact = ProbeFact(level=3)
         result = result_type(payload=0, diagnostics=(
             ProbeDiagnostic(issue=fact, disposition=PlanDiagnosticDisposition.ERROR),))
         limits = DecodeLimits(100000, 10000, 100, 1024)
         restored = decode_bounded(encode(result, manifest), result_type, manifest, limits=limits)
+        loose = LooseDiagnostic(issue=LeafFact[tuple[Any, ...]](leaf=(42,)),
+                                disposition=PlanDiagnosticDisposition.ERROR)
+        from app.dataModel.planning.diagnostics.planDiagnostic import DiagnosticCarrier
+        loose_bytes = encode(loose, manifest)
+        with self.assertRaisesRegex(CanonicalEncodingError, "unexpected canonical record"):
+            decode_bounded(loose_bytes, DiagnosticCarrier, manifest, limits=limits)
         self.assertEqual(restored, result)
         self.assertIs(type(restored.diagnostics[0]), ProbeDiagnostic)
         forged = result.model_copy(update={"diagnostics": (fact,)})
