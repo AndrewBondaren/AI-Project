@@ -1,7 +1,7 @@
 """Typed river routing facts; no geometry, placement or persistence policy."""
 
 from enum import StrEnum
-from pydantic import BaseModel, ConfigDict, SerializeAsAny, model_validator
+from pydantic import BaseModel, ConfigDict, SerializeAsAny, field_validator, model_validator
 from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
 from app.dataModel.hydrology.declaredRiver import HydrologyMouth
 from app.dataModel.hydrology.riverDrainageLink import RiverReceiverKind
@@ -53,6 +53,16 @@ class RiverRouteDiagnostic(BaseModel):
     receiver_kind: RiverReceiverKind | None = None
     receiver_cell: Coord | None = None
     receiver_level: int | None = None
+
+    @field_validator("requested_mouth", mode="before")
+    @classmethod
+    def validate_requested_mouth(cls, value: object) -> HydrologyMouth | None:
+        if value is None:
+            return None
+        # The authored model normally trusts existing instances. At the diagnostic
+        # boundary validate their stored fields, including model_copy updates.
+        fields = vars(value) if isinstance(value, HydrologyMouth) else value
+        return HydrologyMouth.model_validate(fields, strict=True)
 
     @model_validator(mode="after")
     def redirected_receiver_is_complete(self):

@@ -250,3 +250,7 @@ encode(carrier, SURFACE_MANIFEST)
 **Прогоны.** Профильный набор 34/34 OK, comparison 4/4 OK, Pyright по четырём указанным модулям и 18 surfaceBindings.py — 0 ошибок, 0 предупреждений. Расширенный набор: на базе 31 тест и 17 errors, на HEAD 33 теста и 17 errors. Совпали полные имена всех 17 падающих тестов и конечное исключение каждого, `TypeError: FieldPathError requires a named concrete domain subclass`.
 
 Следующий шаг — закрыть P1 на границе RiverRouteDiagnostic/RiverPlanDiagnostic и закрепить обе подделки requested_mouth регрессией с положительным bounded round-trip. Известный P2 по воспроизводимости shape ID 60008 остаётся за S3.
+
+**Исправление P1 предъявлено на повторную приёмку S2.** До правки регрессия воспроизвела приём строки в координате вложенного requested_mouth. При построении или повторной валидации RiverRouteDiagnostic поля устья теперь проходят строгую схему HydrologyMouth. Регрессия проверяет подделки через model_copy и model_construct, включая числовую строку, на границах RiverPlanDiagnostic и PlanBuildResult. Валидное устье (1, 2) проходит bounded round-trip с побайтным совпадением после повторного encode.
+
+Профильный набор — 35/35 OK, comparison — 4/4 OK, Pyright — 0 ошибок и предупреждений. В расширенном наборе 33 теста и 17 ошибок с прежним TypeError базового FieldPathError.
