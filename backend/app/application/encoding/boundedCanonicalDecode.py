@@ -15,6 +15,12 @@ from app.dataModel.encoding.decodeLimits import DecodeLimits
 
 
 def _alternatives(annotation, substitutions):
+    # Collection elements are read later, outside this alias's binding scope.
+    # Specialize the complete annotation while those bindings are available.
+    if substitutions and get_origin(annotation) is not None:
+        parameters = getattr(annotation, "__parameters__", ())
+        if any(param in substitutions for param in parameters):
+            annotation = annotation[tuple(substitutions.get(param, param) for param in parameters)]
     if annotation in substitutions:
         yield from _alternatives(substitutions[annotation], {})
     elif isinstance(annotation, TypeAliasType):

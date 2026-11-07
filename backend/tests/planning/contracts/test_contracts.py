@@ -78,9 +78,24 @@ class IntegerDiagnostic(PlanDiagnostic[LeafFact[tuple[int, ...]]]):
 
 type IntAlias = tuple[int, ...]
 type LooseAlias = tuple[Any, ...]
+type Box[T] = tuple[T, ...]
+type Chain[T] = Box[T]
+type ChainInt = Chain[int]
 
 
 class ConcreteAliasDiagnostic(PlanDiagnostic[LeafFact[IntAlias]]):
+    pass
+
+
+class BoxDiagnostic(PlanDiagnostic[LeafFact[Box[int]]]):
+    pass
+
+
+class ChainDiagnostic(PlanDiagnostic[LeafFact[ChainInt]]):
+    pass
+
+
+class OpenChainDiagnostic(PlanDiagnostic[LeafFact[Chain[Any]]]):
     pass
 
 
@@ -129,7 +144,17 @@ class PlanningContractTests(unittest.TestCase):
         manifest = manifest_for(concrete)
         wire = encode(result, manifest)
         self.assertEqual(decode_bounded(wire, result_type, manifest, limits=limits), result)
-        for bad in (loose_alias, loose_callable):
+        for carrier, alias in ((BoxDiagnostic, Box[int]), (ChainDiagnostic, ChainInt)):
+            with self.subTest(alias=alias):
+                diag = carrier(issue=LeafFact[alias](leaf=(42,)), disposition=disposition)
+                built = result_type(payload=1, diagnostics=(diag,))
+                schema = manifest_for(diag)
+                restored = decode_bounded(encode(built, schema), result_type, schema, limits=limits)
+                self.assertIs(type(restored.diagnostics[0]), carrier)
+                self.assertIs(type(restored.diagnostics[0].issue), type(diag.issue))
+                self.assertEqual(restored, built)
+        open_chain = OpenChainDiagnostic(issue=LeafFact[Chain[Any]](leaf=(42,)), disposition=disposition)
+        for bad in (loose_alias, loose_callable, open_chain):
             with self.subTest(carrier=type(bad).__name__):
                 with self.assertRaises(ValidationError):
                     result_type(payload=1, diagnostics=(bad,))

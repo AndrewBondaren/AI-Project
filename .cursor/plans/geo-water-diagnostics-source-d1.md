@@ -167,3 +167,32 @@ Planning contracts + Fine Water mismatch — 20/20 OK. Pyright — 0 ошибо�
 Следующий шаг — закрыть P1 для alias и составных аргументов, закрепив отказ на обеих границах Planning и в bounded decoder с положительным контролем для конкретного alias. Переход к S2 отложен.
 
 **Исправление по повторному ревью.** Регрессия воспроизвела приём LooseAliasDiagnostic и LooseCallableDiagnostic до правки. Общий предикат теперь раскрывает именованные type aliases и обходит список параметров Callable. Для обоих контрпримеров PlanBuildResult и PlanEnvelope отклоняют экземпляр, bounded decoder отклоняет зарегистрированный тип при чтении заголовка. Контрольный IntAlias проходит обе границы Planning и bounded round-trip. Профиль Planning contracts + Fine Water mismatch дал 21/21 OK, Pyright по четырём production-файлам S1 дал 0 ошибок. Смежный набор дал 24 теста, 11 errors и 5 failures. S1 предъявлен на повторную приёмку. Вопрос стабильности source shape остаётся в S3.
+
+#### Проверка исправления на ffc5d01f относительно f7c5c8b9
+
+**S1 — REVISE.** Оба исходных контрпримера закрыты. Начало S2 отложено до исправления чтения конкретного `Box[int]`. Дефект decoder воспроизводится и на базе. До записи отчёта рабочее дерево было чистым.
+
+Для каждого аргумента создан именованный carrier `D(PlanDiagnostic[LeafFact[arg]])`. PlanBuildResult и PlanEnvelope проверялись отдельно. Для bounded round-trip зарегистрированы четыре типа с ID 1–4 по порядку — PlanBuildResult[int], D, LeafFact[arg], PlanDiagnosticDisposition. Для проверки отказа на заголовке использованы валидные bytes положительного контроля с теми же ID и manifest проверяемого carrier. Наблюдение за входом в `_Reader.record` различает отказ при проверке заголовка и отказ внутри leaf.
+
+| Аргумент LeafFact | PlanBuildResult | PlanEnvelope | Bounded decoder |
+|---|---|---|---|
+| `LooseAlias = tuple[Any, ...]` | отказ | отказ | отказ на заголовке D |
+| `Callable[[Any], int]` | отказ | отказ | отказ на заголовке D |
+| `IntAlias = tuple[int, ...]` | принят | принят | round-trip OK |
+| `Box[Any]`, где `type Box[T] = tuple[T, ...]` | отказ | отказ | отказ на заголовке D |
+| `Box[int]` | принят | принят | отказ на элементе leaf |
+| `type SimpleChain = IntAlias` | принят | принят | round-trip OK |
+| `type Chain[T] = Box[T]`, затем `type ChainInt = Chain[int]` | принят | принят | отказ на элементе leaf |
+| `type ChainLoose = Chain[Any]` | отказ | отказ | отказ на заголовке D |
+
+На отрицательных пробах зарегистрирован вход только в корневой record, затем `unexpected canonical record` на строке 167. На базе оба исходных carrier принимались обеими границами Planning, а reader входил в D и LeafFact. На положительных пробах проверены точные классы D и LeafFact, значение `(42,)` и disposition ERROR после повторной строгой валидации обоих контейнеров и bounded round-trip результата.
+
+**P1, S1 — подстановка аргумента generic alias в bounded decoder.** Минимальный пример — `type Box[T] = tuple[T, ...]`, именованный D с `LeafFact[Box[int]](leaf=(42,))`, disposition ERROR внутри PlanBuildResult[int]. Ожидается чтение результата, записанного encoder с полным manifest. На обеих ревизиях encode проходит, а decode_bounded выдаёт `CanonicalEncodingError: wrong canonical field type or tag`. В [boundedCanonicalDecode.py, строка 35](../../backend/app/application/encoding/boundedCanonicalDecode.py) при раскрытии Box[int] остаётся `tuple[T, ...]`. При чтении элемента на строке 133 контекст подстановки T = int уже потерян.
+
+Профильные тесты — 21/21 OK. Pyright — 0 ошибок. На обеих ревизиях в смежном наборе 24 теста, 11 errors и 5 failures. Сопоставлены все 16 записей по полному имени теста и subtest и по конечному исключению с сообщением, расхождений нет. P2 для S3 подтверждён отдельно — два свежих процесса дали префиксы shape ID 60008 `3955c572` и `4ef79728`.
+
+Следующий шаг — сохранить подстановку T = int при чтении вложенной коллекции и закрепить round-trip `Box[int]` и цепочки generic alias в bounded decoder.
+
+**Исправление по результатам проверки.** До правки регрессия воспроизвела оба отказа чтения: для `Box[int]` и для `ChainInt = Chain[int]`. При раскрытии alias bounded decoder теперь специализирует составную аннотацию в области действия её параметров. При последующем чтении элемента кортежа проверяется конкретный тип `int`.
+
+Оба случая проходят encode/decode с проверкой точных классов carrier и fact, значения и disposition. Контроль `Chain[Any]` подтверждает отказ на обеих границах Planning и на заголовке зарегистрированного carrier в bounded decoder. Профильные наборы дали 21/21 OK с расширенными subtests, Pyright по четырём production-файлам S1 — 0 ошибок. В смежной группе из 24 тестов осталось 11 errors и 5 failures. Исправление предъявлено на повторную приёмку S1. Вопрос воспроизводимости shape ID 60008 остаётся в S3.
