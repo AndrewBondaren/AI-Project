@@ -1,10 +1,9 @@
 """Golden TLV, in-memory domain admission and artifact contract boundaries."""
-from dataclasses import replace
-from hashlib import sha256
+from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
-from app.encoding.canonicalCodec import CanonicalEncodingError, encode
+from app.encoding.canonicalCodec import CanonicalEncodingError, content_digest, encode
 from app.application.worldData.generators.hydrology.encoding import packSchema
 from app.application.worldData.generators.hydrology.encoding.packCodec import (
     decode_root, decode_shard, encode_root, encode_shard,
@@ -14,7 +13,7 @@ from app.application.worldData.generators.hydrology.encoding.packSchema import O
 from app.dataModel.artifacts.references import ArtifactKind
 from app.dataModel.planning.identity.planRef import PlanRef
 from app.application.planning.service.planFingerprints import output_fingerprint
-from app.application.worldData.generators.hydrology.encoding.sourceSchema import OPEN_WATER_SOURCE_SCHEMA_V1
+from app.application.worldData.generators.hydrology.encoding.sourceBindings import OPEN_WATER_SOURCE_SCHEMA_V1
 from app.dataModel.hydrology.query.source import CanonicalOpenWaterSource, WaterMembershipRun
 from app.dataModel.hydrology.pack.root import HydrologyPackRoot, HydrologyShardRef
 from app.dataModel.hydrology.pack.shard import HydrologyPackShard
@@ -22,6 +21,7 @@ from app.dataModel.hydrology.enums.hydrologyShoreKind import HydrologyShoreKind
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.hydrology.planning.sourceBodyMapping import SourceBodyMapping, SourceBodyMappingEntry
 from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
+from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnosticDisposition
 from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
 from app.dataModel.terrain.regions.coverageGeometry import CoverageSpan, RegionCoverage
 from app.dataModel.terrain.sampling.fineSurfaceWindow import FineSurfaceWindow
@@ -35,6 +35,26 @@ def raw_root(root, **overrides):
 
 
 class PackCodecTests(TestCase):
+    def test_retention_fixtures_match_linked_records(self):
+        root, shard = records()
+        fixtures = Path(__file__).with_name("fixtures")
+        shard_wire = encode_shard(shard)
+        descriptor, = root.shards
+        artifact = descriptor.artifact.model_copy(update={
+            "content_hash": content_digest(shard_wire).hex(),
+            "nbytes": len(shard_wire),
+        })
+        root = root.model_copy(update={"shards": (descriptor.model_copy(update={"artifact": artifact}),)})
+        for part, expected, read, write in (
+                ("shard", shard, decode_shard, encode_shard),
+                ("root", root, decode_root, encode_root)):
+            with self.subTest(part=part):
+                fixture = (fixtures / f"retention-{part}.tlv").read_bytes()
+                decoded = read(fixture, 1)
+                self.assertEqual(decoded, expected)
+                self.assertEqual(write(decoded), fixture)
+                self.assertEqual(encode(expected, MANIFEST), fixture)
+
     def test_v1_wire_ids_refuse_renamed_attribute_even_with_updated_shape_hash(self):
         root, _ = records()
         wire = encode_root(root)
@@ -78,7 +98,7 @@ class PackCodecTests(TestCase):
                 (1, (span(64, 65),), (run(64, 65),), ())):
             data = encode_shard(HydrologyPackShard(source_ref=ref, tx=tx, ty=0, bed=bed(spans),
                                                    wet_runs=runs, shore_rows=shores))
-            key = sha256(data).hexdigest()
+            key = content_digest(data).hex()
             blobs[key] = data
             artifact = catalog.shards[0].artifact.model_copy(update={"content_hash": key, "nbytes": len(data)})
             descriptors.append(HydrologyShardRef(tx=tx, ty=0, artifact=artifact))
@@ -133,12 +153,12 @@ class PackCodecTests(TestCase):
     def test_existing_wire_reconstructed_exactly(self):
         root, shard = records()
         for obj, write, read, golden in (
-                (root, encode_root, decode_root, "ef55146133c7271a635a006aa8d3667511d12bfe4bf114e52a74460cc9caadef"),
+                (root, encode_root, decode_root, "bbb839fac75f0c51408421975df58c48530e36f695e3f889873e937ce92acb47"),
                 (shard, encode_shard, decode_shard, "efc45c2be06b296c3190f3128aa657abda3858d978b2de5448d9eae0f68bb308")):
             with self.subTest(model=type(obj).__name__):
                 data = write(obj)
                 self.assertEqual(data, encode(obj, MANIFEST))
-                self.assertEqual(sha256(data).hexdigest(), golden)
+                self.assertEqual(content_digest(data).hex(), golden)
                 decoded = read(data, 1)
                 self.assertEqual(decoded, obj)
                 self.assertEqual(write(decoded), data)
@@ -175,10 +195,10 @@ class PackCodecTests(TestCase):
             with self.assertRaises(CanonicalEncodingError):
                 decode_root(data, 1)
         issue = root.diagnostics[0]
-        altered = issue.model_copy(update={"issue": replace(issue.issue, code="UNKNOWN_EMISSION")})
-        with self.assertRaisesRegex(CanonicalEncodingError, "diagnostic pair"):
+        altered = issue.model_copy(update={"disposition": PlanDiagnosticDisposition.ERROR})
+        with self.assertRaises(CanonicalEncodingError):
             decode_root(raw_root(root, diagnostics=(altered,)), 1)
-        with self.assertRaisesRegex(CanonicalEncodingError, "diagnostic pair"):
+        with self.assertRaisesRegex(CanonicalEncodingError, "disposition"):
             encode_root(root.model_copy(update={"diagnostics": (altered,)}))
 
     def test_bad_record_roster_and_enum_refuse_before_constructors(self):

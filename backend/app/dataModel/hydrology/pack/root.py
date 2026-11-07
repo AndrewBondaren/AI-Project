@@ -16,7 +16,7 @@ from app.dataModel.planning.contracts.planContract import PlanContractRegistry
 from app.dataModel.planning.contracts.planDependency import PlanDependency, PlanDependencyContract
 from app.dataModel.planning.identity.planKey import AlgorithmVersion, PlanSlot, SchemaVersion
 from app.dataModel.registryKey import RegistryKey
-from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic
+from app.dataModel.planning.diagnostics.planDiagnostic import DiagnosticCarrier
 from app.dataModel.planning.identity.planRef import PlanRef
 from app.dataModel.spatial.grid.coordinateTypes import FineZ
 from app.dataModel.topology.worldTopology import WorldTopology
@@ -132,7 +132,7 @@ def _ordered_ids(values):
 class HydrologyPackRoot(_PackRecord):
     source_ref: PlanRef
     dependencies: tuple[PlanDependency, ...]
-    diagnostics: tuple[PlanDiagnostic, ...]
+    diagnostics: tuple[DiagnosticCarrier, ...]
     topology: WorldTopology
     coverage_region_uid: EntityUid
     z_min: FineZ

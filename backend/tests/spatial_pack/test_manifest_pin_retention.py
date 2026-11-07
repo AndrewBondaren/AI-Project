@@ -44,11 +44,11 @@ class ManifestPinRetentionTests(IsolatedAsyncioTestCase):
         writer = await connections.enter_async_context(live_database(path))
         observer = await connections.enter_async_context(live_database(path, seed=False))
         a, b = SqliteBlobFixture(writer), SqliteBlobFixture(observer)
-        # e145de78: the decoded root contains the exact descriptor of these shard bytes.
+        # The root contains the descriptor for these exact shard bytes.
         fixtures = Path(__file__).with_name("fixtures")
         root_bytes = (fixtures / "retention-root.tlv").read_bytes()
         shard_bytes = (fixtures / "retention-shard.tlv").read_bytes()
-        self.assertEqual(sha256(root_bytes).hexdigest(), "198cc08ac48db7127b9b2f7ae0108fdf32d4fdf7684842304e416a3c3a0dea92")
+        self.assertEqual(sha256(root_bytes).hexdigest(), "4c2545de0281fa43c24f0187001d2edeac0746dd80631a5d53e250e7df0be40f")
         self.assertEqual(sha256(shard_bytes).hexdigest(), "efc45c2be06b296c3190f3128aa657abda3858d978b2de5448d9eae0f68bb308")
         world = "w"
         async with writer[0].transaction():

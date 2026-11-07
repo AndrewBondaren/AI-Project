@@ -65,6 +65,33 @@ Closure больше нельзя выводить только из annotation 
 
 ## 5. Файлы и проверяемые шаги
 
+### S3 после приёмки S2 — параллельные треки
+
+**S2 принят, S3 разрешён пользователем.** Выполнение S3 открыто. Ниже уточнён порядок работ строки S3 и проверок §7.0. Первая волна допускает три одновременных задания. У каждого файла один исполнитель.
+
+| Трек | Можно делать сразу | Условие завершения |
+|---|---|---|
+| A. Source и shape 60008 | Владелец `sourceSchema.py` и `tests/spatial_pack/test_source_schema.py`. Воспроизвести P2 в двух свежих процессах. Реализовать воспроизводимое описание validator, явный перечень concrete roots из §4 и проверку допустимых фактов. Представить diff состава типов, alias и lock. | Два свежих процесса дают одинаковый **полный** shape 60008 и alias lock. Подмена validator обнаруживается. Целевые Water/River/mismatch проходят round-trip, посторонний carrier отклоняется. Передать B фактический roster и контракт тестовых helpers `diagnostics` и `ref`. |
+| B. Pack и storage | Владелец `packSchema.py` и `tests/spatial_pack/test_storage_schema.py`. Параллельно с A готовить обход собственных storage roots, проверку дополнительных bindings и отрицательные тесты Pack. Сохранить точку сборки тестовых записей `records()` для C. | После A объединить фактические source roots со storage roots, сверить состав и прогнать source + storage вместе. Передать C проверенные `records()` и действующий Pack manifest. |
+| C. Codec и retention | Владелец `tests/spatial_pack/test_pack_codec.py` и двух fixtures из §7.0. Сразу зафиксировать контрольные суммы исходных файлов, изучить replay/retention consumers и подготовить сценарии сравнения декодированных root/shard. | После совместного прохода A+B получить bytes целевым encoder, объяснить дельту каждого fixture, проверить чтение и повторное кодирование, bounded decode и pin retention. |
+
+Причина порядка видна в коде. `require_pack_schema_v1()` вызывает source guard, а Pack manifest включает source entries. Тестовые зависимости идут от `test_source_schema.diagnostics/ref` к `test_storage_schema.records()`, затем к pack codec. Если общий вход ещё не готов, в отчёте трека указывается эта зависимость. Подмена guard, отдельная копия manifest или временный legacy reader исказили бы результат приёмки.
+
+Команды из `backend`, с `$env:PYTHONPATH='.;tests'`:
+
+```powershell
+# A — запускать дважды отдельными процессами, сопоставить полный вывод
+.\.venv\Scripts\python -c "from app.application.worldData.generators.hydrology.encoding import sourceBindings as b, sourceSchema, sourceShape; sourceSchema.require_source_schema_v1(); shapes, aliases = sourceShape.source_snapshot(); print(next(shapes[t] for i, t, _ in b.SOURCE_BINDINGS if i == 60008), aliases)"
+.\.venv\Scripts\python -m unittest -v tests.spatial_pack.test_source_schema
+# A + B
+.\.venv\Scripts\python -m unittest -v tests.spatial_pack.test_source_schema tests.spatial_pack.test_storage_schema
+# C и общая приёмка S3
+.\.venv\Scripts\python -m unittest -v tests.spatial_pack.test_pack_codec tests.spatial_pack.test_bounded_decode tests.spatial_pack.test_manifest_pin_retention
+.\.venv\Scripts\python -m unittest discover -s tests/planning/encoding/comparison -t . -v
+```
+
+Общий отчёт собирается на одной ревизии после C. В нём указать результаты команд, полный shape ID 60008 в двух процессах, изменения roster/locks и сравнение fixtures. Сухой A + корректный B и переключение producers остаются критериями S4. Здесь P2 обозначает дефект source shape; production reporting P2 из River D1 ведётся отдельно.
+
 Все команды из backend, `$env:PYTHONPATH='.;tests'`; Python `./.venv/Scripts/python.exe`. До реализации §2/3/4 переносится в docs/tz_terrain_hydrology.md (раздел Water diagnostics), owning планы синхронизируются. Это D2-0; код до приёмки D1 не писать.
 
 | Шаг | Точные изменяемые файлы относительно backend | Проверка / Done |
@@ -72,7 +99,7 @@ Closure больше нельзя выводить только из annotation 
 | S1 Planning | app/dataModel/planning/diagnostics/planDiagnostic.py; app/dataModel/planning/contracts/planEnvelope.py; app/application/planning/service/planFingerprints.py; tests/planning/contracts/test_contracts.py | `python -m unittest tests.planning.contracts.test_contracts`; concrete preservation, forged/Any rejects, mismatch reuse |
 | S2 Water | новый app/dataModel/hydrology/waterDiagnostics.py; app/application/worldData/generators/hydrology/water/waterBodyResolver.py; app/application/worldData/planning/encoding/surfaceManifest.py; новый tests/geo1/fine_water/test_water_diagnostics.py; tests/test_hydrology_water_resolver.py | `python -m unittest tests.geo1.fine_water.test_water_diagnostics tests.test_hydrology_water_resolver`; все facts strict, spill before union, levels/UID unchanged |
 | S2 River prerequisite | app/dataModel/hydrology/riverRouting.py; тот же surfaceManifest; tests/geo1/fine_water/test_river_diagnostics.py; tests/planning/encoding/test_canonical_codec.py | River D1 steps 2–3, `python -m unittest tests.geo1.fine_water.test_river_diagnostics tests.planning.encoding.test_canonical_codec`; конкретные DTO/IDs, producer ещё прежний |
-| S3 source/Pack | app/application/worldData/generators/hydrology/encoding/sourceSchema.py, packSchema.py; tests/spatial_pack/test_source_schema.py, test_storage_schema.py | `python -m unittest tests.spatial_pack.test_source_schema tests.spatial_pack.test_storage_schema`; target encode/decode, malformed roster/unknown carrier/alias/shape, concrete closure, никаких старых readers |
+| S3 source/Pack | app/application/worldData/generators/hydrology/encoding/{sourceSchema,sourceBindings,sourceShape,sourceLocks,packSchema}.py; tests/spatial_pack/test_source_schema.py, test_storage_schema.py | `python -m unittest tests.spatial_pack.test_source_schema tests.spatial_pack.test_storage_schema`; target encode/decode, malformed roster/unknown carrier/alias/shape, concrete closure, никаких старых readers |
 | S4 Water callback | app/application/worldData/generators/hydrology/water/waterDiagnostics.py, waterMaterialize.py, planning/waterAssemblyResult.py; tests/geo1/fine_water/test_water_diagnostics.py; tests/geo1/fine_water/test_kind_mismatch.py | `python -m unittest tests.geo1.fine_water.test_water_diagnostics tests.geo1.fine_water.test_kind_mismatch tests.test_hydrology_water_resolver`; порядок фактов, независимый следующий компонент, значения без дельты |
 | S4 River callback | exact файлы River D1 steps 4–7 | команды River D1; mixed Water/River source и publication; не новый runtime sink |
 
@@ -254,3 +281,50 @@ encode(carrier, SURFACE_MANIFEST)
 **Исправление P1 предъявлено на повторную приёмку S2.** До правки регрессия воспроизвела приём строки в координате вложенного requested_mouth. При построении или повторной валидации RiverRouteDiagnostic поля устья теперь проходят строгую схему HydrologyMouth. Регрессия проверяет подделки через model_copy и model_construct, включая числовую строку, на границах RiverPlanDiagnostic и PlanBuildResult. Валидное устье (1, 2) проходит bounded round-trip с побайтным совпадением после повторного encode.
 
 Профильный набор — 35/35 OK, comparison — 4/4 OK, Pyright — 0 ошибок и предупреждений. В расширенном наборе 33 теста и 17 ошибок с прежним TypeError базового FieldPathError.
+
+### Повторная независимая приёмка S2
+
+**ACCEPT. P1 закрыт, S3 можно начинать.** Проверена правка `dc7d1d75` относительно базы предыдущего ревью `22ddd5a1`. На старте правка находилась в рабочем diff поверх `fd440659` (план, riverRouting.py и test_river_diagnostics.py); untracked-файлов не было. Во время проверки этот diff вошёл в `dc7d1d75`. Перед записью вердикта рабочее дерево было чистым.
+
+Независимый прогон подставлял в координату x значения `"bad"`, `"42"`, `True` и `1.5` через model_copy и model_construct. На базе все восемь вариантов принимались. После исправления каждый вариант отклонён на всех четырёх проверенных границах — при построении RiverRouteDiagnostic, при передаче подделанного факта в RiverPlanDiagnostic и при передаче подделанного carrier в PlanBuildResult и PlanEnvelope. Отказ происходит до сериализации.
+
+Положительный bounded round-trip со штатным SURFACE_MANIFEST прошёл для координат (1, 2), ссылки location_uid, координат (-1, 0, 3) и отсутствующего устья. Проверены тип и значение восстановленного устья, равенство carrier и побайтное совпадение повторного encode. Для каждого образца SHA-256 исходных bytes совпал с базой.
+
+Профильный набор — 35/35 OK, comparison — 4/4 OK, Pyright по четырём указанным модулям и 18 surfaceBindings.py — 0 ошибок и предупреждений. Расширенный набор дал на обеих ревизиях 33 теста и 17 errors. Совпали полные имена всех 17 тестов, конечные типы исключений и сообщения. В S3 остаётся P2 по воспроизводимости shape ID 60008. Сухой A + корректный B остаётся критерием S4.
+
+### Независимая приёмка S3
+
+**Исправления после приведённого ниже ревью, на повторную приёмку.** A: подмены `23 → 23.0` и `CanonicalTypeKind.ENUM → "enum"` воспроизведены до правки. Source guard теперь строго валидирует manifest и его entries до сравнения bindings. C: связанный retention-root пересоздан штатным encoder после расчёта descriptor по фактическим shard bytes, новый SHA-256 `4c2545de0281fa43c24f0187001d2edeac0746dd80631a5d53e250e7df0be40f`, размер 7479 байт. Ту же сумму проверяет pin-retention. Обычный root из records() проверяется отдельным golden `bbb839fac75f0c51408421975df58c48530e36f695e3f889873e937ce92acb47`. Исходный shard совпал побайтно. Объединённый прогон A+B+C и comparison дал **55/55 OK**. Pyright по трём production-модулям дал 0 ошибок и предупреждений. В двух свежих процессах shape 60008 равен `ce6afa80c6b82955a432e4f09cc01c44c09c85de19decb2d9b2bd861274c0bae`, SHA-256 представления alias lock равен `a7a995c5350ae46d838c24f1d36aba29e0c20845dc10462c6196626e582920ac`.
+
+**REVISE. S4 начинать нельзя.** A — REVISE по строгой типизации bindings. B — ACCEPT в пределах ответственности Pack. C — REVISE по двум разным root-эталонам. Первым исправить source guard и закрепить оба случая подмены тестами. Затем обновить связанный retention-root целевым encoder и отдельно golden для обычного records(). Повторить общий прогон.
+
+**Состояние ревью.** HEAD `dc7d1d754d3b119dc9afd10ff6ec2b340cbb976c`. Git blob полного `git diff --binary HEAD` до записи этого раздела — `bc0a23bb9e4604e399c33858957d80e7995b559c`, повторная проверка дала тот же hash. Индекс чист, untracked-файлов нет. Восемь изменённых путей: два плана в .cursor/plans (этот и world-generation-plan-dependency-graph.md), три production-модуля из команды Pyright и три tests/spatial_pack/test_{source_schema,storage_schema,pack_codec}.py. Все результаты A/B/C относятся к этому дереву. Исторические контроли выполнены в отдельных распаковках git archive.
+
+**A.** В двух свежих процессах guard прошёл. Полный shape 60008 в каждом — `ce6afa80c6b82955a432e4f09cc01c44c09c85de19decb2d9b2bd861274c0bae`. Совпали целиком обе последовательности пар (имя, определение) и alias lock. Имена по порядку: AlgorithmVersion, Count, EntityUid, FineX, FineXY, FineY, FineZ, InputFingerprint, MaterialKey, OutputFingerprint, PathSegment, PlanContractId, PlanScope, PlanSlot, PositiveCount, SchemaVersion. Добавлены Count, PathSegment, PositiveCount, исключён RevisionHex. В roster добавлены 89, 303–308, 323–336, 338–344, исключены 106–110. У 60008 прежний lock начинался с 4054d88e. Подмена функции PlainValidator в test_replaced_plain_validator_changes_envelope_shape даёт shape drift: 60008. Тесты пропустили семь Water carriers, River и mismatch, проверили вложенные типы и повторное кодирование. Surface-зарегистрированный посторонний факт и WaterPlacementRequiredDiagnostic отклонены. Абстрактных классов по inspect.isabstract в объединённом manifest нет. ID 105 нужен для конкретной пары PlanDiagnostic + WaterKindMismatchIssue.
+
+**P2 · A · sourceSchema.py:285.** Минимальный repro в sourceSchema: взять m = OPEN_WATER_SOURCE_SCHEMA_V1, отдельно для каждого update из ({"type_id": 23.0}, {"kind": "enum"}) собрать entries = (m.entries[0].model_copy(update=update), *m.entries[1:]); под patch.object(s, "OPEN_WATER_SOURCE_SCHEMA_V1", m.model_copy(update={"entries": entries})) вызвать s.require_source_schema_v1(). Ожидался CanonicalEncodingError на границе source. Оба вызова вернули None: tuple equality не различает равные float/int и str/StrEnum. При encode(next(iter(entries[0].python_type)), подменённый_manifest) обе записи отклоняет уже CanonicalCodec.__post_init__ (canonicalCodec.py:32, пути entries.0.type_id и entries.0.kind). На чистом HEAD обе подмены также проходят сравнение bindings, однако весь guard падает позже на closure drift даже для исходной записи. На базе воспроизводится дефект сравнения; полное успешное прохождение подменённого guard наблюдается в S3. Исправление — строгая повторная валидация manifest и записей на входе source guard, как в Pack.
+
+**B.** Pack включает source entries и пять собственных записей: 60001 root, 60002 descriptor, 60003 shard, 60005 ArtifactRef, 60006 ArtifactKind. packSchema.py:87 вызывает source guard, проверяет storage shapes, строгие bindings, имена полей и замыкание. На границе записи проверяются и диагностики root. Изменение root.py:135 сверх карты оправдано: Pydantic реконструирует diagnostics по объявлению поля; DiagnosticCarrier применяет общий контракт сохранения конкретного carrier. У decode_root(encode_root(records()[0]), 1) сохраняются WaterLevelSpillDiagnostic и WaterLevelSpill, а повторное кодирование возвращает те же bytes. test_roster_and_exact_storage_shapes проверяет идентичность обоих классов через assertIs. Прошли отрицательные тесты пропущенной, лишней, подменённой регистрации, равных неправильно типизированных storage bindings, испорченного вложенного поля и переименования shards даже при пересчитанном shape.
+
+Pyright по трём production-файлам дал одну ошибку в sourceSchema.py:262:36: Field[Any].annotation в _snapshot. На чистом HEAD тот же Pyright с тем же Python воспроизвёл её в sourceSchema.py:178:36. Это исходный долг A; новых ошибок в packSchema.py и root.py не обнаружено.
+
+**C.** SHA-256 вычислен по самим байтам. В колонке «старый» указан результат encoder исторической ревизии e145de78, указанной в pin-тесте; fixture внесена в Git коммитом d01cf073. Для связанного root и shard отдельно прочитаны файлы из проверяемого дерева.
+
+| Образец | Старый размер и SHA-256 | Целевой размер и SHA-256 |
+|---|---|---|
+| root из records(), descriptor содержит 64 символа a и nbytes=100 | 7518 · ef55146133c7271a635a006aa8d3667511d12bfe4bf114e52a74460cc9caadef | 7478 · bbb839fac75f0c51408421975df58c48530e36f695e3f889873e937ce92acb47 |
+| retention-root, descriptor содержит SHA-256 shard и nbytes=1913 | 7519 · 198cc08ac48db7127b9b2f7ae0108fdf32d4fdf7684842304e416a3c3a0dea92 | 7479 · 4c2545de0281fa43c24f0187001d2edeac0746dd80631a5d53e250e7df0be40f |
+| shard | 1913 · efc45c2be06b296c3190f3128aa657abda3858d978b2de5448d9eae0f68bb308 | 1913 · efc45c2be06b296c3190f3128aa657abda3858d978b2de5448d9eae0f68bb308 |
+
+Все три старых образца проходят decode → encode байт-в-байт своим reader, все три целевых — текущим. Старый сохранённый shard проходит текущим reader и совпадает с целевым. Старый сохранённый root текущий reader отвергает. Reader e145de78 прочёл тот же файл, восстановил в точности свой связанный records() и вернул исходные 7519 байт.
+
+На уровне полей root дельта между поколениями локализована в diagnostics. Сопоставлены отдельные wire-представления полей records(); остальные десять совпали по контрольным суммам. Между обычным и связанным образцами внутри поколения меняются только content_hash/nbytes descriptor. Старые байты несут PlanDiagnostic (105) → FieldPathError (106) с path=('water', 0), message='spill', code='WATER_LEVEL_SPILL' и пустыми schema_id/reference/runtime_context. Новые — WaterLevelSpillDiagnostic (342) → WaterLevelSpill (334), code=WaterDiagnosticCode.WATER_LEVEL_SPILL (329), source_uid='authored', requested_level=5, spill_limited_level=2. Disposition FALLBACK (111) сохраняется. ID 106 отсутствует в целевом roster.
+
+- **P1 · C · tests/spatial_pack/test_pack_codec.py:53.** Минимальный repro: decode_root(Path('tests/spatial_pack/fixtures/retention-root.tlv').read_bytes(), 1). Ожидался связанный root с concrete spill и побайтовый round-trip; фактически CanonicalEncodingError: unknown or wrong canonical type ID. Пересоздать связанный root после кодирования shard по его фактическим hash и nbytes.
+- **P1 · C · tests/spatial_pack/test_pack_codec.py:161 (golden на :156).** Минимальный repro: content_digest(encode_root(records()[0])).hex(). Ожидается ef551461…; фактически bbb839fa… (полные значения выше). Обновить golden обычного root отдельно от retention fixture. Shard уже совпадает.
+
+**Сверка прогона.** 47 тестов source/storage/codec/bounded дали один ERROR в test_retention_fixtures_match_linked_records (root) и один FAIL в test_existing_wire_reconstructed_exactly (HydrologyPackRoot). Comparison 4/4. Отдельный прогон pin-retention вне песочницы 3/3; в песочнице совместный запуск задержался на SQLite-тесте. Итого по тем же 54 тестам — 52 успешных, 1 error, 1 failure, имена и причины совпадают с предыдущим прогоном. В pin-тестах reader возвращает сохранённые root/shard bytes по ссылкам manifest после смены head и GC (test_manifest_pin_retention.py:159–162); декодируется manifest. Читаемость самого retention-root проверяет упавший codec-тест.
+
+### S3 после исправлений A и C
+
+В sourceSchema.py остались две проверки допуска. Декларации типов и пар диагностики вынесены в sourceBindings.py, вычисление фактических сигнатур в sourceShape.py, эталонные значения в sourceLocks.py. Два свежих процесса дали одинаковые 56 сигнатур и 16 alias, включая shape ID 60008 (ce6afa80c6b82955a432e4f09cc01c44c09c85de19decb2d9b2bd861274c0bae). Адресный прогон S3 прошёл 55/55, Pyright по проверенным production-модулям дал 0 errors и 0 warnings. Повторная независимая приёмка A и C остаётся условием входа в S4.

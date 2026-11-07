@@ -7,15 +7,17 @@ from hashlib import sha256
 from pydantic import BaseModel, ValidationError
 
 from app.encoding.canonicalCodec import CanonicalEncodingError
+from app.application.worldData.generators.hydrology.encoding import sourceBindings
+from app.application.worldData.generators.hydrology.encoding.sourceShape import shape_repr
 from app.application.worldData.generators.hydrology.encoding.sourceSchema import (
-    OPEN_WATER_SOURCE_SCHEMA_V1, require_source_diagnostics_v1, require_source_schema_v1,
+    require_source_diagnostics_v1, require_source_schema_v1,
 )
 from app.dataModel.artifacts.references import ArtifactFormatKey, ArtifactKind, ArtifactRef, FormatVersion
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest, CanonicalTypeKind, RegisteredTypeEntry
 from app.dataModel.hydrology.pack.root import HydrologyPackRoot, HydrologyShardRef
 from app.dataModel.hydrology.pack.shard import HydrologyPackShard
-from app.dataModel.hydrology.query.source import CanonicalOpenWaterSource
-from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
+from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic
+from app.dataModel.validation.diagnostics.runtimeIssueContext import RevisionHex
 from app.dataModel.registryKey import RegistryKey
 
 
@@ -24,7 +26,7 @@ _STORAGE = (
     (60005, ArtifactRef), (60006, ArtifactKind),
 )
 OPEN_WATER_PACK_SCHEMA_V1 = CanonicalSchemaManifest(entries=tuple(sorted((
-    *OPEN_WATER_SOURCE_SCHEMA_V1.entries,
+    *sourceBindings.OPEN_WATER_SOURCE_SCHEMA_V1.entries,
     *(RegisteredTypeEntry(type_id=i, python_type=t,
                           kind=CanonicalTypeKind.ENUM if issubclass(t, Enum) else CanonicalTypeKind.RECORD)
       for i, t in _STORAGE)), key=lambda entry: entry.type_id)))
@@ -32,33 +34,10 @@ OPEN_WATER_PACK_SCHEMA_V1 = CanonicalSchemaManifest(entries=tuple(sorted((
 
 # Stable ordered TLV field identifiers. V1 binds each identifier to the same POJO name.
 _V1_WIRE_FIELDS = {
-    53: ('mode', 'bounds'),
-    55: ('x_min', 'x_max', 'y_min', 'y_max'),
-    94: ('key', 'output_fingerprint'),
-    95: ('world_uid', 'scope', 'contract_id', 'schema_version', 'algorithm_version', 'input_fingerprint'),
-    96: ('kind',),
-    98: ('kind', 'region_uid'),
-    101: ('slot', 'ref'),
-    105: ('issue', 'disposition'),
-    106: ('path', 'message', 'schema_id', 'code', 'reference', 'runtime_context'),
-    107: ('reason', 'domain', 'world_uid', 'requested_template_uid', 'owner_pack_uid', 'dependency_pack_uid', 'consumer', 'selected_default'),
-    109: ('world_uid', 'snapshot_uid', 'content_revision', 'source_uid', 'body_uids', 'cell', 'face', 'fallback_action', 'fallback_reason'),
-    150: ('liquid_candidate', 'role', 'deepening_index', 'connection_edge_uid', 'shore_kind', 'water_body_uid', 'z_water_level', 'river_drainage'),
-    152: ('river_uid', 'river_type', 'receiver_uid', 'receiver_kind', 'receiver_cell'),
-    153: ('water_body_uid', 'location_uid', 'kind', 'liquid', 'declared_level', 'z_water_level', 'declared_basin_uid', 'parent_system_uid'),
-    154: ('water_system_uid', 'member_uids', 'child_system_uids', 'z_water_level', 'parent_system_uid'),
-    226: ('entries',),
-    227: ('source_uid', 'body_uids'),
-    238: ('region_uid', 'spans'),
-    239: ('y', 'x0', 'x1'),
-    283: ('coverage', 'surface_z', 'topology', 'protected_cells'),
     60001: ('source_ref', 'dependencies', 'diagnostics', 'topology', 'coverage_region_uid', 'z_min', 'z_max', 'bodies', 'unions', 'source_mapping', 'shards'),
     60002: ('tx', 'ty', 'artifact'),
     60003: ('source_ref', 'tx', 'ty', 'bed', 'wet_runs', 'shore_rows'),
-    60004: ('y', 'x0', 'x1', 'body_uid'),
     60005: ('kind', 'format_key', 'format_version', 'content_hash', 'nbytes', 'row_count'),
-    60007: ('space', 'bed', 'z_min', 'z_max', 'wet_runs', 'bodies', 'unions', 'source_mapping', 'shore_rows'),
-    60008: ('ref', 'dependencies', 'payload', 'diagnostics'),
 }
 
 
@@ -67,18 +46,19 @@ def _shape(owner):
     if issubclass(owner, Enum):
         rows = [(key, getattr(member, "wire_value", member.value)) for key, member in owner.__members__.items()]
     else:
-        rows = [(key, repr(field.annotation), repr(field.default), repr(field.default_factory), repr(field.metadata))
+        rows = [(key, shape_repr(field.annotation), repr(field.default), repr(field.default_factory), repr(field.metadata))
                 for key, field in owner.model_fields.items()]
     return sha256(repr((name, rows)).encode()).hexdigest()
 
 
-def _closure():
-    """Include the frozen source schema and the two concrete storage roots."""
-    pending = [PlanEnvelope[CanonicalOpenWaterSource], HydrologyPackRoot, HydrologyPackShard]
+def _closure(roots):
+    pending = list(roots)
     records = set()
     aliases = {}
     while pending:
         owner = pending.pop()
+        if owner is PlanDiagnostic[typing.Any]:
+            continue  # Source admission binds the concrete diagnostic records.
         if isinstance(owner, (typing.NewType, typing.TypeAliasType)):
             existing = aliases.get(owner.__name__)
             if existing is not None:
@@ -108,8 +88,10 @@ def _closure():
 
 def require_pack_schema_v1() -> None:
     require_source_schema_v1()
-    expected = {e.type_id: (e.python_type, e.kind) for e in OPEN_WATER_SOURCE_SCHEMA_V1.entries}
+    expected = {e.type_id: (e.python_type, e.kind) for e in sourceBindings.OPEN_WATER_SOURCE_SCHEMA_V1.entries}
     for i, owner in _STORAGE:
+        if i in expected:
+            raise CanonicalEncodingError(f"storage binding collides with source ID: {i}")
         expected[i] = (owner, CanonicalTypeKind.ENUM if issubclass(owner, Enum) else CanonicalTypeKind.RECORD)
         if _shape(owner) != _STORAGE_SHAPES[i]:
             raise CanonicalEncodingError(f"open-water storage v1 shape drift: {i}")
@@ -125,20 +107,20 @@ def require_pack_schema_v1() -> None:
         raise CanonicalEncodingError(f"open-water storage v1 binding drift: {exc}") from exc
     if len(entries) != len(expected) or {e.type_id: (e.python_type, e.kind) for e in entries} != expected:
         raise CanonicalEncodingError("open-water storage v1 binding drift")
-    for entry in entries:
-        if entry.kind is CanonicalTypeKind.RECORD:
-            owner = entry.python_type
-            names = tuple(owner.model_fields) if issubclass(owner, BaseModel) else tuple(
-                field.name for field in dataclasses.fields(owner))
-            if names != _V1_WIRE_FIELDS.get(entry.type_id):
-                raise CanonicalEncodingError(f"open-water v1 wire field binding drift: {entry.type_id}")
-    records, aliases = _closure()
-    if records != {owner for owner, _ in expected.values()} or len(aliases) != 16:
+    for type_id, names in _V1_WIRE_FIELDS.items():
+        if tuple(expected[type_id][0].model_fields) != names:
+            raise CanonicalEncodingError(f"open-water v1 wire field binding drift: {type_id}")
+    source_types = tuple(entry.python_type for entry in sourceBindings.OPEN_WATER_SOURCE_SCHEMA_V1.entries)
+    _, source_aliases = _closure(source_types)
+    records, aliases = _closure((*source_types, HydrologyPackRoot, HydrologyPackShard))
+    if (records != {owner for owner, _ in expected.values()}
+            or aliases.keys() - source_aliases.keys() != {"ArtifactFormatKey", "FormatVersion", "RevisionHex"}):
         raise CanonicalEncodingError("open-water storage v1 closure drift")
     fields = ArtifactRef.model_fields
     if (fields["format_key"].annotation is not ArtifactFormatKey
             or fields["format_version"].annotation is not FormatVersion
-            or (repr(ArtifactFormatKey.__value__), repr(FormatVersion.__value__)) != _ARTIFACT_ALIASES):
+            or fields["content_hash"].annotation is not RevisionHex
+            or (repr(ArtifactFormatKey.__value__), repr(FormatVersion.__value__), repr(RevisionHex.__value__)) != _ARTIFACT_ALIASES):
         raise CanonicalEncodingError("open-water storage v1 artifact alias drift")
 
 
@@ -176,7 +158,7 @@ def require_pack_record_v1(record: HydrologyPackRoot | HydrologyPackShard) -> No
 
 
 _STORAGE_SHAPES = {
-    60001: '12d05e7623678f7bda180f479341f828f46eb96fc0c64f85d506becceedf2232',
+    60001: 'fba09c8adae6fd322b21e30b09dbb940c386889cd9dca7e8735e8b6674a5d691',
     60002: 'd3ffe67598f39312525cfe8ab380ba6019e7133a1c0505dfb8c610e3343a10a2',
     60003: 'fd5cfdba6e4674d58d4aef89ced5adf28a073004b166dc329989e447acff203b',
     60005: 'c26787c76eb2c535951d13feca64a97d7870aa48498db638ddb27afca91b3f41',
@@ -185,4 +167,6 @@ _STORAGE_SHAPES = {
 _ARTIFACT_ALIASES = (
     'app.dataModel.registryKey.RegistryKey[app.dataModel.artifacts.references.ArtifactFormatRegistry]',
     'typing.Annotated[int, Strict(strict=True), FieldInfo(annotation=NoneType, required=True, metadata=[Gt(gt=0)])]',
+    "typing.Annotated[str, Strict(strict=True), StringConstraints(strip_whitespace=None, to_upper=None, "
+    "to_lower=None, strict=None, min_length=64, max_length=64, pattern='^[0-9a-f]{64}$', ascii_only=None)]",
 )

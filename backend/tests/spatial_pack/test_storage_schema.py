@@ -26,6 +26,7 @@ from app.dataModel.surfacePlanning.surfacePlanBindings import geo_surface_plan_b
 from app.dataModel.surfacePlanning.surfacePlanSlot import SurfacePlanSlot
 from app.dataModel.terrain.planning.natural.preparedTerrain import NATURAL_TERRAIN_CONTRACT
 from tests.geo1.canonical_source.test_source_models import source, union
+from app.application.worldData.generators.hydrology.encoding import sourceBindings
 from tests.spatial_pack.test_source_schema import diagnostics, ref
 
 
@@ -60,6 +61,23 @@ def records():
 
 
 class StorageSchemaTests(TestCase):
+    def test_storage_bindings_reject_missing_extra_and_substituted_record(self):
+        class OtherShard(HydrologyPackShard):
+            pass
+
+        manifest = packSchema.OPEN_WATER_PACK_SCHEMA_V1
+        entry = next(entry for entry in manifest.entries if entry.python_type is HydrologyPackShard)
+        remaining = tuple(item for item in manifest.entries if item is not entry)
+        for label, entries in (
+            ("missing", remaining),
+            ("extra", (*manifest.entries, entry.model_copy(update={"type_id": 65000, "python_type": OtherShard}))),
+            ("substituted", (*remaining, entry.model_copy(update={"python_type": OtherShard}))),
+        ):
+            malformed = type(manifest)(entries=entries)
+            with self.subTest(label=label), patch.object(packSchema, "OPEN_WATER_PACK_SCHEMA_V1", malformed):
+                with self.assertRaisesRegex(CanonicalEncodingError, "storage v1 binding drift"):
+                    packSchema.require_pack_schema_v1()
+
     def test_dict_binding_rejected_by_schema_before_reconstruction(self):
         root, _ = records()
         manifest = packSchema.OPEN_WATER_PACK_SCHEMA_V1
@@ -88,7 +106,9 @@ class StorageSchemaTests(TestCase):
         root, _ = records()
         manifest = packSchema.OPEN_WATER_PACK_SCHEMA_V1
         wire = encode(root, manifest)
-        self.assertEqual(sha256(wire).hexdigest(), "ef55146133c7271a635a006aa8d3667511d12bfe4bf114e52a74460cc9caadef")
+        artifact_bytes = encode(root.shards[0].artifact, manifest)
+        self.assertEqual(sha256(artifact_bytes).hexdigest(),
+                         "317b6f08b0f450c2d118f67eb90bbc1619d261e6baf9554482f2fd24758c3d25")
         override = property(lambda kind: "binary" if kind is ArtifactKind.BLOB else kind.value)
         with patch.object(ArtifactKind, "wire_value", override, create=True):
             with self.assertRaisesRegex(CanonicalEncodingError, "shape drift: 60006"):
@@ -122,7 +142,7 @@ class StorageSchemaTests(TestCase):
 
     def test_storage_strings_require_lossless_utf8(self):
         root, _ = records()
-        for text in (chr(0xD800), "озеро🌊"):
+        for text in (chr(0xD800), "Р В РЎвЂўР В Р’В·Р В Р’ВµР РЋР вЂљР В РЎвЂўРЎР‚РЎСџР Р‰Р вЂ°"):
             body = WaterBody(**(vars(root.bodies[0]) | {"location_uid": text}))
             candidate = HydrologyPackRoot(**(vars(root) | {"bodies": (body,)}))
             if text == chr(0xD800):
@@ -164,18 +184,19 @@ class StorageSchemaTests(TestCase):
             packSchema.require_pack_record_v1(item)
             manifest = packSchema.OPEN_WATER_PACK_SCHEMA_V1
             wire = encode(item, manifest)
-            self.assertEqual(decode(wire, type(item), manifest), item)
-        source_entries = packSchema.OPEN_WATER_SOURCE_SCHEMA_V1.entries
+            decoded = decode(wire, type(item), manifest)
+            self.assertEqual(decoded, item)
+            if isinstance(decoded, HydrologyPackRoot):
+                self.assertEqual(decoded.diagnostics, diagnostics())
+                for actual, expected in zip(decoded.diagnostics, diagnostics(), strict=True):
+                    self.assertIs(type(actual), type(expected))
+                    self.assertIs(type(actual.issue), type(expected.issue))
+        source_entries = sourceBindings.OPEN_WATER_SOURCE_SCHEMA_V1.entries
         storage = {e.type_id: e.python_type for e in packSchema.OPEN_WATER_PACK_SCHEMA_V1.entries}
         for entry in source_entries:
             self.assertIs(storage.pop(entry.type_id), entry.python_type)
         self.assertEqual(storage, {60001: HydrologyPackRoot, 60002: HydrologyShardRef, 60003: HydrologyPackShard,
                                    60005: ArtifactRef, 60006: ArtifactKind})
-        _, aliases = packSchema._closure()
-        self.assertEqual(set(aliases), {
-            "AlgorithmVersion", "EntityUid", "FineX", "FineXY", "FineY", "FineZ", "InputFingerprint",
-            "MaterialKey", "OutputFingerprint", "PlanContractId", "PlanScope", "PlanSlot", "RevisionHex",
-            "SchemaVersion", "ArtifactFormatKey", "FormatVersion"})
         replaced = tuple[tuple[TypeAliasType("FineXY", str), MapCellHydrology], ...]
         with patch.object(HydrologyPackShard.model_fields["shore_rows"], "annotation", replaced):
             with self.assertRaises(CanonicalEncodingError):
@@ -246,6 +267,7 @@ class StorageSchemaTests(TestCase):
     def test_diagnostics_use_source_v1_admission(self):
         root, _ = records()
         issue = root.diagnostics[0]
-        changed = issue.model_copy(update={"disposition": PlanDiagnosticDisposition.ERROR})
+        invalid = next(value for value in PlanDiagnosticDisposition if value != issue.disposition)
+        changed = issue.model_copy(update={"disposition": invalid})
         with self.assertRaises(CanonicalEncodingError):
             packSchema.require_pack_record_v1(root.model_copy(update={"diagnostics": (changed,)}))
