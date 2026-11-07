@@ -1,0 +1,4 @@
+app.dataModel.topology.encoding.surfaceBindings
+53	record	app.dataModel.topology.worldTopology.WorldTopology
+54	enum	app.dataModel.topology.enums.worldTopologyMode.WorldTopologyMode
+55	record	app.dataModel.topology.worldBounds.WorldBounds

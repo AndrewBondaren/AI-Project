@@ -1,0 +1,5 @@
+app.dataModel.regions.encoding.surfaceBindings
+179	record	app.dataModel.regions.regionState.RegionState
+180	record	app.dataModel.regions.regionState.RegionStateOverrides
+181	record	app.dataModel.regions.regionState.RegionStateTransition
+182	enum	app.dataModel.regions.regionState.RegionTransitionCause

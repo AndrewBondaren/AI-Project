@@ -52,6 +52,37 @@ def tlv(tag, payload):
 
 
 class CanonicalCodecTests(unittest.TestCase):
+    def test_registered_river_carrier_decodes_in_fresh_process(self):
+        import subprocess
+        import sys
+        from app.application.encoding.boundedCanonicalDecode import decode_bounded
+        from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_MANIFEST
+        from app.dataModel.encoding.decodeLimits import DecodeLimits
+        from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
+        from app.dataModel.hydrology.riverRouting import RiverPlanDiagnostic, RiverRouteDiagnostic, RiverRoutingCode, RiverRoutingFailure
+        from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnosticDisposition
+
+        fact = RiverRouteDiagnostic(world_uid="w", object_uid="r", object_type=HydrologyConnectionType.RIVER,
+            requested_mouth=None, code=RiverRoutingCode.INVALID_SOURCE, reason=RiverRoutingFailure.MISSING_GEOMETRY)
+        item = RiverPlanDiagnostic(issue=fact, disposition=PlanDiagnosticDisposition.ERROR)
+        wire = encode(item, SURFACE_MANIFEST)
+        script = """
+import sys
+from app.application.encoding.boundedCanonicalDecode import decode_bounded
+from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_MANIFEST
+from app.dataModel.encoding.decodeLimits import DecodeLimits
+from app.dataModel.hydrology.riverRouting import RiverPlanDiagnostic
+from app.encoding.canonicalCodec import encode
+item = decode_bounded(sys.stdin.buffer.read(), RiverPlanDiagnostic, SURFACE_MANIFEST,
+                      limits=DecodeLimits(100000, 10000, 100, 1024))
+sys.stdout.buffer.write(encode(item, SURFACE_MANIFEST))
+"""
+        cold = subprocess.run([sys.executable, "-c", script], input=wire, capture_output=True, check=True)
+        self.assertEqual(cold.stdout, wire)
+        missing = CanonicalSchemaManifest(entries=tuple(e for e in SURFACE_MANIFEST.entries if e.type_id != 328))
+        with self.assertRaises(CanonicalEncodingError):
+            decode_bounded(wire, RiverPlanDiagnostic, missing, limits=DecodeLimits(100000, 10000, 100, 1024))
+
     def test_round_trip_primitives_records_dataclasses_and_nested_sets(self):
         values = (None, False, True, -257, 256, 0, 1.5, "данные", b"data", Choice.ONE,
                   (None, b"x", frozenset((1, 2))), Plain(1, frozenset(("a", "b"))),

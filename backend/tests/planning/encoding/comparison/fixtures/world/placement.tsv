@@ -1,0 +1,27 @@
+app.dataModel.placement.encoding.surfaceBindings
+120	record	app.dataModel.placement.water.ResolvedWaterPlacement
+121	record	app.dataModel.placement.result.ResolvedPlacement
+122	record	app.dataModel.placement.prepared.PreparedPlacement
+123	record	app.dataModel.placement.intent.PlacementIntent
+124	record	app.dataModel.placement.intent.PlacementIdentity
+125	enum	app.dataModel.placement.common.PlacementMode
+126	enum	app.dataModel.placement.common.AbsoluteMovement
+127	record	app.dataModel.placement.intent.PlacementDependency
+128	enum	app.dataModel.placement.common.DependencyRelation
+129	record	app.dataModel.placement.intent.PlacementOverlap
+130	enum	app.dataModel.placement.common.OverlapRelation
+131	record	app.dataModel.placement.intent.PlacementSeparation
+132	record	app.dataModel.placement.prepared.PlacementCandidate
+133	record	app.dataModel.placement.prepared.PlacementFootprint
+134	record	app.dataModel.placement.prepared.CoastlinePlacementFact
+135	enum	app.dataModel.placement.common.WaterPresence
+262	record	app.dataModel.placement.result.ResolvedPlacementV2
+263	record	app.dataModel.placement.prepared.PreparedPlacementV2
+266	record	app.dataModel.placement.result.DisabledPlacement
+267	record	app.dataModel.placement.lifecycle.causal.PlacementOutcomeRef
+268	enum	app.dataModel.placement.lifecycle.causal.PlacementOutcomeStatus
+269	record	app.dataModel.placement.result.PlacementDiagnostic
+270	enum	app.dataModel.placement.result.PlacementIssueCode
+271	record	app.dataModel.placement.result.UnresolvedPlacementV2
+288	record	app.dataModel.placement.result.PlacementBatchResultV2
+289	record	app.dataModel.planning.contracts.planEnvelope.PlanEnvelope[PlacementBatchResultV2]

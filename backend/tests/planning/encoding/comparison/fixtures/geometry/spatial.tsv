@@ -1,0 +1,14 @@
+app.dataModel.spatial.encoding.surfaceBindings
+2	record	app.dataModel.spatial.grid.gridBBox.GridBBox
+26	record	app.dataModel.spatial.grid.gridSettings.SurfaceGridSettings
+34	record	app.dataModel.spatial.regionShape.BboxShape
+35	record	app.dataModel.spatial.regionShape.EdgeNoise
+36	enum	app.dataModel.spatial.regionShape.RegionShapeKind
+37	record	app.dataModel.spatial.regionShape.EllipseShape
+38	record	app.dataModel.spatial.regionShape.PolygonShape
+39	record	app.dataModel.spatial.regionShape.AnchorRadiusShape
+40	record	app.dataModel.spatial.regionShape.CorridorShape
+110	enum	app.dataModel.spatial.facing.Facing
+116	record	app.dataModel.spatial.grid.coordinateTypes.SurfaceGridCoord
+119	enum	app.dataModel.spatial.grid.coordinateSpace.CoordinateSpace
+141	record	app.dataModel.spatial.grid.coordinateTypes.LightCellRef

@@ -1,0 +1,16 @@
+app.dataModel.terrain.designedWater.encoding.surfaceBindings
+170	record	app.dataModel.terrain.designedWater.fields.field.NoiseRecipe
+171	record	app.dataModel.terrain.designedWater.fields.field.PlateRecipe
+172	record	app.dataModel.terrain.designedWater.fields.field.PlateNoiseRecipe
+173	enum	app.dataModel.terrain.designedWater.strategyKind.DesignedWaterStrategyKind
+174	record	app.dataModel.terrain.designedWater.settings.continentalNoisePolicy.ContinentalNoisePolicy
+175	record	app.dataModel.terrain.designedWater.settings.plateGenerationPolicy.PlateGenerationPolicy
+176	record	app.dataModel.terrain.designedWater.settings.fieldCompositionPolicy.FieldCompositionPolicy
+177	enum	app.dataModel.terrain.designedWater.settings.fieldCompositionPolicy.FieldCompositionOperator
+250	record	app.dataModel.terrain.designedWater.settings.fieldSelectionPolicy.WaterFieldSelectionPolicy
+274	record	app.dataModel.terrain.designedWater.coverage.budget.WaterCoverageBudget
+275	record	app.dataModel.terrain.designedWater.coverage.budget.BodyCoverageAllocation
+302	record	app.dataModel.terrain.designedWater.waterDesignTypeError.WaterDesignTypeError
+311	enum	app.dataModel.terrain.designedWater.strategyKind.WaterDesignIssueCode
+321	record	app.dataModel.terrain.designedWater.input.NativeCoastlineStrategyInput
+322	record	app.dataModel.terrain.designedWater.input.NativeCoastlineStrategyContext

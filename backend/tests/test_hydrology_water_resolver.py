@@ -34,6 +34,29 @@ def assemble(hm, specs, *, mode=WorldTopologyMode.PLANAR, change="change-a", aut
 
 
 class WaterResolverTests(unittest.TestCase):
+    def test_resolver_spills_describe_retained_source_levels(self):
+        from app.application.worldData.generators.hydrology.water.depressionTree import depression_tree
+        from app.application.worldData.generators.hydrology.water.waterSources import water_sources
+        from app.application.worldData.generators.hydrology.water.waterBodyResolver import resolve_water_levels
+
+        for row, specs, expected, final in (
+            ([99, 0, 0, 2, 0, 0, 8, -2, 99], [spec("B", [(4, 1)], 5), spec("A", [(1, 1)], 20)],
+             [("A", 20, 2), ("B", 5, 2)], (8, 8)),
+            ([99, 0, 0, 3, 3, 3, -2, 99], [spec("lake", [(1, 1)], 10)], [("lake", 10, 3)], (3,)),
+            ([99, 0, 0, 3, 4, 99], [spec("lake", [(1, 1)], 5)], [], (5,)),
+        ):
+            with self.subTest(row=row):
+                hm = row_map(row)
+                topology = hydro_topology(hm, WorldTopologyMode.PLANAR)
+                tree = depression_tree(hm.surface_z, topology)
+                policy = WorldHydrology()
+                sources = water_sources(hm.surface_z, specs, tree, topology, policy, auto_seas=False, auto_lakes=False)
+                result = resolve_water_levels(tree, sources, world_uid=hm.world_uid, change_uid="test",
+                                              default_water_level=policy.default_water_level)
+                self.assertEqual(result.levels, final)
+                self.assertEqual([(s.source_uid, s.requested_level, s.spill_limited_level)
+                                  for s in result.spills], expected)
+
     def test_merge_recomputes_outer_spill_and_materializes_lower_level(self):
         hm = row_map([99, 0, 0, 2, 0, 0, 8, -2, 99])
         hm.surface_z[(2, 0)] = 10  # would be wet at requested 20, dry at final 8

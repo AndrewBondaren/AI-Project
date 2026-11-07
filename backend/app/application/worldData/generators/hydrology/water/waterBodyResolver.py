@@ -13,6 +13,7 @@ from app.application.worldData.generators.hydrology.water.waterSources import Wa
 from app.dataModel.hydrology.enums.basinKind import BasinKind
 from app.dataModel.hydrology.enums.waterSystemKind import WaterSystemKind
 from app.dataModel.hydrology.physicalWaterUnion import PhysicalWaterUnion
+from app.dataModel.hydrology.waterDiagnostics import WaterDiagnosticCode, WaterLevelSpill
 from app.ids.waterSystemIdentity import water_system_uid
 
 
@@ -37,6 +38,7 @@ class ResolvedWaterLevels:
     declared_levels: tuple[int, ...]
     parents: tuple[str | None, ...]
     unions: tuple[PhysicalWaterUnion, ...]
+    spills: tuple[WaterLevelSpill, ...]
 
 
 def resolve_water_levels(tree: DepressionTree, sources: tuple[WaterSource, ...], *,
@@ -110,8 +112,8 @@ def resolve_water_levels(tree: DepressionTree, sources: tuple[WaterSource, ...],
             group = groups[first]
             if len(roots) > 1:
                 members = set().union(*(groups[index].members for index in roots))
-                child_uids = tuple(sorted(groups[index].system_uid for index in roots
-                                          if groups[index].system_uid is not None))
+                child_uids = tuple(sorted(child for index in roots
+                                          if (child := groups[index].system_uid) is not None))
                 uid = water_system_uid(world_uid, change_uid,
                                        (sources[i].spec.source_uid for i in members),
                                        WaterSystemKind.PHYSICAL_MERGE)
@@ -120,7 +122,7 @@ def resolve_water_levels(tree: DepressionTree, sources: tuple[WaterSource, ...],
                         body_parents[i] = uid
                 for child_uid in child_uids:
                     unions[child_uid] = unions[child_uid].with_parent_system(uid)
-                exterior = [groups[i].exterior for i in roots if groups[i].exterior is not None]
+                exterior = [height for i in roots if (height := groups[i].exterior) is not None]
                 group = _Group(members, maximum, uid, any(groups[i].ocean for i in roots),
                                min(exterior) if exterior else None)
                 groups[first] = group
@@ -152,4 +154,10 @@ def resolve_water_levels(tree: DepressionTree, sources: tuple[WaterSource, ...],
         level = effective[union.parent_system_uid] if union.parent_system_uid else effective[uid]
         effective[uid] = level
         unions[uid] = union.with_water_level(level)
-    return ResolvedWaterLevels(levels, tuple(own_levels), tuple(body_parents), tuple(unions.values()))
+    spills = tuple(
+        WaterLevelSpill(code=WaterDiagnosticCode.WATER_LEVEL_SPILL, source_uid=source.spec.source_uid,
+                        requested_level=source.spec.z_water_level, spill_limited_level=held)
+        for source, held in zip(sources, own_levels, strict=True)
+        if source.authored and held < source.spec.z_water_level
+    )
+    return ResolvedWaterLevels(levels, tuple(own_levels), tuple(body_parents), tuple(unions.values()), spills)

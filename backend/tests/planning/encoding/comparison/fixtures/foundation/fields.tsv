@@ -1,0 +1,7 @@
+app.dataModel.fields.encoding.surfaceBindings
+303	record	app.dataModel.fields.validatedFieldPath.ValidatedFieldPath
+304	record	app.dataModel.fields.validatedFieldPath.ModelIdentity
+305	record	app.dataModel.fields.validatedFieldPath.FieldSegment
+306	record	app.dataModel.fields.validatedFieldPath.VariantSegment
+307	record	app.dataModel.fields.validatedFieldPath.IndexSegment
+308	record	app.dataModel.fields.validatedFieldPath.KeySegment

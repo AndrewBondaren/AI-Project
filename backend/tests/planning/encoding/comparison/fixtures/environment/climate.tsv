@@ -1,0 +1,22 @@
+app.dataModel.climate.encoding.surfaceBindings
+1	record	app.dataModel.climate.planning.inputs.climateBaseInput.ClimateBaseInput
+3	enum	app.dataModel.climate.enums.climatePoleMode.ClimatePoleMode
+4	enum	app.dataModel.climate.enums.climatePolePreset.ClimatePolePreset
+5	record	app.dataModel.climate.climateZone.worldClimateZoneRegistry.WorldClimateZoneRegistry
+6	record	app.dataModel.climate.climateZone.climateZoneEntry.ClimateZoneEntry
+7	record	app.dataModel.climate.planning.inputs.climateBaseInput.ManualPoleInput
+8	enum	app.dataModel.climate.enums.poleKind.PoleKind
+9	record	app.dataModel.climate.planning.climatePlan.ResolvedClimateProfile
+10	record	app.dataModel.climate.enums.climateZone.ClimateZoneProfileData
+11	record	app.dataModel.climate.climatePoleBlendDefaults.ClimatePoleBlendDefaults
+12	record	app.dataModel.climate.planning.inputs.climateLocalInput.ClimateLocalInput
+13	record	app.dataModel.climate.planning.climatePoints.ClimateAnchorPoint
+14	enum	app.dataModel.climate.planning.climatePoints.AnchorSource
+15	record	app.dataModel.climate.planning.inputs.climateLocalInput.ClimateFeaturePolicy
+24	enum	app.dataModel.climate.planning.inputs.climateLocalInput.ProminenceScale
+93	record	app.dataModel.planning.contracts.planEnvelope.PlanEnvelope[ClimateBasePlan]
+102	record	app.dataModel.climate.planning.climatePlan.ClimateBasePlan
+103	record	app.dataModel.climate.planning.climatePoints.ClimatePolePoint
+104	enum	app.dataModel.climate.enums.poleSource.PoleSource
+112	record	app.dataModel.planning.contracts.planEnvelope.PlanEnvelope[ClimateLocalPlan]
+113	record	app.dataModel.climate.planning.climatePlan.ClimateLocalPlan

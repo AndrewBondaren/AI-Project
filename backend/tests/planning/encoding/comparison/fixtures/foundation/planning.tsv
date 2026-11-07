@@ -1,0 +1,14 @@
+app.application.worldData.planning.encoding.surfaceBindings
+94	record	app.dataModel.planning.identity.planRef.PlanRef
+95	record	app.dataModel.planning.identity.planKey.PlanKey
+96	record	app.dataModel.planning.identity.planKey.WorldPlanScope
+97	enum	app.dataModel.planning.identity.planKey.PlanScopeKind
+98	record	app.dataModel.planning.identity.planKey.RegionPlanScope
+99	record	app.dataModel.planning.contracts.planContract.PlanContractRegistry
+100	record	app.dataModel.planning.contracts.planContract.PlanContractMetadata
+101	record	app.dataModel.planning.contracts.planDependency.PlanDependency
+105	record	app.dataModel.planning.diagnostics.planDiagnostic.PlanDiagnostic
+111	enum	app.dataModel.planning.diagnostics.planDiagnostic.PlanDiagnosticDisposition
+234	record	app.application.worldData.planning.contracts.surfacePlanningView.GeoSurfacePlanningView
+235	enum	app.application.worldData.planning.contracts.surfacePlanningView.SurfacePlanningViewKind
+255	record	app.application.worldData.planning.contracts.surfacePlanBundle.GeoSurfacePlanBundle

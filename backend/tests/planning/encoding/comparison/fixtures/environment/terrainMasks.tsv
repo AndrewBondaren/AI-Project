@@ -1,0 +1,18 @@
+app.dataModel.terrainMasks.encoding.surfaceBindings
+57	record	app.dataModel.terrainMasks.worldTerrainMasks.MountainsCategoryPolicy
+58	enum	app.dataModel.terrainMasks.mountain.enums.MountainKind
+59	record	app.dataModel.terrainMasks.mountain.specs.MountainFormBySides
+60	record	app.dataModel.terrainMasks.mountain.specs.StarForm
+61	record	app.dataModel.terrainMasks.mountain.specs.PeakForm
+62	record	app.dataModel.terrainMasks.mountain.specs.PlateauForm
+65	enum	app.dataModel.terrainMasks.mountain.enums.MountainRangeStyle
+66	record	app.dataModel.terrainMasks.worldTerrainMasks.RavinesCategoryPolicy
+67	record	app.dataModel.terrainMasks.mountain.specs.MountainSpec
+71	record	app.dataModel.terrainMasks.mountain.specs.MountainRangeSpec
+72	record	app.dataModel.terrainMasks.mountain.specs.MountainRangeSides
+73	record	app.dataModel.terrainMasks.mountain.specs.MountainSaddleSpec
+193	record	app.dataModel.terrainMasks.landcoverRegionsCategoryPolicy.LandcoverClaimNoise
+194	record	app.dataModel.terrainMasks.landcoverRegionsCategoryPolicy.LandcoverTerrainPolicy
+195	record	app.dataModel.terrainMasks.regions.specs.FarmlandSpec
+196	record	app.dataModel.terrainMasks.regions.specs.ForestSpec
+197	record	app.dataModel.terrainMasks.regions.specs.PlainSpec

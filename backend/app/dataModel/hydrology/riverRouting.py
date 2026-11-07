@@ -1,7 +1,8 @@
 """Typed river routing facts; no geometry, placement or persistence policy."""
 
 from enum import StrEnum
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, SerializeAsAny, model_validator
+from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
 from app.dataModel.hydrology.declaredRiver import HydrologyMouth
 from app.dataModel.hydrology.riverDrainageLink import RiverReceiverKind
 from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
@@ -35,7 +36,7 @@ class RiverRoutingFailure(StrEnum):
 
 
 class RiverRouteDiagnostic(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
 
     world_uid: str
     object_uid: str
@@ -58,9 +59,25 @@ class RiverRouteDiagnostic(BaseModel):
         if self.code is RiverRoutingCode.REDIRECTED and (
                 not self.receiver_uid or self.receiver_kind is None or self.receiver_cell is None):
             raise ValueError("river redirection requires receiver UID, kind and cell")
-        if self.code is RiverRoutingCode.INVALID_CONNECTION_TYPE:
+        invalid_type = self.code is RiverRoutingCode.INVALID_CONNECTION_TYPE
+        if invalid_type != (self.reason is RiverRoutingFailure.INVALID_CONNECTION_TYPE):
+            raise ValueError("invalid connection code and reason must agree")
+        if invalid_type:
             if self.object_type is not None or self.rejected_connection_type is None:
                 raise ValueError("invalid type requires original rejected value, without a substituted type")
-        elif self.object_type is None:
+        elif self.rejected_connection_type is not None or self.object_type not in (
+                HydrologyConnectionType.RIVER, HydrologyConnectionType.MOUNTAIN_RIVER):
             raise ValueError("routing diagnostic requires a valid object type")
+        return self
+
+
+class RiverPlanDiagnostic(PlanDiagnostic[RiverRouteDiagnostic]):
+    issue: SerializeAsAny[RiverRouteDiagnostic]
+
+    @model_validator(mode="after")
+    def check_disposition(self):
+        expected = (PlanDiagnosticDisposition.FALLBACK if self.issue.code is RiverRoutingCode.REDIRECTED
+                    else PlanDiagnosticDisposition.ERROR)
+        if self.disposition is not expected:
+            raise ValueError("disposition does not match river outcome")
         return self

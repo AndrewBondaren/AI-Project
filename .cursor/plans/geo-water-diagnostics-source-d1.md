@@ -196,3 +196,27 @@ Planning contracts + Fine Water mismatch — 20/20 OK. Pyright — 0 ошибо�
 **Исправление по результатам проверки.** До правки регрессия воспроизвела оба отказа чтения: для `Box[int]` и для `ChainInt = Chain[int]`. При раскрытии alias bounded decoder теперь специализирует составную аннотацию в области действия её параметров. При последующем чтении элемента кортежа проверяется конкретный тип `int`.
 
 Оба случая проходят encode/decode с проверкой точных классов carrier и fact, значения и disposition. Контроль `Chain[Any]` подтверждает отказ на обеих границах Planning и на заголовке зарегистрированного carrier в bounded decoder. Профильные наборы дали 21/21 OK с расширенными subtests, Pyright по четырём production-файлам S1 — 0 ошибок. В смежной группе из 24 тестов осталось 11 errors и 5 failures. Исправление предъявлено на повторную приёмку S1. Вопрос воспроизводимости shape ID 60008 остаётся в S3.
+
+#### Независимая приёмка S1 после исправления bounded decoder
+
+**Статус по решению пользователя: приёмка не пройдена.** Ниже сохранён технический вердикт независимого ревью по P1. Переход к S2 приостановлен до уточнения замечания пользователя.
+
+**ACCEPT. P1 закрыт, S2 можно начинать.** Сравнение выполнено между базой `ffc5d01f` и рабочим diff поверх неё. Один и тот же независимый тест на базе воспроизвёл `wrong canonical field type or tag` для `Box[int]` и цепочки `ChainInt = Chain[int]`. С исправлением обе схемы прошли bounded round-trip. Для них, `IntAlias` и простой цепочки alias после повторной строгой валидации PlanBuildResult и PlanEnvelope и после декодирования результата сохранены точные классы carrier и fact, значение `(42,)` и disposition ERROR.
+
+Каждый из четырёх аргументов — `LooseAlias = tuple[Any, ...]`, `Callable[[Any], int]`, `Box[Any]` и цепочка до `Chain[Any]` — независимо отвергнут PlanBuildResult и PlanEnvelope. При чтении с зарегистрированным carrier трасса bounded decoder содержит только корневой record PlanBuildResult. Ошибка `unexpected canonical record` возникает на заголовке carrier до чтения полей carrier и leaf. Дополнительная проверка с двумя переставленными параметрами (`Swap[A,B] = Pair[B,A]`, `Pair[A,B] = tuple[A,tuple[B,...]]`) сохранила значение `('x',(42,))` для `Swap[int,str]`. Подстановка строки `'42'` вместо вложенного int на wire была отклонена.
+
+Профильный набор — 21/21 OK. Pyright по четырём модулям — 0 ошибок и 0 предупреждений. В смежном наборе 24 теста, 11 errors и 5 failures. Для всех 16 записей полные имена тестов и subtest, конечные исключения и сообщения совпали с базой. Отдельный P2 для S3 остаётся открытым — shape ID 60008 в двух свежих процессах дал префиксы `960c23a4` и `65b09d9c`. Сценарий сухого A и корректного B остаётся в приёмке S4.
+
+## S2 — реализация на приёмку
+
+Повторяемая проверка разделения манифеста находится в `backend/tests/planning/encoding/comparison/`. Из backend запустить `.\.venv\Scripts\python -m unittest discover -s tests/planning/encoding/comparison -t . -v`. Модули test_domain_bindings, test_manifest_assembly и test_wire_compatibility независимо проверяют декларации каждого владельца, глобальную сборку, байты и fingerprint Water/River. Эталонные ID, полные имена типов, kind и wire-образцы взяты из рабочего манифеста после S2 до его разбиения. При изменении контракта обновлять соответствующий эталон после объяснения дельты.
+
+**Отдельный рефакторинг деклараций после S2, выполнен.** [surfaceManifest.py](../../backend/app/application/worldData/planning/encoding/surfaceManifest.py) теперь собирает 18 явных наборов привязок в порядке числовых ID. Регистрации Water/River принадлежат [Hydrology](../../backend/app/dataModel/hydrology/encoding/surfaceBindings.py). Для последующих шагов, где карта указывает на surfaceManifest.py как место добавления типа, выбирать декларацию владельца. Глобальную уникальность ID и классов проверяет существующий CanonicalSchemaManifest.
+
+Сравнение с рабочим деревом после S2 охватило все 343 записи в исходном порядке: ID равны, python_type и kind идентичны по объекту. Для WaterLevelSpillDiagnostic и RiverPlanDiagnostic полностью совпали canonical bytes и output_fingerprint. Профильные тесты 34/34, Pyright по сборщику и 18 модулям деклараций — 0 ошибок и предупреждений. Изменение source/Pack lock относится к S3.
+
+Пользователь разрешил начать S2 после обсуждения приёмки S1. Реализованы восемь Water facts и их concrete carriers, а также RiverPlanDiagnostic со строгой повторной проверкой RiverRouteDiagnostic. Surface manifest получил ID 325–336 и 338–344. Для runtime-only WaterPlacementRequired и его carrier номера 337/345 зарезервированы.
+
+ResolvedWaterLevels.spills хранит факты в порядке источников. На расчёте с физическим объединением A и B тест получил requested levels 20 и 5, spill-limited levels 2 и 2, общую итоговую высоту 8. Отдельно проверены одиночный перелив 10 → 3 и отсутствие spill при удержании запрошенного уровня.
+
+Проверки S2, Planning и mismatch — **34 OK**. River carrier прочитан bounded decoder в свежем процессе, отсутствие binding 328 проверено отдельно. Pyright по четырём production-файлам S2 — 0 ошибок и предупреждений. Сравнимый набор resolver/routing/canonical_codec до изменений — 31 тест и 17 errors, после — 33 теста и те же 17 errors. Совпали идентификаторы и конечные сообщения всех падений. S3 остаётся следующим срезом со своим открытым P2 для shape 60008. Переключение producer и сценарий сухого A с корректным B относятся к S4.

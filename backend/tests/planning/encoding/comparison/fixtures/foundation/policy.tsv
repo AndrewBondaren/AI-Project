@@ -1,0 +1,19 @@
+app.dataModel.policy.encoding.surfaceBindings
+213	record	app.dataModel.policy.policyFacts.UnknownFact
+214	record	app.dataModel.policy.policyFacts.WaitingFact
+215	enum	app.dataModel.policy.policyEnums.FactState
+218	record	app.dataModel.policy.policyDecision.PolicyProvenance
+219	enum	app.dataModel.policy.policyEnums.PolicyOperation
+220	enum	app.dataModel.policy.policyEnums.PolicyState
+221	enum	app.dataModel.policy.policyEnums.PolicyDisableReason
+222	enum	app.dataModel.policy.policyEnums.PolicyOrigin
+264	record	app.dataModel.policy.policyDecision.ObjectAdmissionDecision[Enum, Enum]
+265	record	app.dataModel.policy.policyDecision.PolicyReason[Enum]
+298	record	app.dataModel.policy.policyTypeError.PolicyRuleIssue
+299	record	app.dataModel.policy.policyTypeError.PolicySupportIssue
+300	record	app.dataModel.policy.policyTypeError.PolicyModelIssue
+301	record	app.dataModel.policy.policyTypeError.PolicyTypeError
+309	enum	app.dataModel.policy.policyEnums.PolicyIssueReason
+310	enum	app.dataModel.policy.policyEnums.PolicyStage
+312	record	app.dataModel.policy.objectAdmissionPolicyDefinition.ObjectAdmissionFacts
+313	record	app.dataModel.policy.objectAdmissionPolicyDefinition.PlacementPolicyDefaults

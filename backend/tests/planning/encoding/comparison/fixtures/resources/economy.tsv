@@ -1,0 +1,3 @@
+app.dataModel.economy.encoding.surfaceBindings
+45	record	app.dataModel.economy.economyTier.worldEconomyTierRegistry.WorldEconomyTierRegistry
+46	record	app.dataModel.economy.economyTier.economyTierEntry.EconomyTierEntry

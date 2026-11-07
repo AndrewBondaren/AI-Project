@@ -1,0 +1,6 @@
+app.dataModel.validation.encoding.surfaceBindings
+28	enum	app.dataModel.validation.enums.resolutionMode.ResolutionMode
+106	record	app.dataModel.validation.diagnostics.fieldPathError.FieldPathError
+107	record	app.dataModel.validation.diagnostics.fieldPathError.ReferenceIssueContext
+108	enum	app.dataModel.validation.diagnostics.fieldPathError.ReferenceIssueReason
+109	record	app.dataModel.validation.diagnostics.runtimeIssueContext.RuntimeIssueContext

@@ -1,0 +1,5 @@
+app.dataModel.materials.encoding.surfaceBindings
+42	record	app.dataModel.materials.worldMaterialRegistry.WorldMaterialRegistry
+43	record	app.dataModel.materials.materialRegistryEntry.MaterialRegistryEntry
+44	enum	app.dataModel.materials.enums.materialCategory.MaterialCategory
+178	enum	app.dataModel.materials.enums.materialSubstrateKind.MaterialSubstrateKind
