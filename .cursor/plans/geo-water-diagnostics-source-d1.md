@@ -220,3 +220,33 @@ Planning contracts + Fine Water mismatch — 20/20 OK. Pyright — 0 ошибо�
 ResolvedWaterLevels.spills хранит факты в порядке источников. На расчёте с физическим объединением A и B тест получил requested levels 20 и 5, spill-limited levels 2 и 2, общую итоговую высоту 8. Отдельно проверены одиночный перелив 10 → 3 и отсутствие spill при удержании запрошенного уровня.
 
 Проверки S2, Planning и mismatch — **34 OK**. River carrier прочитан bounded decoder в свежем процессе, отсутствие binding 328 проверено отдельно. Pyright по четырём production-файлам S2 — 0 ошибок и предупреждений. Сравнимый набор resolver/routing/canonical_codec до изменений — 31 тест и 17 errors, после — 33 теста и те же 17 errors. Совпали идентификаторы и конечные сообщения всех падений. S3 остаётся следующим срезом со своим открытым P2 для shape 60008. Переключение producer и сценарий сухого A с корректным B относятся к S4.
+
+## Независимая приёмка S2
+
+**REVISE. S3 пока начинать нельзя.** Проверен HEAD `22ddd5a1875d2f7307404c34a57ed8e9cb1f4540` относительно S1 `3b104fddf7255f385ea7cb67b9ebc92b4a1941e5`. До записи отчёта индекс и рабочее дерево были чистыми, включая проверку `git status --short --untracked-files=all`. Все новые файлы деклараций, тестов и fixtures находятся в коммите.
+
+**P1 — River допускает невалидный requested_mouth до сериализации.** [riverRouting.py, строка 47](../../backend/app/dataModel/hydrology/riverRouting.py) принимает экземпляр HydrologyMouth. [declaredRiver.py, строка 21](../../backend/app/dataModel/hydrology/declaredRiver.py) оставляет для него стандартную политику повторной валидации экземпляров. Минимальное воспроизведение на штатных типах:
+
+```python
+mouth = HydrologyMouth(x=1, y=2)
+fact = RiverRouteDiagnostic(world_uid="w", object_uid="r", object_type=Connection.RIVER,
+    requested_mouth=mouth, code=Code.INVALID_SOURCE, reason=Failure.MISSING_GEOMETRY)
+bad = fact.model_copy(update={"requested_mouth": mouth.model_copy(update={"x": "bad"})})
+carrier = RiverPlanDiagnostic(issue=bad, disposition=D.ERROR)
+PlanBuildResult[int](payload=1, diagnostics=(carrier,))
+encode(carrier, SURFACE_MANIFEST)
+```
+
+Здесь Connection, Code, Failure и D — HydrologyConnectionType, RiverRoutingCode, RiverRoutingFailure и PlanDiagnosticDisposition соответственно. Ожидался отказ при приёме подделанного факта в RiverPlanDiagnostic. Фактически carrier и PlanBuildResult сохранили строку в x. Первым отказал encoder с CanonicalEncodingError для HydrologyMouth.x (int_type). То же воспроизведено с `HydrologyMouth.model_construct(x="bad", y=2)`. С исходным mouth те же bytes проходят bounded round-trip.
+
+**Water.** Все восемь facts и соответствующие concrete carriers проверены по §2–3. Пропуск каждого обязательного поля, лишнее поле, строка вместо enum, bool, строка и дробное число вместо целого отклоняются. Проверены ограничения puddle, spill, superseded и world ocean, включая допустимое превышение water_cells над world_cells. Для каждого carrier проверены disposition и повторная валидация поддельного code через model_construct/model_copy, в том числе на границе PlanBuildResult. Для семи сериализуемых carriers прошёл bounded round-trip. Mismatch использует прежние точные классы и ID 105/323/324. Placement fact и carrier отсутствуют в surface manifest.
+
+**Spill.** Независимый прогон water_sources → depression_tree/resolve_water_levels на обеих ревизиях дал одинаковые порядок, declared_levels, levels, parents и unions. При передаче B, A источники упорядочились A, B. Из requested 20 и 5 получены два spill_limited_level по 2 и конечные levels (8, 8). У обоих parent UID `942b965c-6c71-5adf-a447-1493f91de0d0`, у union member_uids ('A','B'), parent_system_uid=None. Одиночный authored spill дал 10 → 3. При удержании 5 spill отсутствует. На том же одиночном входе с authored=False уровень остался 3, spills пуст. Факты формируются по own_levels, в порядке sources. Сухой A + корректный B остаётся критерием S4.
+
+**River.** Проверены все 84 сочетания шести code и четырнадцати reason с правилом эквивалентности INVALID_CONNECTION_TYPE, а для допустимых пар — все disposition. REDIRECTED требует receiver UID, kind и cell по отдельности, принимает receiver_level=None и только FALLBACK. Пустая rejected_connection_type сохраняется для INVALID_CONNECTION_TYPE. Подделка непосредственных полей факта отклоняется. Свежий Python-процесс со штатным manifest восстановил carrier через decode_bounded и вернул те же bytes; manifest без ID 328 отклонил исходные bytes.
+
+**Манифест.** Для независимого эталона загрузили монолитную декларацию из `git show 3b104fdd:backend/app/application/worldData/planning/encoding/surfaceManifest.py` в тот же интерпретатор и дополнили её 19 привязками по §4 Water и §5 River. Ровно 324 прежние строки сохранились; добавлены только ID 325–336 и 338–344, 337/345 свободны. Все 343 строки реконструированного монолита и сборки из 18 деклараций совпали по позиции, ID, идентичности объекта Python-класса и kind. Дополнительно прошли сравнения с TSV и wire fixtures, по записи автора снятыми с рабочего монолита S2 перед разбиением; отдельной промежуточной ревизии в этом диапазоне нет. Для обеих сборок совпали полные bytes water.hex / river.hex и output_fingerprint: WaterLevelSpillDiagnostic `abf5c963cb2260752c8afe7b193bf7630fc9672bccd7329342383d5beb102c61`, RiverPlanDiagnostic `42fcbf2ba7d6a8e16bab25561c9356c53870c1d90528ad993e7d4bdef3550617`. Все 13 привязок Spatial совпали с базой по ID, точному классу и kind. Wire-эталоны покрывают только два объекта Water/River.
+
+**Прогоны.** Профильный набор 34/34 OK, comparison 4/4 OK, Pyright по четырём указанным модулям и 18 surfaceBindings.py — 0 ошибок, 0 предупреждений. Расширенный набор: на базе 31 тест и 17 errors, на HEAD 33 теста и 17 errors. Совпали полные имена всех 17 падающих тестов и конечное исключение каждого, `TypeError: FieldPathError requires a named concrete domain subclass`.
+
+Следующий шаг — закрыть P1 на границе RiverRouteDiagnostic/RiverPlanDiagnostic и закрепить обе подделки requested_mouth регрессией с положительным bounded round-trip. Известный P2 по воспроизводимости shape ID 60008 остаётся за S3.
