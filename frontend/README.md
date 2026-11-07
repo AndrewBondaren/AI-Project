@@ -33,6 +33,5 @@ Use semantic utilities such as `bg-panel`, `text-muted`, `border-line`, and `fon
 `global.css` contains only application-wide base rules. Component styles and responsive
 states are expressed in Tailwind utilities; CSS Modules are no longer used.
 
-World import retains its existing API contract in `features/import-world/api/importWorld.js`;
-this refactor does not add a new world import screen. Character import retains its existing
-Electron file-picker behavior.
+The session creation dialog imports worlds and characters through the existing backend endpoints.
+Electron sends the selected local path, and the browser uploads the selected file.

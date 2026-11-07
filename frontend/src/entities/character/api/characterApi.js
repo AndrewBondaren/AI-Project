@@ -1,1 +1,1 @@
-export { getCharacters as listCharacters, copyCharacter } from '@/shared/api/worldApi'
+export { getCharacters as listCharacters, copyCharacter, deleteCharacter } from '@/shared/api/worldApi'

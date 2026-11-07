@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { listWorlds } from '../api/worldApi'
 
 export function useWorlds() {
@@ -6,12 +6,18 @@ export function useWorlds() {
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
 
-  useEffect(() => {
-    listWorlds()
-      .then(setWorlds)
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false))
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      setWorlds(await listWorlds())
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
   }, [])
+  useEffect(() => { refresh() }, [refresh])
 
-  return { worlds, loading, error }
+  return { worlds, loading, error, refresh }
 }

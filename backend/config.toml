@@ -35,3 +35,12 @@ path_ahead_depth = 2
 aiosqlite = "WARNING"
 "app.application.worldData.pack" = "DEBUG"
 "app.application.worldData.materialize.terrainParallelLog" = "DEBUG"
+
+[planning.cache]
+max_retained_bytes = 67108864
+max_entry_bytes = 8388608
+eviction = "lru"
+
+[planning.execution]
+max_workers = 2
+max_pending_builds = 16

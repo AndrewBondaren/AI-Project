@@ -1,8 +1,7 @@
 import { useNavigate } from 'react-router-dom'
-import { useWorlds } from '@/entities/world/model/useWorlds'
+import ImportCard from '@/shared/ui/ImportCard'
 
-export default function WorldSelectStep() {
-  const { worlds, loading, error } = useWorlds()
+export default function WorldSelectStep({ worlds, loading, error, importing, onImport }) {
   const navigate = useNavigate()
 
   return (
@@ -13,24 +12,20 @@ export default function WorldSelectStep() {
       </div>
 
       {loading && <p className="text-muted italic">Загрузка...</p>}
-      {error   && <p className="text-danger">Ошибка: {error}</p>}
+      {error && <p role="alert" className="text-danger">Ошибка: {error}</p>}
 
       {!loading && !error && worlds.length === 0 && (
         <p className="text-muted italic">Нет доступных миров.</p>
       )}
 
       <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <ImportCard label="Импортировать мир" importing={importing} disabled={loading} onImport={onImport} />
         {worlds.map(w => (
-          <li
-            key={w.world_uid}
-            className="flex min-h-32 cursor-pointer flex-col items-start gap-3 rounded-lg border border-line bg-panel p-4 transition-colors hover:border-line-hover hover:bg-raised"
-            tabIndex={0}
-            role="button"
-            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/new/${w.world_uid}`) } }}
-            onClick={() => navigate(`/new/${w.world_uid}`)}
-          >
-            <img src="/icons/world.svg" alt="" width="32" height="32" />
-            <span className="flex-1 text-base font-semibold wrap-anywhere">{w.name}</span>
+          <li key={w.world_uid}>
+            <button type="button" disabled={importing} onClick={() => navigate(`/new/${w.world_uid}`)} className="flex h-full min-h-32 w-full flex-col items-start gap-3 rounded-lg border border-line bg-panel p-4 text-left transition-colors enabled:hover:border-line-hover enabled:hover:bg-raised disabled:opacity-50">
+              <img src="/icons/world.svg" alt="" width="32" height="32" />
+              <span className="text-base font-semibold wrap-anywhere">{w.name}</span>
+            </button>
           </li>
         ))}
       </ul>

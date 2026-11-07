@@ -2,7 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import AppLayout from '@/app/AppLayout'
 import HomePage from '@/pages/home/ui/HomePage'
 import SessionPage from '@/pages/session/ui/SessionPage'
-import WorldSelectStep from '@/features/create-session/ui/WorldSelectStep'
+import WorldSelectPage from '@/pages/session/ui/WorldSelectPage'
 import CharacterSelectPage from '@/pages/session/ui/CharacterSelectPage'
 import CreateSessionDialog from '@/features/create-session/ui/CreateSessionDialog'
 import BackendSettingsPage from '@/pages/settings/ui/BackendSettingsPage'
@@ -14,7 +14,7 @@ export default function AppRouter() {
       <Route element={<AppLayout />}>
         <Route index element={<HomePage />} />
         <Route element={<CreateSessionDialog />}>
-          <Route path="new" element={<WorldSelectStep />} />
+          <Route path="new" element={<WorldSelectPage />} />
           <Route path="new/:worldId" element={<CharacterSelectPage />} />
         </Route>
         <Route path="chat/:sessionId" element={<SessionPage />} />

@@ -18,8 +18,10 @@ export async function importWorld({ file, path, level = 'skeleton', validateOnly
   if (validateOnly) query.set('validate_only', 'true')
   const res = await fetch(`${API_URL}/worlds/import?${query}`, { method: 'POST', body: form })
   const data = await res.json()
-  if (!res.ok) {
-    const error = new Error(typeof data.detail === 'string' ? data.detail : `HTTP ${res.status}`)
+  if (!res.ok || data.rolled_back) {
+    const error = new Error(data.rolled_back
+      ? `Импорт мира отменён: ${data.rollback_reason ?? 'ошибка записи'}`
+      : describeError(data, res.status))
     error.issues = data.detail
     error.status = res.status
     error.outcome = data
@@ -43,13 +45,31 @@ export async function copyCharacter(characterUid) {
   return res.json()
 }
 
-export async function importCharacterFromPath(filePath) {
+function describeError(data, status) {
+  if (typeof data.detail === 'string') return data.detail
+  if (Array.isArray(data.detail)) {
+    const messages = data.detail.map(issue => issue.message ?? issue.msg).filter(Boolean)
+    if (messages.length) return messages.join('; ')
+  }
+  return `HTTP ${status}`
+}
+
+export async function importCharacter({ file, path }) {
   const form = new FormData()
-  form.append('path', filePath)
+  if (file) form.append('file', file)
+  if (path) form.append('path', path)
   const res = await fetch(`${API_URL}/characters/import`, { method: 'POST', body: form })
   if (!res.ok) {
     const data = await res.json().catch(() => ({}))
-    throw new Error(data.detail ?? `HTTP ${res.status}`)
+    throw new Error(describeError(data, res.status))
   }
   return res.json()
+}
+
+export async function deleteCharacter(characterUid) {
+  const res = await fetch(`${API_URL}/characters/${encodeURIComponent(characterUid)}`, { method: 'DELETE' })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(describeError(data, res.status))
+  }
 }
