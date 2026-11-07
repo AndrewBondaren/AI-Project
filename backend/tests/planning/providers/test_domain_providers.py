@@ -1,5 +1,6 @@
 """Canonical protocol vectors and reusable non-domain provider fixtures."""
 
+from app.core.logging.contracts import LogConsumer
 from dataclasses import dataclass
 from threading import Event, Lock
 from time import monotonic
@@ -677,7 +678,7 @@ class WaterPlacementProviderTests(unittest.TestCase):
         coast = self.Coast.model_validate(dict(location_uid="basin", kind="sea", closed=False,
             path=[dict(x=0, y=-20), dict(x=0, y=0)]))
         inputs = self.inputs.model_copy(update={"coastlines": (coast,)})
-        with self.assertNoLogs("app.application.jsonValidation.resolve", level="DEBUG"):
+        with self.assertNoLogs(LogConsumer.RESOLVE.value, level="DEBUG"):
             first = self.get(inputs)
             self.assertEqual(self.get(inputs), first)
             self.h.cache.evict(self.binding.cache_binding, CacheKey(contract=self.binding.cache_binding.contract,
@@ -692,7 +693,7 @@ class WaterPlacementProviderTests(unittest.TestCase):
             footprint=dict(kind="polygon", vertices=[[0, 0], [1, 0], [1, 1]])))
         inputs = self.inputs.model_copy(update={"basins": (*self.inputs.basins, tiny)})
         for mode in (self.Mode.RUNTIME, self.Mode.VALIDATE_ONLY):
-            with self.subTest(mode=mode), self.assertNoLogs("app.application.jsonValidation.resolve", level="DEBUG"):
+            with self.subTest(mode=mode), self.assertNoLogs(LogConsumer.RESOLVE.value, level="DEBUG"):
                 result = self.get(inputs.model_copy(update={"resolution_mode": mode}))
                 self.assertEqual(tuple(r.source_uid for r in result.payload.records), ("basin",))
                 diagnostic, = result.diagnostics
@@ -997,7 +998,7 @@ class ReliefTemplateProviderTests(ReliefProviderFixture, unittest.TestCase):
         missing = self.peak(sides=[], location_uid="needs-template")
         declared = self.peak(origin_x_m=25, sides=[dict(kind="sheer")] * 4, location_uid="declared")
         inputs = self.inputs.model_copy(update={"declared_mountains": (missing, declared)})
-        with self.assertNoLogs("app.application.jsonValidation.resolve", level="DEBUG"):
+        with self.assertNoLogs(LogConsumer.RESOLVE.value, level="DEBUG"):
             first = self.get(inputs)
             self.assertEqual(self.get(inputs), first)
         self.assertEqual(first.payload.mountain_layout.entries, (declared,))
@@ -1006,7 +1007,7 @@ class ReliefTemplateProviderTests(ReliefProviderFixture, unittest.TestCase):
                          ("DOMAIN_NO_CANDIDATE", PlanDiagnosticDisposition.ERROR))
         self.assertEqual(missing.sides, ())
         self.h.backend.clear()
-        with self.assertNoLogs("app.application.jsonValidation.resolve", level="DEBUG"):
+        with self.assertNoLogs(LogConsumer.RESOLVE.value, level="DEBUG"):
             self.assertEqual(self.get(inputs), first)
 
     def test_template_recipe_edit_and_none_recipe_on_real_member(self):

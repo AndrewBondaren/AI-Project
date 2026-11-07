@@ -34,4 +34,6 @@ path_ahead_depth = 2
 [logger_levels]
 aiosqlite = "WARNING"
 "app.application.worldData.pack" = "DEBUG"
+"app.consumer.pack_bake" = "DEBUG"
+"app.consumer.pack_refine_grade" = "DEBUG"
 "app.application.worldData.materialize.terrainParallelLog" = "DEBUG"

@@ -1,7 +1,8 @@
 """Flatten SettlementLayout → map_cells for persist."""
 
 from app.application.worldData.locations.locationPayloadAccess import settlement_payload
-import logging
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 from dataclasses import replace
 
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
@@ -20,7 +21,7 @@ from app.application.jsonValidation.worldRow import location_types
 from app.application.worldData.transitions.transitionIdentity import transition_uid
 from app.dataModel.locations.transitions.transitionSide import TransitionSideId
 
-logger = logging.getLogger(__name__)
+logger = get_consumer_logger(LogConsumer.SETTLEMENT_LAYOUT)
 
 
 def _is_settlement_location(settlement: NamedLocation, world: World) -> bool:

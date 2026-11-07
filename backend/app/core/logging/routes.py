@@ -1,122 +1,229 @@
-"""Existing logger-prefix and server-sink catalog."""
-
-_R44_ACTIVITY = "grade_cell_empty_ray"
+"""File destinations and transcript membership for declared consumers."""
+from app.core.logging.contracts import LogConsumer, LogRoute, LogSink, UnknownLogConsumerError
 
 PROFILE_SERVER = "server"
 PROFILE_SCRIPT = "script"
 
-# Longest prefix first. ``app.relief`` is handled in route_for (R44 split).
-_PREFIX_ROUTES: tuple[tuple[str, str, str], ...] = tuple(
-    sorted(
-        (
-            (
-                "app.application.worldData.regions.regionStateLog",
-                "region_state",
-                "regionStateLog",
-            ),
-            (
-                "app.application.worldData.pack.bake.detailed.packDetailedBakeOrchestrator",
-                "pack",
-                "packDetailedBake",
-            ),
-            (
-                "app.application.worldData.pack.bake.packBakeLog",
-                "pack",
-                "packBakeLog",
-            ),
-            (
-                "app.application.worldData.pack.refine",
-                "pack",
-                "fineChunkPersist",
-            ),
-            (
-                "app.application.worldData.render.dumpLog",
-                "render",
-                "dumpLog",
-            ),
-            (
-                "app.application.worldData.materialize.terrain.terrainParallelLog",
-                "terrain",
-                "terrainParallelLog",
-            ),
-            (
-                "app.application.worldData.generators.assemblers.climateAssembler",
-                "climate",
-                "climateLog",
-            ),
-            (
-                "app.application.worldData.generators.assemblers",
-                "settlement",
-                "settlementAssembler",
-            ),
-            (
-                "app.application.worldData.generators.climate",
-                "climate",
-                "climateLog",
-            ),
-            (
-                "app.application.cascade",
-                "cascade",
-                "cascadeLog",
-            ),
-            (
-                "app.application.jsonValidation",
-                "jsonValidation",
-                "resolve",
-            ),
-            ("app.application.physics", "physics", "physicsLog"),
-            ("http", "http", "api"),
-            ("app.engine.dag", "engine", "dagExecution"),
-            ("app.artifacts", "artifacts", "artifactLifecycle"),
-            ("app.time.operations", "time", "operations"),
-        ),
-        key=lambda row: len(row[0]),
-        reverse=True,
-    )
+
+def _route(consumer: LogConsumer, sink: LogSink, *, generation: bool, server: bool = True) -> LogRoute:
+    return LogRoute(consumer=consumer, sink=sink, server_enabled=server, generation_enabled=generation)
+
+
+ROUTES: tuple[LogRoute, ...] = (
+    _route(LogConsumer.ARTIFACTS, LogSink.ARTIFACTS, generation=True),
+    _route(LogConsumer.CASCADE, LogSink.CASCADE, generation=True),
+    _route(LogConsumer.DAG, LogSink.DAG, generation=False),
+    _route(LogConsumer.RESOLVE, LogSink.RESOLVE, generation=True),
+    _route(LogConsumer.SETTLEMENT_VOLUME, LogSink.RESOLVE, generation=True),
+    _route(LogConsumer.PHYSICS_SETTINGS, LogSink.PHYSICS, generation=True),
+    _route(LogConsumer.TIME_OPERATIONS, LogSink.TIME_OPERATIONS, generation=False),
+    _route(LogConsumer.AREA_BARRIERS, LogSink.SETTLEMENT, generation=True),
+    _route(LogConsumer.STRUCTURE_AREA, LogSink.SETTLEMENT, generation=True),
+    _route(LogConsumer.BUILDING, LogSink.SETTLEMENT, generation=True),
+    _route(LogConsumer.RESOURCE_EXTRACTION, LogSink.SETTLEMENT, generation=True),
+    _route(LogConsumer.RUINS, LogSink.SETTLEMENT, generation=True),
+    _route(LogConsumer.VAST_HULL, LogSink.SETTLEMENT, generation=True),
+    _route(LogConsumer.CLIMATE_SURFACE, LogSink.CLIMATE, generation=True),
+    _route(LogConsumer.SETTLEMENT_LAYOUT, LogSink.SETTLEMENT, generation=True),
+    _route(LogConsumer.SETTLEMENT_PACKING, LogSink.SETTLEMENT, generation=True),
+    _route(LogConsumer.SETTLEMENT_BARRIERS, LogSink.SETTLEMENT, generation=True),
+    _route(LogConsumer.SETTLEMENT_DISTRICTS, LogSink.SETTLEMENT, generation=True),
+    _route(LogConsumer.SETTLEMENT_MATERIAL, LogSink.SETTLEMENT, generation=True),
+    _route(LogConsumer.SETTLEMENT_OCCUPANCY, LogSink.SETTLEMENT, generation=True),
+    _route(LogConsumer.SETTLEMENT_PLACEMENT, LogSink.SETTLEMENT, generation=True),
+    _route(LogConsumer.SETTLEMENT_STREETS, LogSink.SETTLEMENT, generation=True),
+    _route(LogConsumer.SETTLEMENT_ASSEMBLY, LogSink.SETTLEMENT, generation=True),
+    _route(LogConsumer.SETTLEMENT_GENERATION, LogSink.SETTLEMENT, generation=True),
+    _route(LogConsumer.CLIMATE, LogSink.CLIMATE, generation=True),
+    _route(LogConsumer.PRECIPITATION, LogSink.CLIMATE, generation=True),
+    _route(LogConsumer.RELIEF, LogSink.RELIEF, generation=True),
+    _route(LogConsumer.TERRAIN_PARALLEL, LogSink.TERRAIN_PARALLEL, generation=True),
+    _route(LogConsumer.PACK_BAKE, LogSink.PACK_BAKE, generation=True),
+    _route(LogConsumer.PACK_REFINE_GRADE, LogSink.PACK_REFINE, generation=True),
+    _route(LogConsumer.REGION_STATE, LogSink.REGION_STATE, generation=False),
+    _route(LogConsumer.RENDER_DUMP, LogSink.RENDER_DUMP, generation=True, server=False),
+    _route(LogConsumer.HTTP, LogSink.HTTP, generation=False),
+    _route(LogConsumer.RELIEF_RAYS, LogSink.RELIEF_RAYS, generation=True),
+    _route(LogConsumer.RUNTIME_ENGINE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_LLM_AGGREGATE_EXECUTOR, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_NODE_RUNNER, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_GENERATE_CLIMATE_NODE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_RECALCULATE_CLIMATE_NODE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_RESOLVE_WEATHER_NODE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_CHECK_SCENE_NODE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_SCENE_INIT_NODE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_SCENE_LOCATION_SELECT_NODE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_SCENE_INIT_NODE_PYTHON, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_CHECK_TERRAIN_NODE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_EAGER_TERRAIN_NODE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_LAZY_SETTLEMENT_NODE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_LAZY_TERRAIN_NODE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_TERRAIN_CONTEXT_NODE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_TERRAIN_SUMMARY_NODE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_REPAIR_ORCHESTRATOR, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_RESPONSE_RESOLVER, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_OPEN_AICLIENT, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_QWEN_CLIENT, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_LOAD_RELIEF_TEMPLATES_FOR_WORLD, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_ARCHIVE_SERVICE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_MEMBER_OPS, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_PACK_OPS, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_RELIEF_TEMPLATE_FS_IMPORT, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_RELIEF_TEMPLATE_LIBRARY_SERVICE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_STRUCTURE_TEMPLATE_FS_IMPORT, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_STRUCTURE_TEMPLATE_LIBRARY_SERVICE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_TEMPLATE_SNAPSHOT_LOADER, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_HYDROLOGY_GENERATOR_SERVICE, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_WATER_PLACEMENT_PASS, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_DISTRICT_ROAD_GENERATOR, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_HEIGHT_CHECKER, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_LAYOUT_ENGINE, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_LAYOUT_ENTRY, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_ARCHWAY, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_ARCHWAY_VALIDATOR, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_BUILDER, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_CORRIDOR_CONNECTOR, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_CORRIDOR_TRIMMER, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_DOOR_HEIGHT, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_DOOR_PLACER, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_DOOR_VALIDATOR, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_DOORWAY, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_ENTRY, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_STAIRCASE_TUNNEL_ORCHESTRATOR, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_TUNNEL_PATH_FINDER, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_WALL_BREACH_PLACER, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_WALL_OPENING, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_ROOM_FACTORY, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_SHAPES, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_BASE, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_BUILDER_STAIRCASE, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_EMBEDDED_UPPER_LAYOUT, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_SHAFT_FACTORY, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_SHAFT_PLACER, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_SURFACE_CORRIDOR, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_UNDERGROUND_TUNNEL, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_U_SHAPE, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_U_SHAPE_HELPER, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_U_SHAPE_VALIDATOR, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_VALIDATOR, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_VERTICAL_LADDER, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_VERTICAL_LADDER_HELPER, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_VERTICAL_LADDER_VALIDATOR, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_STRUCTURE_GENERATOR_SERVICE, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_STRUCTURE_POST_PROCESS, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_COLLECT, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_FINE_PAINT, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_REGION_IDENTITY_CHECK, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_FORM_PIPELINE, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_RANGE_COMPOSE, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_BASIN_Z, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_MOUNTAIN_Z, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_RAVINE_Z, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_TERRAIN_Z, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_MATERIAL_RESOLVER, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_BOOTSTRAP_MAP_CELL_WRITER, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_MAP_CELL_QUERY_FACADE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_MAP_CELL_SERVICE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_REGION_PRECEDENCE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_CLIMATE_BATCH_ORCHESTRATOR, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_TERRAIN_BATCH_ORCHESTRATOR, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_PACK_MATERIALIZATION_ORCHESTRATOR, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_WORLD_MAP_HYDROLOGY, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_BAKE, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_CLIMATE, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_HYDRO, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_BACKGROUND, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_ROAD, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_SETTLEMENT, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_RUN_MASK_DOMAIN, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_WORLD_SEAM, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_CLIMATE_PACK_BAKE_ORCHESTRATOR, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_LIGHT_FINE_TILE_RESOLVE, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_PACK_RENDER_READ_FACADE, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_PARENT_LIGHT_LOAD, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_CONNECTION_PERSIST_SERVICE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_SETTLEMENT_PERSIST_SERVICE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_SURFACE_PLANNING_ASSEMBLER, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_COVERAGE_RESOLVER, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_REPAIR_WORLD_DEFAULTS, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_SETTLEMENT_OUTDOOR_ORCHESTRATOR, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_SETTLEMENT_OUTDOOR_TOPOLOGY, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_SETTLEMENT_OUTDOOR_TOPOLOGY_JOB, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_SNAPSHOT_LOG, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_GENERATION_LOGGING, LogSink.CORE_RUNTIME, generation=True),
+    _route(LogConsumer.RUNTIME_PERIMETER_BARRIER, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_DISTRICT_CONNECTION, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_WORLD_PURPOSE_PACK_REGISTRY, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_SPECS, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.RUNTIME_DATABASE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.EXTERNAL_ROOT, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.EXTERNAL_MAIN, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.EXTERNAL_ASYNCIO, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.EXTERNAL_CONCURRENT_FUTURES, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.EXTERNAL_UVICORN, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.EXTERNAL_FASTAPI, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.EXTERNAL_SSE_STARLETTE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.EXTERNAL_STARLETTE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.EXTERNAL_AIOSQLITE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.EXTERNAL_HTTPX, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.EXTERNAL_HTTPCORE, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.EXTERNAL_OPENAI, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.EXTERNAL_ANTHROPIC, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.EXTERNAL_MULTIPART, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.EXTERNAL_PYTHON_MULTIPART, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.EXTERNAL_WEBSOCKETS, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.EXTERNAL_WATCHFILES, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.EXTERNAL_ANYIO, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.EXTERNAL_SQLALCHEMY, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.EXTERNAL_URLLIB3, LogSink.CORE_RUNTIME, generation=False),
+    _route(LogConsumer.EXTERNAL_PIL, LogSink.CORE_RUNTIME, generation=False),
 )
 
-# Server profile allowlist — catalog process=server plus unmatched sink.
-# Do not include script/* or render/dumpLog (script-only).
-SERVER_SINKS: frozenset[tuple[str, str]] = frozenset({
-    ("engine", "dagExecution"),
-    ("artifacts", "artifactLifecycle"),
-    ("time", "operations"),
-    ("region_state", "regionStateLog"),
-    ("http", "api"),
-    ("pack", "packBakeLog"),
-    ("pack", "packDetailedBake"),
-    ("pack", "fineChunkPersist"),
-    ("relief", "reliefLog"),
-    ("relief", "gradeCellRays"),
-    ("terrain", "terrainParallelLog"),
-    ("climate", "climateLog"),
-    ("jsonValidation", "resolve"),
-    ("physics", "physicsLog"),
-    ("settlement", "settlementAssembler"),
-    ("structure", "headroom"),
-    ("cascade", "cascadeLog"),
-    ("core", "runtime"),
+
+def _index_routes(routes: tuple[LogRoute, ...]) -> dict[str, LogRoute]:
+    by_name = {route.consumer.value: route for route in routes}
+    if len(by_name) != len(routes) or set(by_name) != set(LogConsumer):
+        raise ValueError("expected one route per LogConsumer")
+    enabled = {route.sink for route in routes if route.server_enabled}
+    disabled = {route.sink for route in routes if not route.server_enabled}
+    if enabled & disabled:
+        raise ValueError("conflicting server policy for the same LogSink")
+    return by_name
+
+
+_BY_NAME = _index_routes(ROUTES)
+
+# The explicitly supported namespaces accept child loggers on a dot boundary.
+_NAMESPACES = frozenset({
+    LogConsumer.DAG,
+    LogConsumer.HTTP,
+    LogConsumer.EXTERNAL_ASYNCIO,
+    LogConsumer.EXTERNAL_CONCURRENT_FUTURES,
+    LogConsumer.EXTERNAL_UVICORN,
+    LogConsumer.EXTERNAL_FASTAPI,
+    LogConsumer.EXTERNAL_STARLETTE,
+    LogConsumer.EXTERNAL_SSE_STARLETTE,
+    LogConsumer.EXTERNAL_AIOSQLITE,
+    LogConsumer.EXTERNAL_HTTPX,
+    LogConsumer.EXTERNAL_HTTPCORE,
+    LogConsumer.EXTERNAL_OPENAI,
+    LogConsumer.EXTERNAL_ANTHROPIC,
+    LogConsumer.EXTERNAL_MULTIPART,
+    LogConsumer.EXTERNAL_PYTHON_MULTIPART,
+    LogConsumer.EXTERNAL_WEBSOCKETS,
+    LogConsumer.EXTERNAL_WATCHFILES,
+    LogConsumer.EXTERNAL_ANYIO,
+    LogConsumer.EXTERNAL_SQLALCHEMY,
+    LogConsumer.EXTERNAL_URLLIB3,
+    LogConsumer.EXTERNAL_PIL,
 })
 
-_DUMP_SINK = ("render", "dumpLog")
-_RUNTIME_SINK = ("core", "runtime")
 
-
-def _matches_prefix(name: str, prefix: str) -> bool:
-    return name == prefix or name.startswith(prefix + ".")
-
-
-def route_for(logger_name: str, activity: object | None = None) -> tuple[str, str] | None:
-    """Map logger name (+ optional ``activity`` extra) to ``(domain, service)``.
-
-    Unmatched names return ``None`` (server profile then uses ``core/runtime``).
-    """
-    name = logger_name or ""
-    if _matches_prefix(name, "app.relief"):
-        if activity == _R44_ACTIVITY:
-            return ("relief", "gradeCellRays")
-        return ("relief", "reliefLog")
-    for prefix, domain, service in _PREFIX_ROUTES:
-        if _matches_prefix(name, prefix):
-            return (domain, service)
-    return None
+def route_for(logger_name: str) -> LogRoute:
+    name = logger_name
+    while name:
+        route = _BY_NAME.get(name)
+        if route is not None and (name == logger_name or route.consumer in _NAMESPACES):
+            return route
+        name = name.rpartition(".")[0]
+    raise UnknownLogConsumerError(logger_name)

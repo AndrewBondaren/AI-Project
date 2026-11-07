@@ -1,17 +1,16 @@
-"""Shared plumbing for ``pack.bake.log`` phase modules — one logger, one extra builder."""
+"""Shared plumbing for ``pack.bake.log`` phase modules вЂ” one logger, one extra builder."""
 
 from __future__ import annotations
 
 import asyncio
-import logging
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 import threading
 from typing import Any
 
 from app.application.worldData.materialize.terrain.terrainParallelLog import current_cpu_core
 
-# Historical name kept verbatim: loggingConfig routes this prefix to the
-# ``pack/packBakeLog`` sink and tests attach to this exact logger.
-logger = logging.getLogger("app.application.worldData.pack.bake.packBakeLog")
+logger = get_consumer_logger(LogConsumer.PACK_BAKE)
 
 
 def _async_task_name() -> str:
@@ -28,7 +27,7 @@ def _diag_extra(
     pool_workers: int | None = None,
     **fields: Any,
 ) -> dict[str, Any]:
-    """Structured fields for JSON logs — thread / CPU / activity as top-level keys."""
+    """Structured fields for JSON logs вЂ” thread / CPU / activity as top-level keys."""
     thread = threading.current_thread()
     extra: dict[str, Any] = {
         "activity": activity,

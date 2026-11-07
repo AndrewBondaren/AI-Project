@@ -1,5 +1,6 @@
 """Diagnostics and technical failures remain identical on each delivery path."""
 
+from app.core.logging.contracts import LogConsumer
 import unittest
 from unittest.mock import patch
 
@@ -21,7 +22,7 @@ class DiagnosticsTests(unittest.TestCase):
                 child = ctx.child("water")
                 self.assertTrue(child.collect_only)
                 self.assertEqual(child.validate_only, validate_only)
-                with self.assertNoLogs("app.application.jsonValidation.resolve", level="DEBUG"):
+                with self.assertNoLogs(LogConsumer.RESOLVE.value, level="DEBUG"):
                     report_issues(child, [probe_issue("collected")])
                     resolve_root_list(WorldClimateZoneRegistry, [{"system_climate": "custom"}],
                         empty_factory=WorldClimateZoneRegistry.canonical_engine, label="test", ctx=child)

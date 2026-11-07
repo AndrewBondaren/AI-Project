@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import logging
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 import os
 import sys
 import threading
@@ -12,7 +13,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from app.application.worldData.generators.terrain.types import ColumnRect
 
-logger = logging.getLogger(__name__)
+logger = get_consumer_logger(LogConsumer.TERRAIN_PARALLEL)
 
 
 def current_cpu_core() -> int | None:

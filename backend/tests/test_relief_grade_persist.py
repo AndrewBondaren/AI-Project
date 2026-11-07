@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.core.logging.contracts import LogConsumer
 import json
 import logging
 import os
@@ -15,7 +16,6 @@ from app.application.worldData.relief.gradeCatalog import load_grade_membership
 from app.application.worldData.relief.gradeVertexSystem import emit_relief_grade_systems
 from app.application.worldData.persist.persistReliefGrades import persist_relief_grades
 from app.application.worldData.generators.terrain.types import ColumnRect
-from app.application.worldData.pack.bake import packBakeLog
 from app.application.worldData.pack.refine.fine.prep.fineTileContext import VertexSlotSeam
 from app.core.generationLogging import generation_world_log
 from app.dataModel.terrain.relief.enums import ReliefSideKind
@@ -259,7 +259,7 @@ class SqliteReliefGradePersistTest(IsolatedAsyncioTestCase):
     async def test_heartbeat_in_detailed_generation_log(self) -> None:
         root = Path(tempfile.mkdtemp())
         logging.getLogger().setLevel(logging.DEBUG)
-        pack_log = logging.getLogger(packBakeLog.__name__)
+        pack_log = logging.getLogger(LogConsumer.PACK_BAKE.value)
         pack_log.setLevel(logging.DEBUG)
         instances = [_sheer(f"g-{i}", [(i, 0)]) for i in range(3)]
         systems = [_system("g-0", "g-1")]

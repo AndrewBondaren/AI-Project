@@ -1,6 +1,14 @@
-# Stable logging consumers — D1 на приёмку
+# Stable logging consumers — DONE
 
-2026-11-07. **Документальный freeze; реализация не начата.** Владелец — общая инфраструктура logging; домены владеют смыслом событий и адаптерами. Основание — поручение пользователя убрать зависимость маршрутов от папок и строковых троек. Переиспользуются существующие stdlib logging, router, formatter, handlers, generation transcript. Новый logging/error framework не создаётся.
+2026-11-07. **Репозиторный переход выполнен и предъявлен на приёмку.** Владелец маршрутизации — инфраструктура logging. Домены владеют событиями и адаптерами. Таблица §2 фиксирует исходные точки создания logger и их целевые идентичности.
+
+Все 33 адреса перешли на get_consumer_logger. Relief выбирает отдельный consumer для R44. Каталог содержит 34 доменные идентичности, 112 явных регистраций существующих runtime-источников и 21 регистрацию для корневых, скриптовых и внешних logger. У оставшихся module-named runtime producers сохраняются исходные имена и файлы. Их перенос под другим именем обнаруживает проверка inventory. Для доменных consumers точного совпадения достаточно, дочерние имена поддержаны в явно перечисленных namespaces (HTTP, DAG и внешние библиотеки). Root и __main__ зарегистрированы точно.
+
+route_for возвращает LogRoute или поднимает UnknownLogConsumerError до открытия файла в обоих профилях. Router проверяет server_enabled прямо на маршруте. Transcript читает generation_enabled того же маршрута. Time, Artifacts и Snapshot различают нарушение контракта и штатный best-effort отказ доставки. Внутренний кеш файлового router использует конечный Path, общий для обоих профилей.
+
+В backend/config.toml найден активный родительский override DEBUG для Pack. В конфигурацию добавлены обе новые идентичности Pack с тем же уровнем. Существующий родительский ключ по-прежнему обслуживает оставшиеся pack-модули. Сбор предупреждений генераторов в отладочных вызовах обновлён для перенесённых имён. Пользовательские overrides вне репозитория требуют сверки при развёртывании.
+
+До изменения адресные route/transcript tests — 28 OK. Итоговый общий набор — **112 tests, 106 OK, 6 errors**, все шесть в прежних library-pack сценариях с базовым FieldPathError. Проверены новый strict contract, отсутствие записи для неизвестного logger, реальные файлы и transcript, R44, debug capture, Pack levels и получение logger после перемещения адаптера. Все 33 модуля producers импортированы. Pyright по общему logging, generationLogging и middleware — **0 errors, 0 warnings**.
 
 Нормы: [ТЗ logging: L1–L8](../../docs/tz_logging.md#инварианты), [маршрут](../../docs/tz_logging.md#маршрут), [два слоя](../../docs/tz_logging.md#два-слоя). Предыдущий [рефакторинг facade](logging-facade-decomposition-done.md) разделил механизм по файлам, но не решил идентичность producers.
 
@@ -16,9 +24,9 @@ LogConsumer — StrEnum: значения в таблице §2 являются
 
 LogSink — StrEnum, полная таблица §3. Это закрытые физические направления, не произвольные пути. `LogRoute` — frozen/strict/extra=forbid/revalidate_instances=always BaseModel; четыре обязательных поля без defaults: `consumer: LogConsumer`, `sink: LogSink`, `server_enabled: StrictBool`, `generation_enabled: StrictBool`. Не хранить рядом дублирующие string domain/service/logger_name. Здесь нет wire/persist формата или canonical IDs; новые поля config до кода записать в ТЗ logging.
 
-В `routes.py`: `ROUTES: tuple[LogRoute, ...]`; каждый consumer ровно один раз, все LogConsumer покрыты, duplicate/missing consumer отвергается при сборке каталога. Для нескольких consumers одного sink server_enabled должен совпадать. `route_for(logger_name: str) -> LogSink | None` использует stable consumer.value, longest-prefix и прежнюю границу точка/конец. Это строка внешнего stdlib LogRecord, не доменный вход. Неизвестный logger возвращает None, не становится новым enum member. activity больше не участвует в core routing.
+`route_for(logger_name: str) -> LogRoute` возвращает зарегистрированный маршрут. Если имя не совпало ни с одним объявленным именем или разрешённым префиксом по границе точки, функция поднимает `UnknownLogConsumerError(ValueError)` с исходным `logger_name: str`. Исключение объявляется в `core/logging/contracts.py`. Router проверяет маршрут до открытия файла и до блока обработки ошибок доставки. Повторный вызов logger для сообщения об этом нарушении запрещён. Каталог проверяет полноту LogConsumer и уникальность каждой регистрации.
 
-`SERVER_SINKS: frozenset[LogSink]` выводится из ROUTES; CORE_RUNTIME добавляется как существующий fallback. Нерегистрируемые сейчас reserved sinks §3 не получают новые producers. `consumer_log_path(sink: LogSink, *, logs_dir: Path | str | None = None) -> Path` в fileRouter.py — единственная граница LogSink.value → относительный путь + .log. Профиль script использует отдельную `script_log_path(service: str, *, logs_dir: Path | str | None = None) -> Path` с прежней проверкой stem. Script service — открытое имя запуска, не член LogSink. Router cache допускает `LogSink | str` как внутренний ключ, где str только validated script stem; обращения разделены по profile, произвольный tuple/string sink не принимается.
+Router проверяет `route.server_enabled` непосредственно. Для известного маршрута с False сервер пропускает запись. `consumer_log_path(sink: LogSink, *, logs_dir: Path | str | None = None) -> Path` в fileRouter.py — единственная граница LogSink.value → относительный путь + .log. Профиль script использует отдельную `script_log_path(service: str, *, logs_dir: Path | str | None = None) -> Path` с прежней проверкой stem. Script service — открытое имя запуска, не член LogSink. Router cache допускает `LogSink | str` как внутренний ключ, где str только validated script stem; обращения разделены по profile, произвольный tuple/string sink не принимается.
 
 ## 2. Проверенный producer inventory и LogConsumer
 
@@ -65,7 +73,7 @@ Reuse неизменённых logical names ARTIFACTS/DAG/TIME_OPERATIONS/RELIE
 
 Все остальные routed имена меняются на объявленные значения. Поле logger в JSON поэтому изменится намеренно; другие event fields, severity, файл и порядок эмиссии сохраняются. Проверять golden records с этой единственной metadata дельтой, не обещать byte-identical JSON.
 
-Поиск не нашёл собственного getLogger в packDetailedBakeOrchestrator: прежний специальный prefix сейчас не имеет обнаруженного producer. `structure/headroom` находится в server allowlist, но не имеет route_for mapping. Эти записи не означают реализованные consumers: не добавлять им новые logger автоматически. Прямые producers вне таблицы (например pack lightGrid, Hydrology, snapshot) остаются за пределами среза, их текущий core/runtime fallback не переназначается.
+Поиск не нашёл собственного getLogger в packDetailedBakeOrchestrator: прежний специальный prefix сейчас не имеет обнаруженного producer. `structure/headroom` находится в server allowlist, но не имеет route_for mapping. Эти записи не означают реализованные consumers: не добавлять им новые logger автоматически. До включения строгой проверки D2-0 обязан дополнить inventory ранее не маршрутизированных producers (включая pack lightGrid, Hydrology, Snapshot и внешние библиотеки) и зафиксировать их явные маршруты. Исходные 33 места охватывают только известные текущему router имена.
 
 ## 3. LogSink и разрешения
 
@@ -91,7 +99,7 @@ Reuse неизменённых logical names ARTIFACTS/DAG/TIME_OPERATIONS/RELIE
 | PACK_DETAILED | pack/packDetailedBake |
 | STRUCTURE_HEADROOM | structure/headroom |
 
-Все ROUTES server_enabled=True кроме RENDER_DUMP=False. PACK_DETAILED/STRUCTURE_HEADROOM остаются reserved enum значениями без consumer; существующие synthetic route probes обновляются, не выдают эти файлы за production paths. Историческая неиспользуемая allowlist запись не служит основанием для нового writer. CORE_RUNTIME — только fallback router, не доменный emitter.
+Все ROUTES server_enabled=True кроме RENDER_DUMP=False. PACK_DETAILED/STRUCTURE_HEADROOM остаются reserved enum значениями без consumer; существующие synthetic route probes обновляются, не выдают эти файлы за production paths. Историческая неиспользуемая allowlist запись не служит основанием для нового writer. Для CORE_RUNTIME требуется явная регистрация имени или разрешённого пространства имён. Catch-all отсутствует.
 
 generation_enabled=True для всех consumers §2 кроме DAG, TIME_OPERATIONS, REGION_STATE, HTTP. Это текущее фактическое покрытие generation prefix filter, не пожелание включить больше логов. RENDER_DUMP и RELIEF_RAYS generation=True. В частности Time transcript не добавляется этим D1.
 
@@ -138,7 +146,7 @@ Existing baseline logging refactor: 105 tests, 6 errors из старого Fiel
 - Exact enums: неизвестные/string значения rejected, duplicate consumer rejected, все consumers имеют typed route, sink не задаётся producer произвольной строкой.
 - Реальный доменный adapter → ожидаемый физический файл, не только route_for synthetic name. Relocation: producer получает logger по enum из тестового модуля с другим __name__; его логический logger и sink не меняются.
 - По каждому producer из §2 AST/rg gate обнаруживает оставшийся getLogger(__name__) либо старый строковый logger; исключения вне scope явно перечислены. Gate покрывает creation sites, а runtime file checks — каждый sink/особую политику, не имитацию доменных вычислений.
-- R44/другие Relief activity, server/script dump split, неизвестный/запрещённый logger, parent-prefix boundary и уровни.
+- Проверить R44, server/script split и границу префикса. Неизвестное имя даёт UnknownLogConsumerError с точным именем до открытия файла. Отдельный тест подтверждает штатный пропуск известного server-disabled маршрута. Поддерживаемый внешний logger попадает в явно назначенный sink.
 - Transcript: ровно одна запись в своём world scope, reset/вложенные scopes; Time/DAG/HTTP/region_state не включились случайно.
 - Fake sink failure и malformed domain DTO сохраняют прежние границы; fallback, default/None, batch continuation, commit/rollback не меняются.
 - Обзор diff, git diff --check; нет runtime compatibility lookup старых логгеров. Осознанная дельта только logger identity/настройки её имени, не event meaning.

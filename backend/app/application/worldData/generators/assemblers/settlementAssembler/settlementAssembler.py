@@ -15,7 +15,8 @@ SettlementAssembler — оркестратор генерации поселен
 ТЗ: docs/tz_assembler_hierarchy.md, tz_city_generation.md, tz_structure_connections.md §5
 """
 from app.application.worldData.locations.locationPayloadAccess import settlement_payload
-import logging
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 import time
 from dataclasses import replace
 
@@ -52,7 +53,7 @@ from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
-logger = logging.getLogger(__name__)
+logger = get_consumer_logger(LogConsumer.SETTLEMENT_ASSEMBLY)
 
 
 class SettlementAssembler:

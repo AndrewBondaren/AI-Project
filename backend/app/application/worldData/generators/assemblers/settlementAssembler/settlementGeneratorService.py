@@ -6,7 +6,8 @@ Skeleton на NamedLocation — фаза 1 (world create).
 """
 
 from app.application.worldData.locations.locationPayloadAccess import settlement_payload
-import logging
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 
 from app.application.worldData.locations.settlementSkeletonAccess import resolved_settlement_skeleton
 from app.application.worldData.generators.assemblers.settlementAssembler.layoutCells import (
@@ -42,7 +43,7 @@ from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
-logger = logging.getLogger(__name__)
+logger = get_consumer_logger(LogConsumer.SETTLEMENT_GENERATION)
 
 
 class SettlementGeneratorService:

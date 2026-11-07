@@ -6,7 +6,8 @@ rect; catalog ``face_key`` and L2 apply are not occupancy.
 
 from __future__ import annotations
 
-import logging
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 from collections.abc import Sequence
 
 from app.application.worldData.pack.refine.columnBounds import ColumnBounds
@@ -20,7 +21,7 @@ from app.application.worldData.materialize.terrain.terrainBatchOrchestrator impo
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.db.models.world import World
 
-logger = logging.getLogger(__name__)
+logger = get_consumer_logger(LogConsumer.PACK_REFINE_GRADE)
 
 
 def generate_detailed_grade(

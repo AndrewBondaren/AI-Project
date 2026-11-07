@@ -1,5 +1,6 @@
 """10c: production import/HTTP and atomic declaration/state writes."""
 
+from app.core.logging.contracts import LogConsumer
 import copy
 import json
 import tempfile
@@ -78,7 +79,7 @@ class DeclaredRegionEditTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.worlds.get_all(), [])
         with patch("app.application.jsonValidation.declaredRegions.declared_region_identity",
                    wraps=declared_region_identity) as identity, \
-             self.assertLogs("app.application.jsonValidation.resolve", level="WARNING") as logs:
+             self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING") as logs:
             await self.import_world()
         warnings = [line for line in logs.output if "degraded_identity" in line]
         self.assertEqual(len(warnings), 1, logs.output)

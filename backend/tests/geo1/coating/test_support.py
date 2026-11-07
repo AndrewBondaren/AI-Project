@@ -1,3 +1,4 @@
+from app.core.logging.contracts import LogConsumer
 from copy import replace
 from unittest import TestCase
 from unittest.mock import patch
@@ -145,6 +146,6 @@ class SupportProviderTests(TestCase):
         ctx = ResolveContext(validate_only=True)
         SurfacePlanValidator().validate_coating(runtime.payload, ctx=ctx)
         self.assertEqual(tuple(ctx.errors), preview.payload.cells[0].decision.issues)
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING") as logs:
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING") as logs:
             SurfacePlanValidator().validate_coating(runtime.payload, ctx=ResolveContext())
         self.assertTrue(any("WarningError" in line for line in logs.output))

@@ -1,8 +1,9 @@
 """Shared climate logging — warn-once dedupe per (world_uid, reason)."""
 
-import logging
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 
-logger = logging.getLogger(__name__)
+logger = get_consumer_logger(LogConsumer.CLIMATE)
 
 _warned: set[tuple[str, str]] = set()
 _debugged: set[tuple[str, str]] = set()

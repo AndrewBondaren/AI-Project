@@ -70,7 +70,7 @@ policy-resolve эмиттер и sink `jsonValidation/resolve`; settlement и re
 
 ### Time — TL-R (2026-11-07)
 
-`app.time.operations` → `time/operations`, server sink `backend/logs/time/operations.log`. Producer — `application/time/logging/timeOperationLog.py`, зарегистрирован существующими prefix router и SERVER_SINKS. DEBUG candidate/cancel фильтруется общим уровнем; refusal WARNING, fault ERROR. Общий formatter добавляет request_id. Script profile сохраняет свой script sink. Time не добавлен в generation transcript allowlist: это отдельное решение, не часть TL-R. Production bindings TL-B ещё не подключены; регистрация не означает runtime acceptance.
+`app.time.operations` → `time/operations`, server sink `backend/logs/time/operations.log`. Producer — `application/time/logging/timeOperationLog.py`, зарегистрирован как LogConsumer.TIME_OPERATIONS. DEBUG candidate/cancel фильтруется общим уровнем; refusal WARNING, fault ERROR. Общий formatter добавляет request_id. Script profile сохраняет свой script sink. Time не добавлен в generation transcript allowlist: это отдельное решение, не часть TL-R. Production bindings TL-B ещё не подключены; регистрация не означает runtime acceptance.
 
 ### Patch/Snapshot и artifacts — target регистрации шага 2 (2026-10-30)
 
@@ -86,8 +86,7 @@ handlers и без общего app.log. Domain emitters не дублируют
   `logs/artifacts/artifactLifecycle.log`.
   Producer — общий artifact/staging/holder/GC application owner.
 
-В реализации нужны согласованные entries в существующих _PREFIX_ROUTES
-и SERVER_SINKS, не новый file router. Script profile сохраняет собственный
+Для регистрации используется каталог LogRoute. Script profile сохраняет собственный
 script sink; не открывает server files. Logger names — явный контракт
 маршрутизации, не названия классов и не автоопределение домена по payload.
 
@@ -128,7 +127,7 @@ rejected и не запускает повторное применение; out
 
 - Logger: `app.engine.dag`; domain `engine`, service `dagExecution`, профиль `server`; файл `backend/logs/engine/dagExecution.log`.
 - Producer: единый `backend/app/application/engine/diagnostics/dagLog.py`, owner engine runtime. Координатор формирует итоговые события; причины/поля — `docs/tz_engine_node_context.md` §10.
-- Регистрация маршрута в существующем `_PREFIX_ROUTES`/`route_for` файла `backend/app/core/logging/routes.py`; тот же JsonLogFormatter и router, без нового handler/собственного файла на ноду. L1–L8 действуют без исключений.
+- Регистрация LogConsumer.DAG в каталоге `ROUTES` файла `backend/app/core/logging/routes.py`; тот же JsonLogFormatter и router, без нового handler/собственного файла на ноду. L1–L8 действуют без исключений.
 - Статус: route, server allowlist и emitter реализованы и проверены 2026-10-31 (DAG-TYPING-1 A2.5). Используются прежние router/JsonLogFormatter, без нового handler. Payload Input/Output/error POJO в лог не копируется; обязательная диагностика отмены доступна без DEBUG. Production handoff runtime — GEN-DAG-1.
 
 ### Существующие консьюмеры
@@ -160,7 +159,7 @@ rejected и не запускает повторное применение; out
 | `settlement` | `settlementAssembler` | `logs/settlement/settlementAssembler.log` | server | C22 packing DEBUG/INFO/WARNING; шторм `fit` только файл (L8) | ⬜ хелпер по образцу relief `log.py` / climate `loggingHelpers` · [connections](./tz_structure_connections.md) §5.1.3 «Debug packing» |
 | `structure` | `headroom` | `logs/structure/headroom.log` | server | post-gen ERROR, не abort | [`tz_building_generator.md`](./tz_building_generator.md) § Headroom (образец R44) |
 | `cascade` | `cascadeLog` | `logs/cascade/cascadeLog.log` | server | `scope_resolve` DEBUG на границу scope (parent/child по provenance на параметр); `default_applied` — WARNING для `REGISTRY_MEDIAN` (один раз на цепочку), DEBUG для canonical-дефолтов | [`cascadeLog.py`](../backend/app/application/worldData/context/cascadeLog.py) · [`contextResolver.py`](../backend/app/application/worldData/context/contextResolver.py) · [`tz_cascade_context.md`](./tz_cascade_context.md) §4 |
-| `core` | `runtime` | `logs/core/runtime.log` | server | непойманные server-логгеры (uvicorn / fastapi / …); **не** `app.log` | [`loggingConfig.py`](../backend/app/core/loggingConfig.py) |
+| `core` | `runtime` | `logs/core/runtime.log` | server | явно зарегистрированные runtime-источники, включая uvicorn и fastapi | [`loggingConfig.py`](../backend/app/core/loggingConfig.py) |
 | `script` | `detailedBake` | `logs/script/detailedBake.log` | script | poll HTTP, summary скрипта | [`detailed_bake.py`](../backend/scripts/detailed_bake.py) |
 | `script` | `lightAndFullBake` | `logs/script/lightAndFullBake.log` | script | light→full smoke | [`light_and_full_bake.py`](../backend/scripts/light_and_full_bake.py) |
 | `script` | `initializeWorld` | `logs/script/initializeWorld.log` | script | import + bake harness | [`initialize_world.py`](../backend/scripts/initialize_world.py) |
@@ -171,25 +170,11 @@ rejected и не запускает повторное применение; out
 
 ## Маршрут
 
-Фасад смотрит имя logger / extra → `(domain, service)` → handler файла.
+Домен получает стандартный logger через `get_consumer_logger(LogConsumer.…)`. Каталог задаёт файл и участие в transcript для каждого зарегистрированного потребителя. Поле `logger` в JSON содержит стабильное имя. Точные имена, внешние пространства имён и назначения перечислены в [контрактах](../backend/app/core/logging/contracts.py) и [каталоге](../backend/app/core/logging/routes.py).
 
-| Префикс / вход | Домен | Сервис |
-|---|---|---|
-| `http` | `http` | `api` |
-| `app.relief` | `relief` | `reliefLog`; R44 event → `gradeCellRays` |
-| `app.application.worldData.pack.bake.packBakeLog` | `pack` | `packBakeLog` |
-| `app.application.worldData.pack.bake.packDetailedBakeOrchestrator` | `pack` | `packDetailedBake` |
-| `app.application.worldData.pack.refine` | `pack` | `fineChunkPersist` (persist/validate call site) |
-| `app.application.worldData.render.dumpLog` | `render` | `dumpLog` |
-| `app.application.worldData.terrainParallelLog` | `terrain` | `terrainParallelLog` |
-| `app.application.worldData.generators.climate` / climate assembler | `climate` | `climateLog` |
-| `app.application.jsonValidation` | `jsonValidation` | `resolve` |
-| `app.application.worldData.generators.assemblers` (кроме `climateAssembler` → `climate`) | `settlement` | `settlementAssembler` |
-| `app.application.worldData.context` | `cascade` | `cascadeLog` |
-| `backend/scripts/{stem}.py` после `ensure_script_logging` | `script` | camelCase stem |
-| непойманный (профиль server) | `core` | `runtime` |
+`route_for(logger_name) -> LogRoute` поднимает `UnknownLogConsumerError` с исходным именем, если регистрация отсутствует. Эта проверка выполняется до открытия файла в обоих профилях. Сервер пишет в `route.sink` при `server_enabled=True`. Внешние библиотеки и прежние runtime producers имеют явные регистрации в CORE_RUNTIME. Флаг `generation_enabled` применяется внутри текущего world scope.
 
-`ensure_script_logging` **не** открывает `app.log`. Только консоль процесса + `logs/script/{service}.log`. Если в том же PID идёт dump — ещё `logs/render/dumpLog.log`. Непойманные server-логгеры → `core` / `runtime`, не `app.log`.
+Relief передаёт событие R44 в RELIEF_RAYS. В профиле script запись идёт в `logs/script/{stem}.log`, для RENDER_DUMP дополнительно в `logs/render/dumpLog.log`. Уровни задаются по текущему logger name с обычным наследованием stdlib.
 
 ## Запрещено
 
@@ -219,7 +204,7 @@ rejected и не запускает повторное применение; out
 
 ## Связанные документы
 
-- [Stable logging consumers — D1](../.cursor/plans/logging-stable-consumers-d1.md) — предложение типизированной идентичности consumers/sinks вместо маршрутов по Python-папкам; код не реализован, требуется приёмка.
+- [Stable logging consumers — D1](../.cursor/plans/logging-stable-consumers-done.md) — реализация типизированной маршрутизации, результаты проверок и граница проверки настроек окружения.
 
 - [Разделение logging facade по ответственностям — DONE](../.cursor/plans/logging-facade-decomposition-done.md) — реализовано, предъявлено на приёмку; 105 тестов, те же 6 внешних baseline ошибок, typing чистый. Без legacy re-export и изменения runtime.
 
@@ -261,14 +246,14 @@ rejected и не запускает повторное применение; out
 
 ## Physics settings: подготовительный I0 (2026-11-07)
 
-Input operations Physics используют единственный emitter `app.application.physics.settings` в `application/physics/settings/reporting.py`. Общий facade маршрутизирует `app.application.physics` в `physics/physicsLog`, файл `logs/physics/physicsLog.log` (server sink). Prefix включён в existing generation transcript только внутри активного world scope. Settings input больше не emit через `jsonValidation/resolve`; общий ResolveReport и его continuation identity сохранены.
+Input operations Physics используют единственный emitter `app.consumer.physics_settings` в `application/physics/settings/reporting.py`. Общий facade маршрутизирует LogConsumer.PHYSICS_SETTINGS в `physics/physicsLog`, файл `logs/physics/physicsLog.log` (server sink). Prefix включён в existing generation transcript только внутри активного world scope. Settings input больше не emit через `jsonValidation/resolve`; общий ResolveReport и его continuation identity сохранены.
 
 Runtime fallback пишет WARNING с concrete cause и selected default; structural refusal — distinct причины вызова. Validation/collect_only не emit; обычный успех/missing/zero тихие. Без raw input: явные code/type/location/path, gravity arguments и selected default. Request correlation — existing request_id; DAG execution correlation и production binding этим срезом не вводятся. DAG lifecycle event остаётся отдельным фактом. Доставка одного события в sink и transcript не означает повтор producer emit или exactly-once delivery.
 
 
 ### Physics: подготовительный I0 (§P3.22)
 
-`app.application.physics` → `physics/physicsLog`: server file
+`app.consumer.physics_settings` → `physics/physicsLog`: server file
 `backend/logs/physics/physicsLog.log`. Prefix входит в world-scoped transcript
 allowlist; scope открывает caller. Script profile сохраняет script sink.
 Handlers, formatter и request_id принадлежат общему logging facade.

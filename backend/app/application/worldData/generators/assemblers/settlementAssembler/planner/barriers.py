@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import logging
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 from random import Random
 
 from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
@@ -28,7 +29,7 @@ from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
-logger = logging.getLogger(__name__)
+logger = get_consumer_logger(LogConsumer.SETTLEMENT_BARRIERS)
 
 _WALLED_SIZES = frozenset({"town", "city", "metropolis", "megalopolis"})
 _NO_WALL_SIZES = frozenset({"hamlet", "village"})

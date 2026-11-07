@@ -1,5 +1,6 @@
 """Step 7: empty canonical relief source, public reads and world isolation."""
 
+from app.core.logging.contracts import LogConsumer
 import asyncio
 import os
 import shutil
@@ -13,7 +14,6 @@ from app.application.canonicalLibrary import CanonicalSourceError, ensure_canoni
 from app.application.jsonValidation.resolve import UnresolvedModelError
 from app.application.worldData.generators.terrain.relief.pick.templatePick import pick_template
 from app.application.templateLibrary.packs.defaults import default_pack_names, is_default_pack_uid
-from app.application.jsonValidation import resolve as resolve_module
 from app.application.templateLibrary import reliefTemplateLibraryService
 from app.application.templateLibrary.packs import reliefCanonicalSpec
 from app.application.templateLibrary.packs.reliefCanonicalSpec import RELIEF_CANONICAL_SPEC
@@ -97,7 +97,7 @@ class ReliefCanonicalTests(_ServiceCase):
         policy = WorldReliefPickPolicy(open_land=ReliefContextPickPolicy(
             mode="fixed", default_template_uid=target_uid))
         before = policy.model_dump(mode="json")
-        with self.assertLogs(resolve_module.__name__, level="WARNING") as logs, \
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING") as logs, \
                 self.assertRaises(UnresolvedModelError) as rejected:
             pick_template(context="open_land", templates={}, world_policy=policy,
                           world_seed="seed", site_id="b")
@@ -117,7 +117,7 @@ class ReliefCanonicalTests(_ServiceCase):
         with patch.object(library, "list_all", side_effect=AssertionError("global list bypass")), \
                 patch.object(library, "get_by_uid", side_effect=AssertionError("global get bypass")):
             b_bodies = await load_relief_templates_for_world(loader, b)
-        with self.assertLogs(resolve_module.__name__, level="WARNING") as logs, \
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING") as logs, \
                 self.assertRaises(UnresolvedModelError) as rejected:
             pick_template(context="open_land", templates=b_bodies, world_policy=policy,
                           world_seed="seed", site_id="b")

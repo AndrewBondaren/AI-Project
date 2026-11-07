@@ -1,5 +1,6 @@
 """Policy, causal facts and integrity boundaries of Physics settings."""
 
+from app.core.logging.contracts import LogConsumer
 import asyncio
 from copy import deepcopy
 import unittest
@@ -35,7 +36,7 @@ from app.dataModel.fields.checkedPath import CheckedPath
 from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.physics.settings.settingsCapture import WorldPhysicsSettingsRef
 
-LOG = "app.application.physics.settings"
+LOG = LogConsumer.PHYSICS_SETTINGS.value
 
 
 class SettingsPolicyTests(unittest.TestCase):

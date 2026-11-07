@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.core.logging.contracts import LogConsumer
 import logging
 import unittest
 from unittest import IsolatedAsyncioTestCase
@@ -305,7 +306,7 @@ class TestNamedLocationServiceGate(IsolatedAsyncioTestCase):
         repo = _LocRepo()
         world = _world()
         svc = NamedLocationService(repo=repo, world_repo=_WorldRepo(world))
-        log = logging.getLogger(settlementVolumeSeparation.__name__)
+        log = logging.getLogger(LogConsumer.SETTLEMENT_VOLUME.value)
         handler = _LogCapture()
         log.addHandler(handler)
         log.setLevel(logging.ERROR)
@@ -344,7 +345,7 @@ class TestNamedLocationServiceGate(IsolatedAsyncioTestCase):
         first = _city("loc-a")
         vol = next(v for _, v in territory_volumes_by_location(world, [first]))
         second_y = vol.y1 + 1 + policy.min_settlement_separation_xy
-        log = logging.getLogger(settlementVolumeSeparation.__name__)
+        log = logging.getLogger(LogConsumer.SETTLEMENT_VOLUME.value)
         handler = _LogCapture()
         log.addHandler(handler)
         log.setLevel(logging.ERROR)
@@ -365,7 +366,7 @@ class TestNamedLocationServiceGate(IsolatedAsyncioTestCase):
         repo = _LocRepo()
         world = _world()
         svc = NamedLocationService(repo=repo, world_repo=_WorldRepo(world))
-        log = logging.getLogger(settlementVolumeSeparation.__name__)
+        log = logging.getLogger(LogConsumer.SETTLEMENT_VOLUME.value)
         handler = _LogCapture()
         log.addHandler(handler)
         log.setLevel(logging.ERROR)

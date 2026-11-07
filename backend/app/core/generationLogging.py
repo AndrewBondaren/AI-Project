@@ -21,28 +21,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
 
+from app.core.logging.routes import route_for
 from app.core.logging.formatting import JsonLogFormatter
 
 # Active bake/refine world for this asyncio Task / thread.
 generation_world_var: ContextVar[str | None] = ContextVar("generation_world", default=None)
-
-# Logger name prefixes captured into the generation file (not HTTP/chat).
-# ``app.relief`` = reliefLog / canal / road_shoulder events (not under generators.*).
-_GENERATION_PREFIXES: tuple[str, ...] = (
-    "app.artifacts",
-    "app.application.worldData.pack",
-    "app.application.worldData.generators",
-    "app.application.worldData.materialize.terrain.terrainBatchOrchestrator",
-    "app.application.worldData.materialize.terrain.terrainParallelLog",
-    "app.application.worldData.materialize.surface.loadingProgress",
-    "app.application.worldData.materialize.surface.worldSurfaceMaterializationOrchestrator",
-    "app.application.worldData.render",
-    "app.application.cascade",
-    "app.application.jsonValidation",
-    "app.application.physics",
-    "app.core.generationLogging",
-    "app.relief",
-)
 
 _log = logging.getLogger(__name__)
 
@@ -65,16 +48,14 @@ def _stamp_utc() -> str:
 class _GenerationScopeFilter(logging.Filter):
     """Pass only records for this world's generation scope + allowlisted loggers."""
 
-    def __init__(self, world_uid: str, prefixes: tuple[str, ...] = _GENERATION_PREFIXES) -> None:
+    def __init__(self, world_uid: str) -> None:
         super().__init__()
         self._world_uid = world_uid
-        self._prefixes = prefixes
 
     def filter(self, record: logging.LogRecord) -> bool:
         if generation_world_var.get() != self._world_uid:
             return False
-        name = record.name
-        return any(name == p or name.startswith(p + ".") for p in self._prefixes)
+        return route_for(record.name).generation_enabled
 
 
 @contextmanager

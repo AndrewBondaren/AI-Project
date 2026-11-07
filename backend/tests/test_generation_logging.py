@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.core.logging.contracts import LogConsumer
 import json
 import logging
 import tempfile
@@ -21,7 +22,7 @@ class GenerationWorldLogTests(unittest.TestCase):
 
     def test_generation_world_log_writes_bake_files(self) -> None:
         logging.getLogger().setLevel(logging.DEBUG)
-        pack_log = logging.getLogger("app.application.worldData.pack.bake.packBakeLog")
+        pack_log = logging.getLogger(LogConsumer.PACK_BAKE.value)
         relief_log = logging.getLogger("app.relief")
         http_log = logging.getLogger("http")
         pack_log.setLevel(logging.DEBUG)
@@ -73,7 +74,7 @@ class GenerationWorldLogTests(unittest.TestCase):
         self.assertNotIn("artifact-outside", a + b)
 
     def test_generation_world_log_isolates_worlds(self) -> None:
-        pack_log = logging.getLogger("app.application.worldData.pack.bake.packBakeLog")
+        pack_log = logging.getLogger(LogConsumer.PACK_BAKE.value)
 
         with generation_world_log("world-a", mode="light", root=self.root):
             pack_log.info("only-a")
@@ -89,7 +90,7 @@ class GenerationWorldLogTests(unittest.TestCase):
 
     def test_generation_world_log_writes_detailed_files(self) -> None:
         logging.getLogger().setLevel(logging.DEBUG)
-        pack_log = logging.getLogger("app.application.worldData.pack.bake.packBakeLog")
+        pack_log = logging.getLogger(LogConsumer.PACK_BAKE.value)
         pack_log.setLevel(logging.DEBUG)
 
         with generation_world_log(
@@ -152,7 +153,7 @@ class GenerationWorldLogTests(unittest.TestCase):
 
     def test_generation_world_log_captures_dump_render_logger(self) -> None:
         logging.getLogger().setLevel(logging.DEBUG)
-        dump_log = logging.getLogger("app.application.worldData.render.dumpLog")
+        dump_log = logging.getLogger(LogConsumer.RENDER_DUMP.value)
         dump_log.setLevel(logging.DEBUG)
 
         with generation_world_log(

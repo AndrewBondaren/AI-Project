@@ -1,5 +1,6 @@
 """HY-12/3b: pre-1.4 water placement pass wiring + one-carve cutover smoke."""
 
+from app.core.logging.contracts import LogConsumer
 import json
 import unittest
 from tests.planning.consumers.test_wiring import planning_kwargs
@@ -113,7 +114,7 @@ class WaterPlacementPassFixtureTests(unittest.TestCase):
         policy = WorldHydrology.model_validate(world.hydrology)
         # The fixture intentionally duplicates location_uid between a declared basin and
         # a declared coastline; runtime merges them with one structured warning.
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING") as log:
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING") as log:
             deps = planning_kwargs(self)
             _, working = SurfacePlanningEntry(deps["planning"], deps["capture"]).require_plan_inputs(
                 world, locations, wait=deps["wait"])

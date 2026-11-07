@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.core.logging.contracts import LogConsumer
 import io
 import json
 import logging
@@ -22,6 +23,8 @@ from app.core.loggingConfig import (
     setup_logging,
 )
 from app.core.logging.routes import route_for
+from app.core.logging.contracts import LogSink, UnknownLogConsumerError
+from app.application.worldData.generators.terrain.relief.log.log import relief_error
 from app.core.logging.console import flush_console_queue
 
 
@@ -84,7 +87,7 @@ class RouteTableTests(unittest.TestCase):
 
         expected = Path(__file__).resolve().parents[1] / "logs"
         self.assertEqual(backend_logs_dir(), expected)
-        self.assertEqual(consumer_log_path("time", "operations"), expected / "time" / "operations.log")
+        self.assertEqual(consumer_log_path(LogSink.TIME_OPERATIONS), expected / "time" / "operations.log")
         before = request_id_var.get()
         token = logMiddleware.request_id_var.set("shared-request")
         record = logging.LogRecord("probe", logging.INFO, __file__, 1, "probe", (), None)
@@ -115,35 +118,12 @@ class RouteTableTests(unittest.TestCase):
             handler.close()
 
     def test_http_and_relief_split(self) -> None:
-        self.assertEqual(route_for("http"), ("http", "api"))
-        self.assertEqual(route_for("http.access"), ("http", "api"))
-        self.assertEqual(
-            route_for("app.relief", "grade_cell_empty_ray"),
-            ("relief", "gradeCellRays"),
-        )
-        self.assertEqual(
-            route_for("app.relief", "road_shoulder_skip"),
-            ("relief", "reliefLog"),
-        )
-        self.assertEqual(route_for("app.relief"), ("relief", "reliefLog"))
-        self.assertIsNone(route_for("uvicorn.error"))
-        self.assertIsNone(route_for("httpx"))
-        self.assertEqual(
-            route_for("app.application.worldData.generators.assemblers.districtAssembler"),
-            ("settlement", "settlementAssembler"),
-        )
-        self.assertEqual(
-            route_for("app.application.worldData.generators.assemblers.climateAssembler"),
-            ("climate", "climateLog"),
-        )
-        self.assertEqual(
-            route_for("app.application.jsonValidation.resolve"),
-            ("jsonValidation", "resolve"),
-        )
-        self.assertEqual(
-            route_for("app.application.jsonValidation.settlementSizeResolve"),
-            ("jsonValidation", "resolve"),
-        )
+        self.assertIs(route_for("http.access").sink, LogSink.HTTP)
+        self.assertIs(route_for("app.relief.rays").sink, LogSink.RELIEF_RAYS)
+        self.assertIs(route_for("uvicorn.error").sink, LogSink.CORE_RUNTIME)
+        self.assertIs(route_for("httpx").sink, LogSink.CORE_RUNTIME)
+        with self.assertRaises(UnknownLogConsumerError):
+            route_for("httpOther")
 
 
 class _LogDirCase(unittest.TestCase):
@@ -206,7 +186,7 @@ class ServerRouteFileTests(_LogDirCase):
         from tests.time.test_time_core import publication
 
         self._install_server()
-        self.assertEqual(route_for("app.time.operations"), ("time", "operations"))
+        self.assertIs(route_for("app.time.operations").sink, LogSink.TIME_OPERATIONS)
         producer = TimeOperationLog()
         context = CurrentLogContext(expected=publication())
         token = request_id_var.set("time-route")
@@ -241,7 +221,7 @@ class ServerRouteFileTests(_LogDirCase):
 
     def test_artifacts_route_preserves_traceback_in_domain_file_and_transcript(self) -> None:
         self._install_server()
-        self.assertEqual(route_for("app.artifacts"), ("artifacts", "artifactLifecycle"))
+        self.assertIs(route_for("app.artifacts").sink, LogSink.ARTIFACTS)
         with generation_world_log("artifact-world", mode="light", root=self.logs / "generation") as run_path:
             try:
                 raise OSError("artifact route probe")
@@ -320,10 +300,7 @@ class ServerRouteFileTests(_LogDirCase):
 
     def test_relief_r44_writes_grade_cell_rays(self) -> None:
         self._install_server()
-        logging.getLogger("app.relief").error(
-            "relief | grade_cell_empty_ray | x=1 y=2",
-            extra={"activity": "grade_cell_empty_ray"},
-        )
+        relief_error("grade_cell_empty_ray", x=1, y=2)
         _flush_facade()
         rays = self.logs / "relief" / "gradeCellRays.log"
         relief = self.logs / "relief" / "reliefLog.log"
@@ -355,7 +332,7 @@ class ServerRouteFileTests(_LogDirCase):
 
     def test_server_does_not_open_dump_log(self) -> None:
         self._install_server()
-        logging.getLogger("app.application.worldData.render.dumpLog").info(
+        logging.getLogger(LogConsumer.RENDER_DUMP.value).info(
             "dump tick",
             extra={"activity": "dump"},
         )
@@ -382,10 +359,7 @@ class ServerRouteFileTests(_LogDirCase):
         with generation_world_log(
             "world-x", mode="detailed", root=gen_root,
         ) as run_path:
-            relief.error(
-                "relief | grade_cell_empty_ray | x=1 y=2",
-                extra={"activity": "grade_cell_empty_ray"},
-            )
+            relief_error("grade_cell_empty_ray", x=1, y=2)
         _flush_facade()
         self.assertIn(
             "grade_cell_empty_ray",
@@ -400,10 +374,7 @@ class ServerRouteFileTests(_LogDirCase):
 
     def test_console_skips_volume_keeps_pack_heartbeat(self) -> None:
         self._install_server()
-        logging.getLogger("app.relief").error(
-            "relief | grade_cell_empty_ray | x=1 y=2",
-            extra={"activity": "grade_cell_empty_ray"},
-        )
+        relief_error("grade_cell_empty_ray", x=1, y=2)
         logging.getLogger("app.relief").debug(
             "relief | grade_system_create | uid=sys-1",
             extra={"activity": "grade_system_create"},
@@ -429,7 +400,7 @@ class ServerRouteFileTests(_LogDirCase):
 
     def test_json_validation_writes_resolve_log(self) -> None:
         self._install_server()
-        logging.getLogger("app.application.jsonValidation.settlementSizeResolve").warning(
+        logging.getLogger(LogConsumer.RESOLVE.value).warning(
             "json_validation | settlement_size invalid 'hamlet'; using field default 'medium'",
             extra={"activity": "settlement_size_fallback"},
         )
@@ -444,13 +415,13 @@ class ServerRouteFileTests(_LogDirCase):
     def test_settlement_assembler_writes_settlement_log(self) -> None:
         self._install_server()
         logging.getLogger(
-            "app.application.worldData.generators.assemblers",
+            LogConsumer.SETTLEMENT_PACKING.value,
         ).info(
             "C22 packing | district=civic_center step=frame",
             extra={"activity": "frame"},
         )
         logging.getLogger(
-            "app.application.worldData.generators.assemblers",
+            LogConsumer.SETTLEMENT_PACKING.value,
         ).debug(
             "C22 packing | district=civic_center step=fit fit='no'",
             extra={"activity": "c22_packing_fit"},
@@ -468,11 +439,8 @@ class ScriptProfileTests(_LogDirCase):
     def test_script_writes_stem_log_not_app_or_relief(self) -> None:
         self._install_script("detailedBake")
         logging.getLogger("http").info("request_end should not create http/api")
-        logging.getLogger("app.relief").error(
-            "relief | grade_cell_empty_ray | x=0 y=0",
-            extra={"activity": "grade_cell_empty_ray"},
-        )
-        logging.getLogger("poll").info("waiting for bake")
+        relief_error("grade_cell_empty_ray", x=1, y=2)
+        logging.getLogger("__main__").info("waiting for bake")
         _flush_facade()
         script_log = self.logs / "script" / "detailedBake.log"
         self.assertTrue(script_log.is_file())
@@ -485,7 +453,7 @@ class ScriptProfileTests(_LogDirCase):
 
     def test_script_dump_also_opens_dump_log(self) -> None:
         self._install_script("renderMaps")
-        logging.getLogger("app.application.worldData.render.dumpLog").info(
+        logging.getLogger(LogConsumer.RENDER_DUMP.value).info(
             "dump grade_z tick",
             extra={"activity": "dump_grade_z"},
         )
@@ -516,7 +484,7 @@ class ScriptProfileTests(_LogDirCase):
         self._install_script("detailedBake")
         gen_root = self.logs / "generation"
         relief = logging.getLogger("app.relief")
-        dump = logging.getLogger("app.application.worldData.render.dumpLog")
+        dump = logging.getLogger(LogConsumer.RENDER_DUMP.value)
         relief.setLevel(logging.DEBUG)
         dump.setLevel(logging.DEBUG)
         with generation_world_log("world-x", mode="dump", root=gen_root) as run_path:

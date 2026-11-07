@@ -1,6 +1,7 @@
 """Pack climate row-batch pool vs serial fallback (CL-PAR)."""
 
 from __future__ import annotations
+from app.core.logging.contracts import LogConsumer
 from tests.planning.consumers.test_wiring import working_fixture
 
 import logging
@@ -14,7 +15,6 @@ from app.application.worldData.generators.climate.climatePoleField import (
     GridBBox,
 )
 from app.application.worldData.materialize.surface.materializationContext import MaterializationContext
-from app.application.worldData.pack.bake import packBakeLog
 from app.application.worldData.pack.climate import climateCoarseBake, climatePackBakeOrchestrator
 from app.application.worldData.pack.climate.climatePackBakeOrchestrator import (
     ClimatePackBakeOrchestrator,
@@ -110,7 +110,7 @@ class TestPackClimateParallel(unittest.IsolatedAsyncioTestCase):
             def emit(self, record: logging.LogRecord) -> None:
                 records.append(record)
 
-        log = logging.getLogger(packBakeLog.__name__)
+        log = logging.getLogger(LogConsumer.PACK_BAKE.value)
         handler = _Capture()
         log.addHandler(handler)
         prev = log.level

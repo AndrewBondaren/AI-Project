@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import logging
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 from random import Random
 
 from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
@@ -30,7 +31,7 @@ from app.dataModel.locations.transitions.transitionType import TransitionType
 from app.dataModel.spatial.facing import GRID_OUTWARD_DELTA
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 
-logger = logging.getLogger(__name__)
+logger = get_consumer_logger(LogConsumer.AREA_BARRIERS)
 
 
 def area_gate_cells(barrier_cells: list[MapCell]) -> list[MapCell]:

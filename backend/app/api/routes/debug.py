@@ -1,6 +1,6 @@
 """
-Debug endpoints — только для разработки и тестирования.
-Не должны использоваться в production flow.
+Debug endpoints вЂ” С‚РѕР»СЊРєРѕ РґР»СЏ СЂР°Р·СЂР°Р±РѕС‚РєРё Рё С‚РµСЃС‚РёСЂРѕРІР°РЅРёСЏ.
+РќРµ РґРѕР»Р¶РЅС‹ РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊСЃСЏ РІ production flow.
 """
 from dataclasses import asdict
 import logging
@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 
 
 class _LogCapture(logging.Handler):
-    """Перехватывает записи во время генерации для возврата в debug-ответе."""
+    """РџРµСЂРµС…РІР°С‚С‹РІР°РµС‚ Р·Р°РїРёСЃРё РІРѕ РІСЂРµРјСЏ РіРµРЅРµСЂР°С†РёРё РґР»СЏ РІРѕР·РІСЂР°С‚Р° РІ debug-РѕС‚РІРµС‚Рµ."""
 
     def __init__(self, level: int = logging.WARNING) -> None:
         super().__init__(level)
@@ -57,7 +57,7 @@ async def debug_generate_structure_rotations(
 ) -> JSONResponse:
     from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
     from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
-    from app.application.worldData.debugStructureRotations import generate_rotations
+    from app.application.worldData.debugStructureRotations import capture_generator_logs, generate_rotations
     from app.application.templateLibrary.structureTemplateLibraryService import (
         StructureTemplateNotFoundError,
     )
@@ -121,13 +121,13 @@ async def debug_generate_structure(
     container=Depends(get_container),
 ) -> JSONResponse:
     """
-    Генерирует структуру здания из шаблона и возвращает layout.
+    Р“РµРЅРµСЂРёСЂСѓРµС‚ СЃС‚СЂСѓРєС‚СѓСЂСѓ Р·РґР°РЅРёСЏ РёР· С€Р°Р±Р»РѕРЅР° Рё РІРѕР·РІСЂР°С‰Р°РµС‚ layout.
 
-    Принимает JSON-шаблон через file upload или path к файлу.
-    Мир берётся из БД по world_uid.
-    Здание создаётся как временный объект с переданными координатами.
+    РџСЂРёРЅРёРјР°РµС‚ JSON-С€Р°Р±Р»РѕРЅ С‡РµСЂРµР· file upload РёР»Рё path Рє С„Р°Р№Р»Сѓ.
+    РњРёСЂ Р±РµСЂС‘С‚СЃСЏ РёР· Р‘Р” РїРѕ world_uid.
+    Р—РґР°РЅРёРµ СЃРѕР·РґР°С‘С‚СЃСЏ РєР°Рє РІСЂРµРјРµРЅРЅС‹Р№ РѕР±СЉРµРєС‚ СЃ РїРµСЂРµРґР°РЅРЅС‹РјРё РєРѕРѕСЂРґРёРЅР°С‚Р°РјРё.
 
-    Возвращает: cells, levels, transitions, rooms + сводка по элементам.
+    Р’РѕР·РІСЂР°С‰Р°РµС‚: cells, levels, transitions, rooms + СЃРІРѕРґРєР° РїРѕ СЌР»РµРјРµРЅС‚Р°Рј.
     """
     template = await JsonResolver.resolve(file=file, path=path)
     if not isinstance(template, dict):
@@ -170,15 +170,11 @@ async def debug_generate_structure(
 
     log_level = logging.DEBUG if verbose else logging.WARNING
     capture = _LogCapture(level=log_level)
-    gen_logger = logging.getLogger("app.application.worldData.generators")
-    gen_logger.addHandler(capture)
-    try:
+    with capture_generator_logs(capture):
         layout = _structure_generator.generate_from_template(
             world, building, layout_template,
             ctx=debug_building_context(world, building),
         )
-    finally:
-        gen_logger.removeHandler(capture)
 
     from collections import Counter
     element_counts = Counter(c.system_building_element for c in layout.cells)

@@ -1,6 +1,7 @@
 """Rainfall from zone moisture × world precipitation liquid phase band."""
 
-import logging
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 
 from app.application.worldData.generators.climate.loggingHelpers import warn_once
 from app.application.worldData.generators.climate.loggingHelpers import debug_once
@@ -14,7 +15,7 @@ from app.application.jsonValidation import (
 from app.dataModel.materials.materialRegistryEntry import MaterialRegistryEntry
 from app.db.models.world import World
 
-logger = logging.getLogger(__name__)
+logger = get_consumer_logger(LogConsumer.PRECIPITATION)
 
 LIQUID_BAND_OUTER = 0.1
 

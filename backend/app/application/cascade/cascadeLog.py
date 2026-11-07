@@ -7,12 +7,13 @@ no ad-hoc ``getLogger`` for the same events elsewhere (L3/L5).
 
 from __future__ import annotations
 
-import logging
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 from typing import Any
 
 from app.dataModel.cascade.cascadeSpec import DefaultPolicy
 
-logger = logging.getLogger(__name__)
+logger = get_consumer_logger(LogConsumer.CASCADE)
 
 
 def log_scope_resolve(

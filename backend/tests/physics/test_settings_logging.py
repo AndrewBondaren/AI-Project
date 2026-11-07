@@ -1,5 +1,6 @@
 """Public settings operations through real facade and transcript files."""
 
+from app.core.logging.contracts import LogConsumer
 import io
 import json
 import logging
@@ -18,6 +19,7 @@ from app.core.loggingConfig import (
 )
 from app.core.logging.context import request_id_var
 from app.core.logging.routes import route_for
+from app.core.logging.contracts import LogSink
 from app.core.logging.console import flush_console_queue
 
 
@@ -42,10 +44,10 @@ class SettingsLoggingTests(unittest.TestCase):
         return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
     def physics(self, path):
-        return [row for row in self.rows(path) if row["logger"] == "app.application.physics.settings"]
+        return [row for row in self.rows(path) if row["logger"] == LogConsumer.PHYSICS_SETTINGS.value]
 
     def test_sink_transcript_dedup_correlation_and_world_isolation(self):
-        self.assertEqual(route_for("app.application.physics.settings"), ("physics", "physicsLog"))
+        self.assertEqual(route_for(LogConsumer.PHYSICS_SETTINGS.value).sink, LogSink.PHYSICS)
         previous = request_id_var.get()
         token = request_id_var.set("physics-request-a")
         ctx = ResolveContext()

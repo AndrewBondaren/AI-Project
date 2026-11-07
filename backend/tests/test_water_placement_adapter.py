@@ -1,5 +1,6 @@
 """P3 W1/W2: declared water joins the shared pass without carve/fill or a private resolver."""
 
+from app.core.logging.contracts import LogConsumer
 from dataclasses import replace
 from itertools import permutations
 import unittest
@@ -71,7 +72,7 @@ class WaterBasinAdapterTests(unittest.TestCase):
     def test_context_rejects_missing_or_malformed_revision_without_logging_when_collecting(self):
         snap = context()
         for invalid in (None, b"short", "a" * 32):
-            with self.subTest(invalid=invalid), self.assertNoLogs("app.application.jsonValidation.resolve", level="DEBUG"):
+            with self.subTest(invalid=invalid), self.assertNoLogs(LogConsumer.RESOLVE.value, level="DEBUG"):
                 ctx = ResolveContext(collect_only=True)
                 with self.assertRaises(UnresolvedModelError):
                     prepare(basins=[basin()], snapshot=replace(snap, snapshot_revision=invalid), ctx=ctx)
@@ -293,9 +294,9 @@ class WaterSharedPassTests(unittest.TestCase):
         arguments = dict(basins=[basin("bad", floor_z=-101)], coasts=[coast()], snapshot=snap)
         runtime = ResolveContext(location=WireLocation(parts=("master",)))
         preview = ResolveContext(validate_only=True, location=WireLocation(parts=("master",)))
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING") as log:
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING") as log:
             actual = prepare(**arguments, ctx=runtime)
-        with self.assertNoLogs("app.application.jsonValidation.resolve", level="WARNING"):
+        with self.assertNoLogs(LogConsumer.RESOLVE.value, level="WARNING"):
             expected = prepare(**arguments, ctx=preview)
         self.assertEqual(actual, expected)
         self.assertFalse(runtime.errors)
@@ -469,12 +470,12 @@ class WaterMergedSourceTests(unittest.TestCase):
         self.assertFalse(prep.entries)
 
     def test_runtime_logs_one_warning_and_preview_reports_the_same_fact(self):
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING") as log:
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING") as log:
             prepare(basins=[basin("dup")], coasts=[ring()], snapshot=context(),
                     ctx=ResolveContext())
         self.assertTrue(any("WATER_PLACEMENT_MERGED_SOURCES" in line for line in log.output))
         preview = ResolveContext(validate_only=True)
-        with self.assertNoLogs("app.application.jsonValidation.resolve", level="WARNING"):
+        with self.assertNoLogs(LogConsumer.RESOLVE.value, level="WARNING"):
             prep = prepare(basins=[basin("dup")], coasts=[ring()], snapshot=context(), ctx=preview)
         self.assertEqual([notice.code for notice in prep.notices], ["WATER_PLACEMENT_MERGED_SOURCES"])
         self.assertEqual([e.code for e in preview.errors], ["WATER_PLACEMENT_MERGED_SOURCES"])

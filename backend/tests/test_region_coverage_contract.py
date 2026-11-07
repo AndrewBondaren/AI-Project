@@ -1,4 +1,5 @@
 """WR-TD-1: source and current coverage are mandatory nominal terrain references."""
+from app.core.logging.contracts import LogConsumer
 from dataclasses import fields, replace
 from types import SimpleNamespace
 import unittest
@@ -73,7 +74,7 @@ class RegionCoverageContractTests(unittest.TestCase):
         for name in ("entry_type","current_type"):
             bad = replace(self.region,**{name:"unregistered"})
             with self.subTest(field=name):
-                with self.assertLogs("app.application.jsonValidation.resolve",level="WARNING") as log:
+                with self.assertLogs(LogConsumer.RESOLVE.value,level="WARNING") as log:
                     self.assertEqual(resolve_collected([bad],self.f.ctx,self.f.inputs,self.f.registry),[])
                 self.assertIn("REF_W_UNKNOWN"," ".join(log.output))
                 self.assertIn(name," ".join(log.output))
@@ -91,7 +92,7 @@ class RegionCoverageContractTests(unittest.TestCase):
     def test_state_override_cannot_hide_an_invalid_initial_key(self):
         bad = replace(self.region,entry_type="unregistered",current_type="unregistered")
         inputs = replace(self.f.inputs,state_snapshot={bad.region_uid:StateSnapshotEntry("swamp")})
-        with self.assertLogs("app.application.jsonValidation.resolve",level="WARNING"):
+        with self.assertLogs(LogConsumer.RESOLVE.value,level="WARNING"):
             self.assertEqual(resolve_collected([bad],self.f.ctx,inputs,self.f.registry),[])
 
     def test_forged_dataclass_is_revalidated_at_index_boundary(self):

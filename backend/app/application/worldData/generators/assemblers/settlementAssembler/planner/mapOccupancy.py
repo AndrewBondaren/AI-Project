@@ -1,6 +1,7 @@
 """Footprint reservation on world map grid — settlement ↔ map_cells."""
 
-import logging
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 
 from app.application.jsonValidation import terrain_masks, terrain_system_keys
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
@@ -16,7 +17,7 @@ from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
-logger = logging.getLogger(__name__)
+logger = get_consumer_logger(LogConsumer.SETTLEMENT_OCCUPANCY)
 
 
 def _surface_terrain(world: World) -> str:

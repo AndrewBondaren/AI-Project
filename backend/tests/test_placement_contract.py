@@ -1,5 +1,6 @@
 """P1 contract boundaries: authored intent, prepared data, policy and outcomes."""
 
+from app.core.logging.contracts import LogConsumer
 from itertools import permutations
 from math import inf, nan
 import unittest
@@ -301,9 +302,9 @@ class PlacementWirePolicyTests(unittest.TestCase):
         wire = intent_wire()  # priority omitted; the declared default is None/auto.
         runtime = ResolveContext.for_import(validate_only=False).child("placements").child("region-a")
         master = ResolveContext.for_import(validate_only=True).child("placements").child("region-a")
-        with self.assertLogs("app.application.jsonValidation.resolve", level="INFO") as logs:
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="INFO") as logs:
             ordinary = resolve_result(PlacementIntent, wire, ctx=runtime)
-        with self.assertLogs("app.application.jsonValidation.resolve", level="INFO") as preview_logs:
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="INFO") as preview_logs:
             preview = resolve_result(PlacementIntent, wire, ctx=master)
         self.assertTrue(ordinary.resolved)
         self.assertTrue(preview.resolved)
@@ -366,9 +367,9 @@ class PlacementWirePolicyTests(unittest.TestCase):
         payload = intent_wire(placement_specificity=-1)
         runtime = ResolveContext(location=WireLocation(parts=("placements", "region-a")))
         preview = ResolveContext(validate_only=True, location=runtime.location)
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING") as log:
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING") as log:
             result_runtime = resolve_result(PlacementIntent, payload, ctx=runtime)
-        with self.assertNoLogs("app.application.jsonValidation.resolve", level="WARNING"):
+        with self.assertNoLogs(LogConsumer.RESOLVE.value, level="WARNING"):
             result_preview = resolve_result(PlacementIntent, payload, ctx=preview)
         self.assertFalse(result_runtime.resolved)
         self.assertEqual(result_runtime.issues, result_preview.issues)

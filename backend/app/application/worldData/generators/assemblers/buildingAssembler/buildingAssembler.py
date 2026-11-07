@@ -1,4 +1,5 @@
-import logging
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 from dataclasses import replace
 
 from app.application.cascade.locationScope import empty_location_chain
@@ -19,7 +20,7 @@ from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
-logger = logging.getLogger(__name__)
+logger = get_consumer_logger(LogConsumer.BUILDING)
 
 
 @BUILDING_ASSEMBLER_REGISTRY.register("building")

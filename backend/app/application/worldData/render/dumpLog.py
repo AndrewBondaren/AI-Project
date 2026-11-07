@@ -9,7 +9,8 @@ Not ``print``, not a script-local tee. Heartbeat ≤5 s (``DEBUG_PROGRESS_POLL_S
 from __future__ import annotations
 
 import argparse
-import logging
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 import os
 import threading
 import time
@@ -17,7 +18,7 @@ from collections.abc import Callable
 from contextlib import contextmanager
 from typing import Any, Iterator
 
-logger = logging.getLogger(__name__)
+logger = get_consumer_logger(LogConsumer.RENDER_DUMP)
 
 DEBUG_LOGGING_HELP = "Set root log level to DEBUG (default INFO)"
 

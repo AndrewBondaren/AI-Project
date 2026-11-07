@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import logging
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 from collections import Counter
 
 from app.application.worldData.generators.assemblers.districtAssembler.districtLayout import DistrictLayout
@@ -11,7 +12,7 @@ from app.application.worldData.generators.structure.structureGeneratorService im
 from app.dataModel.locations.context.locationContext import LocationContext
 from app.db.models.mapCell import MapCell
 
-logger = logging.getLogger(__name__)
+logger = get_consumer_logger(LogConsumer.SETTLEMENT_MATERIAL)
 
 
 def _append_cell_materials(materials: list[str], cells: list[MapCell]) -> None:

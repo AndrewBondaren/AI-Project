@@ -6,6 +6,7 @@ import logging.handlers
 from pathlib import Path
 
 from app.core.logging import routes
+from app.core.logging.contracts import LogSink
 
 _ROTATE_MAX_BYTES = 10 * 1024 * 1024
 _ROTATE_BACKUP_COUNT = 5
@@ -16,14 +17,20 @@ def backend_logs_dir() -> Path:
 
 
 def consumer_log_path(
-    domain: str,
-    service: str,
+    sink: LogSink,
     *,
     logs_dir: Path | str | None = None,
 ) -> Path:
     """``{logs_dir}/{domain}/{service}.log``."""
     base = Path(logs_dir) if logs_dir is not None else backend_logs_dir()
-    return base / domain / f"{service}.log"
+    if type(sink) is not LogSink:
+        raise TypeError("expected LogSink")
+    return base / (sink.value + ".log")
+
+
+def script_log_path(service: str, *, logs_dir: Path | str | None = None) -> Path:
+    base = Path(logs_dir) if logs_dir is not None else backend_logs_dir()
+    return base / "script" / (_require_service_stem(service) + ".log")
 
 
 def _require_service_stem(service: str) -> str:
@@ -53,29 +60,24 @@ class DomainFileRouter(logging.Handler):
         self._profile = profile
         self._logs_dir = logs_dir
         self._script_service = script_service
-        self._handlers: dict[tuple[str, str], logging.Handler] = {}
+        self._handlers: dict[Path, logging.Handler] = {}
 
-    def _keys_for(self, record: logging.LogRecord) -> list[tuple[str, str]]:
-        routed = routes.route_for(record.name, getattr(record, "activity", None))
+    def _paths_for(self, record: logging.LogRecord) -> tuple[Path, ...]:
+        route = routes.route_for(record.name)
         if self._profile == routes.PROFILE_SCRIPT:
-            keys: list[tuple[str, str]] = [
-                ("script", self._script_service or "script"),
-            ]
-            if routed == routes._DUMP_SINK:
-                keys.append(routes._DUMP_SINK)
-            return keys
-        if routed is None:
-            return [routes._RUNTIME_SINK]
-        if routed not in routes.SERVER_SINKS:
-            return []
-        return [routed]
+            assert self._script_service is not None
+            path = script_log_path(self._script_service, logs_dir=self._logs_dir)
+            if route.sink is LogSink.RENDER_DUMP:
+                return path, consumer_log_path(route.sink, logs_dir=self._logs_dir)
+            return (path,)
+        if route.server_enabled:
+            return (consumer_log_path(route.sink, logs_dir=self._logs_dir),)
+        return ()
 
-    def _handler_for(self, key: tuple[str, str]) -> logging.Handler:
-        handler = self._handlers.get(key)
+    def _handler_for(self, path: Path) -> logging.Handler:
+        handler = self._handlers.get(path)
         if handler is not None:
             return handler
-        domain, service = key
-        path = consumer_log_path(domain, service, logs_dir=self._logs_dir)
         path.parent.mkdir(parents=True, exist_ok=True)
         handler = logging.handlers.RotatingFileHandler(
             path,
@@ -85,13 +87,14 @@ class DomainFileRouter(logging.Handler):
         )
         handler.setFormatter(self.formatter)
         handler.setLevel(logging.NOTSET)
-        self._handlers[key] = handler
+        self._handlers[path] = handler
         return handler
 
     def emit(self, record: logging.LogRecord) -> None:
+        paths = self._paths_for(record)
         try:
-            for key in self._keys_for(record):
-                self._handler_for(key).handle(record)
+            for path in paths:
+                self._handler_for(path).handle(record)
         except Exception:
             self.handleError(record)
 

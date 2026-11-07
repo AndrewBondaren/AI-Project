@@ -5,10 +5,11 @@ Sink ``jsonValidation`` / ``resolve``. Does not reject import.
 
 from __future__ import annotations
 
-import logging
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = get_consumer_logger(LogConsumer.SETTLEMENT_VOLUME)
 
 REASON_FOOTPRINT = "footprint"
 REASON_DECLARATION_ORDER = "declaration_order"

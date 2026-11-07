@@ -1,6 +1,7 @@
 """Snapshot lifecycle events through the shared logging facade, without local sinks."""
 
 import logging
+from app.core.logging.contracts import UnknownLogConsumerError
 
 from app.core.logLevel import LogLevel, to_logging_level
 from app.dataModel.worldSnapshot.events import SnapshotLogActivity, SnapshotLogRecord
@@ -36,6 +37,8 @@ class SnapshotLifecycleLog:
         try:
             _LOGGER.log(level, "snapshot | %s | operation_id=%s",
                         record.activity.value, record.operation_id, extra=fields)
+        except UnknownLogConsumerError:
+            raise
         except Exception:
             # Best effort only: no retry, secondary error event or state change.
             return

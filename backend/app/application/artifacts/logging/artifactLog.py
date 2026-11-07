@@ -1,6 +1,7 @@
 """Artifact staging/holder/GC events through the project's shared logging facade."""
 
-import logging
+from app.core.logging.contracts import LogConsumer, UnknownLogConsumerError
+from app.core.logging.consumers import get_consumer_logger
 
 from app.core.logLevel import LogLevel, to_logging_level
 from app.dataModel.artifacts.events import ArtifactLogActivity, ArtifactLogRecord
@@ -10,7 +11,7 @@ from app.dataModel.identity.uid import EntityUid
 from app.ids.deterministicIds import runtime_uid
 
 
-_LOGGER = logging.getLogger("app.artifacts")
+_LOGGER = get_consumer_logger(LogConsumer.ARTIFACTS)
 _LEVELS: dict[ArtifactLogActivity, LogLevel] = {
     ArtifactLogActivity.ARTIFACT_SEALED: LogLevel.DEBUG,
     ArtifactLogActivity.LEASE_RELEASED: LogLevel.INFO,
@@ -68,6 +69,8 @@ class ArtifactLifecycleLog:
             _LOGGER.log(level, "artifacts | %s | operation_id=%s",
                         record.activity.value, record.operation_id, extra=fields,
                         exc_info=(type(cause), cause, cause.__traceback__) if cause is not None else None)
+        except UnknownLogConsumerError:
+            raise
         except Exception:
             # Logging failure must not turn a sealed/deleted artifact into a refusal.
             return

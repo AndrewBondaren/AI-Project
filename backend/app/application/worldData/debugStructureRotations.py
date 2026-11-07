@@ -1,10 +1,15 @@
 """In-memory rotation diagnostics; no envelope, repositories or persistence."""
 
 from collections import Counter
+from collections.abc import Iterator
+from contextlib import contextmanager, ExitStack
 from copy import deepcopy
 from dataclasses import asdict, replace
 import logging
 
+from app.core.logging.consumers import get_consumer_logger
+from app.core.logging.contracts import LogSink
+from app.core.logging.routes import ROUTES
 from app.application.cascade.locationScope import debug_building_context
 from app.application.worldData.facingArrows import FACING_ARROW
 from app.application.worldData.generators.structure.errors import GenerationError
@@ -66,21 +71,31 @@ def rotation_payload(layout, probe):
     }
 
 
+@contextmanager
+def capture_generator_logs(handler: logging.Handler) -> Iterator[None]:
+    # Capture the generator subtree plus consumers moved out of that hierarchy.
+    loggers = [logging.getLogger("app.application.worldData.generators")]
+    loggers.extend(get_consumer_logger(route.consumer) for route in ROUTES
+                   if route.sink in (LogSink.SETTLEMENT, LogSink.CLIMATE))
+    with ExitStack() as cleanup:
+        for logger in loggers:
+            logger.addHandler(handler)
+            cleanup.callback(logger.removeHandler, handler)
+        yield
+
+
 def generate_rotations(world, building, structure, plot, capture_factory):
-    logger = logging.getLogger("app.application.worldData.generators")
     ctx = debug_building_context(world, building, plot)
 
     def run(facing):
         probe = RotationProbe()
         capture = capture_factory()
-        logger.addHandler(capture)
         try:
-            layout = probe.generate_from_template(world, building, structure, facing=facing, ctx=ctx)
+            with capture_generator_logs(capture):
+                layout = probe.generate_from_template(world, building, structure, facing=facing, ctx=ctx)
             return layout, probe, {"status": "ok", **rotation_payload(layout, probe), "warnings": capture.records}
         except GenerationError as exc:
             return None, probe, {"status": "error", "error": str(exc), "warnings": capture.records}
-        finally:
-            logger.removeHandler(capture)
 
     base, base_probe, baseline = run(None)
     variants, equivalence = {}, {}

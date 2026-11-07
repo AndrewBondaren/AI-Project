@@ -1,5 +1,6 @@
 """Region entity identity, revision, and author/runtime diagnostics."""
 
+from app.core.logging.contracts import LogConsumer
 import unittest
 from dataclasses import replace
 
@@ -15,7 +16,7 @@ from app.dataModel.terrainMasks.regions import ForestSpec, PlainSpec
 from app.ids import UID_PART_SEPARATOR, UidKind, entity_uid, state_fingerprint
 from app.ids.regionIdentity import region_uid
 
-LOG = "app.application.jsonValidation.resolve"
+LOG = LogConsumer.RESOLVE.value
 
 
 class RegionIdentityTests(unittest.TestCase):

@@ -1,5 +1,6 @@
 """Review-debt step 4: resolved water before fine planning and explicit writer output."""
 
+from app.core.logging.contracts import LogConsumer
 import json
 import unittest
 from unittest.mock import patch
@@ -97,7 +98,7 @@ class FineRiverPlanningTests(unittest.TestCase):
                     source=Point(x=source[0], y=source[1]), mouth=HydrologyMouth(location_uid="authored"))], span=span)
                 index = {(1, 1): water("alternate"), (5, 3): water("authored")}
                 kw = {"fine_hydro" if space is Space.WORLD_FINE_GRID else "coarse_hydro": index}
-                with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING") as logged:
+                with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING") as logged:
                     roles, z = module.apply_declared_fine_river_carves(w, [named_location("authored", *target)],
                         hm.surface_z, base_space=space, topology=fine_topology(hydro_topology(hm), span), **kw)
                 diagnostic = json.loads(logged.records[0].getMessage().rsplit(" | ", 1)[1])
@@ -155,7 +156,7 @@ class FineRiverPlanningTests(unittest.TestCase):
     def test_wrapped_fallback_uses_sampled_seam(self):
         hm = flat_heightmap(0, 7, 0, 2, z=50)
         hm.surface_z.update({(6, 1): 20, (7, 1): 10, (0, 1): -2})
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING"):
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING"):
             roles, z = module.apply_declared_fine_river_carves(world([river("wrap", (6, 1), (4, 1))]), [],
                 hm.surface_z, topology=hydro_topology(hm, Mode.WRAPPED), fine_hydro={(0, 1): water("lake")})
         self.assertEqual(set(roles), {(6, 1), (7, 1)})
@@ -184,7 +185,7 @@ class FineRiverPlanningTests(unittest.TestCase):
                 hm.surface_z.update(floors)
                 w = world([river("seam", source, target)], span=2,
                           max_path_cells=12, mouth_search_radius_fine=0)
-                with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING") as logs:
+                with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING") as logs:
                     roles, z = module.apply_declared_fine_river_carves(w, [], hm.surface_z,
                         topology=fine_topology(hydro_topology(hm, mode), 2), base_space=Space.WORLD_SURFACE_GRID,
                         coarse_hydro={receiver: water("lake")})
@@ -198,7 +199,7 @@ class FineRiverPlanningTests(unittest.TestCase):
         w = world([river("far", (0, 0), (10, 0))], span=1000,
                   mouth_search_radius_fine=0, max_path_cells=8)
         base = {(0, 0): 10, (1, 0): 50, (2, 0): -2}
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING") as logs:
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING") as logs:
             roles, _ = module.apply_declared_fine_river_carves(w, [], base,
                 topology=fine_topology(hydro_topology(heightmap_from_z(base)), 1000),
                 base_space=Space.WORLD_SURFACE_GRID, coarse_hydro={(2, 0): water("far-lake")})

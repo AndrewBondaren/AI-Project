@@ -1,5 +1,6 @@
 """Explicit observation of Time outcomes using the existing logging facade."""
-import logging
+from app.core.logging.contracts import LogConsumer, UnknownLogConsumerError
+from app.core.logging.consumers import get_consumer_logger
 
 from app.core.logLevel import LogLevel, to_logging_level
 from app.dataModel.time.diagnostics.events import (
@@ -74,7 +75,7 @@ def _observation(context: TimeLogContext) -> TimeObservation:
 
 class TimeOperationLog:
     def __init__(self) -> None:
-        self._logger = logging.getLogger("app.time.operations")
+        self._logger = get_consumer_logger(LogConsumer.TIME_OPERATIONS)
 
     def emit(self, record: TimeLogRecord) -> None:
         if type(record) not in (TimeCandidateLog, TimeRefusalLog, TimeCancelledLog, TimeFaultLog):
@@ -84,6 +85,8 @@ class TimeOperationLog:
         level = to_logging_level(_LEVELS[record.activity])
         try:
             self._logger.log(level, record.activity.value, extra=extra)
+        except UnknownLogConsumerError:
+            raise
         except Exception:
             pass
 

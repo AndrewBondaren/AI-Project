@@ -1,5 +1,6 @@
 """Review-debt step 3: atomic rivers, nearest reachable fallback and full facts."""
 
+from app.core.logging.contracts import LogConsumer
 import json
 import unittest
 
@@ -45,7 +46,7 @@ class RiverRoutingTests(unittest.TestCase):
     def test_runtime_redirects_to_reachable_water_and_logs_complete_fact(self):
         hm, occupied, master = self.unreachable_target()
         before = dict(hm.surface_z)
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING") as logged:
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING") as logged:
             result = assemble_rivers(world(), hm, master, occupied, topology=hydro_topology(hm))
         diagnostic = result.diagnostics[0]
         self.assertIs(diagnostic.code, Code.REDIRECTED)
@@ -84,7 +85,7 @@ class RiverRoutingTests(unittest.TestCase):
         hm = flat_heightmap(0, 6, 0, 2, z=20)
         before = dict(hm.surface_z)
         master = hydro_master(declared_river_edges=[edge("dry", (0, 1), (5, 1))])
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING") as logged:
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING") as logged:
             result = assemble_rivers(world(), hm, master, {}, topology=hydro_topology(hm))
         self.assertIs(result.diagnostics[0].code, Code.NO_WATER_BODIES)
         self.assertIs(result.diagnostics[0].reason, Failure.DRY_MOUTH)
@@ -97,7 +98,7 @@ class RiverRoutingTests(unittest.TestCase):
         hm.surface_z.update({(1, 3): 20, (5, 3): -2})
         before = dict(hm.surface_z)
         master = hydro_master(declared_river_edges=[edge("blocked", (1, 3), (5, 3))])
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING"):
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING"):
             result = assemble_rivers(world(), hm, master, {(5, 3): water("lake")}, topology=hydro_topology(hm))
         self.assertIs(result.diagnostics[0].code, Code.NO_REACHABLE_WATER)
         self.assertEqual(result.by_cell, {})
@@ -111,7 +112,7 @@ class RiverRoutingTests(unittest.TestCase):
             declare_mode="endpoints", source={"x": 1, "y": 3},
             mouth=HydrologyMouth(location_uid="near-but-isolated"))])
         occupied = {(6, 3): water("near-but-isolated"), (4, 3): water("far-but-reachable")}
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING"):
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING"):
             result = assemble_rivers(world(), hm, master, occupied,
                 [named_location("near-but-isolated", 6, 3)], topology=hydro_topology(hm))
         self.assertIs(result.diagnostics[0].code, Code.REDIRECTED)
@@ -130,7 +131,7 @@ class RiverRoutingTests(unittest.TestCase):
                 hm.surface_z.clear()
                 hm.surface_z.update({(x, y): (-2 if (x, y) in occupied else 10)
                                      for y in reversed(range(5)) for x in reversed(range(7))})
-            with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING"):
+            with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING"):
                 result = assemble_rivers(world(), hm, hydro_master(declared_river_edges=[
                     edge("tie", (3, 0), (3, 3))]), occupied, topology=hydro_topology(hm))
             self.assertEqual(result.diagnostics[0].receiver_uid, "left")
@@ -141,7 +142,7 @@ class RiverRoutingTests(unittest.TestCase):
         hm = flat_heightmap(0, 3, 0, 0, z=5)
         hm.surface_z[(3, 0)] = -20
         before = dict(hm.surface_z)
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING"):
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING"):
             result = assemble_rivers(world(), hm, hydro_master(declared_river_edges=[
                 edge("low-source", (0, 0), (3, 0))]), {(3, 0): water("high-lake", level=10)},
                 topology=hydro_topology(hm))
@@ -155,7 +156,7 @@ class RiverRoutingTests(unittest.TestCase):
         before = dict(hm.surface_z)
         master = hydro_master(declared_river_edges=[
             edge("same-river", (0, 0), (2, 0)), edge("same-river", (2, 0), (4, 0))])
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING"):
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING"):
             result = assemble_rivers(world(), hm, master, {(4, 0): water("lake")}, topology=hydro_topology(hm))
         self.assertEqual((result.by_cell, result.segments), ({}, []))
         self.assertEqual(len(result.diagnostics), 1)
@@ -167,7 +168,7 @@ class RiverRoutingTests(unittest.TestCase):
         master = hydro_master(declared_river_edges=[
             edge("left", (0, 1), (3, 1)), edge("right", (6, 1), (3, 1)),
             edge("invalid", (-1, 0), (3, 1))])
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING"):
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING"):
             result = assemble_rivers(world(), hm, master, {(3, 1): water("shared")}, topology=hydro_topology(hm))
         self.assertEqual({segment.location_uid for segment in result.segments}, {"left", "right"})
         self.assertEqual(result.diagnostics[0].object_uid, "invalid")
@@ -190,7 +191,7 @@ class RiverRoutingTests(unittest.TestCase):
     def test_wrapped_fallback_crosses_seam(self):
         hm = flat_heightmap(0, 7, 0, 2, z=50)
         hm.surface_z.update({(6, 1): 20, (7, 1): 10, (0, 1): -2})
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING"):
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING"):
             result = assemble_rivers(world(), hm, hydro_master(declared_river_edges=[
                 edge("wrap", (6, 1), (4, 1))]), {(0, 1): water("across-seam")},
                 topology=hydro_topology(hm, Mode.WRAPPED))
@@ -200,7 +201,7 @@ class RiverRoutingTests(unittest.TestCase):
     def test_path_limit_comes_from_pojo(self):
         hm = flat_heightmap(0, 4, 0, 0, z=20)
         hm.surface_z[(4, 0)] = -2
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING"):
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING"):
             result = assemble_rivers(world(max_path_cells=2), hm, hydro_master(declared_river_edges=[
                 edge("budget", (0, 0), (4, 0))]), {(4, 0): water("lake")}, topology=hydro_topology(hm))
         self.assertIs(result.diagnostics[0].reason, Failure.PATH_LIMIT)
@@ -214,7 +215,7 @@ class RiverRoutingTests(unittest.TestCase):
     def test_sphere_fallback_crosses_pole(self):
         hm = flat_heightmap(0, 7, 0, 3, z=50)
         hm.surface_z.update({(1, 0): 20, (5, 0): 10, (5, 1): -2})
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING"):
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING"):
             result = assemble_rivers(world(), hm, hydro_master(declared_river_edges=[
                 edge("pole", (1, 0), (2, 2))]), {(5, 1): water("beyond-pole")},
                 topology=hydro_topology(hm, Mode.SPHERE))
@@ -224,7 +225,7 @@ class RiverRoutingTests(unittest.TestCase):
     def test_fallback_does_not_invent_receiver_identity(self):
         hm = flat_heightmap(0, 4, 0, 2, z=10)
         hm.surface_z[(0, 2)] = -2
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING"):
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING"):
             result = assemble_rivers(world(), hm, hydro_master(declared_river_edges=[
                 edge("missing-meta", (0, 0), (4, 0))]),
                 {(0, 2): MapCellHydrology(role=Role.LAKE, z_water_level=0)}, topology=hydro_topology(hm))

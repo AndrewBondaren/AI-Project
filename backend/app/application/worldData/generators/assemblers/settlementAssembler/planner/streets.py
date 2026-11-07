@@ -1,4 +1,5 @@
-import logging
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 from random import Random
 
 from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
@@ -40,7 +41,7 @@ from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.world import World
 
-logger = logging.getLogger(__name__)
+logger = get_consumer_logger(LogConsumer.SETTLEMENT_STREETS)
 
 
 def _city_has_sidewalk(skeleton: SettlementSkeleton) -> bool:

@@ -6,11 +6,12 @@ Callers pass ``PackingStep`` / ``PackingReason`` — not ad-hoc literals.
 
 from __future__ import annotations
 
-import logging
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 from enum import StrEnum
 from typing import Any
 
-logger = logging.getLogger("app.application.worldData.generators.assemblers")
+logger = get_consumer_logger(LogConsumer.SETTLEMENT_PACKING)
 
 # Console L8: fit storm is file-only (not the TZ step name).
 FIT_ACTIVITY = "c22_packing_fit"

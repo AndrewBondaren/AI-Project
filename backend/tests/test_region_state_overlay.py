@@ -1,5 +1,6 @@
 """9c: live entity state below patches, immutable L0/L2 pack snapshots."""
 
+from app.core.logging.contracts import LogConsumer
 import io
 import json
 import logging
@@ -88,7 +89,7 @@ class OverlayMergeTests(unittest.IsolatedAsyncioTestCase):
         patch = base.model_copy(update={"system_terrain": "crater"})
         cells = {(0, 0, 1): [LayerSlice(kind=MapLayerKind.WORLD_MAP, cell=base),
                             LayerSlice(kind=MapLayerKind.PATCH, cell=patch)]}
-        with self.assertLogs("app.application.worldData.regions.regionStateLog", "WARNING") as logs:
+        with self.assertLogs(LogConsumer.REGION_STATE.value, "WARNING") as logs:
             views = await RegionStateOverlay(repo).merge(
                 World("w", "W", "now"), cells, [entry("r"), entry("neighbor", 10, 20)])
         self.assertEqual(views[0].system_terrain, "crater")

@@ -1,6 +1,7 @@
 """Settings input fact delivery; handlers and routing belong to the logging facade."""
 
-import logging
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 from collections.abc import Iterable
 from typing import Literal
 
@@ -17,7 +18,7 @@ from app.dataModel.validation.importIssues.wireLocation import WirePart
 from app.dataModel.validation.importIssues.jsonFieldError import JsonFieldError
 from app.dataModel.validation.importIssues.wireShapeIssue import WireShapeIssue
 
-logger = logging.getLogger("app.application.physics.settings")
+logger = get_consumer_logger(LogConsumer.PHYSICS_SETTINGS)
 type InputIssue = PhysicsGravityTypeError | JsonFieldError | WireShapeIssue
 
 

@@ -1,13 +1,15 @@
 """Single DAG emitter; loggingConfig owns routing, handlers and formatting."""
 
 import logging
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 
 from pydantic import TypeAdapter
 
 from app.application.engine.diagnostics.events import LevelDiagnostic, ReplanDiagnostic, LifecycleDiagnostic
 from app.dataModel.engine.dag.diagnostics import ExecutionDiagnostic, ExecutionSeverity
 
-_logger = logging.getLogger("app.engine.dag")
+_logger = get_consumer_logger(LogConsumer.DAG)
 _levels = {
     ExecutionSeverity.DEBUG: logging.DEBUG,
     ExecutionSeverity.INFO: logging.INFO,

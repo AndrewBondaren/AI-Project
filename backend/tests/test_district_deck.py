@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from app.core.logging.contracts import LogConsumer
 from app.application.jsonValidation.resolve import UnresolvedModelError, ResolveContext, resolve_result
 import unittest
 
-from app.application.jsonValidation import resolve as resolve_module
 from app.application.jsonValidation.resolve import resolve_model
 from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
 from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
@@ -55,7 +55,7 @@ class TestDistrictDeck(unittest.TestCase):
         self.assertEqual(entry.deck, 2)
 
     def test_resolve_invalid_rejects(self):
-        with self.assertLogs(resolve_module.__name__, "WARNING") as logs:
+        with self.assertLogs(LogConsumer.RESOLVE.value, "WARNING") as logs:
             result = resolve_result(DistrictTemplateEntry, _wire(deck="surface"))
         self.assertFalse(result.resolved)
         self.assertEqual(result.issues[0].path, ("deck",))

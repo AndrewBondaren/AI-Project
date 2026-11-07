@@ -1,3 +1,4 @@
+from app.core.logging.contracts import LogConsumer
 import json
 import unittest
 
@@ -470,7 +471,7 @@ class AdmissionTests(unittest.TestCase):
         period, = entry["definition"]["periods"]["entries"]
         period["from_minute"] = 75
         budget = CalendarBudget(max_year_patterns=100, max_rule_checks=100)
-        logger = "app.application.jsonValidation.resolve"
+        logger = LogConsumer.RESOLVE.value
         preview = ResolveContext.for_import(validate_only=True)
         with self.assertNoLogs(logger, level="WARNING"), self.assertRaises(UnresolvedModelError):
             resolve_world_time_settings(raw, preview, budget)
@@ -495,7 +496,7 @@ class AdmissionTests(unittest.TestCase):
         periods.append(dict(system_period="evening", display_period="Evening", from_hour=0, from_minute=75))
         raw["selected"] = "missing"
         ctx = ResolveContext()
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING") as output:
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING") as output:
             with self.assertRaises(UnresolvedModelError):
                 resolve_world_time_settings(raw, ctx, CalendarBudget(max_year_patterns=100, max_rule_checks=100))
         self.assertEqual(len(output.records), 3)
@@ -505,7 +506,7 @@ class AdmissionTests(unittest.TestCase):
     def test_world_hours_default_and_required_fields(self):
         from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
         from app.application.worldData.timeSettings.admission.settings import resolve_world_time_settings
-        logger = "app.application.jsonValidation.resolve"
+        logger = LogConsumer.RESOLVE.value
         raw = custom_settings().model_dump(mode="json")
         budget = CalendarBudget(max_year_patterns=100, max_rule_checks=100)
         del raw["hours_per_day"]

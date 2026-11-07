@@ -1,5 +1,6 @@
 """Round 2: identity, per-object errors, proven confluences and fallback facts."""
 
+from app.core.logging.contracts import LogConsumer
 from dataclasses import replace
 from types import SimpleNamespace
 import json
@@ -65,7 +66,7 @@ class Round2RiverTests(unittest.TestCase):
         hm.surface_z.update({(1, 3): 20, (1, 2): 10, (1, 1): -2, (5, 3): -2})
         intent = DeclaredRiver(location_uid="r", declare_mode="endpoints", source={"x": 1, "y": 3},
                                mouth={"location_uid": "original-location"})
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING"):
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING"):
             result = self.assemble(hm, intents=[intent], locations=[named_location("original-location", 5, 3)],
                 occupied={(1, 1): water("alternate"), (5, 3): water("auto-original")}, ctx=ResolveContext())
         fact = result.diagnostics[0]
@@ -78,7 +79,7 @@ class Round2RiverTests(unittest.TestCase):
         hm.surface_z[(4, 2)] = -2
         before = dict(hm.surface_z)
         bad = DeclaredRiverEdge("bad-edge", ((2, 0), (4, 0)), "not-a-river", location_uid="bad")
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING") as logged:
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING") as logged:
             result = self.assemble(hm, edges=[edge("bad", (0, 0), (2, 0)), bad,
                 edge("good", (0, 2), (4, 2))], occupied={(4, 2): water("lake")}, ctx=ResolveContext())
         self.assertEqual({s.location_uid for s in result.segments}, {"good"})
@@ -130,7 +131,7 @@ class Round2RiverTests(unittest.TestCase):
         if alternative:
             hm.surface_z.update({(1, 0): 10, (2, 0): -2})
             occupied[(2, 0)] = water("valid")
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING") as logged:
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING") as logged:
             result = self.assemble(hm, edges=[edge("r", (0, 0), (4, 3))], occupied=occupied,
                                    ctx=ResolveContext())
         return result, logged
@@ -212,7 +213,7 @@ class Round2RiverTests(unittest.TestCase):
     def test_fallback_can_redirect_to_a_confirmed_river(self):
         hm = flat_heightmap(0, 6, -1, 2, z=10)
         hm.surface_z.update({(6, 0): -2, (2, -1): 50})
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING"):
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING"):
             result = self.assemble(hm, edges=[edge("stem", (0, 0), (6, 0)),
                 edge("child", (2, 2), (2, -1))], occupied={(6, 0): water("lake")}, ctx=ResolveContext())
         fact = result.diagnostics[0]
@@ -272,7 +273,7 @@ class Round2RiverTests(unittest.TestCase):
             for uid, target, x in (("a", "b", 3), ("b", "a", 2))]
         occupied = {(x, 0): MapCellHydrology(role=Role.RIVER_BED, water_body_uid=link.river_uid,
                     river_drainage=link) for x, link in zip((2, 3), links)}
-        with self.assertLogs("app.application.jsonValidation.resolve", level="WARNING"):
+        with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING"):
             result = self.assemble(hm, edges=[edge("child", (2, 2), (2, 0))],
                 occupied=occupied, ctx=ResolveContext())
         self.assertEqual(result.segments, [])

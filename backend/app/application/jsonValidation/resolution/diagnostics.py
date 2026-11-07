@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import copy
 import json
-import logging
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -16,7 +17,7 @@ from app.application.jsonValidation.types import ImportIssue, ResolveReport, val
 from app.dataModel.validation.importIssues.wireLocation import WireLocation
 
 # Preserve the existing jsonValidation resolve logging channel.
-logger = logging.getLogger("app.application.jsonValidation.resolve")
+logger = get_consumer_logger(LogConsumer.RESOLVE)
 
 
 class ResolveMode(StrEnum):

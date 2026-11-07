@@ -1353,7 +1353,9 @@ def test_climate_logging_warnings() -> None:
     warn_buf = StringIO()
     warn_handler = logging.StreamHandler(warn_buf)
     warn_handler.setLevel(logging.WARNING)
-    climate_log = logging.getLogger("app.application.worldData.generators.climate")
+    from app.core.logging.contracts import LogConsumer
+    from app.core.logging.consumers import get_consumer_logger
+    climate_log = get_consumer_logger(LogConsumer.CLIMATE)
     climate_log.addHandler(warn_handler)
     climate_log.setLevel(logging.WARNING)
 
@@ -1405,7 +1407,7 @@ def test_climate_logging_warnings() -> None:
     debug_buf = StringIO()
     debug_handler = logging.StreamHandler(debug_buf)
     debug_handler.setLevel(logging.DEBUG)
-    helpers_log = logging.getLogger("app.application.worldData.generators.climate.loggingHelpers")
+    helpers_log = get_consumer_logger(LogConsumer.CLIMATE)
     helpers_log.addHandler(debug_handler)
     helpers_log.setLevel(logging.DEBUG)
 

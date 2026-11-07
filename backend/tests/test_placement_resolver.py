@@ -1,5 +1,6 @@
 """P2 behavior: priority, dependency readiness, stable results and policy parity."""
 
+from app.core.logging.contracts import LogConsumer
 from itertools import permutations
 from hashlib import sha256
 from concurrent.futures import ThreadPoolExecutor
@@ -213,9 +214,9 @@ class PlacementDiagnosticsTests(unittest.TestCase):
         runtime = ResolveContext.for_import(validate_only=False).child("placement")
         preview = ResolveContext.for_import(validate_only=True).child("placement")
         before = world.model_dump()
-        with self.assertLogs("app.application.jsonValidation.resolve", "WARNING") as log:
+        with self.assertLogs(LogConsumer.RESOLVE.value, "WARNING") as log:
             ordinary = resolve_placements(world, ctx=runtime)
-        with self.assertNoLogs("app.application.jsonValidation.resolve", "WARNING"):
+        with self.assertNoLogs(LogConsumer.RESOLVE.value, "WARNING"):
             master = resolve_placements(world, ctx=preview)
         self.assertEqual(ordinary, master)
         self.assertEqual(runtime.errors, [])

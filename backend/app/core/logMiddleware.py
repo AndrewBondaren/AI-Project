@@ -1,4 +1,5 @@
-import logging
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 import time
 import uuid
 
@@ -7,7 +8,7 @@ from starlette.requests import Request
 
 from app.core.logging.context import request_id_var
 
-logger = logging.getLogger("http")
+logger = get_consumer_logger(LogConsumer.HTTP)
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):

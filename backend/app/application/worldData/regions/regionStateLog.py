@@ -1,10 +1,11 @@
 """Region state diagnostics routed through the project's loggingConfig facade."""
 
-import logging
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 from collections.abc import Sequence
 from app.dataModel.regions.regionState import RegionState, RegionStateTransition
 
-logger = logging.getLogger(__name__)
+logger = get_consumer_logger(LogConsumer.REGION_STATE)
 
 
 def log_evaluation(world_uid: str, state: RegionState, parent_region_uid: str | None) -> None:

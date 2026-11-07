@@ -6,9 +6,19 @@ import logging
 import threading
 from typing import Any
 
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 from app.application.worldData.materialize.terrain.terrainParallelLog import current_cpu_core
+from app.application.worldData.generators.terrain.relief.log.events import EVENT_GRADE_CELL_EMPTY_RAY
 
-logger = logging.getLogger("app.relief")
+_relief_logger = get_consumer_logger(LogConsumer.RELIEF)
+_rays_logger = get_consumer_logger(LogConsumer.RELIEF_RAYS)
+
+
+def _event_logger(event: str) -> logging.Logger:
+    if event == EVENT_GRADE_CELL_EMPTY_RAY:
+        return _rays_logger
+    return _relief_logger
 
 
 def _worker_fields() -> dict[str, Any]:
@@ -26,22 +36,22 @@ def _extra(event: str, worker: dict[str, Any]) -> dict[str, Any]:
 
 def relief_info(event: str, **fields: Any) -> None:
     worker = _worker_fields()
-    logger.info("relief | %s | %s", event, _fmt(fields), extra=_extra(event, worker))
+    _event_logger(event).info("relief | %s | %s", event, _fmt(fields), extra=_extra(event, worker))
 
 
 def relief_warning(event: str, **fields: Any) -> None:
     worker = _worker_fields()
-    logger.warning("relief | %s | %s", event, _fmt(fields), extra=_extra(event, worker))
+    _event_logger(event).warning("relief | %s | %s", event, _fmt(fields), extra=_extra(event, worker))
 
 
 def relief_error(event: str, **fields: Any) -> None:
     worker = _worker_fields()
-    logger.error("relief | %s | %s", event, _fmt(fields), extra=_extra(event, worker))
+    _event_logger(event).error("relief | %s | %s", event, _fmt(fields), extra=_extra(event, worker))
 
 
 def relief_debug(event: str, **fields: Any) -> None:
     worker = _worker_fields()
-    logger.debug(
+    _event_logger(event).debug(
         "relief | %s | %s",
         event,
         _fmt({**fields, **worker}),

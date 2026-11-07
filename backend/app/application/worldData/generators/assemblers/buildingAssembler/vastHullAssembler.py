@@ -1,4 +1,5 @@
-import logging
+from app.core.logging.contracts import LogConsumer
+from app.core.logging.consumers import get_consumer_logger
 from dataclasses import dataclass
 
 from app.application.worldData.generators.assemblers.buildingAssembler.assemblerRegistry import BUILDING_ASSEMBLER_REGISTRY
@@ -12,7 +13,7 @@ from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from app.dataModel.spatial.facing import Facing
 
-logger = logging.getLogger(__name__)
+logger = get_consumer_logger(LogConsumer.VAST_HULL)
 
 
 @dataclass
