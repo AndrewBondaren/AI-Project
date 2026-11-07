@@ -13,7 +13,7 @@ from app.dataModel.hydrology.planning.sourceBodyMapping import SourceBodyMapping
 from app.dataModel.hydrology.planning.stages.openWaterPlan import AssembledWater, MaterializedWater, FineWaterResult
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult
-from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
+from app.dataModel.planning.diagnostics.planDiagnostic import DiagnosticCarrier, PlanDiagnosticDisposition
 from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
 from app.dataModel.spatial.grid.coordinateTypes import FineX, FineY, FineZ
 from app.dataModel.spatial.grid.gridBBox import GridBBox
@@ -62,7 +62,7 @@ class FineWaterJob:
                                    {cell: int(z) for cell, z in window.surface_z})
         apply_basin_z(scratch, specs, topology, reserved=window.protected_cells, coordinate_space=CoordinateSpace.WORLD_FINE_GRID)
         control.raise_if_shutdown()
-        diagnostics: list[PlanDiagnostic] = []
+        diagnostics: list[DiagnosticCarrier] = []
         policy = WorldHydrology(default_water_level=inputs.default_water_level,
             default_seas=inputs.seas, default_lakes=inputs.lakes, default_rivers=inputs.rivers)
         water = assemble_water_bodies(scratch, specs, topology, policy, change_uid=inputs.change_uid,
@@ -70,9 +70,9 @@ class FineWaterJob:
             ctx=ResolveContext(collect_only=True, validate_only=inputs.resolution_mode is ResolutionMode.VALIDATE_ONLY),
             emit=diagnostics.append)
         control.raise_if_shutdown()
-        errors = tuple(d.issue for d in diagnostics if d.disposition is PlanDiagnosticDisposition.ERROR)
+        errors = tuple(d for d in diagnostics if d.disposition is PlanDiagnosticDisposition.ERROR)
         if errors:
-            raise PlanBuildFailure(errors)
+            raise PlanBuildFailure((), diagnostics=errors)
         post = FineSurfaceWindow(coverage=window.coverage, topology=topology, protected_cells=window.protected_cells,
             surface_z=tuple(((FineX(x), FineY(y)), FineZ(z)) for (x, y), z in scratch.surface_z.items()))
         return PlanBuildResult[FineWaterResult](payload=(post, water), diagnostics=tuple(dict.fromkeys(diagnostics)))

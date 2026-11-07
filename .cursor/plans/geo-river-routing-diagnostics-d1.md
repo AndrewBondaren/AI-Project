@@ -222,6 +222,40 @@ P2 маршрутизирует по concrete carrier до обращения к
 
 Файлы **P2, вне River D2**: `backend/app/application/worldData/planning/composition/surfacePlanningAssembler.py` (dispatch и field continuation); новый `backend/app/application/worldData/generators/hydrology/rivers/riverPlanningReporting.py` (domain collector contract); `backend/tests/planning/providers/test_diagnostics.py` (mixed delivery, dedup, runtime/validate_only/collect_only). ResolveReport/ImportIssue не расширяются. Старый `riverRouteDiagnostics.py::emit_river_diagnostic` остаётся отдельным runtime/import handoff и не объявляется исправленным.
 
+#### Проверка контракта P2, 2026-11-08
+
+**Статус — контракт проверен и зафиксирован.** Проверены потребители, доступность результата при возврате и исключении, четыре сочетания флагов контекста и совместимость с field reporting.
+
+**Владелец и время жизни.** Caller операции surface planning владеет одним hydrology collector на запрос. На входе `prepare_captured_bundle` и `prepare_captured_geo_bundle` передаётся явный keyword callback. Он принимает один целый carrier из закрытого объединения семи operational Water source carriers и RiverPlanDiagnostic и возвращает None. Один collector для обоих семейств сохраняет их взаимный порядок. Конкретный request-owned collector предоставляет caller упорядоченный tuple принятых carriers. Минимальный контракт использования: caller создаёт collector до capture/prepare, передаёт его метод при подготовке и читает tuple после вызова, в том числе после field validation refusal. Ссылку удерживает caller. Локальная переменная, исчезающая внутри prepare, этому контракту не удовлетворяет.
+
+**Проводка.** Передать collector через `SurfacePlanningEntry.prepare_captured`, `require_plan_inputs` и `require_plan_bundle` до lower-level callback. Runtime map/read/bake callers создают его на границе своей операции; callers, передающие режим сбора, передают свой экземпляр по всей цепочке. Сохранить существующие формы результатов: bundle/None, (bundle, working)/None и исключения. Для доступности отчёта не требуются новый HTTP response, внешний storage, поле в cached envelope или зависимость jsonValidation от Hydrology. В карте реализации учесть три вызова в api/routes/map.py, wildernessRegionReadService, L0 и detailed materialization. У GEO helper в этом checkout найдены integration/typing callers; модули app пока не вызывают его напрямую. Оба helper входят в приёмку. `probe_extent` обрабатывает только field capture diagnostics; тип capture view остаётся прежним.
+
+**Dispatch до обращения к issue.path/message.**
+
+| Факт на границе | Доставка и исход |
+|---|---|
+| Семь concrete Water source carriers, включая WaterWorldOcean NOTICE | Передать collector с исходной disposition. Water ERROR в опубликованном upstream envelope описывает решение producer. Право Fine Water на публикацию остаётся у существующей границы отказа. |
+| River ERROR / FALLBACK | Передать тому же collector; частичный результат и принятые маршруты сохраняются. River NOTICE отвергает DTO. |
+| Exact field PlanDiagnostic, включая WaterKindMismatchIssue | ERROR → report_issues; FALLBACK → report_continuation; NOTICE → прежняя информационная доставка, если collect_only выключен. В UnresolvedModelError при validate_only включаются только field ERROR этого прохода. |
+| WaterPlacementRequiredDiagnostic | Runtime-only факт прямого apply. В контракт source callback не входит. |
+
+Оба режима validate_only и collect_only сохраняют operational facts у владельца. Collect_only подавляет логирование; сам вызов collector остаётся обязательным. Механизм локального Water report из S4 имеет собственную field policy и не заменяет dispatch на этой границе. P2 не требует повторного runtime emit в producer. Сбой callback распространяется как сбой доставки. Исход доменной операции по типу или тексту сообщения повторно не вычисляется.
+
+**Порядок, повторы, отказы.** Обход capture → восемь PC / двенадцать GEO фаз в существующем порядке, внутри envelope — исходный порядок. На одном проходе дедуплицируется полный carrier до dispatch. Один и тот же request-owned collector сохраняет только первое появление равного carrier и при повторе в рамках запроса. Новый запрос со своим collector получает факты и при cache HIT. При успешном build с field ERROR сначала обработать остальные независимые факты, затем применить validate_only refusal. Если сам build поднял PlanBuildFailure до возврата bundle, сохранить исходное исключение и его diagnostics, без replay частично построенных фаз. NO_EXTENT возвращает None после обработки capture facts; в штатном capture operational фактов нет.
+
+**Доказательства до фиксации.** На неизменённом коде проверены пары (validate_only, collect_only) = (0,0), (1,0), (0,1), (1,1). Два одинаковых WaterWorldOcean дают AttributeError при collect_only=False, при collect_only=True возвращается управление и факт теряется при доставке. Реальные River NO_WATER_BODIES и REDIRECTED из scenario/route во всех четырёх случаях дают ValidationError на ImportIssue. Реальный WaterKindMismatch попадает в ctx.errors и при validate_only поднимает UnresolvedModelError. Отдельный вызов report_continuation дважды на том же mismatch во всех четырёх случаях даёт 0 ошибок и 1 continuation. Это baseline до P2.
+
+Проверка предлагаемой проводки в отдельном Python-процессе: на время теста подменён только report_surface_diagnostics наблюдающим dispatcher для фактически предъявленных типов. PC-тест test_pipeline_supplies_pre_river_elevation_to_fine_profiles прошёл со своими численными проверками и передал один WaterWorldOcean NOTICE. Для GEO в fixture GeoBundleReportingTests в relief переданы (ocean, mismatch), в hydrology_routes — (ocean, redirect). Получен GeoSurfacePlanBundle, collector содержит (ocean, redirect) по одному, field report содержит 0 errors / 1 continuation. Это проверяет совместимость предлагаемой доставки с реальными формами вызовов; полный dispatcher и владение collector должны быть реализованы и проверены отдельно.
+
+Повторяемый baseline из backend:
+
+```powershell
+$env:PYTHONPATH='.;tests'
+.\.venv\Scripts\python.exe -m unittest tests.test_hydrology_hy12_rivers.RiverWaterlineTests.test_pipeline_supplies_pre_river_elevation_to_fine_profiles tests.geo1.integration.test_revisions.GeoBundleReportingTests tests.planning.consumers.test_request_boundary tests.planning.providers.test_diagnostics -q
+```
+
+14 тестов, 8 errors. Один — WaterWorldOcean.path, семь — базовый FieldPathError (один через PlanProviderFault). Для P2 обновить конкретные field fixtures и ожидания FALLBACK в GeoBundleReportingTests, сохранив проверки причин и всех фаз. После реализации обязательна независимая приёмка на обоих entry point: mixed ERROR/FALLBACK/NOTICE, два запроса и cache HIT, повтор в одном контексте, оба флага по отдельности и вместе, NO_EXTENT, отказ до bundle и validate refusal после сборки. Проверить также normal production caller и typing fixtures. Вердикт по выпуску выносится по реализации.
+
 ### 9.3 Проверка текущего checkout и приёмка зависимостей
 
 7 ноября повторён `require_source_schema_v1()` из backend: **FAIL**, `CanonicalEncodingError: open-water source v1 closure drift`. Это существующий baseline до правок документа. Исходники подтверждают: `_snapshot` учитывает annotations/metadata; PlanDiagnostic=105 входит в source closure, envelope=60008. IDs 325–328 в SURFACE_MANIFEST свободны (max=324). Generic carrier, новые validators и round-trip ещё не реализованы и не тестировались; прежние числа тестов §6 — исторические, не новый PASS.
@@ -270,3 +304,7 @@ Reuse принятого смысла WATER_LEVEL_SPILL: [GEO owning-план](g
 Для Planning/source P1 проверяются целевая schema closure, явный diff lock, encode/decode и согласованность fingerprint; поддержка прежнего внутреннего source wire не является критерием Done. Изменения bytes объяснять, а не скрывать регенерацией эталонов. Runtime, условия fallback и продолжение обработки сохраняются.
 
 Это решение не отменяет отдельное требование docs/tz_world_snapshot.md §20 к читаемости snapshot-оболочек и доменных секций. Если переход затрагивает именно эту границу, отдельно показать пересечение; не распространять её автоматически на внутренние контракты движка. Код и сохранённые пользовательские данные этой документальной правкой не удаляются. Остальные gates согласования и реализации сохраняются.
+
+### Проверка River в S4, 2026-11-08
+
+Для lake=False и mouth=(8,11) историческая ревизия 9ed3bba6 и два свежих процесса S4 дали одинаковые payload digest соответственно 757adfe9… и 38927c0d…. Для первого результата типизированный NO_WATER_BODIES/DRY_MOUTH сохраняет ERROR и failure_cell=(11,11). Для второго за Water mismatch следует REDIRECTED/DRY_MOUTH с FALLBACK и receiver lake/(10,11). Исторический JSON причины в field issue заменён RiverPlanDiagnostic. Digest пары payload/diagnostics обновлён с 36204c39… до cf066fb1… и с a5fcf7d3… до 8cc13ee8…. Mismatch-only golden d632ae06… проходит. Mixed envelope восстановлен bounded reader в свежем процессе и повторно закодирован побайтно. Проверены redirect и validate rejection через PlanningService. Procedural refinement discover — 9 тестов, 1 исходный error в disabled fine routing. [Приёмка локального S4 и отдельная граница P2](geo-water-diagnostics-source-d1.md#s4--реализация-перед-независимой-приёмкой-2026-11-08).

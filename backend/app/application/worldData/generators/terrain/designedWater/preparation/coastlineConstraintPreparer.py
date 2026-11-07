@@ -46,6 +46,8 @@ class CoastlineConstraintPreparer:
         try:
             geometry = prepare_native_water_geometry(request)
         except PlanBuildFailure as error:
+            if error.diagnostics:
+                raise
             if not isinstance(error.__cause__, EmptyCoastlineWaterSide):
                 raise
             raise PlanBuildFailure((FieldPathError(("coastline_constraints", request.source.value.location_uid),

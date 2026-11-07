@@ -20,7 +20,7 @@ from app.dataModel.hydrology.planning.sourceBodyMapping import SourceBodyMapping
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult
-from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic
+from app.dataModel.planning.diagnostics.planDiagnostic import DiagnosticCarrier
 from app.dataModel.spatial.grid.coordinateTypes import FineZ, GridX, GridY, SurfaceGridCoord
 from app.dataModel.spatial.grid.gridBBox import GridBBox
 from app.dataModel.terrain.planning.waterPlacementPlan import WaterPlacementPlan, GeoWaterPlacementPlan
@@ -89,7 +89,7 @@ class WaterBodyJob:
             {(cell.gx, cell.gy): int(z) for cell, z in surface_z})
         policy = WorldHydrology(default_water_level=inputs.default_water_level,
             default_seas=inputs.seas, default_lakes=inputs.lakes, default_rivers=inputs.rivers)
-        diagnostics: list[PlanDiagnostic] = []
+        diagnostics: list[DiagnosticCarrier] = []
         ctx = ResolveContext(collect_only=True, validate_only=inputs.resolution_mode is ResolutionMode.VALIDATE_ONLY)
         control.raise_if_shutdown()
         water = assemble_water_bodies(heightmap, specs,

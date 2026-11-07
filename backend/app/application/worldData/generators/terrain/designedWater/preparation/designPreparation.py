@@ -60,6 +60,8 @@ def prepare_designed_water(
                     prepared = prepare_competitor(admission)
                 session.submit(prepared)
             except PlanBuildFailure as failure:
+                if failure.diagnostics:
+                    raise
                 session.fail(header.identity, preparation_diagnostics(header, failure.issues))
 
     result = session.run(prepare_ready, check_cancelled=control.raise_if_shutdown)

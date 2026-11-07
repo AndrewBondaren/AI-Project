@@ -68,7 +68,9 @@ class WaterMismatchTests(TestCase):
         self.assertFalse(kwargs["ctx"].errors)
         for ctx in (ResolveContext(validate_only=True), ResolveContext(collect_only=True), ResolveContext()):
             with patch.object(waterDiagnostics, "log_issues") as log:
-                result = execution.assemble_water_bodies(*args, **(kwargs | {"ctx": ctx, "emit": None}))
+                emitted = []
+                result = execution.assemble_water_bodies(*args, **(kwargs | {"ctx": ctx, "emit": emitted.append}))
+                waterDiagnostics.report_water_diagnostics(ctx, tuple(emitted))
                 self.assertEqual(result, water)
                 if ctx.collect_only or ctx.validate_only:
                     self.assertEqual(ctx.errors, issues)

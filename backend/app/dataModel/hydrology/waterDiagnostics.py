@@ -1,11 +1,12 @@
 """Hydrology-owned facts emitted while assembling water."""
 from enum import StrEnum
-from typing import Annotated, ClassVar, Literal, Self
+from typing import Annotated, ClassVar, Literal, Self, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, SerializeAsAny, StrictInt, StrictStr, field_validator, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, SerializeAsAny, StrictInt, StrictStr, field_validator, model_validator
 
+from app.dataModel.hydrology.waterKindMismatchIssue import WaterKindMismatchIssue
 from app.dataModel.identity.uid import EntityUid
-from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
+from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition, require_concrete_diagnostic
 
 
 class WaterDiagnosticCode(StrEnum):
@@ -181,3 +182,42 @@ type WaterPlanningDiagnostic = (
     | WaterLevelSupersededDiagnostic
     | WaterWorldOceanDiagnostic
 )
+
+
+_REPORT_TYPES = (*get_args(WaterPlanningDiagnostic.__value__), WaterPlacementRequiredDiagnostic)
+
+
+def require_water_diagnostic(value: object) -> WaterPlanningDiagnostic | WaterPlacementRequiredDiagnostic:
+    diagnostic = require_concrete_diagnostic(value)
+    if type(diagnostic) not in _REPORT_TYPES:
+        raise ValueError("expected a water diagnostic")
+    if type(diagnostic) is PlanDiagnostic and type(diagnostic.issue) is not WaterKindMismatchIssue:
+        raise ValueError("water field diagnostic requires a kind mismatch issue")
+    return diagnostic
+
+
+type ReportDiagnostic = Annotated[
+    WaterPlanningDiagnostic | WaterPlacementRequiredDiagnostic, BeforeValidator(require_water_diagnostic)
+]
+
+
+class WaterDiagnosticReport(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
+
+    ordered: tuple[ReportDiagnostic, ...]
+    blocking: tuple[ReportDiagnostic, ...]
+    continuations: tuple[Annotated[WaterPlanningDiagnostic, BeforeValidator(require_water_diagnostic)], ...]
+    notices: tuple[Annotated[WaterWorldOceanDiagnostic, BeforeValidator(require_water_diagnostic)], ...]
+
+    @model_validator(mode="after")
+    def check_dispositions(self) -> Self:
+        for group, disposition in ((self.blocking, PlanDiagnosticDisposition.ERROR),
+                                   (self.continuations, PlanDiagnosticDisposition.FALLBACK),
+                                   (self.notices, PlanDiagnosticDisposition.NOTICE)):
+            if group != tuple(item for item in self.ordered if item.disposition is disposition):
+                raise ValueError("water diagnostic group differs from ordered diagnostics")
+        return self
+
+    @classmethod
+    def empty(cls) -> Self:
+        return cls(ordered=(), blocking=(), continuations=(), notices=())

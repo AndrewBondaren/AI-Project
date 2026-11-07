@@ -1,6 +1,8 @@
 {
   "baseline_commit": "9ed3bba6",
   "historical_digest": "1ccb025f9dbc28083d7751293bec109823d7970836ce4eee6c882aef07c8eeb2",
+  "no_water_digest": "cf066fb112c95449072e9a4b7e5eb78e62ee20fee188782510e330f14efc2fe8",
+  "redirect_digest": "8cc13ee8bb0b3e57bb6933fcc565c29ef3b018360b21f62214bc61553d510fb0",
   "payload_digest": "12843e8818af8ef750edd2fa509d51860e700d34eea4ce4aac5d56cf4f87a533",
   "digest": "d632ae064d4cc12d76da2ac032b3a35d7642f40140c1471d99aa02428f2f99a7",
   "payload": {

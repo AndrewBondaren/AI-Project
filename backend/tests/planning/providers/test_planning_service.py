@@ -46,6 +46,25 @@ class PlanningServiceTests(unittest.TestCase):
         other.registry.register(self.binding, Provider())
         self.assertEqual(other.get(self.binding), first)
 
+    def test_build_refusal_preserves_both_causes_without_caching(self):
+        from app.dataModel.hydrology.waterDiagnostics import WaterCannotHold, WaterCannotHoldDiagnostic, WaterDiagnosticCode
+        from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnosticDisposition
+
+        field = probe_issue("field")
+        dry = WaterCannotHoldDiagnostic(issue=WaterCannotHold(code=WaterDiagnosticCode.WATER_CANNOT_HOLD,
+            source_uid="A", effective_level=0), disposition=PlanDiagnosticDisposition.ERROR)
+        refusal = PlanBuildFailure((field,), diagnostics=(dry,))
+        def refuse(*args):
+            raise refusal
+        binding, provider = self.h.register(contract("test.refusal"), Provider(refuse))
+        for _ in range(2):
+            with self.assertRaises(PlanBuildFailure) as raised:
+                self.h.get(binding)
+            self.assertIs(raised.exception, refusal)
+            self.assertEqual(raised.exception.issues, (field,))
+            self.assertEqual(raised.exception.diagnostics, (dry,))
+        self.assertEqual(provider.count, 2)
+
     def test_registry_rejects_duplicate_and_substituted_handles(self):
         with self.assertRaises(ValueError):
             self.h.registry.register(self.binding, Provider())

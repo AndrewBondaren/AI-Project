@@ -18,6 +18,7 @@ from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConne
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.hydrology.declaredBasin import DeclaredBasin
 from app.dataModel.hydrology.waterBody import WaterBody
+from app.dataModel.hydrology.waterDiagnostics import WaterDiagnosticReport
 from app.dataModel.hydrology.riverRouting import RiverRouteDiagnostic
 from app.dataModel.hydrology.riverDrainageLink import RiverDrainageLink
 from app.dataModel.hydrology.waterfallDrop import WaterfallDrop
@@ -139,6 +140,7 @@ class HydrologyResult:
     physical_unions: tuple[PhysicalWaterUnion, ...] = ()
     water_areas: dict[str, int] = field(default_factory=dict)
     water_floors: dict[str, int] = field(default_factory=dict)
+    water_diagnostics: WaterDiagnosticReport = field(default_factory=WaterDiagnosticReport.empty)
 
     @property
     def cells_modified(self) -> int:

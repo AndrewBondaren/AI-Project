@@ -124,7 +124,7 @@ class ProceduralRefinementTests(TestCase):
         result = route(physical, water, coarse=accepted)
         self.assertEqual(result.payload.routes, ())
         errors = {fact.object_uid: fact for d in result.diagnostics if d.disposition is PlanDiagnosticDisposition.ERROR
-                  for fact in (RiverRouteDiagnostic.model_validate_json(d.issue.message),)}
+                  for fact in (d.issue,)}
         self.assertEqual(set(errors), {"parent", "child"})
         self.assertIs(errors["parent"].reason, RiverRoutingFailure.SOURCE_IN_WATER)
         self.assertIs(errors["child"].reason, RiverRoutingFailure.WRONG_BODY)
@@ -134,7 +134,7 @@ class ProceduralRefinementTests(TestCase):
         physical = replace(physical, resolution_mode=ResolutionMode.VALIDATE_ONLY)
         result = route(physical, water, coarse=coarse(proposal("no-prefix", ((0, 0), (1, 0)))))
         self.assertEqual(result.payload.routes, ())
-        errors = [RiverRouteDiagnostic.model_validate_json(d.issue.message) for d in result.diagnostics
+        errors = [d.issue for d in result.diagnostics
                   if d.disposition is PlanDiagnosticDisposition.ERROR]
         self.assertEqual(len(errors), 1)
         self.assertEqual(errors[0].object_uid, "no-prefix")
@@ -158,8 +158,8 @@ class ProceduralRefinementTests(TestCase):
     def test_declared_membership_and_historical_results_do_not_depend_on_segment_flag(self):
         golden = json.loads(Path(__file__).with_name("river_route_golden.json").read_text())
         expected = (golden["digest"],
-            "36204c395f88de16bcce6fd87990059e7554bd1402c26c8879560e4b9beee067",
-            "a5fcf7d389a726efbcfa4eeaca352a9bc9030f7a64826abf6775ee0d22fa4da6")
+            golden["no_water_digest"],
+            golden["redirect_digest"])
         for settings, fingerprint in zip(({}, {"lake": False}, {"mouth": (8, 11)}), expected, strict=True):
             with self.subTest(settings=settings):
                 _, physical, water = scenario(**settings)

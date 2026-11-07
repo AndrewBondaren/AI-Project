@@ -210,7 +210,7 @@ class SourceMappingProducerTests(TestCase):
         before = dict(heightmap.surface_z)
         result = assemble_water_bodies(heightmap, specs, hydro_topology(heightmap, mode or WorldTopologyMode.PLANAR),
             WorldHydrology(default_seas={"min_water_cells": 1}, default_lakes={"min_water_cells": 1}),
-            change_uid="same-fill", auto_seas=auto, auto_lakes=auto, ctx=ResolveContext(collect_only=True))
+            emit=[].append, change_uid="same-fill", auto_seas=auto, auto_lakes=auto, ctx=ResolveContext(collect_only=True))
         self.assertEqual(heightmap.surface_z, before)
         bodies = {body.water_body_uid for body in result.materialized.bodies}
         self.assertTrue(all(set(entry.body_uids) <= bodies for entry in result.materialized.source_mapping.entries))
@@ -294,9 +294,10 @@ class SourceMappingProducerTests(TestCase):
         topology = hydro_topology(heightmap)
         del heightmap.surface_z[(2, 2)]
         ctx = ResolveContext(collect_only=True)
+        diagnostics = []
         result = assemble_water_bodies(heightmap, (self.spec("accepted", ((1, 2),)),), topology,
-            WorldHydrology(), change_uid="invalid-surface", auto_seas=False, auto_lakes=False, ctx=ctx)
-        self.assertTrue(ctx.errors)
+            WorldHydrology(), emit=diagnostics.append, change_uid="invalid-surface", auto_seas=False, auto_lakes=False, ctx=ctx)
+        self.assertEqual(diagnostics[0].issue.code, "WATER_TERRAIN_UNRESOLVED")
         self.assertEqual(result.materialized.source_mapping.entries, ())
 
 

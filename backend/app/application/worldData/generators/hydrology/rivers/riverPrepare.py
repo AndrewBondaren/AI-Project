@@ -21,14 +21,14 @@ from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConne
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole as Role
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.hydrology.riverDrainageLink import RiverDrainageLink
-from app.dataModel.hydrology.riverRouting import RiverRouteDiagnostic, RiverRoutingCode as Code, RiverRoutingFailure as Failure
+from app.dataModel.hydrology.riverRouting import RiverPlanDiagnostic, RiverRouteDiagnostic, RiverRoutingCode as Code, RiverRoutingFailure as Failure
 from app.dataModel.hydrology.rivers import HydrologyRiversPolicy
 from app.dataModel.hydrology.waterBody import WaterBody
 from app.dataModel.hydrology.planning.hydrologyPlan import RiverPathSegment, RiverRoute
 from app.dataModel.hydrology.planning.stages.riverRoutePlans import RiverRouteBatch
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult
-from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
+from app.dataModel.planning.diagnostics.planDiagnostic import DiagnosticCarrier, PlanDiagnosticDisposition
 from app.dataModel.spatial.grid.coordinateTypes import FineXY, FineZ, SurfaceGridCoord
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
@@ -67,7 +67,7 @@ def _diagnostic(world_uid: str, span: int, request: RiverRouteRequest, space: Co
 
 
 def _invalid_type(world_uid: str, span: int, request: RiverRouteRequest, space: CoordinateSpace,
-                   rejected: str, emit: Callable[[PlanDiagnostic], None] | None) -> PreparedRiver:
+                   rejected: str, emit: Callable[[DiagnosticCarrier], None] | None) -> PreparedRiver:
     request = replace(request, object_type=None, rejected_connection_type=rejected)
     fact = _diagnostic(world_uid, span, request, space,
         code=Code.INVALID_CONNECTION_TYPE, reason=Failure.INVALID_CONNECTION_TYPE)
@@ -100,7 +100,7 @@ def prepare_river_from_inputs(world_uid: str, span: int, heightmap: SurfaceHeigh
                    occupied: dict[Coord, MapCellHydrology], topology: WorldTopology,
                    policy: HydrologyRiversPolicy, bodies: Sequence[WaterBody],
                    ctx: ResolveContext, z_min: int, *, space: CoordinateSpace, build_profiles: bool,
-                   emit: Callable[[PlanDiagnostic], None] | None = None) -> PreparedRiver:
+                   emit: Callable[[DiagnosticCarrier], None] | None = None) -> PreparedRiver:
     if request.rejected_connection_type is not None:
         return _invalid_type(world_uid, span, request, space, request.rejected_connection_type, emit)
     request_kind = request.object_type
@@ -193,7 +193,7 @@ def prepare_river_requests_from_inputs(world_uid: str, span: int, heightmap: Sur
                            policy: HydrologyRiversPolicy, water_bodies: Sequence[WaterBody],
                            ctx: ResolveContext, z_min: int, *, space: CoordinateSpace, build_profiles: bool,
                            check: Callable[[], None] | None = None,
-                           emit: Callable[[PlanDiagnostic], None] | None = None) -> list[PreparedRiver]:
+                           emit: Callable[[DiagnosticCarrier], None] | None = None) -> list[PreparedRiver]:
     """Prepare receivers first; claims retain rooted drainage and never mutate z."""
     jobs = []
     for request in order_river_requests(requests, heightmap.surface_z, claims):
@@ -228,10 +228,9 @@ S = TypeVar("S", SurfaceGridCoord, FineXY)
 
 
 def _emit_diagnostic(fact: RiverRouteDiagnostic, disposition: PlanDiagnosticDisposition,
-                     emit: Callable[[PlanDiagnostic], None] | None) -> None:
+                     emit: Callable[[DiagnosticCarrier], None] | None) -> None:
     if emit is not None:
-        emit(PlanDiagnostic(issue=FieldPathError(("hydrology", "rivers", fact.object_uid),
-            fact.model_dump_json(), code=fact.code.value), disposition=disposition))
+        emit(RiverPlanDiagnostic(issue=fact, disposition=disposition))
 
 
 def plan_prepared_routes(*, world_uid: EntityUid, span: int, heightmap: SurfaceHeightmap,
@@ -245,7 +244,7 @@ def plan_prepared_routes(*, world_uid: EntityUid, span: int, heightmap: SurfaceH
     if space not in (CoordinateSpace.WORLD_SURFACE_GRID, CoordinateSpace.WORLD_FINE_GRID):
         raise PlanBuildFailure((FieldPathError(("space",), "unsupported river coordinate space"),))
     ctx = ResolveContext(collect_only=True, validate_only=resolution_mode is ResolutionMode.VALIDATE_ONLY)
-    diagnostics: list[PlanDiagnostic] = []
+    diagnostics: list[DiagnosticCarrier] = []
     jobs = prepare_river_requests_from_inputs(world_uid, span, heightmap, requests, dict(claims), topology,
         policy, water_bodies, ctx, z_min, space=space, build_profiles=False,
         check=control.raise_if_shutdown, emit=diagnostics.append)

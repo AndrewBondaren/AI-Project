@@ -29,6 +29,8 @@ class CoastlineBoundaryPlanner:
                     results.record(result.boundary)
                     session.submit(result.prepared)
                 except PlanBuildFailure as failure:
+                    if failure.diagnostics:
+                        raise
                     session.fail(header.identity, results.record_failure(header, failure.issues))
 
         return results.assemble(session.run(prepare_ready))

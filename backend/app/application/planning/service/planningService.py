@@ -18,6 +18,7 @@ from app.dataModel.cache.contracts.cacheLookup import CacheHit
 from app.dataModel.cache.identity.cacheKey import CacheKey
 from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
 from app.dataModel.planning.contracts.planRequest import PlanRequest
+from app.dataModel.planning.diagnostics.planDiagnostic import DiagnosticCarrier, PlanDiagnosticDisposition, require_concrete_diagnostic
 from app.dataModel.planning.identity.planKey import PlanKey
 from app.dataModel.planning.identity.planRef import PlanRef
 from app.dataModel.planning.policy.planningExecutionPolicy import PlanningExecutionPolicy
@@ -44,16 +45,28 @@ _BUILD_ISSUES = TypeAdapter(tuple[FieldPathError[Any], ...])
 
 
 class PlanBuildFailure(Exception):
-    """F03: provider-owned concrete field issues from a domain build."""
+    """F03: provider-owned field issues and blocking diagnostics from a domain build."""
 
-    def __init__(self, issues: tuple[FieldPathError[Any], ...]):
-        if not issues:
-            raise ValueError("PlanBuildFailure requires nonempty issues")
+    def __init__(self, issues: tuple[FieldPathError[Any], ...], *, diagnostics: tuple[DiagnosticCarrier, ...] = ()):
+        if type(diagnostics) is not tuple:
+            raise TypeError("diagnostics must be a tuple")
+        if not issues and not diagnostics:
+            raise ValueError("PlanBuildFailure requires nonempty issues or diagnostics")
         admitted = _BUILD_ISSUES.validate_python(issues, strict=True)
         for issue in admitted:
             validate_immutable(issue)
+        for diagnostic in diagnostics:
+            require_concrete_diagnostic(diagnostic)
+            validate_immutable(diagnostic)
+            if diagnostic.disposition is not PlanDiagnosticDisposition.ERROR:
+                raise ValueError("build refusal requires ERROR diagnostics")
+        self._diagnostics = diagnostics
         self._issues = admitted
         super().__init__("plan build failed")
+
+    @property
+    def diagnostics(self) -> tuple[DiagnosticCarrier, ...]:
+        return self._diagnostics
 
     @property
     def issues(self) -> tuple[FieldPathError[Any], ...]:

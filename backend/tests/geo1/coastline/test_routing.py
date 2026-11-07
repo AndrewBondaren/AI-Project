@@ -61,5 +61,5 @@ class CoastlineRoutingTests(TestCase):
         heightmap = flat_heightmap(0, 10, 0, 10)
         self.assertIsNone(run_water_placement_pass(world, [], heightmap))
         ctx = ResolveContext(collect_only=True)
-        HydrologyGeneratorService().apply(world, [], heightmap, ctx=ctx)
-        self.assertFalse(any(e.code == "WATER_PLACEMENT_REQUIRED" for e in ctx.errors))
+        result = HydrologyGeneratorService().apply(world, [], heightmap, ctx=ctx)
+        self.assertFalse(any(d.issue.code == "WATER_PLACEMENT_REQUIRED" for d in result.water_diagnostics.blocking))

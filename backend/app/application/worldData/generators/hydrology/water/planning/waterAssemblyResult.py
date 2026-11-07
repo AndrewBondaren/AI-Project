@@ -7,28 +7,31 @@ from app.dataModel.hydrology.planning.stages.openWaterPlan import AssembledWater
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.worldData.generators.hydrology.water.waterBodyResolver import ResolvedWaterLevels
 from app.application.worldData.generators.hydrology.water.waterSources import WaterSource
-from app.application.worldData.generators.hydrology.water.waterDiagnostics import water_issue
+from app.dataModel.hydrology import waterDiagnostics as wd
 from app.dataModel.hydrology.physicalWaterUnion import PhysicalWaterUnion
 from app.dataModel.hydrology.enums.waterSystemKind import WaterSystemKind
 from app.dataModel.hydrology.enums.basinKind import BasinKind
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.dataModel.hydrology.planning.sourceBodyMapping import SourceBodyMapping
 from app.dataModel.topology.worldTopology import WorldTopology
-from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
+from app.dataModel.planning.diagnostics.planDiagnostic import DiagnosticCarrier, PlanDiagnosticDisposition
 from app.ids.waterSystemIdentity import water_system_uid
 
 
-def unresolved_water(world_uid: str, error: ValueError, ctx: ResolveContext,
-                     emit: Callable[[PlanDiagnostic], None] | None) -> AssembledWater:
-    water_issue(ctx, world_uid, str(error), "WATER_TERRAIN_UNRESOLVED",
-                disposition=PlanDiagnosticDisposition.ERROR, emit=emit)
+def unresolved_water(world_uid: str, error: ValueError, ctx: ResolveContext, *,
+                     emit: Callable[[DiagnosticCarrier], None]) -> AssembledWater:
+    emit(wd.WaterTerrainUnresolvedDiagnostic(
+        issue=wd.WaterTerrainUnresolved(code=wd.WaterDiagnosticCode.WATER_TERRAIN_UNRESOLVED,
+            world_uid=world_uid, message=str(error)),
+        disposition=PlanDiagnosticDisposition.ERROR,
+    ))
     return AssembledWater(MaterializedWater((), (), (), (), (), SourceBodyMapping(entries=())), ())
 
 
 def finalize_water(water: MaterializedWater, resolved: ResolvedWaterLevels, sources: tuple[WaterSource, ...], *,
                    world_uid: str, change_uid: str, topology: WorldTopology, policy: WorldHydrology,
                    auto_seas: bool, ctx: ResolveContext,
-                   emit: Callable[[PlanDiagnostic], None] | None) -> AssembledWater:
+                   emit: Callable[[DiagnosticCarrier], None]) -> AssembledWater:
     # Procedural minima of one connected water are one positional body.
     uid_remap = dict(water.uid_aliases)
     normalized = {}
@@ -62,10 +65,18 @@ def finalize_water(water: MaterializedWater, resolved: ResolvedWaterLevels, sour
         nearest[body.water_body_uid][1] if body.water_body_uid in nearest else None,
     ) for body in water.bodies))
     if auto_seas and not any(source.spec.z_water_level == policy.default_water_level for source in sources):
-        water_issue(ctx, world_uid, "natural-only autoresolve: no ocean depression",
-                    "WATER_NO_OCEAN_DEPRESSION", disposition=PlanDiagnosticDisposition.ERROR, emit=emit)
-    if (sum(area for _, area in water.area_rows) * 2 >= topology.bounds.width * topology.bounds.height
+        emit(wd.WaterNoOceanDepressionDiagnostic(
+            issue=wd.WaterNoOceanDepression(code=wd.WaterDiagnosticCode.WATER_NO_OCEAN_DEPRESSION,
+                world_uid=world_uid, default_water_level=policy.default_water_level),
+            disposition=PlanDiagnosticDisposition.ERROR,
+        ))
+    water_cells = sum(area for _, area in water.area_rows)
+    world_cells = topology.bounds.width * topology.bounds.height
+    if (water_cells * 2 >= world_cells
             and any(body.kind is not BasinKind.LAKE for body in water.bodies)):
-        water_issue(ctx, world_uid, "world is ocean: water covers at least half the world",
-                    "WATER_WORLD_OCEAN", disposition=PlanDiagnosticDisposition.NOTICE, emit=emit)
+        emit(wd.WaterWorldOceanDiagnostic(
+            issue=wd.WaterWorldOcean(code=wd.WaterDiagnosticCode.WATER_WORLD_OCEAN,
+                world_uid=world_uid, water_cells=water_cells, world_cells=world_cells),
+            disposition=PlanDiagnosticDisposition.NOTICE,
+        ))
     return AssembledWater(water, unions)

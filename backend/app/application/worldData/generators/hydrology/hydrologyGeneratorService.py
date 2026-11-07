@@ -13,12 +13,13 @@ from app.application.worldData.generators.hydrology.riverNetworkAssembler import
 from app.application.worldData.generators.hydrology.types import (
     HydrologyMasterInput, HydrologyResult, HydrologyScope, resolve_scopes,
 )
-from app.application.worldData.generators.hydrology.water.waterDiagnostics import water_issue
+from app.application.worldData.generators.hydrology.water.waterDiagnostics import report_water_diagnostics
+from app.dataModel.hydrology import waterDiagnostics as wd
 from app.application.worldData.generators.hydrology.waterBodyAssembler import assemble_water_bodies
 from app.application.worldData.generators.terrain.reliefObjects.bathymetry import BasinSpec
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.basinKind import BasinKind
-from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnosticDisposition
+from app.dataModel.planning.diagnostics.planDiagnostic import DiagnosticCarrier, PlanDiagnosticDisposition
 from app.dataModel.topology.worldTopology import WorldTopology
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
@@ -66,9 +67,16 @@ class HydrologyGeneratorService:
         seas = bool(active & {HydrologyScope.COASTAL_SEA, HydrologyScope.OPEN_OCEAN})
         lakes = HydrologyScope.LAKES in active
         if seas or lakes:
+            diagnostics: list[wd.WaterPlanningDiagnostic | wd.WaterPlacementRequiredDiagnostic] = []
+
+            def collect(diagnostic: DiagnosticCarrier) -> None:
+                diagnostics.append(wd.require_water_diagnostic(diagnostic))
+
             if basin_specs is None and (policy.declared_basins or any(c.is_water_source for c in policy.declared_coastlines) or policy.declared_lakes):
-                water_issue(ctx, world.world_uid, "declared water requires resolved post-carve BasinSpec input",
-                            "WATER_PLACEMENT_REQUIRED", disposition=PlanDiagnosticDisposition.ERROR)
+                collect(wd.WaterPlacementRequiredDiagnostic(
+                    issue=wd.WaterPlacementRequired(code=wd.WaterDiagnosticCode.WATER_PLACEMENT_REQUIRED,
+                                                    world_uid=world.world_uid),
+                    disposition=PlanDiagnosticDisposition.ERROR))
             specs = [spec for spec in (basin_specs or ())
                      if (lakes and policy.default_lakes.enabled if spec.kind is BasinKind.LAKE
                          else seas and policy.default_seas.enabled)]
@@ -78,11 +86,12 @@ class HydrologyGeneratorService:
                 auto_seas=bool(seas and policy.default_seas.enabled and (
                     policy.default_seas.autoresolve_coastal_sea or policy.default_seas.autoresolve_open_ocean)),
                 auto_lakes=bool(lakes and policy.default_lakes.enabled and policy.default_lakes.autoresolve), ctx=ctx,
-                allowed_kinds=frozenset(
+                emit=collect, allowed_kinds=frozenset(
                     ([BasinKind.LAKE] if lakes and policy.default_lakes.enabled else [])
                     + ([BasinKind.SEA, BasinKind.OCEAN, BasinKind.INLAND_SEA]
                        if seas and policy.default_seas.enabled else [])),
             )
+            result.water_diagnostics = report_water_diagnostics(ctx, tuple(diagnostics))
             result.cell_index.by_cell.update(water.materialized.cells)
             result.water_bodies = water.materialized.bodies
             result.physical_unions = water.physical_unions

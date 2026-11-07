@@ -1287,6 +1287,7 @@ class HydrologyProviderTests(ReliefProviderFixture, unittest.TestCase):
             declared_rivers=(self.segment(),), coastlines=(), declared_lakes=(), anchors=(),
             topology=self.water.topology, grid=self.inputs.grid, z_min=-100, z_max=100,
             liquid_keys=frozenset(("water",)), change_uid="change")
+        from app.dataModel.hydrology.riverRouting import RiverPlanDiagnostic, RiverRouteDiagnostic, RiverRoutingCode, RiverRoutingFailure
         records = (HydrologyPlanInput, HydrologyFinalInput, HydrologyAnchorInput,
             HydrologyRoutesPlan, HydrologyPlan, RiverReliefInput, RiverReliefPlan,
             RiverBedRecord[SurfaceGridCoord], RiverBedRecord[FineXY],
@@ -1294,9 +1295,10 @@ class HydrologyProviderTests(ReliefProviderFixture, unittest.TestCase):
             DeclaredWaterPaint, LakePaint, CoastlinePaint, SegmentRiverPaint, IntentRiverPaint,
             DeclaredRiver, DeclaredRiverSegment, HydrologyMouth, HydrologyRiversPolicy, RiverTypeClassify,
             MapCellHydrology, WaterBody, PhysicalWaterUnion, RiverDrainageLink,
-            PlanEnvelope[HydrologyRoutesPlan], PlanEnvelope[HydrologyPlan], PlanEnvelope[RiverReliefPlan])
+            PlanEnvelope[HydrologyRoutesPlan], PlanEnvelope[HydrologyPlan], PlanEnvelope[RiverReliefPlan],
+            RiverPlanDiagnostic, RiverRouteDiagnostic)
         enums = (HydrologyCellRole, HydrologyShoreKind, HydrologyConnectionType,
-            WaterSystemKind, RiverDeclareMode, RiverSystemRole, RiverSystemTopology, HydrologyScope)
+            WaterSystemKind, RiverDeclareMode, RiverSystemRole, RiverSystemTopology, HydrologyScope, RiverRoutingCode, RiverRoutingFailure)
         self.hydro_manifest = CanonicalSchemaManifest(entries=self.manifest.entries + tuple(
             RegisteredTypeEntry(type_id=i, python_type=t, kind=CanonicalTypeKind.RECORD) for i, t in enumerate(records, 400))
             + tuple(RegisteredTypeEntry(type_id=i, python_type=t, kind=CanonicalTypeKind.ENUM) for i, t in enumerate(enums, 450)))
@@ -1887,50 +1889,15 @@ class WaterAndPaintOwnerTests(unittest.TestCase):
         self.assertIn(("WATER_KIND_MISMATCH", PlanDiagnosticDisposition.FALLBACK),
                       [(d.issue.code, d.disposition) for d in fallback.diagnostics])
 
-    def test_replacing_diagnostic_code_and_message_cannot_reclassify_producer_outcome(self):
-        from unittest.mock import patch
-        from app.application.worldData.generators.hydrology.water.waterDiagnostics import water_issue
+    def test_puddle_refusal_contains_component_measurements(self):
         f = self.fixture
         inputs = f.hydro_inputs.model_copy(update={"seas": f.hydro_inputs.seas.model_copy(update={"min_water_cells": 50})})
-        original = self.water(inputs=inputs)
-        def renamed(ctx, uid, message, code, *, disposition, emit=None):
-            water_issue(ctx, uid, "different message", "opaque", disposition=disposition, emit=emit)
-        with patch("app.application.worldData.generators.hydrology.water.waterMaterialize.water_issue", side_effect=renamed):
-            changed = self.water(inputs=inputs)
-        self.assertEqual(changed.payload, original.payload)
-        self.assertEqual([d.disposition for d in changed.diagnostics], [d.disposition for d in original.diagnostics])
-        self.assertTrue(all(d.issue.code == "opaque" for d in changed.diagnostics))
-
-    def test_diagnostic_callback_is_explicit_and_does_not_double_report(self):
-        from unittest.mock import patch
-        from app.application.jsonValidation.resolve import ResolveContext
-        from app.application.worldData.generators.hydrology.water.waterDiagnostics import water_issue
-        path = "app.application.worldData.generators.hydrology.water.waterDiagnostics."
-        for disposition in PlanDiagnosticDisposition:
-            ctx, emitted = ResolveContext(), []
-            with patch(path + "log_issues") as log, patch(path + "report_issues") as report:
-                water_issue(ctx, "uid", "message", "same-code", disposition=disposition, emit=emitted.append)
-            self.assertEqual(len(emitted), 1)
-            self.assertIs(emitted[0].disposition, disposition)
-            self.assertFalse(ctx.errors)
-            log.assert_not_called()
-            report.assert_not_called()
-        with self.assertRaises(TypeError):
-            water_issue(ResolveContext(), "uid", "message", "code")
-
-    def test_legacy_water_reporting_keeps_collect_preview_and_runtime_sinks(self):
-        from unittest.mock import patch
-        from app.application.jsonValidation.resolve import ResolveContext
-        from app.application.worldData.generators.hydrology.water.waterDiagnostics import water_issue
-        path = "app.application.worldData.generators.hydrology.water.waterDiagnostics."
-        for ctx in (ResolveContext(collect_only=True), ResolveContext(validate_only=True)):
-            with patch(path + "log_issues") as log:
-                water_issue(ctx, "uid", "message", "code", disposition=PlanDiagnosticDisposition.ERROR)
-            self.assertEqual(len(ctx.errors), 1)
-            log.assert_not_called()
-        with patch(path + "log_issues") as log:
-            water_issue(ResolveContext(), "uid", "message", "code", disposition=PlanDiagnosticDisposition.NOTICE)
-        log.assert_called_once()
+        result = self.water(inputs=inputs)
+        self.assertEqual(len(result.diagnostics), 1)
+        diagnostic, = result.diagnostics
+        self.assertIs(diagnostic.disposition, PlanDiagnosticDisposition.ERROR)
+        self.assertEqual(diagnostic.issue.minimum_cells, 50)
+        self.assertLess(diagnostic.issue.cell_count, diagnostic.issue.minimum_cells)
 
     def test_water_physical_unions_and_levels_remain_existing_kernel_results(self):
         from app.dataModel.spatial.regionShape import BboxShape
@@ -2090,7 +2057,7 @@ class RiverOwnerTests(unittest.TestCase):
         fine = self.fine(inputs, coarse.payload)
         self.assertEqual([r.river_uid for r in coarse.payload.routes], ["river"])
         self.assertEqual([r.river_uid for r in fine.payload.routes], ["river"])
-        self.assertEqual({d.issue.path[-1] for d in coarse.diagnostics}, {"road", "coast"})
+        self.assertEqual({d.issue.object_uid for d in coarse.diagnostics}, {"road", "coast"})
         self.assertTrue(all(d.disposition is PlanDiagnosticDisposition.ERROR for d in coarse.diagnostics))
 
     def test_rooted_tributary_is_prepared_after_parent_and_preserves_its_claim(self):
@@ -2166,20 +2133,18 @@ class RiverOwnerTests(unittest.TestCase):
         self.assertIs(result.diagnostics[0].disposition, PlanDiagnosticDisposition.ERROR)
         self.assertEqual(result.diagnostics[0].issue.code, "RIVER_INVALID_SOURCE")
 
-    def test_diagnostic_code_does_not_override_explicit_domain_disposition(self):
+    def test_inconsistent_route_code_and_explicit_disposition_are_rejected(self):
         from unittest.mock import patch
         from app.application.worldData.generators.hydrology.rivers.riverPrepare import _diagnostic
         from app.dataModel.hydrology.riverRouting import RiverRoutingCode
         f = self.fixture
         inputs = f.hydro_inputs.model_copy(update={"declared_rivers": (f.segment(uid="bad", start=(-20, 10), end=(40, 10)),)})
-        baseline = self.coarse(inputs)
+        self.assertIs(self.coarse(inputs).diagnostics[0].disposition, PlanDiagnosticDisposition.FALLBACK)
         def renamed(*args, **kwargs):
             return _diagnostic(*args, **kwargs).model_copy(update={"code": RiverRoutingCode.TARGET_UNREACHABLE})
         with patch("app.application.worldData.generators.hydrology.rivers.riverPrepare._diagnostic", side_effect=renamed):
-            result = self.coarse(inputs)
-        self.assertEqual(result.payload, baseline.payload)
-        self.assertIs(result.diagnostics[0].disposition, PlanDiagnosticDisposition.FALLBACK)
-        self.assertEqual(result.diagnostics[0].issue.code, "RIVER_TARGET_UNREACHABLE")
+            with self.assertRaisesRegex(ValueError, "disposition"):
+                self.coarse(inputs)
 
     def test_route_only_api_preserves_caller_claims_and_rejects_wrong_coordinate_conversion(self):
         from app.application.worldData.generators.hydrology.rivers.riverPrepare import plan_prepared_routes

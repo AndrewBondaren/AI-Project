@@ -9,7 +9,7 @@ from app.application.worldData.generators.hydrology.water.levelFill import Level
 from app.application.worldData.generators.hydrology.water.shoreDerive import derive_shore
 from app.application.worldData.generators.hydrology.water.waterBodyResolver import ResolvedWaterLevels
 from app.application.worldData.generators.hydrology.water.waterClassifier import classify_components
-from app.application.worldData.generators.hydrology.water.waterDiagnostics import deliver_water_issue, water_issue
+from app.dataModel.hydrology import waterDiagnostics as wd
 from app.application.worldData.generators.hydrology.water.waterSources import WaterSource
 from app.application.worldData.generators.hydrology.waterBodyIdentity import AutoWaterBodyRole, auto_water_body_uid
 from app.application.worldData.generators.terrain.reliefObjects.bathymetry.distanceField import distance_from_boundary
@@ -21,14 +21,14 @@ from app.dataModel.hydrology.planning.sourceBodyMapping import SourceBodyMapping
 from app.dataModel.hydrology.waterBody import WaterBody
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.dataModel.topology.worldTopology import Coord, WorldTopology
-from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
+from app.dataModel.planning.diagnostics.planDiagnostic import DiagnosticCarrier, PlanDiagnostic, PlanDiagnosticDisposition
 
 
 def materialize_water(surface_z: Mapping[Coord, int], sources: tuple[WaterSource, ...],
                       resolved: ResolvedWaterLevels, topology: WorldTopology,
                       policy: WorldHydrology, ctx: ResolveContext,
                       allowed_kinds: frozenset[BasinKind] | None = None, *,
-                      emit: Callable[[PlanDiagnostic], None] | None = None) -> MaterializedWater:
+                      emit: Callable[[DiagnosticCarrier], None]) -> MaterializedWater:
     fill = labelled_level_fill(surface_z, tuple(
         LevelFillSource(i, source.spec.source_uid, source.seeds, resolved.levels[i])
         for i, source in enumerate(sources)
@@ -59,9 +59,11 @@ def materialize_water(surface_z: Mapping[Coord, int], sources: tuple[WaterSource
                    else policy.default_seas.min_water_cells)
         if len(component) < minimum:
             anchor = min(component, key=lambda cell: (cell[1], cell[0]))
-            water_issue(ctx, sources[owners[anchor]].spec.source_uid,
-                        f"puddle: component has {len(component)} cells, minimum={minimum}", "WATER_PUDDLE",
-                        disposition=PlanDiagnosticDisposition.ERROR, emit=emit)
+            emit(wd.WaterPuddleDiagnostic(
+                issue=wd.WaterPuddle(code=wd.WaterDiagnosticCode.WATER_PUDDLE,
+                    source_uid=sources[owners[anchor]].spec.source_uid, cell_count=len(component), minimum_cells=minimum),
+                disposition=PlanDiagnosticDisposition.ERROR,
+            ))
             continue
         wet.update(component)
         anchor = min(component, key=lambda cell: (cell[1], cell[0]))
@@ -75,7 +77,7 @@ def materialize_water(surface_z: Mapping[Coord, int], sources: tuple[WaterSource
             if sources[i].spec.kind is not kind:
                 spec = sources[i].spec
                 issue = WaterKindMismatchIssue.retained(spec.source_uid, spec.kind, kind)
-                deliver_water_issue(ctx, issue, disposition=PlanDiagnosticDisposition.FALLBACK, emit=emit)
+                emit(PlanDiagnostic(issue=issue, disposition=PlanDiagnosticDisposition.FALLBACK))
     distances = distance_from_boundary(frozenset(wet), topology)
     by_cell, areas, floors = {}, {}, {}
     bodies: dict[str, WaterBody] = {}
@@ -104,6 +106,7 @@ def materialize_water(surface_z: Mapping[Coord, int], sources: tuple[WaterSource
                 z_water_level=level, declared_basin_uid=spec.source_uid if source.authored else None,
                 parent_system_uid=resolved.parents[i] if source.authored else None,
             )
+    spills = {spill.source_uid: spill for spill in resolved.spills}
     for i, source in enumerate(sources):
         uid = source.spec.source_uid
         # Coincident declarations retain their distinct object identities even
@@ -120,14 +123,20 @@ def materialize_water(surface_z: Mapping[Coord, int], sources: tuple[WaterSource
                 )
                 areas[uid], floors[uid] = 0, source.spec.floor_z
         if source.authored and not any(surface_z[cell] < resolved.levels[i] for cell in source.seeds):
-            water_issue(ctx, uid, "basin cannot hold water", "WATER_CANNOT_HOLD",
-                        disposition=PlanDiagnosticDisposition.ERROR, emit=emit)
-        if source.authored and resolved.declared_levels[i] < source.spec.z_water_level:
-            water_issue(ctx, uid, "level exceeds pour point", "WATER_LEVEL_SPILL",
-                        disposition=PlanDiagnosticDisposition.FALLBACK, emit=emit)
+            emit(wd.WaterCannotHoldDiagnostic(
+                issue=wd.WaterCannotHold(code=wd.WaterDiagnosticCode.WATER_CANNOT_HOLD,
+                    source_uid=uid, effective_level=resolved.levels[i]),
+                disposition=PlanDiagnosticDisposition.ERROR,
+            ))
+        if source.authored and uid in spills:
+            emit(wd.WaterLevelSpillDiagnostic(issue=spills[uid], disposition=PlanDiagnosticDisposition.FALLBACK))
         if source.authored and resolved.declared_levels[i] != resolved.levels[i]:
-            water_issue(ctx, uid, "level superseded by physical union/reservoir", "WATER_LEVEL_SUPERSEDED",
-                        disposition=PlanDiagnosticDisposition.FALLBACK, emit=emit)
+            emit(wd.WaterLevelSupersededDiagnostic(
+                issue=wd.WaterLevelSuperseded(code=wd.WaterDiagnosticCode.WATER_LEVEL_SUPERSEDED,
+                    source_uid=uid, declared_level=resolved.declared_levels[i],
+                    effective_level=resolved.levels[i], parent_system_uid=resolved.parents[i]),
+                disposition=PlanDiagnosticDisposition.FALLBACK,
+            ))
     by_cell.update(derive_shore(surface_z, by_cell, topology))
     mapping = SourceBodyMapping(entries=tuple(SourceBodyMappingEntry(source_uid=source.spec.source_uid,
         body_uids=tuple(sorted({cell.water_body_uid for coord in source.spec.footprint

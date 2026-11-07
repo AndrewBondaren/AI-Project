@@ -12,7 +12,7 @@ from app.dataModel.hydrology.riverRouting import RiverRouteDiagnostic, RiverRout
 from app.dataModel.hydrology.planning.stages.riverRoutePlans import CoarseRiverPlan, FineRiverPlan
 from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
 from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.dataModel.hydrology.waterDiagnostics import WaterCannotHold, WaterCannotHoldDiagnostic, WaterDiagnosticCode
 from app.dataModel.validation.immutableValue import validate_immutable
 from tests.geo1.fine_water.fixtures import physical_inputs
 from tests.geo1.fine_water.test_fill import source, fill, basin
@@ -81,7 +81,7 @@ class FineRoutingTests(TestCase):
         diagnostic = result.diagnostics[0]
         self.assertIs(diagnostic.disposition, PlanDiagnosticDisposition.ERROR)
         self.assertEqual(diagnostic.issue.code, RiverRoutingCode.NO_WATER_BODIES)
-        detail = RiverRouteDiagnostic.model_validate_json(diagnostic.issue.message)
+        detail = diagnostic.issue
         self.assertEqual(detail.object_uid, "river")
         self.assertIs(detail.code, RiverRoutingCode.NO_WATER_BODIES)
         self.assertIs(detail.reason, RiverRoutingFailure.DRY_MOUTH)
@@ -97,7 +97,7 @@ class FineRoutingTests(TestCase):
         self.assertEqual(result.payload.routes[0].drainage.receiver_uid, "lake")
         errors = [d for d in result.diagnostics if d.disposition is PlanDiagnosticDisposition.ERROR]
         self.assertEqual(len(errors), 1)
-        detail = RiverRouteDiagnostic.model_validate_json(errors[0].issue.message)
+        detail = errors[0].issue
         self.assertEqual(detail.object_uid, "rejected")
         self.assertIs(detail.code, RiverRoutingCode.INVALID_SOURCE)
         self.assertIs(detail.reason, RiverRoutingFailure.SOURCE_IN_WATER)
@@ -115,13 +115,15 @@ class FineRoutingTests(TestCase):
             route(inputs, bad)
         with self.assertRaisesRegex(ValueError, "topology"):
             route(replace(inputs, grid=replace(inputs.grid, fine_span=32)), water)
-        diagnostics = (PlanDiagnostic(issue=FieldPathError(("water",), "failed resolution"),
+        diagnostics = (WaterCannotHoldDiagnostic(issue=WaterCannotHold(code=WaterDiagnosticCode.WATER_CANNOT_HOLD,
+                                      source_uid="dry", effective_level=0),
                                       disposition=PlanDiagnosticDisposition.ERROR),)
         failed = replace(water, diagnostics=diagnostics,
             ref=replace(water.ref, output_fingerprint=output_fingerprint(
                 water.payload, water.dependencies, diagnostics, SURFACE_MANIFEST)))
-        with self.assertRaises(PlanBuildFailure):
+        with self.assertRaises(PlanBuildFailure) as raised:
             route(inputs, failed)
+        self.assertEqual(raised.exception.diagnostics, diagnostics)
 
     def test_source_and_route_inputs_invalidate_revision_and_cancellation_propagates(self):
         _, inputs, water = scenario()

@@ -13,7 +13,7 @@ from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.basinKind import BasinKind
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.dataModel.topology.worldTopology import WorldTopology
-from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic
+from app.dataModel.planning.diagnostics.planDiagnostic import DiagnosticCarrier
 
 
 def assemble_water_bodies(heightmap: SurfaceHeightmap, specs: Sequence[BasinSpec],
@@ -21,14 +21,14 @@ def assemble_water_bodies(heightmap: SurfaceHeightmap, specs: Sequence[BasinSpec
                           change_uid: str, auto_seas: bool, auto_lakes: bool,
                           ctx: ResolveContext | None = None,
                           allowed_kinds: frozenset[BasinKind] | None = None,
-                          emit: Callable[[PlanDiagnostic], None] | None = None) -> AssembledWater:
+                          emit: Callable[[DiagnosticCarrier], None]) -> AssembledWater:
     ctx = ctx or ResolveContext()
     if not change_uid:
         raise ValueError("water resolution requires a nonempty operation UID")
     try:
         tree = depression_tree(heightmap.surface_z, topology)
     except ValueError as error:
-        return unresolved_water(heightmap.world_uid, error, ctx, emit)
+        return unresolved_water(heightmap.world_uid, error, ctx, emit=emit)
     sources = water_sources(heightmap.surface_z, specs, tree, topology, policy,
                              auto_seas=auto_seas, auto_lakes=auto_lakes)
     resolved = resolve_water_levels(tree, sources, world_uid=heightmap.world_uid,

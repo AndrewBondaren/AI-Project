@@ -36,6 +36,41 @@ def water(uid):
 
 
 class FineRiverPlanningTests(unittest.TestCase):
+    def test_mixed_water_and_river_cold_envelope(self):
+        import subprocess
+        import sys
+        from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_MANIFEST
+        from app.application.planning.service.planFingerprints import output_fingerprint
+        from app.dataModel.hydrology.riverRouting import RiverPlanDiagnostic
+        from app.encoding.canonicalCodec import encode
+        from tests.geo1.fine_water.test_routing import scenario, route
+
+        _, inputs, water = scenario(mouth=(8, 11))
+        envelope = route(inputs, water)
+        mismatch, redirect = envelope.diagnostics
+        self.assertEqual((mismatch,), water.diagnostics)
+        self.assertIs(type(redirect), RiverPlanDiagnostic)
+        self.assertEqual(envelope.dependencies[0].ref, water.ref)
+        self.assertNotEqual(envelope.ref.output_fingerprint,
+            output_fingerprint(envelope.payload, envelope.dependencies, (mismatch,), SURFACE_MANIFEST))
+        wire = encode(envelope, SURFACE_MANIFEST)
+        reader = """import sys
+from app.application.encoding.boundedCanonicalDecode import decode_bounded
+from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_MANIFEST
+from app.dataModel.encoding.decodeLimits import DecodeLimits
+from app.dataModel.hydrology.planning.stages.riverRoutePlans import FineRiverPlan
+from app.dataModel.hydrology.riverRouting import RiverPlanDiagnostic
+from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
+from app.encoding.canonicalCodec import encode
+env = decode_bounded(sys.stdin.buffer.read(), PlanEnvelope[FineRiverPlan], SURFACE_MANIFEST,
+                     limits=DecodeLimits(2000000, 100000, 100, 10000))
+assert type(env.diagnostics[-1]) is RiverPlanDiagnostic
+sys.stdout.buffer.write(encode(env, SURFACE_MANIFEST))
+"""
+        restored = subprocess.run([sys.executable, "-c", reader], input=wire, capture_output=True)
+        self.assertEqual(restored.returncode, 0, restored.stderr)
+        self.assertEqual(restored.stdout, wire)
+
     def test_fine_intent_sees_water_before_mouth_snap(self):
         w = world([DeclaredRiver(location_uid="r", declare_mode="endpoints",
             source=Point(x=0, y=0), mouth=HydrologyMouth(x=3, y=0))], span=7)

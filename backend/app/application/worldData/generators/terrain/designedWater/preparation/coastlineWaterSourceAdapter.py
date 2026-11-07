@@ -143,6 +143,8 @@ class CoastlineWaterSourceAdapter:
                 errors.add(WaterDesignTypeError.at(type(generation), ("behavior",),
                     "native coastline requires ready AUTORESOLVE before preparation", operation="water_source", source_uid=uid, prefix=("generation",)))
         except PlanBuildFailure as failure:
+            if failure.diagnostics:
+                raise
             for issue in failure.issues:
                 if not isinstance(issue, WaterDesignTypeError):
                     raise

@@ -55,3 +55,94 @@ class WaterDiagnosticsTests(TestCase):
         ):
             with self.subTest(fact=fact), self.assertRaises(ValidationError):
                 fact(**fields)
+
+    def test_protected_dry_a_continues_to_b_then_refuses_publication(self):
+        from unittest.mock import patch
+        from app.application.planning.service.planningService import PlanBuildFailure
+        from app.application.worldData.generators.hydrology.water.planning.fine import execution
+        from tests.geo1.fine_water.test_fill import basin, fill, source
+
+        window, protected, topology = source(mountain=True)
+        a = basin("A", {min(protected)})
+        b = basin("B", {(x, y) for x in range(17, 25) for y in range(15, 22)} - protected)
+        assemble = execution.assemble_water_bodies
+        observed = []
+        def capture(*args, **kwargs):
+            result = assemble(*args, **kwargs)
+            observed.extend(result.materialized.source_mapping.entries)
+            return result
+        with patch.object(execution, "assemble_water_bodies", side_effect=capture), self.assertRaises(PlanBuildFailure) as raised:
+            fill(window, topology, (a, b))
+        self.assertEqual([(e.source_uid, e.body_uids) for e in observed], [("A", ()), ("B", ("B",))])
+        cause, = raised.exception.diagnostics
+        self.assertEqual(cause.issue, w.WaterCannotHold(code=w.WaterDiagnosticCode.WATER_CANNOT_HOLD,
+                                                       source_uid="A", effective_level=0))
+        self.assertEqual(raised.exception.issues, ())
+
+    def test_report_delivery_and_build_refusal(self):
+        from unittest.mock import patch
+        from app.application.jsonValidation.resolve import ResolveContext
+        from app.application.planning.service.planningService import PlanBuildFailure
+        from app.application.worldData.generators.hydrology.water import waterDiagnostics as reporting
+
+        error = w.WaterCannotHoldDiagnostic(issue=w.WaterCannotHold(code=w.WaterDiagnosticCode.WATER_CANNOT_HOLD,
+            source_uid="dry", effective_level=0), disposition=D.ERROR)
+        spill = w.WaterLevelSpillDiagnostic(issue=w.WaterLevelSpill(code=w.WaterDiagnosticCode.WATER_LEVEL_SPILL,
+            source_uid="wet", requested_level=3, spill_limited_level=2), disposition=D.FALLBACK)
+        for ctx in (ResolveContext(), ResolveContext(collect_only=True), ResolveContext(validate_only=True)):
+            with patch.object(reporting.logger, "warning", side_effect=OSError("unavailable")) as sink:
+                report = reporting.report_water_diagnostics(ctx, (error, spill))
+            self.assertEqual(report.blocking, (error,))
+            self.assertEqual(report.continuations, (spill,))
+            self.assertEqual(report.ordered, (error, spill))
+            self.assertFalse(ctx.errors)
+            self.assertEqual(sink.call_count, 0 if ctx.collect_only or ctx.validate_only else 2)
+        for invalid in (spill, error.model_copy(update={"issue": spill.issue})):
+            with self.assertRaises(ValueError):
+                PlanBuildFailure((), diagnostics=(invalid,))
+
+        with self.assertLogs(reporting.logger, level="WARNING") as captured:
+            reversed_report = reporting.report_water_diagnostics(ResolveContext(), (spill, error))
+        self.assertEqual(reversed_report.ordered, (spill, error))
+        self.assertEqual(reversed_report.blocking, report.blocking)
+        self.assertEqual(reversed_report.continuations, report.continuations)
+        self.assertEqual([record.getMessage() for record in captured.records], ["water diagnostic"] * 2)
+        self.assertEqual([record.diagnostic for record in captured.records],
+                         [d.model_dump(mode="json", serialize_as_any=False) for d in (spill, error)])
+        with self.assertRaises(ValidationError):
+            w.WaterDiagnosticReport(ordered=(spill, error), blocking=(), continuations=(spill,), notices=())
+
+    def test_foreign_field_issue_rejected_by_water_report_before_delivery(self):
+        from unittest.mock import patch
+        from app.application.jsonValidation.resolve import ResolveContext
+        from app.application.worldData.generators.hydrology.water import waterDiagnostics as reporting
+        from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic
+        from tests.planning.probeIssues import probe_issue
+
+        foreign = PlanDiagnostic(issue=probe_issue("foreign"), disposition=D.ERROR)
+        with self.assertRaises(ValidationError):
+            w.WaterDiagnosticReport(ordered=(foreign,), blocking=(foreign,), continuations=(), notices=())
+        with patch.object(reporting.logger, "warning") as sink:
+            with self.assertRaises(ValueError):
+                reporting.report_water_diagnostics(ResolveContext(), (foreign,))
+            sink.assert_not_called()
+
+    def test_apply_exposes_placement_refusal_and_returns_in_every_mode(self):
+        from unittest.mock import patch
+        from app.application.jsonValidation.resolve import ResolveContext
+        from app.application.worldData.generators.hydrology.hydrologyGeneratorService import HydrologyGeneratorService
+        from app.application.worldData.generators.hydrology.water import waterDiagnostics as reporting
+        from tests.geo1.coastline.test_routing import coast
+        from tests.hydrology_fixtures import hydro_world, flat_heightmap
+
+        world = hydro_world(hydrology={"enabled": True, "declared_coastlines": [coast("source")],
+            "default_seas": {"autoresolve_coastal_sea": False, "autoresolve_open_ocean": False},
+            "default_lakes": {"autoresolve": False}})
+        for ctx in (ResolveContext(), ResolveContext(validate_only=True), ResolveContext(collect_only=True)):
+            with patch.object(reporting.logger, "warning") as sink:
+                result = HydrologyGeneratorService().apply(world, [], flat_heightmap(0, 10, 0, 10), ctx=ctx)
+            refusal, = result.water_diagnostics.blocking
+            self.assertEqual(refusal.issue, w.WaterPlacementRequired(
+                code=w.WaterDiagnosticCode.WATER_PLACEMENT_REQUIRED, world_uid=world.world_uid))
+            self.assertFalse(ctx.errors)
+            self.assertEqual(sink.call_count, int(not ctx.collect_only and not ctx.validate_only))

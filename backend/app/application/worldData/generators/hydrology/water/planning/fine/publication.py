@@ -46,9 +46,9 @@ class FineWaterPublicationJob:
                 or water.ref.output_fingerprint != output_fingerprint(
                     water.payload, water.dependencies, water.diagnostics, SURFACE_MANIFEST)):
             raise ValueError("fine water requires the exact published revision and output proof")
-        errors = tuple(d.issue for d in water.diagnostics if d.disposition is PlanDiagnosticDisposition.ERROR)
+        errors = tuple(d for d in water.diagnostics if d.disposition is PlanDiagnosticDisposition.ERROR)
         if errors:
-            raise PlanBuildFailure(errors)
+            raise PlanBuildFailure((), diagnostics=errors)
         window, assembled = water.payload
         if window.topology != fine_topology(inputs.topology, inputs.grid.fine_span):
             raise ValueError("fine water inputs must match the published topology")

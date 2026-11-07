@@ -43,9 +43,9 @@ class NativeFinalWaterQuery:
                 or refs.get(FINE_WATER) != water.ref or refs.get(PRE_WATER_SURFACE) is None
                 or refs.get(PRE_WATER_SURFACE) != source_refs.get(PRE_WATER_SURFACE)):
             raise ValueError("water query requires final's exact successful source dependency")
-        errors = tuple(d.issue for d in water.diagnostics if d.disposition is PlanDiagnosticDisposition.ERROR)
+        errors = tuple(d for d in water.diagnostics if d.disposition is PlanDiagnosticDisposition.ERROR)
         if errors:
-            raise PlanBuildFailure(errors)
+            raise PlanBuildFailure((), diagnostics=errors)
         self._coverage = water.payload[0].coverage.spans
         # GEO-LEGACY-73: Bind diagnostic XY rows to admitted native final roles.
         self._rows = final.payload.sparse_fine_hydro

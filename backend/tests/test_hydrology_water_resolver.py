@@ -29,7 +29,7 @@ def row_map(row):
 def assemble(hm, specs, *, mode=WorldTopologyMode.PLANAR, change="change-a", auto=False,
              policy=None):
     return assemble_water_bodies(hm, specs, hydro_topology(hm, mode), policy or WorldHydrology(),
-                                  change_uid=change, auto_seas=auto, auto_lakes=auto,
+                                  emit=[].append, change_uid=change, auto_seas=auto, auto_lakes=auto,
                                   ctx=ResolveContext(validate_only=True))
 
 
