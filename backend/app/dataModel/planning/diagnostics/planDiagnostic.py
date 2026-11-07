@@ -1,7 +1,7 @@
 """A diagnostic fact and its declared disposition, with no logging behavior."""
 
 from enum import StrEnum
-from typing import Annotated, Any, Generic, get_args
+from typing import Annotated, Any, Generic, NewType, ParamSpec, TypeAliasType, TypeVarTuple, get_args, get_origin
 from typing_extensions import TypeVar
 
 from pydantic import BaseModel, ConfigDict, PlainValidator, SerializeAsAny
@@ -25,13 +25,33 @@ class PlanDiagnostic(BaseModel, Generic[IssueT]):
     disposition: PlanDiagnosticDisposition
 
 
-def _closed_argument(arg: object) -> bool:
-    if arg is Any or isinstance(arg, TypeVar):
+def _closed_argument(arg: object, bound: tuple[object, ...] = (),
+                     expanding: tuple[TypeAliasType, ...] = ()) -> bool:
+    if arg is Any:
         return False
-    if isinstance(arg, type) and issubclass(arg, BaseModel):
+    if isinstance(arg, (TypeVar, TypeVarTuple, ParamSpec)):
+        return arg in bound
+    origin = get_origin(arg)
+    args = get_args(arg)
+    alias = arg if isinstance(arg, TypeAliasType) else origin
+    if isinstance(alias, TypeAliasType):
+        if alias in expanding or len(args) != len(alias.__type_params__):
+            return False
+        # Check actual arguments before considering the alias parameters bound.
+        return (all(_closed_argument(a, bound, expanding) for a in args)
+                and _closed_argument(alias.__value__, alias.__type_params__, (*expanding, alias)))
+    if isinstance(arg, NewType):
+        return _closed_argument(arg.__supertype__, bound, expanding)
+    if origin is Annotated:
+        return _closed_argument(args[0], bound, expanding)
+    if isinstance(arg, list):  # get_args(Callable[[A, B], R]) returns ([A, B], R).
+        args = tuple(arg)
+    elif isinstance(arg, type) and issubclass(arg, BaseModel):
         metadata = arg.__pydantic_generic_metadata__
-        return not metadata["parameters"] and all(_closed_argument(a) for a in metadata["args"])
-    return all(_closed_argument(a) for a in get_args(arg))
+        if metadata["parameters"]:
+            return False
+        args = metadata["args"]
+    return all(_closed_argument(a, bound, expanding) for a in args)
 
 
 def admits_diagnostic_type(kind: type) -> bool:

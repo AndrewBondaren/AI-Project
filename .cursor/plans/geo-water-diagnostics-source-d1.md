@@ -154,3 +154,16 @@ Planning contracts + Fine Water mismatch дали 19/19 OK, Pyright — 0 оши
 **Исправление P1 после ревью.** Контрпример `LeafFact[tuple[Any, ...]]` воспроизведён на PlanBuildResult и PlanEnvelope. Общая для Planning и bounded reader проверка теперь рекурсивно обходит аргументы типов. Оба контейнера отклоняют этот carrier и принимают `LeafFact[tuple[int, ...]]`. Даже при регистрации loose carrier в тестовом manifest bounded decoder отклоняет класс при чтении заголовка записи.
 
 После исправления Planning contracts + Fine Water mismatch — **20/20 OK**, Pyright по четырём production-модулям S1 — **0 ошибок**. Группа source_schema / providers diagnostics / canonical_codec — 24 теста, 11 errors, 5 failures. Исправление P1 предъявлено на повторную приёмку S1. P2 относится к воспроизводимости source shape в S3.
+
+### Повторное независимое ревью S1, 2026-11-07
+
+**REVISE на `f7c5c8b9` относительно `78ab89bd`.** Прямой `LeafFact[tuple[Any, ...]]` теперь отклоняется на обеих границах Planning и в bounded decoder. P1 остаётся воспроизводимым через именованный alias.
+
+- **P1, S1.** В [planDiagnostic.py, строка 34](../../backend/app/dataModel/planning/diagnostics/planDiagnostic.py) вызов `get_args` для `type LooseAlias = tuple[Any, ...]` возвращает пустой кортеж. Объявить именованный carrier для `LeafFact[LooseAlias]` и передать `leaf=(42,)`. По §4 admission должен отклонить этот carrier. Фактически PlanBuildResult и PlanEnvelope его принимают. При полном тестовом manifest bounded round-trip принятого PlanBuildResult завершается `CanonicalEncodingError: wrong canonical field type or tag`. Контрольный `type IntAlias = tuple[int, ...]` проходит тот же round-trip. Bugbot также воспроизвёл пропуск Any в списке параметров `Callable[[Any], int]`.
+- **P2, S3.** Два свежих процесса снова дали разные префиксы shape ID 60008, `5370271c` и `ecbe476a`. Изменения вычисления fingerprint, codec и schema locks в diff исправления отсутствуют.
+
+Planning contracts + Fine Water mismatch — 20/20 OK. Pyright — 0 ошибок. В смежной группе 24 теста, 11 errors и 5 failures, имена падающих тестов и причины совпали с предыдущим прогоном, сверенным с базой. D2-0 остаётся принятым, сухой A + корректный B остаётся сценарием S4.
+
+Следующий шаг — закрыть P1 для alias и составных аргументов, закрепив отказ на обеих границах Planning и в bounded decoder с положительным контролем для конкретного alias. Переход к S2 отложен.
+
+**Исправление по повторному ревью.** Регрессия воспроизвела приём LooseAliasDiagnostic и LooseCallableDiagnostic до правки. Общий предикат теперь раскрывает именованные type aliases и обходит список параметров Callable. Для обоих контрпримеров PlanBuildResult и PlanEnvelope отклоняют экземпляр, bounded decoder отклоняет зарегистрированный тип при чтении заголовка. Контрольный IntAlias проходит обе границы Planning и bounded round-trip. Профиль Planning contracts + Fine Water mismatch дал 21/21 OK, Pyright по четырём production-файлам S1 дал 0 ошибок. Смежный набор дал 24 теста, 11 errors и 5 failures. S1 предъявлен на повторную приёмку. Вопрос стабильности source shape остаётся в S3.

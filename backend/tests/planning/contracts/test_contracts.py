@@ -6,7 +6,7 @@ import subprocess
 import sys
 import unittest
 
-from typing import Any
+from typing import Any, Callable
 from pydantic import BaseModel, ConfigDict, SerializeAsAny, TypeAdapter, ValidationError
 
 from app.application.jsonValidation import types as legacy
@@ -76,6 +76,22 @@ class IntegerDiagnostic(PlanDiagnostic[LeafFact[tuple[int, ...]]]):
     pass
 
 
+type IntAlias = tuple[int, ...]
+type LooseAlias = tuple[Any, ...]
+
+
+class ConcreteAliasDiagnostic(PlanDiagnostic[LeafFact[IntAlias]]):
+    pass
+
+
+class LooseAliasDiagnostic(PlanDiagnostic[LeafFact[LooseAlias]]):
+    pass
+
+
+class LooseCallableDiagnostic(PlanDiagnostic[LeafFact[Callable[[Any], int]]]):
+    pass
+
+
 def plan_key(**update):
     return PlanKey.model_validate({"world_uid": "world", "scope": WorldPlanScope(),
         "contract_id": "surface.climate_base", "schema_version": 1, "algorithm_version": 1,
@@ -87,6 +103,43 @@ def plan_ref(**update):
 
 
 class PlanningContractTests(unittest.TestCase):
+    def test_alias_and_callable_admission_agrees_with_bounded_decoder(self):
+        from app.application.encoding.boundedCanonicalDecode import decode_bounded
+        from app.dataModel.encoding.decodeLimits import DecodeLimits
+        from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest, CanonicalTypeKind, RegisteredTypeEntry
+        from app.encoding.canonicalCodec import CanonicalEncodingError, encode
+
+        result_type = PlanBuildResult[int]
+        disposition = PlanDiagnosticDisposition.ERROR
+        concrete = ConcreteAliasDiagnostic(issue=LeafFact[IntAlias](leaf=(42,)), disposition=disposition)
+        loose_alias = LooseAliasDiagnostic(issue=LeafFact[LooseAlias](leaf=(42,)), disposition=disposition)
+        loose_callable = LooseCallableDiagnostic(issue=LeafFact[Callable[[Any], int]](leaf=int), disposition=disposition)
+
+        def manifest_for(diagnostic):
+            models = (result_type, type(diagnostic), type(diagnostic.issue), PlanDiagnosticDisposition)
+            return CanonicalSchemaManifest(entries=tuple(
+                RegisteredTypeEntry(type_id=i, python_type=model, kind=CanonicalTypeKind.ENUM
+                                    if model is PlanDiagnosticDisposition else CanonicalTypeKind.RECORD)
+                for i, model in enumerate(models, start=1)))
+
+        result = result_type(payload=1, diagnostics=(concrete,))
+        envelope = PlanEnvelope[int](ref=plan_ref(), dependencies=(), payload=1, diagnostics=result.diagnostics)
+        self.assertIs(type(envelope.diagnostics[0]), ConcreteAliasDiagnostic)
+        limits = DecodeLimits(100000, 10000, 100, 1024)
+        manifest = manifest_for(concrete)
+        wire = encode(result, manifest)
+        self.assertEqual(decode_bounded(wire, result_type, manifest, limits=limits), result)
+        for bad in (loose_alias, loose_callable):
+            with self.subTest(carrier=type(bad).__name__):
+                with self.assertRaises(ValidationError):
+                    result_type(payload=1, diagnostics=(bad,))
+                with self.assertRaises(ValidationError):
+                    PlanEnvelope[int](ref=plan_ref(), dependencies=(), payload=1, diagnostics=(bad,))
+                # Same wire IDs, but the manifest now identifies an open carrier.
+                # Reject that record header before inspecting any leaf bytes.
+                with self.assertRaisesRegex(CanonicalEncodingError, "unexpected canonical record"):
+                    decode_bounded(wire, result_type, manifest_for(bad), limits=limits)
+
     def test_nested_any_is_rejected_at_both_planning_boundaries(self):
         loose = LooseDiagnostic(issue=LeafFact[tuple[Any, ...]](leaf=(42,)),
                                 disposition=PlanDiagnosticDisposition.ERROR)
