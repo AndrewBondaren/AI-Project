@@ -1,13 +1,13 @@
 from collections.abc import Mapping
-from typing import Annotated
 
-from pydantic import BaseModel, Field, TypeAdapter
+from pydantic import BaseModel
 
 from app.application.cancellation.typed.snapshotStore import SnapshotStore
 from app.application.engine.contracts.executionBindings import ExecutionCursor, ExecutionResult, LifecycleBinding, PassStage
 from app.application.engine.contracts.invocation.executionOptions import InvocationOptions
 from app.application.engine.registration.nodeRegistry import NodeRegistry
 from app.application.engine.runtime.dag.executionState import ExecutionState
+from app.application.engine.runtime.dag.lifecycle.admissionValidation import validate_resume, validate_run
 from app.application.engine.runtime.dag.lifecycle.executionSnapshotService import ExecutionSnapshotService
 from app.application.engine.runtime.dag.lifecycle.passExecution import PassExecution
 from app.application.engine.runtime.dag.lifecycle.sessionRecovery import SessionRecovery
@@ -17,7 +17,7 @@ from app.application.engine.runtime.invocations.invocationCoordinator import Inv
 from app.application.engine.runtime.invocations.recovery.executionRecovery import ExecutionRecovery
 from app.application.engine.taskType import TaskType
 from app.dataModel.engine.dag.diagnostics import CancellationRequest
-from app.dataModel.engine.dag.identity import DomainRevision, ExecutionId, ExecutionIdValue
+from app.dataModel.engine.dag.identity import DomainRevision, ExecutionId
 
 
 class ExecutionAdmission[O: BaseModel, S: BaseModel]:
@@ -36,9 +36,7 @@ class ExecutionAdmission[O: BaseModel, S: BaseModel]:
         self._passes = passes
         self._active: set[ExecutionId] = set()
 
-    def _enter(self, execution_id: ExecutionId, max_passes: int) -> None:
-        TypeAdapter[ExecutionId](ExecutionIdValue).validate_python(execution_id)
-        TypeAdapter(Annotated[int, Field(strict=True, gt=0)]).validate_python(max_passes)
+    def _enter(self, execution_id: ExecutionId) -> None:
         if execution_id in self._active:
             raise RuntimeError("execution is already running")
         self._active.add(execution_id)
@@ -47,10 +45,9 @@ class ExecutionAdmission[O: BaseModel, S: BaseModel]:
         self, execution_id: ExecutionId, task_type: TaskType, *, max_passes: int, options: LLMExecutionOptions,
         confirmed_domain_revisions: Mapping[str, DomainRevision] | None = None, cancellation: CancellationRequest | None = None,
     ) -> ExecutionResult[O]:
-        self._enter(execution_id, max_passes)
+        validate_run(execution_id, max_passes, task_type, options)
+        self._enter(execution_id)
         try:
-            options.__post_init__()
-            TypeAdapter(TaskType).validate_python(task_type, strict=True)
             if self._store.load(execution_id) is not None:
                 raise ValueError("saved execution requires resume")
             settings = self._settings
@@ -93,9 +90,9 @@ class ExecutionAdmission[O: BaseModel, S: BaseModel]:
         self, execution_id: ExecutionId, *, max_passes: int, options: LLMExecutionOptions,
         confirmed_domain_revisions: Mapping[str, DomainRevision] | None = None, cancellation: CancellationRequest | None = None,
     ) -> ExecutionResult[O]:
-        self._enter(execution_id, max_passes)
+        validate_resume(execution_id, max_passes, options)
+        self._enter(execution_id)
         try:
-            options.__post_init__()
             invocation_options = self._settings
             if invocation_options is not None:
                 try:

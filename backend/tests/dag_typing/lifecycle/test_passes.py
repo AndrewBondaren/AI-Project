@@ -9,12 +9,15 @@ import unittest
 from unittest.mock import patch
 import weakref
 
+from pydantic import ValidationError
+
 from app.application.cancellation.typed.snapshotStore import SnapshotStore
 from app.application.engine.contracts.executionBindings import PassStage, ResolveResult
 from app.application.engine.diagnostics.dagLog import emit
 from app.application.engine.diagnostics.events import LifecycleDiagnostic
 from app.application.engine.runtime.dag.dagExecutor import DAGExecutor
 from app.application.engine.runtime.dag.executionState import ExecutionState
+from app.application.engine.runtime.dag.lifecycle.executionAdmission import ExecutionAdmission
 from app.application.engine.runtime.dag.lifecycle.executionSnapshotService import ExecutionSnapshotService
 from app.application.engine.runtime.execution.pythonNodeError import PythonNodeError
 from app.application.engine.runtime.execution.pythonNodeExecutor import PythonNodeExecutor

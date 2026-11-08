@@ -2,9 +2,9 @@
 
 from collections.abc import Callable, Mapping
 from time import time
-from typing import Annotated, Generic, TypeVar
+from typing import Generic, TypeVar
 
-from pydantic import BaseModel, Field, TypeAdapter
+from pydantic import BaseModel
 
 from app.application.engine.contracts.invocation.inputWait import ResumeInput
 from app.dataModel.engine.dag.invocations.inputWait import InputReceipt
@@ -19,6 +19,7 @@ from app.application.engine.diagnostics.events import LifecycleDiagnostic
 from app.application.engine.registration.nodeRegistry import NodeRegistry
 from app.application.engine.runtime.dag.dagExecutor import DAGExecutor
 from app.application.engine.runtime.dag.lifecycle.executionAdmission import ExecutionAdmission
+from app.application.engine.runtime.dag.lifecycle.admissionValidation import validate_resume
 from app.application.engine.runtime.dag.lifecycle.executionSnapshotService import ExecutionSnapshotService
 from app.application.engine.runtime.dag.lifecycle.passExecution import PassExecution
 from app.application.engine.runtime.dag.lifecycle.sessionRecovery import SessionRecovery
@@ -75,8 +76,7 @@ class DAGEngine(Generic[O, S]):
 
     async def resume_input[U: BaseModel](self, execution_id: ExecutionId, request: ResumeInput[U], *,
                                          max_passes: int, options: LLMExecutionOptions) -> InputDelivery[O]:
-        TypeAdapter(Annotated[int, Field(strict=True, gt=0)]).validate_python(max_passes)
-        options.__post_init__()
+        validate_resume(execution_id, max_passes, options)
         receipt = await self.accept_input(execution_id, request)
         result = await self.resume(execution_id, max_passes=max_passes, options=options)
         return InputDelivery(receipt, result)
