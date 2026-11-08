@@ -13,7 +13,7 @@
 | Владелец и операция | Input | Output | Отказы и эффекты |
 |---|---|---|---|
 | Climate · подготовить материализацию / пересчёт | Закреплённый план, область, варианты LOD и входы запроса; для пересчёта — область и назначение пересчёта из события. Имена generate_climate/recalculate_climate обозначают сценарии legacy | Подготовленный результат Climate с областью, provenance и ссылками на staged artifacts; пустое изменение — явный успешный исход | Домен проверяет пригодность входов, вычисляет результат и при необходимости передаёт его в staging. DAG ведёт материализацию вплоть до передачи результата владельцу публикации. Форматы результата и патча требуют freeze. |
-| Climate · sample_scene_climate | SampleRef, temperature_base:int или null и rainfall:int или null после независимой агрегации по доступным значениям, season:SeasonKey или null из типизированного входа DAG, SeasonTempOffsets из той же публикации | SceneClimateSample(ref, season, temperature_base:int, effective_temperature:int, rainfall:int). При заданном сезоне effective = base + соответствующий offset, при null — base | Несовместимый источник — SourceMismatch; отсутствующая публикация — PublicationUnavailable. При отсутствии хотя бы одного поля возвращается неполная выборка по контракту ниже. Чистый расчёт. |
+| Climate · sample_scene_climate | SampleRef, temperature_base:int или null и rainfall:int или null после независимой агрегации по доступным значениям, season:Key[CalendarSeasonRegistry] или null от Time через DAG, согласованные поправки Climate той же базы | SceneClimateSample(ref, season, temperature_base:int, effective_temperature:int, rainfall:int). При заданном сезоне effective = base + соответствующий offset, при null — base | Сезон без поправки — ошибка контракта SeasonContractMismatch; несовместимый источник — SourceMismatch; отсутствующая публикация — PublicationUnavailable. При отсутствии хотя бы одного поля возвращается неполная выборка по контракту ниже. Чистый расчёт. |
 | Weather · read_weather_rules | world_uid, At(R) | WeatherRulesView(world_uid, R, registry:WorldWeatherTypeRegistry). DAG разрешает Current один раз у World; для сцены использует At(sample.ref.R) | WorldNotFound, PublicationUnavailable, InvalidStoredSettings. Чтение без записи или repair. |
 | Weather · resolve_weather | SceneClimateSample и WeatherRulesView того же мира и R | WeatherSnapshot со ссылкой на sample, сезоном, базовой и эффективной температурой, rainfall, выбранным system_weather. Для совместимости существующего выхода intensity=0 до отдельной формулы | SourceMismatch при несовместимых входах. При отсутствии совпадения применяется fallback из ТЗ. Результат передаётся потребителю сцены без записи в map_cells. |
 
@@ -42,7 +42,17 @@
 
 При равном priority сохраняется порядок записей в реестре согласно WorldWeatherTypeRegistry.sorted_by_priority. По ТЗ входной check_order служит alias для priority; при наличии обоих побеждает priority. В текущей модели WeatherTypeEntry alias ещё отсутствует.
 
-**Открыто для привязки DAG.** Уточнить тип ссылки на выборку сцены, типизированную привязку выхода Time (CalendarProjection.season) ко входу Climate (SeasonKey или null) через DAG для пользовательских календарей; null означает отсутствие сезона, неизвестный ключ нельзя молча превращать в null, источник сохранённого WeatherRulesView по R, соответствие wire-схемы уже заданному в ТЗ alias check_order. Регистрация нод, перенос классов и переключение consumers требуют отдельной реализации.
+#### Контракт календарного сезона и Climate
+
+| Граница | Тип, владелец и источник |
+|---|---|
+| World → Time | World объявляет ключ в [SeasonEntry.system_season](../../backend/app/dataModel/world/calendar/catalogs/seasons.py#L24). Для выбранной публикации [TimeReader.read_pinned](../../backend/app/application/time/reads/reader.py#L12) возвращает TimeCapture либо TimeStateUnavailable. [CalendarProjector.project](../../backend/app/application/time/calendar/projection.py#L84) помещает сезон календарного интервала в [CalendarProjection.season](../../backend/app/dataModel/world/calendar/projection/result.py#L19) типа `Key[CalendarSeasonRegistry] \| None`. |
+| Time → нода DAG → Climate (цель) | Нода передаёт полученное значение как аргумент season в [контракт sample_scene_climate](./generator_public_method.md#climate-и-weather--публичные-операции-для-dag). При season=None: effective_temperature = temperature_base. При заданном ключе: effective_temperature = temperature_base + offset этого ключа, включая offset=0. Отказ Time остаётся отказом чтения. |
+| Climate → нода DAG (цель) | Для каждого сезона, который может вернуть календарь, должна однозначно разрешаться поправка той же базы. При создании, импорте и изменении одной из сторон проверяется итоговая пара; read-set включает обе версии. Несовместимый кандидат отклоняется целиком с указанием ключа. Несовместимая сохранённая база при расчёте даёт ошибку контракта (предлагаемое имя SeasonContractMismatch); DAG завершает ветвь до Weather. |
+
+**Разрыв с реализацией.** [SeasonTempOffsets](../../backend/app/dataModel/climate/worldClimateScalars.py#L44) объявляет четыре поля. Текущий [resolve_effective_temperature](../../backend/app/application/worldData/generators/assemblers/climateAssembler/climateRuntimeAssembler.py#L25) принимает строку и при неизвестном ключе фактически прибавляет 0. Целевая ошибка, формат хранения произвольных сезонных ключей и миграция четырёх полей пока не реализованы.
+
+**Открыто для привязки DAG.** Точный reader выборки сцены, источник сохранённого WeatherRulesView по R и реализация alias check_order. Регистрация нод, перенос классов и переключение consumers требуют отдельной реализации.
 
 ### Пример оркестрации погоды сцены через DAG
 
@@ -65,19 +75,20 @@ flowchart TD
     P <-->|"область на R → SampleRef, температура, осадки"| Pack["Pack / владелец выборки"]
     C <-->|"read_settings(world_uid, R)"| Climate["Climate"]
     W <-->|"read_weather_rules(world_uid, R)"| Weather["Weather"]
-    T -->|"привязка сезона ко входу Climate"| S
+    T -->|"system_season или null"| S
     P -->|"выборка"| S
     C -->|"SeasonTempOffsets"| S
     S <-->|"sample_scene_climate → полный или неполный результат"| Climate
     S --> B
     B -->|"IncompleteSceneClimate"| M
+    B -->|"SeasonContractMismatch"| X["Ошибка контракта календаря и Climate"]
     B -->|"SceneClimateSample"| R
     W -->|"WeatherRulesView той же R"| R
     R <-->|"resolve_weather → WeatherSnapshot"| Weather
     R --> O
 ```
 
-Четыре исходных чтения могут исполняться независимо после выбора R. В ветке полной выборки Climate применяет сезонную поправку один раз, а Weather выбирает тип погоды по переданным значениям. Измеренный ноль осадков допускает расчёт; отсутствие измерения возвращает missing_fields. Точный reader выборки и привязка пользовательского календарного ключа к SeasonKey остаются открытыми.
+Четыре исходных чтения могут исполняться независимо после выбора R. В ветке полной выборки Climate применяет сезонную поправку один раз, а Weather выбирает тип погоды по переданным значениям. Измеренный ноль осадков допускает расчёт; отсутствие измерения возвращает missing_fields. При несовместимости календаря и настроек Climate DAG возвращает диагностику с ключом сезона.
 
 ### Проверка плана и legacy inventory
 
