@@ -1,5 +1,7 @@
 # GEN-SURFACE-PLAN — публичный pipeline подготовки плана поверхности
 
+**Навигационный граф разработки:** [WORLD-PLAN-GRAPH-1](./world-generation-plan-dependency-graph.md), §§1, 4, 5.1/5.2, 8 и 12. Для применимой GEN preparation-ноды сначала согласуется доменный public contract §7 (GEN-CONTRACTS), затем реализованный/проверенный метод передаётся в binding (GEN-PORTS); это не общий prerequisite всех GEN-нод. Нормативные I/O/E/ownership, статус и разрешение реализации остаются в этом owning-плане.
+
 **Статус:** REQUIREMENTS / OPEN, 2026-11-02. По поручению пользователя фиксируются target interface/method names и отдельное требование реализации. Это не разрешение реализации или cutover, не расширение поведения существующих DAG-нод.
 
 **Owning domain:** surface planning (`application/worldData/planning`). Интерфейс принадлежит этому домену, а не engine и не общему facade всех генераторов. Реализация использует существующие domain providers и PlanningService.
