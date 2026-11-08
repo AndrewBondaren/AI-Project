@@ -1,13 +1,14 @@
 """Pack-side execution lifetime. Every physical read holds the publication writer until drain."""
 from dataclasses import dataclass
 from functools import partial
+from sqlite3 import OperationalError, ProgrammingError
 from uuid import UUID
 
 from app.application.artifacts.contracts.blobRead import ReadableBlobBackend
 from app.application.artifacts.contracts.formatBackend import ArtifactFormatContract
 from app.application.artifacts.registry.artifactRegistry import ArtifactFormatRegistryBinding
 from app.application.worldData.generators.hydrology.encoding.packCodec import decode_root
-from app.application.engine.contracts.invocation.executionStore import ExecutionStore
+from app.application.engine.contracts.invocation.executionStore import CloseReceipt as CloseReceipt, ExecutionStore
 from app.application.worldData.pack.encoding.packManifestCodec import decode_manifest
 from app.application.worldData.pack.spatial.openWaterBlobReader import OpenWaterBlobReader
 from app.dataModel.artifacts.lifecycle.holders import ArtifactRetentionHolder, PinHolder
@@ -34,13 +35,6 @@ class PackIntentUnavailable(RuntimeError):
 
 
 @dataclass(frozen=True)
-class CloseReceipt:
-    store_id: UUID
-    execution_id: ExecutionId
-    stop_revision: int
-
-
-@dataclass(frozen=True)
 class PinIntent:
     store_id: UUID
     execution_id: ExecutionId
@@ -51,30 +45,61 @@ class PinIntent:
 
 
 class ExecutionPins:
+    def __init__(self, publications: SqliteWorldPublicationStore,
+                 holders: SqliteArtifactHolders, registry: ArtifactFormatRegistryBinding,
+                 manifest_contract: ArtifactFormatContract[bytes], manifest_version: int, manifest_budget: int):
+        backend = registry.resolve(manifest_contract)
+        if (not isinstance(backend, ReadableBlobBackend) or manifest_version not in manifest_contract.supported_versions
+                or type(manifest_budget) is not int or manifest_budget <= 0):
+            raise ValueError("invalid registered manifest reader or budget")
+        self._id: UUID | None = None
+        self._store: ExecutionStore | None = None
+        self._publications = publications
+        self._catalog = holders._catalog
+        self._holders = holders
+        self._scopes = holders._scopes
+        self._access = holders._access
+        self._backend = backend
+        self._contract = manifest_contract
+        self._version = manifest_version
+        self._budget = manifest_budget
+        self._reader = OpenWaterBlobReader(registry, self._catalog, holders)
+
     @classmethod
     async def bind(cls, store: ExecutionStore, publications: SqliteWorldPublicationStore,
                    holders: SqliteArtifactHolders, registry: ArtifactFormatRegistryBinding,
-                   manifest_contract: ArtifactFormatContract[bytes], manifest_version: int, manifest_budget: int):
-        """Bind trusted store and registered manifest format once at composition."""
-        instance = cls()
+                   manifest_contract: ArtifactFormatContract[bytes], manifest_version: int, manifest_budget: int,
+                   *, binding_key: str = "default"):
+        """Each configured DAG endpoint has a stable Pack-local binding key."""
+        instance = cls(publications, holders, registry, manifest_contract, manifest_version, manifest_budget)
+        lookup = "SELECT store_id FROM pack_execution_namespaces WHERE binding_key=?"
+        try:
+            store_id = await store.get_store_id()
+        except (OSError, OperationalError, ProgrammingError) as error:
+            # sqlite3 gives a closed connection no distinct exception class or SQLite error code.
+            if isinstance(error, ProgrammingError) and error.args != ("Cannot operate on a closed database.",):
+                raise
+            async with holders._scopes.read_scope() as scope:
+                row = await holders._access.one(scope, lookup, (binding_key,))
+            if row is None:
+                raise PackIntentUnavailable("no authenticated Pack namespace for offline recovery") from error
+            instance._id = UUID(row["store_id"])
+            return instance
+
+        async with holders._scopes.commits.transaction(runtime_uid()) as scope:
+            row = await holders._access.one(scope, lookup, (binding_key,))
+            if row is None:
+                await holders._access.one(scope, "INSERT INTO pack_execution_namespaces VALUES (?,?)",
+                                          (binding_key, str(store_id)))
+            elif row["store_id"] != str(store_id):
+                raise PackIdentityConflict("configured DAG endpoint changed namespace")
+        instance._id = store_id
         instance._store = store
-        instance._id = await store.get_store_id()
-        instance._publications = publications
-        instance._catalog = holders._catalog
-        instance._holders = holders
-        instance._scopes = holders._scopes
-        instance._access = holders._access
-        instance._backend = registry.resolve(manifest_contract)
-        instance._contract = manifest_contract
-        instance._version = manifest_version
-        instance._budget = manifest_budget
-        if (not isinstance(instance._backend, ReadableBlobBackend) or manifest_version not in manifest_contract.supported_versions
-                or type(manifest_budget) is not int or manifest_budget <= 0):
-            raise ValueError("invalid registered manifest reader or budget")
-        instance._reader = OpenWaterBlobReader(registry, instance._catalog, holders)
         return instance
 
     def _owner(self, identity):
+        if self._id is None:
+            raise PackIdentityConflict("adapter requires an authenticated namespace binding")
         if identity.store_id != self._id:
             raise PackIdentityConflict("foreign DAG store")
         return str(self._id), identity.execution_id
@@ -84,12 +109,24 @@ class ExecutionPins:
             WHERE store_id=? AND execution_id=?""", owner)
 
     async def _checkpoint(self, execution_id):
+        if self._store is None:
+            raise PackIntentUnavailable("offline recovery requires an existing CLOSED receipt")
         try:
             return await self._store.load(execution_id)
         except KeyError as exc:
             raise PackIdentityConflict("unknown execution") from exc
         except Exception as exc:
             raise PackIntentUnavailable("cannot load trusted execution") from exc
+
+    async def read_closed(self, command: ExecutionStopIntent) -> CloseReceipt | None:
+        owner = self._owner(command)
+        async with self._scopes.read_scope() as scope:
+            row = await self._closed(scope, owner)
+        if row is None:
+            return None
+        if row["stop_revision"] != command.stop_revision:
+            raise PackIdentityConflict("conflicting stop revision")
+        return CloseReceipt(command.store_id, command.execution_id, row["stop_revision"])
 
     async def close(self, command: ExecutionStopIntent) -> CloseReceipt:
         if type(command) is not ExecutionStopIntent or type(command.stop_revision) is not int or command.stop_revision <= 0:
@@ -119,6 +156,8 @@ class ExecutionPins:
         owner = self._owner(intent)
         if await self._closed(scope, owner):
             raise PackClosed("execution is closed")
+        if self._store is None:
+            raise PackIntentUnavailable("offline recovery requires an existing CLOSED receipt")
         rows = await self._access.all(scope, """SELECT * FROM pack_execution_pins WHERE pin_id=?
             OR (store_id=? AND execution_id=? AND invocation_id=? AND logical_read_key=?)""",
             (intent.pin_id, *owner, intent.invocation_id, intent.logical_read_key))

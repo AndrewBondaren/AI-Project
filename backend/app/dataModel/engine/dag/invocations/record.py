@@ -123,6 +123,7 @@ class InvocationGraph(BaseModel):
     execution_id: ExecutionIdValue
     revision: PlanRevisionValue
     root: InvocationId
+    initial_task: str | None = None
     session: str | None = None
     response: str | None = None
     interaction_owner: InteractionOwner | None = None

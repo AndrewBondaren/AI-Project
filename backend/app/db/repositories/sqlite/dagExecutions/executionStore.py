@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 from hashlib import sha256
 
 from app.application.engine.contracts.invocation.executionStore import (
-    Checkpoint, Claim, OwnershipConflict, RestoreFailure,
+    Checkpoint, Claim, CloseReceipt, OwnershipConflict, RestoreFailure,
 )
 from app.dataModel.engine.dag.identity import ExecutionId, WaitId
 from app.dataModel.engine.dag.invocations.record import ExecutionCheckpointStatus, ExecutionStopIntent, InvocationStatus, StopOutcome
@@ -56,16 +56,20 @@ class SQLiteExecutionStore:
         if row is None:
             raise KeyError(execution_id)
         version, revision, status, blob, checksum = row
-        if version not in (2, 3) or sha256(blob).hexdigest() != checksum:
+        if version not in (2, 3, 4) or sha256(blob).hexdigest() != checksum:
             raise RestoreFailure("unsupported or corrupt execution checkpoint")
-        if version == 3:
+        if version in (3, 4):
             try:
                 stopped = _StoppedCheckpoint.model_validate_json(blob)
             except ValidationError as exc:
                 raise RestoreFailure("invalid stopped checkpoint") from exc
-            if stopped.intent.execution_id != execution_id or stopped.intent.stop_revision != revision:
+            if stopped.intent.execution_id != execution_id or stopped.intent.stop_revision + (version == 4) != revision:
+                raise RestoreFailure("stop intent revision mismatch")
+            identity = self.db.execute("SELECT store_id FROM dag_store_identity WHERE singleton=1").fetchone()
+            if identity is None or identity[0] != str(stopped.intent.store_id):
                 raise RestoreFailure("stop intent identity mismatch")
-            return Checkpoint(revision, _checkpoint_status.validate_python(status), stopped.graph_blob, stopped.intent)
+            return Checkpoint(revision, _checkpoint_status.validate_python(status), stopped.graph_blob, stopped.intent,
+                              revision if version == 4 else None)
         return Checkpoint(revision, _checkpoint_status.validate_python(status), blob)
 
     async def claim(self, execution_id: ExecutionId, owner_id: str, seconds: int) -> Claim:
@@ -74,7 +78,7 @@ class SQLiteExecutionStore:
         with self._transaction():
             row = self.db.execute(
                 "UPDATE dag_executions SET owner_id=?,fence=fence+1,lease_until=unixepoch('subsec')+? "
-                "WHERE execution_id=? AND (owner_id IS NULL OR lease_until<=unixepoch('subsec')) RETURNING fence",
+                "WHERE schema_version IN (2,3) AND execution_id=? AND (owner_id IS NULL OR lease_until<=unixepoch('subsec')) RETURNING fence",
                 (owner_id, seconds, execution_id),
             ).fetchone()
             if row is None:
@@ -104,6 +108,20 @@ class SQLiteExecutionStore:
             if updated.rowcount != 1:
                 raise OwnershipConflict(claim.execution_id)
             return intent
+
+    async def finalize(self, claim: Claim, revision: int, closed: CloseReceipt) -> Checkpoint:
+        with self._transaction():
+            self.db.execute("BEGIN IMMEDIATE")
+            saved = await self.load(claim.execution_id)
+            intent = saved.confirm_closed(revision, closed)
+            updated = self.db.execute(
+                "UPDATE dag_executions SET schema_version=4,revision=revision+1 WHERE schema_version=3 "
+                "AND execution_id=? AND owner_id=? AND fence=? AND revision=? AND lease_until>unixepoch('subsec')",
+                (claim.execution_id, claim.owner_id, claim.fence, revision),
+            )
+            if updated.rowcount != 1:
+                raise OwnershipConflict(claim.execution_id)
+            return Checkpoint(revision + 1, saved.status, saved.blob, intent, revision + 1)
 
     async def checkpoint(self, claim: Claim, revision: int, status: ExecutionCheckpointStatus, blob: bytes) -> int:
         with self._transaction():
@@ -144,7 +162,7 @@ class SQLiteExecutionStore:
         with self._transaction():
             cursor = self.db.execute(
                 "UPDATE dag_executions SET lease_until=unixepoch('subsec')+? WHERE execution_id=? AND owner_id=? "
-                "AND fence=?", (seconds, claim.execution_id, claim.owner_id, claim.fence),
+                "AND fence=? AND (schema_version=2 OR lease_until>unixepoch('subsec'))", (seconds, claim.execution_id, claim.owner_id, claim.fence),
             )
             if cursor.rowcount != 1:
                 raise OwnershipConflict(claim.execution_id)

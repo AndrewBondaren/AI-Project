@@ -13,7 +13,7 @@ from app.application.engine.runtime.invocations.inputWaitCoordinator import Inpu
 from app.dataModel.engine.dag.invocations.inputWait import InputReceipt
 from app.dataModel.engine.dag.invocations.record import CompletedOutcome, FailedOutcome, InvocationStatus
 from app.application.engine.contracts.invocation.executionOptions import InvocationOptions
-from app.application.engine.contracts.invocation.executionStore import Checkpoint, OwnershipConflict, RestoreFailure
+from app.application.engine.contracts.invocation.executionStore import Checkpoint, PackCloser, OwnershipConflict, RestoreFailure
 from app.application.engine.runtime.invocations.checkpointCodec import CheckpointCodec
 from app.application.engine.runtime.invocations.invocationCoordinator import InvocationCoordinator
 from app.application.engine.runtime.invocations.ownedExecution import ExecutionStopping, OwnedExecution
@@ -33,6 +33,7 @@ from app.application.engine.runtime.execution.llmAggregateExecutor import LLMAgg
 from app.application.engine.runtime.execution.nodeOutcome import LevelDecision
 from app.application.engine.runtime.repair.repairOrchestrator import cancellation_checkpoint
 from app.application.engine.runtime.responseResolver import ResponseResolver
+from app.application.publication.errors import UnknownCommitOutcome
 from app.application.engine.taskType import TaskType
 from app.dataModel.engine.dag.diagnostics import CancellationRequest, ExecutionEventCode, ExecutionSeverity
 from app.dataModel.engine.dag.executionPhase import ExecutionPhase
@@ -47,14 +48,15 @@ class DAGEngine(Generic[O, S]):
     def __init__(
         self, executor: DAGExecutor, aggregate: LLMAggregateExecutor, registry: NodeRegistry,
         binding: LifecycleBinding[O], request: LLMRequest, snapshots: ExecutionSnapshotService[S], store: SnapshotStore[S], *,
-        enable_stop_intent: bool = False,
+        enable_stop_intent: bool = False, pack_closer: PackCloser | None = None,
         emit: Callable[[LifecycleDiagnostic], None] = emit_diagnostic, clock: Callable[[], float] = time,
     ) -> None:
         self._executor, self._aggregate, self._registry = executor, aggregate, registry
         self._binding, self._request = binding, request
         self._snapshots, self._store = snapshots, store
         self._emit, self._clock = emit, clock
-        self._enable_stop_intent = enable_stop_intent
+        self._pack_closer = pack_closer
+        self._enable_stop_intent = enable_stop_intent or pack_closer is not None
         self._active: set[ExecutionId] = set()
 
     def _enter(self, execution_id: ExecutionId, max_passes: int) -> None:
@@ -95,6 +97,7 @@ class DAGEngine(Generic[O, S]):
                     graph.interaction_owner = invocation_options.interaction.owner
                 elif any(c.input_wait for c in graph.registry):
                     raise ValueError("WAIT_INPUT requires an application interaction binding")
+                graph.initial_task = task_type.value
                 graph.session = self._snapshots.encode(state, self._registry)
                 await invocation_options.store.create(execution_id, CheckpointCodec.encode(graph))
                 state.release()
@@ -241,9 +244,7 @@ class DAGEngine(Generic[O, S]):
         confirmed: Mapping[str, DomainRevision] | None, cancellation: CancellationRequest | None,
         requested_task: TaskType | None = None,
     ) -> ExecutionResult[O]:
-        claim = await settings.store.claim(execution_id, str(uuid4()), settings.lease_seconds)
-        async def drive_claimed() -> ExecutionResult[O]:
-            saved = await settings.store.load(execution_id)
+        def read_header(saved: Checkpoint) -> tuple[InvocationGraph, SessionFrame]:
             try:
                 header = InvocationGraph.model_validate_json(saved.blob)
                 if header.session is None or header.execution_id != execution_id:
@@ -251,10 +252,50 @@ class DAGEngine(Generic[O, S]):
                 if header.interaction_owner is not None:
                     InputWaitCoordinator.check_owner(header, settings.interaction)
                 frame = SessionFrame.model_validate_json(header.session)
+                if frame.metadata.execution_id != execution_id or frame.metadata.plan_revision != header.revision:
+                    raise RestoreFailure("lifecycle identity mismatch")
                 if frame.cursor is None or (saved.stop_intent is None and frame.metadata.pass_number >= max_passes):
                     raise ValueError("invalid durable lifecycle cursor")
-                if requested_task is not None and frame.metadata.pass_number == 0 and frame.cursor.task_type != requested_task:
+                initial_task = header.initial_task
+                if initial_task is None and frame.metadata.pass_number == 0:
+                    initial_task = frame.cursor.task_type.value
+                if requested_task is not None and initial_task != requested_task.value:
                     raise ValueError("duplicate execution request differs")
+                return header, frame
+            except ValueError as exc:
+                raise RestoreFailure("incompatible durable execution") from exc
+
+        def terminal(saved: Checkpoint) -> ExecutionResult[O]:
+            intent = saved.stop_intent
+            if intent is None or intent.execution_id != execution_id or saved.final_revision != intent.stop_revision + 1:
+                raise RestoreFailure("invalid finalized execution")
+            if isinstance(intent.outcome, FailedOutcome):
+                return Failed(intent.outcome.diagnostic)
+            try:
+                return TypeAdapter[ResolveResult[O]](ResolveResult[self._binding.response_type]).validate_json(intent.outcome.result_json)
+            except ValueError as exc:
+                raise RestoreFailure("invalid final response") from exc
+
+        before = await settings.store.load(execution_id)
+        if before.final_revision is not None:
+            read_header(before)
+            return terminal(before)
+        try:
+            claim = await settings.store.claim(execution_id, str(uuid4()), settings.lease_seconds)
+        except OwnershipConflict:
+            winner = await settings.store.load(execution_id)
+            if winner.final_revision is None:
+                raise
+            read_header(winner)
+            return terminal(winner)
+
+        async def drive_claimed() -> ExecutionResult[O]:
+            saved = await settings.store.load(execution_id)
+            try:
+                header, frame = read_header(saved)
+                assert frame.cursor is not None and header.session is not None
+                if saved.final_revision is not None:
+                    return terminal(saved)
                 if saved.stop_intent is not None:
                     if saved.stop_intent.execution_id != execution_id or saved.stop_intent.stop_revision != saved.revision:
                         raise RestoreFailure("invalid stop intent identity")
@@ -264,6 +305,8 @@ class DAGEngine(Generic[O, S]):
                     raise ExecutionStopping(recovered)
                 revision, plan = self._binding.compile(frame.cursor.task_type, frame.metadata.pass_number)
                 graph = await CheckpointCodec.restore(saved.blob, plan)
+                if graph.initial_task is None and frame.metadata.pass_number == 0:
+                    graph.initial_task = frame.cursor.task_type.value
                 if revision != graph.revision or plan.invocation_root != graph.records[graph.root].node_id:
                     raise ValueError("durable plan changed")
                 if graph.cancellation is not None or graph.failure is not None:
@@ -285,7 +328,30 @@ class DAGEngine(Generic[O, S]):
                 raise RestoreFailure("incompatible durable execution") from exc
             owned = OwnedExecution(settings.store, claim, saved.revision, graph, settings.lease_seconds)
             return await self._drive(state, plan, max_passes, options, confirmed, cancellation, owned)
-        task = asyncio.create_task(drive_claimed())
+
+        async def drive_to_final() -> ExecutionResult[O]:
+            try:
+                return await drive_claimed()
+            except ExecutionStopping as stopped:
+                if self._pack_closer is None:
+                    raise
+                intent = stopped.intent
+                closed = await self._pack_closer.read_closed(intent)
+                if closed is None:
+                    try:
+                        await self._pack_closer.close(intent)
+                    except (UnknownCommitOutcome, OSError):
+                        closed = await self._pack_closer.read_closed(intent)
+                        if closed is None:
+                            raise
+                    else:
+                        closed = await self._pack_closer.read_closed(intent)
+                if closed is None:
+                    raise RestoreFailure("Pack CLOSED unavailable after close")
+                final = await settings.store.finalize(claim, intent.stop_revision, closed)
+                return terminal(final)
+
+        task = asyncio.create_task(drive_to_final())
         heartbeat = settings.lease_seconds / 3
         if settings.interaction is not None:
             heartbeat = min(heartbeat, 1.0)
@@ -303,7 +369,10 @@ class DAGEngine(Generic[O, S]):
                 await settings.store.release(claim)
         except OwnershipConflict:
             saved = await settings.store.load(execution_id)
-            if saved.status != InvocationStatus.CANCELLED or settings.interaction is None:
+            if saved.final_revision is not None:
+                read_header(saved)
+                return terminal(saved)
+            if saved.stop_intent is not None or saved.status != InvocationStatus.CANCELLED or settings.interaction is None:
                 raise
             graph, _ = self._interaction_graph(execution_id, settings, saved)
             if graph.cancellation is None:

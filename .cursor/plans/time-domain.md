@@ -1298,6 +1298,8 @@ API/GEN owner получает inventory §11/30/33, lossless transport policy �
 
 Владелец внешних контрактов и критерии их проверки указаны в [Snapshot, «Контракты Snapshot для интеграции Time»](./world-domain-patches-snapshots.md). Статус всех трёх gates — OPEN.
 
+Проект [SN-TIME-READ — точная адресация принятого времени](./sn-time-read.md) содержит контракт, интеграционную проверку P/Q и команду первого среза. Согласовано сохранить проверку актуальности в read_current(expected=P) и добавить read_pinned(P) для повторяемого чтения принятой публикации. Gate T4 открыт до production-проверки.
+
 - **T4, current/historical read.** Требуется SN-TIME-READ и реализация Time state reader. Чтение привязано к уже принятому состоянию. Целевая публикация будущей записи и операция создания ветки этому пути не требуются.
 - **T5, runtime apply.** Требуется SN-TIME-APPLY и применимый Time/World handler в общем CommitScope. Target publication назначает Snapshot. Принятие подтверждается общим результатом commit. Pure prepare_advance доступен независимо.
 - **Restore/branch.** SN-TIME-BRANCH требуется именно для создания и восстановления результата новой ветки. Чтение существующей исторической точки использует SN-TIME-READ.

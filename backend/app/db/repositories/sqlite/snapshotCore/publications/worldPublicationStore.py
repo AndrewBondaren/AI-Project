@@ -94,6 +94,15 @@ class SqliteWorldPublicationStore:
         return await self._ref(await self._access.one(scope,
             "SELECT * FROM world_publications WHERE publication_id=?", (publication_id,)), scope)
 
+    async def read_exact(self, world_uid: EntityUid, publication_id: EntityUid, *,
+                         scope: CommitReadScope) -> WorldPublicationRef | None:
+        self._registry.check(scope)
+        world_uid = _UID.validate_python(world_uid, strict=True)
+        publication_id = _UID.validate_python(publication_id, strict=True)
+        row = await self._access.one(scope,
+            "SELECT * FROM world_publications WHERE world_uid=? AND publication_id=?", (world_uid, publication_id))
+        return None if row is None else await self._ref(row, scope)
+
     async def read(self, world_uid: EntityUid, *, scope: CommitReadScope | None = None) -> WorldPublicationRef:
         world_uid = _UID.validate_python(world_uid, strict=True)
         async with self._commits.read_scope(scope) as pinned:

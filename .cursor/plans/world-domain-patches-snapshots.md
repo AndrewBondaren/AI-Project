@@ -3066,6 +3066,8 @@ Evidence гонок получено на отдельных соединени�
 | SN-TIME-APPLY | Согласовать передачу назначенной target WorldPublicationRef обработчику в том же CommitScope, где CAS принимает эту публикацию. Предложение Time §37 — поле SnapshotApplyContext.next_publication. Проверить согласованность world, timeline, assigned head и expected base, а также порядок записи FK. | Handler и CAS используют одну target identity. При конфликте CAS изменения времени и сопутствующие эффекты откатываются вместе. При retry с прежним operation_id ledger возвращает принятый результат без повторного продвижения. |
 | SN-TIME-BRANCH | Определить публичный контракт создания ветки, его OperationKind и сохраняемый terminal outcome. По ним Snapshot восстанавливает результат и передаёт новому timeline время точки ветвления. | Crash после commit до ответа и повтор с прежним ID возвращают ту же ветку и тот же исходный момент. История родителя сохраняется. |
 
+Проект [SN-TIME-READ — точная адресация принятого времени](./sn-time-read.md) содержит контракт, интеграционную проверку P/Q и команду первого среза. Gate T4 открыт.
+
 Исходная граница видна в [SnapshotApplyContext](../../backend/app/application/worldSnapshot/contracts/context.py), [SQLite CAS](../../backend/app/db/repositories/sqlite/snapshotCore/publications/worldPublicationStore.py) и [OperationKind](../../backend/app/dataModel/artifacts/lifecycle/operation/kinds.py). Следующий документальный шаг Snapshot owner — согласовать сигнатуры и показать вызовы от read/apply/branch до хранилища и ledger. Владельцу Time передаются утверждённые контракты и затем отдельное integration evidence.
 
 

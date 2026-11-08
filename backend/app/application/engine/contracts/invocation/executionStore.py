@@ -15,6 +15,18 @@ class RestoreFailure(ValueError):
 
 
 @dataclass(frozen=True)
+class CloseReceipt:
+    store_id: UUID
+    execution_id: ExecutionId
+    stop_revision: int
+
+
+class PackCloser(Protocol):
+    async def read_closed(self, command: ExecutionStopIntent) -> CloseReceipt | None: ...
+    async def close(self, command: ExecutionStopIntent) -> CloseReceipt: ...
+
+
+@dataclass(frozen=True)
 class Claim:
     execution_id: ExecutionId
     owner_id: str
@@ -27,6 +39,15 @@ class Checkpoint:
     status: ExecutionCheckpointStatus
     blob: bytes
     stop_intent: ExecutionStopIntent | None = None
+
+    final_revision: int | None = None
+
+    def confirm_closed(self, revision: int, closed: CloseReceipt) -> ExecutionStopIntent:
+        intent = self.stop_intent
+        if (intent is None or self.final_revision is not None or revision != self.revision
+                or revision != intent.stop_revision or closed != CloseReceipt(intent.store_id, intent.execution_id, revision)):
+            raise OwnershipConflict("CLOSED does not match current stop intent")
+        return intent
 
     def replay_stop(self, revision: int, outcome: StopOutcome) -> ExecutionStopIntent:
         intent = self.stop_intent
@@ -51,6 +72,7 @@ class ExecutionStore(Protocol):
     async def load(self, execution_id: ExecutionId) -> Checkpoint: ...
     async def claim(self, execution_id: ExecutionId, owner_id: str, seconds: int) -> Claim: ...
     async def record_stop_intent(self, claim: Claim, revision: int, outcome: StopOutcome) -> ExecutionStopIntent: ...
+    async def finalize(self, claim: Claim, revision: int, closed: CloseReceipt) -> Checkpoint: ...
     async def checkpoint(self, claim: Claim, revision: int, status: ExecutionCheckpointStatus, blob: bytes) -> int: ...
     async def cancel_child(self, execution_id: ExecutionId, revision: int, wait_id: WaitId) -> bool:
         """Publish a single validated wait cancellation by revision CAS, preserving the current lease."""

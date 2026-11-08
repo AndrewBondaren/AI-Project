@@ -86,6 +86,12 @@ class ExecutionPinTests(IsolatedAsyncioTestCase):
         receipt = await self.pins.close(cmd)
         await self.reopen()
         self.assertEqual(await self.pins.close(cmd), receipt)
+        persisted = await self.pins.read_closed(cmd)
+        assert persisted is not None
+        self.assertEqual(persisted, receipt)
+        final = await self.dag.finalize(self.claim, cmd.stop_revision, persisted)
+        self.assertEqual(final.final_revision, cmd.stop_revision + 1)
+        self.assertEqual(final.stop_intent, cmd)
         async with self.bundle[0].conn.execute("SELECT COUNT(*) FROM pack_execution_closed") as cursor:
             self.assertEqual((await cursor.fetchone())[0], 1)
         await self.assert_holds()
@@ -103,8 +109,11 @@ class ExecutionPinTests(IsolatedAsyncioTestCase):
         await foreign.create(self.intent.execution_id, b"another execution")
         claim = await foreign.claim(self.intent.execution_id, "worker", 60)
         command = await foreign.record_stop_intent(claim, 0, FailedOutcome(diagnostic="foreign"))
+        with self.assertRaises(PackIdentityConflict):
+            await ExecutionPins.bind(foreign, self.bundle[2], self.fixture.holders,
+                self.fixture.service._registry, self.fixture.backend.contract, 1, 100000)
         other = await ExecutionPins.bind(foreign, self.bundle[2], self.fixture.holders,
-            self.fixture.service._registry, self.fixture.backend.contract, 1, 100000)
+            self.fixture.service._registry, self.fixture.backend.contract, 1, 100000, binding_key="other-dag")
         with self.assertRaises(PackIdentityConflict):
             await self.pins.close(command)
         with patch.object(foreign, "load", side_effect=OSError("offline")):
@@ -222,17 +231,67 @@ class ExecutionPinTests(IsolatedAsyncioTestCase):
         self.assertEqual(await self.pins.read_shard(intent_b, self.shard), shard_bytes)
         cmd = await self.stop()
         receipt = await self.pins.close(cmd)
-        await self.reopen()
-        with patch.object(self.dag, "load", side_effect=OSError("offline")):
+        with (patch.object(self.dag, "get_store_id", side_effect=OSError("offline")),
+              patch.object(self.dag, "load", side_effect=OSError("offline")) as load):
+            await self.reopen()
+            with self.assertRaises(PackIntentUnavailable):
+                await ExecutionPins.bind(self.dag, self.bundle[2], self.fixture.holders,
+                    self.fixture.service._registry, self.fixture.backend.contract, 1, 100000,
+                    binding_key="never-registered")
+            with self.assertRaises(PackIdentityConflict):
+                await self.pins.close(cmd.model_copy(update={"store_id": uuid4()}))
+            with self.assertRaises(PackIdentityConflict):
+                await self.pins.close(cmd.model_copy(update={"stop_revision": cmd.stop_revision + 1}))
+            with self.assertRaises(PackIntentUnavailable):
+                await self.pins.close(cmd.model_copy(update={"execution_id": "no-receipt"}))
             self.assertEqual(await self.pins.close(cmd), receipt)
             for intent in (self.intent, intent_b):
                 with self.assertRaises(PackClosed):
                     await self.pins.acquire(intent)
                 with self.assertRaises(PackClosed):
                     await self.pins.read_shard(intent, self.shard)
+            load.assert_not_awaited()
         await self.assert_holds()
         self.assertTrue(await self.fixture.holders.is_held(second, PinHolder(pin_id="pin-b")))
         self.assertTrue(await self.fixture.holders.is_held(self.shard, ArtifactRetentionHolder(artifact=second)))
+
+    async def test_direct_constructor_cannot_grant_foreign_namespace(self):
+        foreign = replace(self.intent, store_id=uuid4(), pin_id="foreign-pin")
+        with self.assertRaises(TypeError):
+            ExecutionPins(foreign.store_id, self.dag, self.bundle[2], self.fixture.holders,
+                          self.fixture.service._registry, self.fixture.backend.contract, 1, 100000)
+        unbound = ExecutionPins(self.bundle[2], self.fixture.holders, self.fixture.service._registry,
+                                self.fixture.backend.contract, 1, 100000)
+        with self.assertRaises(PackIdentityConflict):
+            await unbound.acquire(foreign)
+        with self.assertRaises(PackIdentityConflict):
+            await self.pins.acquire(foreign)
+        async with self.bundle[0].conn.execute(
+                "SELECT COUNT(*) FROM pack_execution_pins WHERE store_id=?", (str(foreign.store_id),)) as cursor:
+            self.assertEqual((await cursor.fetchone())[0], 0)
+        self.assertFalse(await self.fixture.holders.is_held(self.manifest, PinHolder(pin_id=foreign.pin_id)))
+        await self.pins.close(await self.stop())
+        with patch.object(Path, "open", autospec=True) as opened:
+            with self.assertRaises(PackIdentityConflict):
+                await self.pins.read_root(foreign, self.root)
+            with self.assertRaises(PackClosed):
+                await self.pins.read_root(self.intent, self.root)
+            opened.assert_not_called()
+
+    async def test_cold_replay_after_dag_connection_closed(self):
+        command = await self.stop()
+        receipt = await self.pins.close(command)
+        with patch.object(self.dag, "get_store_id", side_effect=sqlite3.ProgrammingError("incorrect bindings")):
+            with self.assertRaisesRegex(sqlite3.ProgrammingError, "incorrect bindings"):
+                await self.adapter(self.bundle, self.fixture)
+        self.dag.db.close()
+        with patch.object(self.dag, "load", wraps=self.dag.load) as load:
+            await self.reopen()
+            self.assertEqual(await self.pins.close(command), receipt)
+            with self.assertRaises(PackClosed):
+                await self.pins.read_root(self.intent, self.root)
+            load.assert_not_awaited()
+        await self.assert_holds()
 
 
 class JournalSchemaTests(TestCase):

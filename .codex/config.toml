@@ -1,0 +1,10 @@
+sandbox_mode = "read-only"
+approval_policy = "on-request"
+approvals_reviewer = "user"
+
+[[hooks.PermissionRequest]]
+matcher = "^Bash$"
+
+[[hooks.PermissionRequest.hooks]]
+type = "command"
+command = '"C:\Python314\python.exe" -I -B "E:\AI Project\.codex\deny_shell_escalation.py"'

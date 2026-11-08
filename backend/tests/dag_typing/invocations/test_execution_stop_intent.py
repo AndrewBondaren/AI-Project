@@ -5,7 +5,7 @@ from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
-from app.application.engine.contracts.invocation.executionStore import Claim, ExecutionStore, OwnershipConflict
+from app.application.engine.contracts.invocation.executionStore import Claim, CloseReceipt, ExecutionStore, OwnershipConflict
 from app.application.engine.runtime.invocations.memoryExecutionStore import MemoryExecutionStore
 from app.dataModel.engine.dag.identity import ExecutionId, WaitId
 from app.dataModel.engine.dag.invocations.record import CompletedOutcome, FailedOutcome, StopOutcome
@@ -52,7 +52,35 @@ class StopIntentTests(unittest.IsolatedAsyncioTestCase):
         saved = await first.load(key)
         self.assertEqual((saved.revision, saved.blob, saved.status, saved.stop_intent),
                          (1, legacy.blob, legacy.status, intent))
-        return saved
+        closed = CloseReceipt(intent.store_id, key, 1)
+        for claim, revision, receipt in (
+            (old, 1, closed), (active, 0, closed),
+            (active, 1, CloseReceipt(intent.store_id, ExecutionId("foreign"), 1)),
+            (active, 1, CloseReceipt(intent.store_id, key, 2)),
+            (active, 1, CloseReceipt(MemoryExecutionStore()._store_id, key, 1)),
+        ):
+            with self.assertRaises(OwnershipConflict):
+                await second.finalize(claim, revision, receipt)
+        self.assertEqual(await first.load(key), saved)
+        if isinstance(second, SQLiteExecutionStore):
+            with second.db:
+                second.db.execute("UPDATE dag_executions SET lease_until=0 WHERE execution_id=?", (key,))
+            with self.assertRaises(OwnershipConflict):
+                await second.finalize(active, 1, closed)
+        else:
+            with patch("app.application.engine.runtime.invocations.memoryExecutionStore.monotonic", return_value=2e20):
+                with self.assertRaises(OwnershipConflict):
+                    await second.finalize(active, 1, closed)
+            await second.release(active)
+        recovery = await first.claim(key, "recovery", 60)
+        with self.assertRaises(OwnershipConflict):
+            await second.finalize(active, 1, closed)
+        self.assertEqual(await first.load(key), saved)
+        final = await first.finalize(recovery, 1, closed)
+        self.assertEqual((final.final_revision, final.revision, final.stop_intent), (2, 2, intent))
+        with self.assertRaises(OwnershipConflict):
+            await second.finalize(recovery, 2, closed)
+        return final
 
     async def test_memory(self):
         store = MemoryExecutionStore()

@@ -36,6 +36,7 @@ class OwnedExecution:
             await self._checkpoint()
 
     async def _checkpoint(self) -> None:
+        retried_revision: int | None = None
         while True:
             blob = CheckpointCodec.encode(self.graph)
             status = self.graph.checkpoint_status()
@@ -47,7 +48,14 @@ class OwnedExecution:
                 return
             except OwnershipConflict:
                 saved = await self.store.load(self.claim.execution_id)
-                if saved.stop_intent is not None or saved.revision <= self.revision:
+                if saved.stop_intent is not None:
+                    raise
+                # A slow SQLite commit of renew can consume a short working lease.
+                # Retry once at this revision. Renew still checks owner and fence.
+                if saved.revision == self.revision and retried_revision != self.revision:
+                    retried_revision = self.revision
+                    continue
+                if saved.revision <= self.revision:
                     raise
                 # Only a child cancellation can advance the revision while we still own this fence.
                 await self.store.renew(self.claim, self.lease_seconds)

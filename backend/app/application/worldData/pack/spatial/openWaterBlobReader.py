@@ -51,8 +51,7 @@ class OpenWaterBlobReader:
         if type(ref) is not ArtifactRef or isinstance(holder, dict):
             raise ValueError("expected typed artifact and holder references")
         ref = ArtifactRef.model_validate(ref, strict=True)
-        if admission is None:
-            holder = _HOLDER.validate_python(holder, strict=True)
+        validated = _HOLDER.validate_python(holder, strict=True) if admission is None else None
         if max_bytes is not None and (type(max_bytes) is not int or max_bytes < 0):
             raise ValueError("invalid read budget")
         if (ref.kind is not contract.kind or ref.format_key != contract.key
@@ -71,8 +70,9 @@ class OpenWaterBlobReader:
             raise SpatialBlobReadError(Reason.SOURCE_UNAVAILABLE)
         try:
             async with self._catalog.guard(ref):
-                if admission is not None:
-                    holder = await admission()
+                holder = await admission() if admission is not None else validated
+                if holder is None:
+                    raise ValueError("missing artifact holder")
                 try:
                     actual = await self._catalog.read(ref)
                 except ValueError as exc:

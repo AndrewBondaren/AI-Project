@@ -1562,6 +1562,19 @@ CREATE TABLE IF NOT EXISTS artifact_storage_events (
     CHECK (kind IN ('sealed','gc_deleted'))
 );
 
+-- Composition names a DAG endpoint. Only a live, trusted bind registers its UUID.
+CREATE TABLE IF NOT EXISTS pack_execution_namespaces (
+    binding_key TEXT NOT NULL PRIMARY KEY CHECK(length(binding_key) > 0),
+    store_id TEXT NOT NULL
+);
+CREATE TRIGGER IF NOT EXISTS pack_namespace_immutable_insert BEFORE INSERT ON pack_execution_namespaces
+WHEN EXISTS (SELECT 1 FROM pack_execution_namespaces WHERE binding_key=NEW.binding_key)
+BEGIN SELECT RAISE(ABORT,'existing Pack namespace'); END;
+CREATE TRIGGER IF NOT EXISTS pack_namespace_no_update BEFORE UPDATE ON pack_execution_namespaces
+BEGIN SELECT RAISE(ABORT,'immutable Pack namespace'); END;
+CREATE TRIGGER IF NOT EXISTS pack_namespace_no_delete BEFORE DELETE ON pack_execution_namespaces
+BEGIN SELECT RAISE(ABORT,'immutable Pack namespace'); END;
+
 CREATE TABLE IF NOT EXISTS pack_execution_closed (
     store_id TEXT NOT NULL, execution_id TEXT NOT NULL, stop_revision INTEGER NOT NULL CHECK(stop_revision > 0),
     PRIMARY KEY(store_id, execution_id)

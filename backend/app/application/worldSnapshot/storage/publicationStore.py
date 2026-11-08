@@ -8,6 +8,11 @@ from app.dataModel.worldSnapshot.identity.refs import PlayerSnapshotRef
 from app.dataModel.worldSnapshot.results.publication import WorldCasResult, PlayerCasResult
 
 
+class IExactWorldPublicationReader(Protocol):
+    async def read_exact(self, world_uid: EntityUid, publication_id: EntityUid, *,
+                         scope: CommitReadScope) -> WorldPublicationRef | None: ...
+
+
 class IWorldPublicationStore(Protocol):
     async def read(self, world_uid: EntityUid, *, scope: CommitReadScope | None = None) -> WorldPublicationRef: ...
 

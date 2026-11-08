@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from time import monotonic
 from uuid import UUID, uuid4
 
-from app.application.engine.contracts.invocation.executionStore import Checkpoint, Claim, OwnershipConflict
+from app.application.engine.contracts.invocation.executionStore import Checkpoint, Claim, CloseReceipt, OwnershipConflict
 from app.dataModel.engine.dag.identity import ExecutionId, WaitId
 from app.dataModel.engine.dag.invocations.record import ExecutionCheckpointStatus, ExecutionStopIntent, InvocationStatus, StopOutcome
 
@@ -33,7 +33,7 @@ class MemoryExecutionStore:
         entry = self._entries[execution_id]
         if not owner_id or seconds <= 0:
             raise ValueError("claim requires an owner and positive duration")
-        if entry.owner is not None and entry.lease_until > monotonic():
+        if entry.snapshot.final_revision is not None or (entry.owner is not None and entry.lease_until > monotonic()):
             raise OwnershipConflict(execution_id)
         entry.owner = owner_id
         entry.fence += 1
@@ -60,6 +60,15 @@ class MemoryExecutionStore:
         entry.snapshot = Checkpoint(revision + 1, saved.status, saved.blob, intent)
         return intent
 
+    async def finalize(self, claim: Claim, revision: int, closed: CloseReceipt) -> Checkpoint:
+        entry = self._owned(claim)
+        saved = entry.snapshot
+        intent = saved.confirm_closed(revision, closed)
+        if entry.lease_until <= monotonic():
+            raise OwnershipConflict(claim.execution_id)
+        entry.snapshot = Checkpoint(revision + 1, saved.status, saved.blob, intent, revision + 1)
+        return entry.snapshot
+
     async def checkpoint(self, claim: Claim, revision: int, status: ExecutionCheckpointStatus, blob: bytes) -> int:
         entry = self._owned(claim)
         if entry.snapshot.stop_intent is not None or entry.snapshot.revision != revision or entry.lease_until <= monotonic():
@@ -71,6 +80,8 @@ class MemoryExecutionStore:
         entry = self._owned(claim)
         if seconds <= 0:
             raise ValueError("lease duration must be positive")
+        if entry.snapshot.stop_intent is not None and entry.lease_until <= monotonic():
+            raise OwnershipConflict(claim.execution_id)
         entry.lease_until = monotonic() + seconds
 
     async def cancel_child(self, execution_id: ExecutionId, revision: int, wait_id: WaitId) -> bool:

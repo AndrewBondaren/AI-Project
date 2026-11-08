@@ -21,7 +21,7 @@ from app.application.engine.repair.repairMode import RepairMode
 from app.application.engine.taskType import TaskType
 from app.application.engine.contracts.invocation.callTarget import CallTarget
 from app.application.engine.contracts.invocation.continuationContract import ContinuationContract
-from app.application.engine.contracts.invocation.executionStore import OwnershipConflict, RestoreFailure
+from app.application.engine.contracts.invocation.executionStore import CloseReceipt, OwnershipConflict, RestoreFailure
 from app.application.engine.contracts.invocation.nodeStep import Call, CallGroup, CallRequest, Complete
 from app.application.engine.contracts.invocation.resumeEvent import CallCancelled, CallFailure, CallSuccess
 from app.application.engine.contracts.nodeContract import NodeContract
@@ -188,7 +188,7 @@ class Merge(Source):
 
 
 def runtime(entry=Pipeline, store=None, transform=Transform, retry_policy=None, diamond=False, counter=CountCaller, lease_seconds=300,
-            interaction=None, counter_wait=None, entry_lifecycle=None, enable_stop_intent=False):
+            interaction=None, counter_wait=None, entry_lifecycle=None, enable_stop_intent=False, pack_closer=None):
     registry, bindings = NodeRegistry(), GraphBindings()
     if diamond:
         for cls, deps in ((Source, ()), (Left, (Source.id,)), (Right, (Source.id,)), (Merge, (Left.id, Right.id))):
@@ -218,7 +218,7 @@ def runtime(entry=Pipeline, store=None, transform=Transform, retry_policy=None, 
     plan = compiler.compile(GraphRuleState(), invocation_root=entry.id)
     if store is not None:
         return DAGEngine(executor, None, registry, PipelineHooks(plan), None, ExecutionSnapshotService(), SnapshotStore(),
-                         enable_stop_intent=enable_stop_intent)
+                         enable_stop_intent=enable_stop_intent, pack_closer=pack_closer)
     return executor, plan
 
 
@@ -471,54 +471,125 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                             await operation
                         self.assertEqual(recovered.exception.intent, intent)
 
-    async def test_terminal_resume_requires_data_read_by_output_lifecycle(self):
+    async def test_final_replay_after_reopen(self):
+        from app.application.engine.contracts.invocation.inputWait import Failed
         schema = (Path(__file__).resolve().parents[3] / "app/db/migrations/0001_initial.sql").read_text("utf-8")
-        execution = ExecutionId("terminal-resume")
-        options = LLMExecutionOptions(player_message="", language="ru", repair_iterations=0,
-                                      repair_mode=RepairMode.MAXIMUM)
-        events = []
-        with tempfile.TemporaryDirectory() as directory:
-            db_path = Path(directory) / "execution.sqlite"
-            # The restored output is the lookup key for an independently retained payload.
-            payload = Path(directory) / "count=5"
-            payload.write_bytes(b"held data")
+        key = ExecutionId("terminal-replay")
+        options = LLMExecutionOptions(player_message="", language="ru", repair_iterations=0, repair_mode=RepairMode.MAXIMUM)
 
-            class ReadRestoredPayload:
-                async def validate_restored(self, output: Text):
-                    events.append(("open", output.text))
-                    data = (Path(directory) / output.text).read_bytes()
-                    events.append(("read", data))
+        class Pack:
+            receipt = None
 
-            with closing(sqlite3.connect(db_path)) as db:
-                db.executescript(schema)
-                store = SQLiteExecutionStore(db)
-                result = await runtime(store=store, entry_lifecycle=ReadRestoredPayload()).run(
-                    execution, TaskType.INTENT_DETECTION, max_passes=1, options=options)
-                saved = await store.load(execution)
-                self.assertEqual(saved.status.value, "COMPLETED")
-                self.assertEqual(result.data, Text(text="count=5"))
+            async def read_closed(self, command):
+                return self.receipt
 
-            for available in (True, False):
-                with self.subTest(available=available), closing(sqlite3.connect(db_path)) as db:
-                    if not available:
-                        payload.unlink()
+            async def close(self, command):
+                self.receipt = CloseReceipt(command.store_id, command.execution_id, command.stop_revision)
+                raise ConnectionError("reply lost after CLOSED")
+
+        for failed in (False, True):
+            with self.subTest(failed=failed), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "dag.sqlite"
+                payload = Path(directory) / "count=5"
+                payload.write_bytes(b"held data")
+                pack = Pack()
+
+                class Lifecycle:
+                    async def validate_restored(self, output: Text):
+                        (Path(directory) / output.text).read_bytes()
+
+                with closing(sqlite3.connect(path)) as db:
+                    db.executescript(schema)
                     store = SQLiteExecutionStore(db)
-                    engine = runtime(store=store, entry_lifecycle=ReadRestoredPayload())
-                    events.clear()
-                    events.append("resume")
-                    if available:
-                        restored = await engine.resume(execution, max_passes=1, options=options)
-                        events.append("returned")
-                        self.assertEqual(restored, result)
-                        self.assertEqual(events, ["resume", ("open", "count=5"), ("read", b"held data"), "returned"])
+                    engine = runtime(store=store, pack_closer=pack, entry_lifecycle=Lifecycle())
+                    assert isinstance(engine, DAGEngine)
+                    with patch.object(store, "finalize", side_effect=Crash):
+                        if failed:
+                            with patch.object(Pipeline, "start", side_effect=PythonNodeError(TestNodeError(item_id=1))):
+                                with self.assertRaises(Crash):
+                                    await engine.run(key, TaskType.INTENT_DETECTION, max_passes=1, options=options)
+                        else:
+                            with self.assertRaises(Crash):
+                                await engine.run(key, TaskType.INTENT_DETECTION, max_passes=1, options=options)
+                    pending = await store.load(key)
+                    assert pending.stop_intent is not None
+                    self.assertIsNone(pending.final_revision)
+                    outcome = pending.stop_intent.outcome
+                    if failed:
+                        assert isinstance(outcome, FailedOutcome)
+                        expected = Failed(outcome.diagnostic)
                     else:
-                        with self.assertRaises(RestoreFailure) as raised:
-                            await engine.resume(execution, max_passes=1, options=options)
-                        cause = raised.exception.__cause__
-                        self.assertIsInstance(cause, RestoreFailure)
-                        self.assertIsInstance(cause.__cause__, FileNotFoundError)
-                        self.assertEqual(events, ["resume", ("open", "count=5")])
-                    self.assertEqual(await store.load(execution), saved)
+                        assert isinstance(outcome, CompletedOutcome)
+                        expected = TypeAdapter(ResolveResult[Text]).validate_json(outcome.result_json)
+                        self.assertEqual(expected.data, Text(text="count=5"))
+
+                with closing(sqlite3.connect(path)) as db:
+                    store = SQLiteExecutionStore(db)
+                    engine = runtime(store=store, pack_closer=pack)
+                    assert isinstance(engine, DAGEngine)
+                    # A close acknowledgement alone cannot authorize the final write.
+                    with (patch.object(pack, "read_closed", return_value=None),
+                          patch.object(pack, "close", return_value=pack.receipt),
+                          self.assertRaises(RestoreFailure)):
+                        await engine.resume(key, max_passes=1, options=options)
+                    self.assertEqual(await store.load(key), pending)
+                    commit = store.finalize
+
+                    async def lost_reply(claim, revision, closed):
+                        await commit(claim, revision, closed)
+                        raise Crash()
+
+                    with (patch.object(store, "finalize", side_effect=lost_reply),
+                          patch.object(store, "release"), patch.object(pack, "close", side_effect=AssertionError)):
+                        with self.assertRaises(Crash):
+                            await engine.resume(key, max_passes=1, options=options)
+                    self.assertTrue(db.execute("SELECT lease_until > unixepoch('subsec') FROM dag_executions").fetchone()[0])
+
+                with closing(sqlite3.connect(path)) as db:
+                    store = SQLiteExecutionStore(db)
+                    engine = runtime(store=store, entry_lifecycle=Lifecycle())
+                    assert isinstance(engine, DAGEngine)
+                    for available in (True, False):
+                        if not available:
+                            payload.unlink()
+                        with (patch.object(store, "claim", side_effect=AssertionError),
+                              patch.object(engine._binding, "compile", side_effect=AssertionError),
+                              patch.object(CheckpointCodec, "restore", side_effect=AssertionError),
+                              patch.object(Lifecycle, "validate_restored", side_effect=AssertionError),
+                              patch.object(Path, "open", side_effect=AssertionError)):
+                            with self.assertRaises(RestoreFailure):
+                                await engine.run(key, TaskType.SCENE_INIT, max_passes=1, options=options)
+                            self.assertEqual(await engine.resume(key, max_passes=1, options=options), expected)
+                            self.assertEqual(await engine.run(key, TaskType.INTENT_DETECTION,
+                                                              max_passes=1, options=options), expected)
+
+    async def test_final_replay_checks_owner_type_and_integrity(self):
+        from tests.dag_typing.invocations.test_input_wait import Session
+        from unittest.mock import AsyncMock
+
+        key = ExecutionId("private-result")
+        options = LLMExecutionOptions(player_message="", language="ru", repair_iterations=0, repair_mode=RepairMode.MAXIMUM)
+        schema = Path(__file__).resolve().parents[3] / "app/db/migrations/0001_initial.sql"
+        with closing(sqlite3.connect(":memory:")) as db:
+            db.executescript(schema.read_text("utf-8"))
+            store = SQLiteExecutionStore(db)
+            pack = AsyncMock()
+            async def receipt(command):
+                return CloseReceipt(command.store_id, command.execution_id, command.stop_revision)
+            pack.read_closed.side_effect = receipt
+            owner = runtime(store=store, pack_closer=pack, interaction=Session("a"))
+            assert isinstance(owner, DAGEngine)
+            await owner.run(key, TaskType.INTENT_DETECTION, max_passes=1, options=options)
+            stranger = runtime(store=store, interaction=Session("b"))
+            assert isinstance(stranger, DAGEngine)
+            with patch.object(store, "claim", side_effect=AssertionError):
+                with self.assertRaises(PermissionError):
+                    await stranger.resume(key, max_passes=1, options=options)
+                with patch.object(owner._binding, "response_type", Count), self.assertRaises(RestoreFailure):
+                    await owner.resume(key, max_passes=1, options=options)
+                db.execute("UPDATE dag_executions SET checksum='corrupt' WHERE execution_id=?", (key,))
+                with self.assertRaises(RestoreFailure):
+                    await owner.resume(key, max_passes=1, options=options)
 
     async def test_prior_phase_output_is_bound_to_post_root(self):
         from app.dataModel.engine.dag.executionPhase import ExecutionPhase

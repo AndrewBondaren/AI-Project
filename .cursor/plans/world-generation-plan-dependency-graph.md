@@ -839,10 +839,10 @@ flowchart TD
 
 | Трек | Последнее решение и evidence | Следующая работа |
 |---|---|---|
-| Water/River | S1–S4 приняты, проверки исправлений S4 прошли 62/62 и 32/32. | Реализовать согласованный [S2-FOLLOWUP-ID-1, контракт B](./geo-water-diagnostics-source-d1.md): ModelIdentity.of и admission в двух canonical readers. |
+| Water/River / Fields | S1–S4 приняты, S2-FOLLOWUP-ID-1 выполнен. [Отчёт Fields/Encoding](./geo-water-fields-identity-report.md): 64 теста OK на Pydantic 2.13.4. | Учитывать проверенный контракт B в потребителях. |
 | [Snapshot](./world-domain-patches-snapshots.md) | [Независимое ревью rollback trace](./world-domain-snapshot-rollback-trace-independent-review.md) — PASS. | Продолжение 4D2 по открытым validation/apply/terminal gates. |
-| [Spatial](./spatial-distribution-domain.md) | Карта F3 принята. [Проверка store identity](./spatial-f3-verification-report.md) прошла. | Реализовать F3 по §§15.99–15.103: receipt, binding, holder, trusted adapter и admission под guard. |
-| Time | TL-1…TL-3 и TL-R реализованы. Для TL-1…TL-3 прошли 36 тестов, для регистрации TL-R — 24. Production typing чист, общий typing с tests/time остаётся открыт. [Реализация TL-1…TL-3](./time-log-implementation.md#evidence-реализации-tl-1tl-3), [регистрация TL-R](./time-log-implementation.md#5-отдельная-регистрация-tl-r-после-независимого-среза) | Подготовить TL-B: указать application bindings пяти вызовов, точки подключения и интеграционные тесты. Production read, apply и branch зависят соответственно от SN-TIME-READ, SN-TIME-APPLY и SN-TIME-BRANCH. [TIME-LOG §6](./time-log-implementation.md#6-будущие-production-bindings-tl-b-и-gates) |
+| [Spatial](./spatial-distribution-domain.md) | [Проверка реализации F3](./spatial-f3-pack-evidence.md) закрыла P1/P2. CLOSED переживает reopen, после отзыва запрещён физический open, holds сохраняются. DDL внесён в 0001_initial.sql. | DAG F4 по принятым F2 и проверенному F3, затем Pack F5 и совместная F6. |
+| Time | [TL-B PROJECT](./time-log-project-report.md) получил ACCEPT. Выполнены 11 binding-тестов. | Остальные TL-B по фактическим callers и gates §6. Production T4 требует SN-TIME-READ, T5 требует SN-TIME-APPLY. |
 | Physics | Подготовительный Physics I0 и общая маршрутизация прошли [совместную техническую проверку](./artifacts-d2-physics-i0-joint-verification.md). | Production I0 требует конкретной точки вызова и execution correlation. |
 | Artifacts | D2 и совместная маршрутизация технически приняты по [отчёту](./artifacts-d2-physics-i0-joint-verification.md). SnapshotCore: 176 тестов, один skip, logging 28/28. | Учитывать этот результат при интеграции. Статус пользовательской приёмки фиксирует владелец. |
 | [API-1](./api-1-transport-boundary.md) | Проверено покрытие полей storage и wire. Climate C1 содержит девять scalars, десять после переноса lapse. | Сопоставить вход каждой операции с версией и выходом владельца, включая presence/aliases. |
@@ -855,7 +855,7 @@ flowchart TD
 
 **Параллельно** можно принимать Artifacts D2-1…D2-4 и Physics D2 и готовить план production bindings для Time TL-B. У каждого трека свои доказательства и решение о приёмке.
 
-**Последний приоритет — реализация S2-FOLLOWUP-ID-1.** Согласован контракт B: Fields отклоняет параметризованный owner при создании ModelIdentity, Encoding проверяет допуск при восстановлении. Реализация и приёмка открыты. [Решение D1 и условия приёмки](./geo-water-diagnostics-source-d1.md#s2-followup-id-1--контракт-b-согласован-2026-11-08)
+**Следующий срез реализации — DAG F4.** Сверить сохранённый Pack CLOSED с intent того же execution и stop_revision, зафиксировать finalized и проверить terminal replay после reopen до восстановления outputs. Pack F5 зависит от F4.
 
 ### 12.1. Параллельная работа по срезам на 2026-11-06
 
