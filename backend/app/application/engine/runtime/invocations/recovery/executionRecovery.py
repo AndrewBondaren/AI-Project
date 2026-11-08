@@ -55,7 +55,8 @@ class ExecutionRecovery[O: BaseModel, S: BaseModel]:
         heartbeat = settings.lease_seconds / 3
         if settings.interaction is not None:
             heartbeat = min(heartbeat, 1.0)
-        try:
+
+        async def run_with_lease() -> ExecutionResult[O]:
             try:
                 while not task.done():
                     done, _ = await asyncio.wait((task,), timeout=heartbeat)
@@ -65,21 +66,25 @@ class ExecutionRecovery[O: BaseModel, S: BaseModel]:
             finally:
                 if not task.done():
                     task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+                await settings.store.release(claim)
 
-                async def drain_and_release() -> None:
-                    await asyncio.gather(task, return_exceptions=True)
-                    await settings.store.release(claim)
-
-                cleanup = asyncio.create_task(drain_and_release())
-                cancelled = None
-                while not cleanup.done():
+        owner = asyncio.create_task(run_with_lease())
+        try:
+            try:
+                await asyncio.wait((owner,))
+            except asyncio.CancelledError:
+                if not task.done() and not task.cancelling():
+                    task.cancel()
+                # Keep renewal and release alive while the worker finishes its cancellation hooks.
+                while not owner.done():
                     try:
-                        await asyncio.shield(cleanup)
-                    except asyncio.CancelledError as exc:
-                        cancelled = exc
-                cleanup.result()
-                if cancelled is not None:
-                    raise cancelled
+                        await asyncio.wait((owner,))
+                    except asyncio.CancelledError:
+                        continue
+                owner.result()
+                raise
+            return owner.result()
         except OwnershipConflict:
             saved = await settings.store.load(execution_id)
             if saved.final_revision is not None:
