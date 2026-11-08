@@ -2,6 +2,13 @@ sandbox_mode = "read-only"
 approval_policy = "on-request"
 approvals_reviewer = "user"
 
+[[hooks.PreToolUse]]
+matcher = "^Bash$"
+
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = 'C:\Python314\python.exe -I -B "E:\AI Project\.codex\deny_patch_cli.py"'
+
 [[hooks.PermissionRequest]]
 matcher = "^Bash$"
 
