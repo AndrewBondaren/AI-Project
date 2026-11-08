@@ -93,7 +93,7 @@ class WaterMismatchTests(TestCase):
         issue = WaterKindMismatchIssue.retained("a", BasinKind.LAKE, BasinKind.OCEAN)
         for changes in ({"physical_kind": BasinKind.LAKE}, {"code": "UNKNOWN"},
                         {"path": CheckedPath.from_pydantic_loc(WaterBody, ("liquid",))},
-                        {"path": CheckedPath.from_pydantic_loc(PlanDiagnostic, ("disposition",))}):
+                        {"path": CheckedPath.from_pydantic_loc(WaterKindMismatchIssue, ("code",))}):
             invalid = issue.model_copy(update=changes)
             with self.assertRaises(ValueError):
                 decode(encode(invalid, SURFACE_MANIFEST), WaterKindMismatchIssue, SURFACE_MANIFEST)

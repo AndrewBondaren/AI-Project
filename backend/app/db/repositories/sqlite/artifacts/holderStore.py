@@ -8,7 +8,7 @@ from app.application.worldSnapshot.contracts.commitScope import CommitReadScope,
 from app.dataModel.artifacts.references import ArtifactRef
 from app.dataModel.artifacts.lifecycle.lease import OperationLeaseRef
 from app.dataModel.artifacts.lifecycle.holders import (
-    ArtifactHolderRef, ArtifactHolderKind, OperationHolder, ArtifactRetentionHolder, SnapshotHolder,
+    ArtifactHolderRef, ArtifactHolderKind, OperationHolder, ArtifactRetentionHolder, SnapshotHolder, PinHolder,
 )
 from app.dataModel.artifacts.lifecycle.operation.kinds import OperationPhase
 from app.dataModel.identity.uid import EntityUid
@@ -45,7 +45,7 @@ class SqliteArtifactHolders:
     @staticmethod
     def _key(row: ArtifactHolderEventRow) -> tuple[object, ...]:
         return (row.holder_kind, row.operation_id, row.fence, row.retained_artifact_id,
-                row.world_snapshot_id, row.player_snapshot_id)
+                row.world_snapshot_id, row.player_snapshot_id, row.pin_id)
 
     @staticmethod
     async def _chain(access: ScopedSqliteAccess, scope: CommitReadScope | CommitScope,
@@ -55,7 +55,7 @@ class SqliteArtifactHolders:
         latest: dict[tuple[object, ...], ArtifactHolderEventRow] = {}
         for row in rows:
             _values(uids=(row.event_id, row.artifact_id), optional_uids=(row.operation_id, row.retained_artifact_id,
-                row.world_snapshot_id, row.player_snapshot_id, row.predecessor_id),
+                row.world_snapshot_id, row.player_snapshot_id, row.pin_id, row.predecessor_id),
                 positives=(row.event_seq,) if row.fence is None else (row.event_seq, row.fence))
             kind = _wire(ArtifactHolderKind, row.holder_kind)
             if kind is ArtifactHolderKind.OPERATION:
@@ -64,9 +64,13 @@ class SqliteArtifactHolders:
             elif kind is ArtifactHolderKind.ARTIFACT:
                 valid = (row.retained_artifact_id is not None and row.operation_id is None and row.fence is None
                     and row.world_snapshot_id is None and row.player_snapshot_id is None)
-            else:
+            elif kind is ArtifactHolderKind.SNAPSHOT:
                 valid = (row.operation_id is None and row.fence is None and row.retained_artifact_id is None
                     and ((row.world_snapshot_id is None) != (row.player_snapshot_id is None)))
+            else:
+                valid = row.pin_id is not None and all(value is None for value in (row.operation_id, row.fence,
+                    row.retained_artifact_id, row.world_snapshot_id, row.player_snapshot_id))
+            valid = valid and ((row.pin_id is not None) == (kind is ArtifactHolderKind.PIN))
             key = SqliteArtifactHolders._key(row)
             previous = latest.get(key)
             if (not valid or row.artifact_id != artifact_id or row.event_kind not in ("acquire", "release")
@@ -74,7 +78,7 @@ class SqliteArtifactHolders:
                     or row.predecessor_id != (None if previous is None else previous.event_id)
                     or (previous is None and row.event_kind != "acquire")
                     or (previous is not None and row.event_kind == previous.event_kind)
-                    or (kind is ArtifactHolderKind.SNAPSHOT and row.event_kind == "release")):
+                    or (kind in (ArtifactHolderKind.SNAPSHOT, ArtifactHolderKind.PIN) and row.event_kind == "release")):
                 raise PublicationInfrastructureError("invalid artifact holder chain")
             latest[key] = row
         return tuple(latest.values())
@@ -116,6 +120,8 @@ class SqliteArtifactHolders:
             if row.retained_artifact_id is None:
                 raise PublicationInfrastructureError("missing retention owner")
             return ArtifactRetentionHolder(artifact=await self._catalog._by_id(scope, row.retained_artifact_id))
+        if row.pin_id is not None:
+            return PinHolder(pin_id=row.pin_id)
         snapshot_id = row.world_snapshot_id if row.world_snapshot_id is not None else row.player_snapshot_id
         if snapshot_id is None:
             raise PublicationInfrastructureError("missing snapshot holder owner")
@@ -136,6 +142,9 @@ class SqliteArtifactHolders:
             if owner is None:
                 raise ValueError("unknown retention owner")
             retained = owner.artifact_id
+        elif isinstance(holder, PinHolder):
+            return ArtifactHolderEventRow(runtime_uid(), artifact_id, holder.kind.value, None, None, None,
+                None, None, None, 1, "acquire", holder.pin_id)
         elif isinstance(holder.snapshot, WorldSnapshotRef):
             world = holder.snapshot.snapshot_id
         else:
@@ -191,7 +200,7 @@ class SqliteArtifactHolders:
                 if isinstance(holder, ArtifactRetentionHolder):
                     if not await self._catalog.is_sealed(holder.artifact):
                         raise ValueError("retention owner must be sealed")
-                else:
+                elif isinstance(holder, SnapshotHolder):
                     actual = await self._history.resolve_ref(holder.snapshot.snapshot_id, holder.snapshot.kind, scope=scope.read_scope)
                     if actual != holder.snapshot:
                         raise ValueError("snapshot holder identity mismatch")
@@ -200,7 +209,7 @@ class SqliteArtifactHolders:
     async def release(self, ref: ArtifactRef, holder: ArtifactHolderRef) -> None:
         ref = ArtifactRef.model_validate(ref, strict=True)
         holder = TypeAdapter(ArtifactHolderRef).validate_python(holder, strict=True)
-        if isinstance(holder, SnapshotHolder):
+        if isinstance(holder, (SnapshotHolder, PinHolder)):
             raise ValueError("published history holds cannot be released")
         async with self._scopes.transaction(holder.lease.operation_id if isinstance(holder, OperationHolder) else runtime_uid()) as scope:
             artifact = await self._catalog._find(scope, ref)

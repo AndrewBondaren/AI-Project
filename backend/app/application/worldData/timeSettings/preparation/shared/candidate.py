@@ -1,4 +1,8 @@
-from app.dataModel.world.settings.timeOperations.results import SettingsInvalid
+from asyncio import CancelledError
+from contextlib import suppress
+
+from app.application.time.logging.timeOperationLog import TimeOperationLog
+from app.dataModel.time.diagnostics.events import ProjectLogContext
 from pydantic import BaseModel
 from app.dataModel.world.calendar.projection.errors import CalendarFieldIssue, CalendarIssueCode
 from app.application.time.calendar.projection import CalendarProjector
@@ -11,7 +15,7 @@ from app.dataModel.registryKey import RegistryKey
 from app.dataModel.world.settings.timeSettings import WorldTimeSettings
 from app.dataModel.world.settings.timeOperations.changes import SettingsPreparationBase
 from app.dataModel.world.settings.timeOperations.read import ResolveCalendarAt
-from app.dataModel.world.settings.timeOperations.results import PreparedTimeSettingsChange
+from app.dataModel.world.settings.timeOperations.results import PreparedTimeSettingsChange, SettingsInvalid
 from ...reader import WorldCalendarResolver
 
 
@@ -23,9 +27,24 @@ def projected(base: SettingsPreparationBase, key: RegistryKey[WorldCalendarRegis
     resolved = WorldCalendarResolver.resolve_at(ResolveCalendarAt(capture=base.capture, calendar=key))
     if isinstance(resolved, SettingsInvalid):
         return resolved
-    result = projector.project(CalendarProjectionInput(point=base.clock.point, capture=base.clock,
-                               calendar=key, resolved=resolved, budget=base.budget))
-    if isinstance(result, (CalendarProjection, CalendarBudgetExceeded)):
+    request = CalendarProjectionInput(
+        point=base.clock.point, capture=base.clock, calendar=key, resolved=resolved, budget=base.budget
+    )
+    try:
+        result = projector.project(request)
+    except CancelledError:
+        with suppress(Exception, CancelledError):
+            TimeOperationLog().emit_cancelled(ProjectLogContext(request=request))
+        raise
+    except Exception:
+        with suppress(Exception, CancelledError):
+            TimeOperationLog().emit_fault(ProjectLogContext(request=request))
+        raise
+    if isinstance(result, CalendarProjection):
+        return result
+    with suppress(Exception, CancelledError):
+        TimeOperationLog().emit_project_refused(request, result)
+    if isinstance(result, CalendarBudgetExceeded):
         return result
     if isinstance(result, CalendarInvalid):
         return SettingsInvalid(issues=result.issues)

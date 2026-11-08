@@ -1,4 +1,6 @@
 """Read a single held open-water artifact under the catalog's GC guard."""
+from collections.abc import Awaitable, Callable
+
 from pydantic import TypeAdapter
 
 from app.application.artifacts.contracts.blobRead import CorruptBlobError, ReadableBlobBackend
@@ -35,12 +37,22 @@ class OpenWaterBlobReader:
     async def read_shard(self, ref: ArtifactRef, holder: ArtifactHolderRef, *, max_bytes: int | None = None) -> bytes:
         return await self._read(ref, holder, SHARD_FORMAT, SHARD_V1.max_bytes, max_bytes)
 
-    async def _read(self, ref: ArtifactRef, holder: ArtifactHolderRef, contract: ArtifactFormatContract[bytes],
-                    cap: int, max_bytes: int | None) -> bytes:
+    async def read_bound_root(self, ref: ArtifactRef, admission: Callable[[], Awaitable[ArtifactHolderRef]],
+                              *, max_bytes: int | None = None) -> bytes:
+        return await self._read(ref, None, ROOT_FORMAT, ROOT_V1.max_bytes, max_bytes, admission)
+
+    async def read_bound_shard(self, ref: ArtifactRef, admission: Callable[[], Awaitable[ArtifactHolderRef]],
+                               *, max_bytes: int | None = None) -> bytes:
+        return await self._read(ref, None, SHARD_FORMAT, SHARD_V1.max_bytes, max_bytes, admission)
+
+    async def _read(self, ref: ArtifactRef, holder: ArtifactHolderRef | None, contract: ArtifactFormatContract[bytes],
+                    cap: int, max_bytes: int | None,
+                    admission: Callable[[], Awaitable[ArtifactHolderRef]] | None = None) -> bytes:
         if type(ref) is not ArtifactRef or isinstance(holder, dict):
             raise ValueError("expected typed artifact and holder references")
         ref = ArtifactRef.model_validate(ref, strict=True)
-        holder = _HOLDER.validate_python(holder, strict=True)
+        if admission is None:
+            holder = _HOLDER.validate_python(holder, strict=True)
         if max_bytes is not None and (type(max_bytes) is not int or max_bytes < 0):
             raise ValueError("invalid read budget")
         if (ref.kind is not contract.kind or ref.format_key != contract.key
@@ -59,6 +71,8 @@ class OpenWaterBlobReader:
             raise SpatialBlobReadError(Reason.SOURCE_UNAVAILABLE)
         try:
             async with self._catalog.guard(ref):
+                if admission is not None:
+                    holder = await admission()
                 try:
                     actual = await self._catalog.read(ref)
                 except ValueError as exc:

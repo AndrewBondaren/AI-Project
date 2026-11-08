@@ -5002,7 +5002,7 @@ F1/F2 проверены. Для варианта A (§§15.99–15.100) гра�
 **Команда после принятия карты и закрытия входов:** «Реализуй только Pack F3 по §§15.99–15.102. Добавь согласованные persistence/migration и holder binding, атомарные acquire/close и execution-bound admission под одним guard. Предъяви отдельные SQLite-тесты пяти сценариев карты с reopen, точными hold и счётчиком open; в случае crash до finalized докажи, что holds сохранены. Остановись на F3 до финализации DAG и release».
 
 ### 15.103. Решение принято 2026-11-06
-Карта §15.102 принята пользователем. [Отдельный срез identity и статус F3](./spatial-f3-implementation-report.md). Граница — до F4 finalized и release.
+Карта §15.102 принята пользователем. [Отдельный срез identity и статус F3](./spatial-f3-implementation-report.md). Граница — до F4 finalized и release. [Реализация Pack F3 и evidence пяти сценариев §15.102](./spatial-f3-pack-evidence.md).
 
 
 ## Инвариант миграции диагностики: runtime не меняется (2026-11-06)

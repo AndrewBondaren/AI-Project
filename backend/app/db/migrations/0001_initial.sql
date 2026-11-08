@@ -1562,6 +1562,32 @@ CREATE TABLE IF NOT EXISTS artifact_storage_events (
     CHECK (kind IN ('sealed','gc_deleted'))
 );
 
+CREATE TABLE IF NOT EXISTS pack_execution_closed (
+    store_id TEXT NOT NULL, execution_id TEXT NOT NULL, stop_revision INTEGER NOT NULL CHECK(stop_revision > 0),
+    PRIMARY KEY(store_id, execution_id)
+);
+CREATE TABLE IF NOT EXISTS pack_execution_pins (
+    pin_id TEXT PRIMARY KEY NOT NULL, store_id TEXT NOT NULL, execution_id TEXT NOT NULL,
+    invocation_id TEXT NOT NULL, logical_read_key TEXT NOT NULL, world_uid TEXT NOT NULL,
+    publication_id TEXT NOT NULL, manifest_artifact_id TEXT NOT NULL REFERENCES artifact_catalog(artifact_id),
+    state TEXT NOT NULL DEFAULT 'OPEN' CHECK(state='OPEN'),
+    UNIQUE(store_id,execution_id,invocation_id,logical_read_key), UNIQUE(pin_id,manifest_artifact_id),
+    FOREIGN KEY(world_uid, publication_id) REFERENCES world_publications(world_uid, publication_id)
+);
+CREATE INDEX IF NOT EXISTS ix_execution_pins_state ON pack_execution_pins(store_id, execution_id, state);
+CREATE TRIGGER IF NOT EXISTS pack_execution_closed_no_update BEFORE UPDATE ON pack_execution_closed BEGIN SELECT RAISE(ABORT,'immutable Pack record'); END;
+CREATE TRIGGER IF NOT EXISTS pack_execution_closed_no_delete BEFORE DELETE ON pack_execution_closed BEGIN SELECT RAISE(ABORT,'immutable Pack record'); END;
+CREATE TRIGGER IF NOT EXISTS pack_execution_pins_no_update BEFORE UPDATE ON pack_execution_pins BEGIN SELECT RAISE(ABORT,'immutable Pack record'); END;
+CREATE TRIGGER IF NOT EXISTS pack_execution_pins_no_delete BEFORE DELETE ON pack_execution_pins BEGIN SELECT RAISE(ABORT,'immutable Pack record'); END;
+CREATE TRIGGER IF NOT EXISTS pack_closed_identity BEFORE INSERT ON pack_execution_closed
+WHEN EXISTS (SELECT 1 FROM pack_execution_closed WHERE store_id=NEW.store_id AND execution_id=NEW.execution_id)
+BEGIN SELECT RAISE(ABORT,'execution already closed'); END;
+CREATE TRIGGER IF NOT EXISTS pack_pin_identity BEFORE INSERT ON pack_execution_pins
+WHEN EXISTS (SELECT 1 FROM pack_execution_closed WHERE store_id=NEW.store_id AND execution_id=NEW.execution_id)
+  OR EXISTS (SELECT 1 FROM pack_execution_pins WHERE pin_id=NEW.pin_id OR
+    (store_id,execution_id,invocation_id,logical_read_key) =
+    (NEW.store_id,NEW.execution_id,NEW.invocation_id,NEW.logical_read_key))
+BEGIN SELECT RAISE(ABORT,'closed execution or existing pin'); END;
 CREATE TABLE IF NOT EXISTS artifact_holder_events (
     event_id TEXT NOT NULL PRIMARY KEY CHECK (event_id IS NULL OR (length(event_id) > 0)),
     artifact_id TEXT NOT NULL CHECK (artifact_id IS NULL OR (length(artifact_id) > 0)),
@@ -1574,6 +1600,8 @@ CREATE TABLE IF NOT EXISTS artifact_holder_events (
     predecessor_id TEXT CHECK (predecessor_id IS NULL OR (length(predecessor_id) > 0)),
     event_seq INTEGER NOT NULL CHECK (event_seq IS NULL OR (typeof(event_seq) = 'integer' AND event_seq >= 1)),
     event_kind TEXT NOT NULL CHECK (event_kind IS NULL OR (length(event_kind) > 0)),
+    pin_id TEXT,
+    FOREIGN KEY (pin_id, artifact_id) REFERENCES pack_execution_pins(pin_id, manifest_artifact_id),
     UNIQUE (artifact_id, event_id),
     FOREIGN KEY (artifact_id) REFERENCES artifact_catalog(artifact_id),
     FOREIGN KEY (artifact_id, predecessor_id) REFERENCES artifact_holder_events(artifact_id, event_id),
@@ -1582,7 +1610,7 @@ CREATE TABLE IF NOT EXISTS artifact_holder_events (
     FOREIGN KEY (world_snapshot_id) REFERENCES world_snapshots(snapshot_id),
     FOREIGN KEY (player_snapshot_id) REFERENCES player_snapshots(player_snapshot_id),
     CHECK (event_kind IN ('acquire','release')),
-    CHECK ((holder_kind = 'operation' AND operation_id IS NOT NULL AND fence IS NOT NULL AND retained_artifact_id IS NULL AND world_snapshot_id IS NULL AND player_snapshot_id IS NULL) OR (holder_kind = 'artifact' AND retained_artifact_id IS NOT NULL AND operation_id IS NULL AND fence IS NULL AND world_snapshot_id IS NULL AND player_snapshot_id IS NULL) OR (holder_kind = 'snapshot' AND operation_id IS NULL AND fence IS NULL AND retained_artifact_id IS NULL AND ((world_snapshot_id IS NOT NULL AND player_snapshot_id IS NULL) OR (world_snapshot_id IS NULL AND player_snapshot_id IS NOT NULL))))
+    CHECK ((pin_id IS NOT NULL AND holder_kind='pin' AND operation_id IS NULL AND fence IS NULL AND retained_artifact_id IS NULL AND world_snapshot_id IS NULL AND player_snapshot_id IS NULL) OR (pin_id IS NULL AND ((holder_kind = 'operation' AND operation_id IS NOT NULL AND fence IS NOT NULL AND retained_artifact_id IS NULL AND world_snapshot_id IS NULL AND player_snapshot_id IS NULL) OR (holder_kind = 'artifact' AND retained_artifact_id IS NOT NULL AND operation_id IS NULL AND fence IS NULL AND world_snapshot_id IS NULL AND player_snapshot_id IS NULL) OR (holder_kind = 'snapshot' AND operation_id IS NULL AND fence IS NULL AND retained_artifact_id IS NULL AND ((world_snapshot_id IS NOT NULL AND player_snapshot_id IS NULL) OR (world_snapshot_id IS NULL AND player_snapshot_id IS NOT NULL))))))
 );
 
 CREATE TABLE IF NOT EXISTS artifact_lease_events (
@@ -1631,10 +1659,10 @@ CREATE INDEX IF NOT EXISTS ix_artifact_storage_events_latest ON artifact_storage
 CREATE UNIQUE INDEX IF NOT EXISTS ux_artifact_lease_events_root ON artifact_lease_events (operation_id) WHERE predecessor_id IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_artifact_lease_events_successor ON artifact_lease_events (predecessor_id) WHERE predecessor_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS ix_artifact_lease_events_latest ON artifact_lease_events (operation_id, event_seq DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS ux_artifact_holder_events_root ON artifact_holder_events (artifact_id, holder_kind, COALESCE(operation_id,''), COALESCE(fence,0), COALESCE(retained_artifact_id,''), COALESCE(world_snapshot_id,''), COALESCE(player_snapshot_id,'')) WHERE predecessor_id IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_artifact_holder_events_root ON artifact_holder_events (artifact_id, holder_kind, COALESCE(operation_id,''), COALESCE(fence,0), COALESCE(retained_artifact_id,''), COALESCE(world_snapshot_id,''), COALESCE(player_snapshot_id,''), COALESCE(pin_id,'')) WHERE predecessor_id IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_artifact_holder_events_successor ON artifact_holder_events (predecessor_id) WHERE predecessor_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS ix_artifact_holder_events_latest ON artifact_holder_events (artifact_id, holder_kind, COALESCE(operation_id,''), COALESCE(fence,0), COALESCE(retained_artifact_id,''), COALESCE(world_snapshot_id,''), COALESCE(player_snapshot_id,''), event_seq DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS ux_artifact_holder_sequence ON artifact_holder_events (artifact_id, holder_kind, COALESCE(operation_id,''), COALESCE(fence,0), COALESCE(retained_artifact_id,''), COALESCE(world_snapshot_id,''), COALESCE(player_snapshot_id,''), event_seq);
+CREATE INDEX IF NOT EXISTS ix_artifact_holder_events_latest ON artifact_holder_events (artifact_id, holder_kind, COALESCE(operation_id,''), COALESCE(fence,0), COALESCE(retained_artifact_id,''), COALESCE(world_snapshot_id,''), COALESCE(player_snapshot_id,''), COALESCE(pin_id,''), event_seq DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_artifact_holder_sequence ON artifact_holder_events (artifact_id, holder_kind, COALESCE(operation_id,''), COALESCE(fence,0), COALESCE(retained_artifact_id,''), COALESCE(world_snapshot_id,''), COALESCE(player_snapshot_id,''), COALESCE(pin_id,''), event_seq);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_artifact_writer_claims_root ON artifact_writer_claims (artifact_id, operation_id, fence) WHERE predecessor_id IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_artifact_writer_claims_successor ON artifact_writer_claims (predecessor_id) WHERE predecessor_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS ix_artifact_writer_claims_latest ON artifact_writer_claims (artifact_id, operation_id, fence, event_seq DESC);
@@ -1913,9 +1941,9 @@ END;
 
 CREATE TRIGGER IF NOT EXISTS artifact_holder_events_insert_guard BEFORE INSERT ON artifact_holder_events
 BEGIN
-    SELECT CASE WHEN NEW.predecessor_id IS NULL AND (NEW.event_kind != 'acquire' OR EXISTS (SELECT 1 FROM artifact_holder_events p WHERE p.artifact_id = NEW.artifact_id AND p.holder_kind IS NEW.holder_kind AND p.operation_id IS NEW.operation_id AND p.fence IS NEW.fence AND p.retained_artifact_id IS NEW.retained_artifact_id AND p.world_snapshot_id IS NEW.world_snapshot_id AND p.player_snapshot_id IS NEW.player_snapshot_id)) THEN RAISE(ABORT, 'invalid holder root') END;
-    SELECT CASE WHEN NEW.predecessor_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM artifact_holder_events p WHERE p.event_id = NEW.predecessor_id AND p.artifact_id = NEW.artifact_id AND p.holder_kind IS NEW.holder_kind AND p.operation_id IS NEW.operation_id AND p.fence IS NEW.fence AND p.retained_artifact_id IS NEW.retained_artifact_id AND p.world_snapshot_id IS NEW.world_snapshot_id AND p.player_snapshot_id IS NEW.player_snapshot_id AND p.event_kind != NEW.event_kind) THEN RAISE(ABORT, 'holder identity or transition mismatch') END;
-    SELECT CASE WHEN NEW.holder_kind = 'snapshot' AND NEW.event_kind = 'release' THEN RAISE(ABORT, 'published history holds cannot be released') END;
+    SELECT CASE WHEN NEW.predecessor_id IS NULL AND (NEW.event_kind != 'acquire' OR EXISTS (SELECT 1 FROM artifact_holder_events p WHERE p.artifact_id = NEW.artifact_id AND p.holder_kind IS NEW.holder_kind AND p.operation_id IS NEW.operation_id AND p.fence IS NEW.fence AND p.retained_artifact_id IS NEW.retained_artifact_id AND p.world_snapshot_id IS NEW.world_snapshot_id AND p.player_snapshot_id IS NEW.player_snapshot_id AND p.pin_id IS NEW.pin_id)) THEN RAISE(ABORT, 'invalid holder root') END;
+    SELECT CASE WHEN NEW.predecessor_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM artifact_holder_events p WHERE p.event_id = NEW.predecessor_id AND p.artifact_id = NEW.artifact_id AND p.holder_kind IS NEW.holder_kind AND p.operation_id IS NEW.operation_id AND p.fence IS NEW.fence AND p.retained_artifact_id IS NEW.retained_artifact_id AND p.world_snapshot_id IS NEW.world_snapshot_id AND p.player_snapshot_id IS NEW.player_snapshot_id AND p.pin_id IS NEW.pin_id AND p.event_kind != NEW.event_kind) THEN RAISE(ABORT, 'holder identity or transition mismatch') END;
+    SELECT CASE WHEN NEW.holder_kind IN ('snapshot','pin') AND NEW.event_kind = 'release' THEN RAISE(ABORT, 'published history holds cannot be released') END;
     SELECT CASE WHEN NEW.event_kind = 'acquire' AND NEW.holder_kind = 'operation' AND
       ((SELECT fence FROM publication_operation_events WHERE operation_id = NEW.operation_id ORDER BY event_seq DESC LIMIT 1) IS NOT NEW.fence OR (SELECT phase FROM publication_operation_events WHERE operation_id = NEW.operation_id ORDER BY event_seq DESC LIMIT 1) IS NULL OR (SELECT phase FROM publication_operation_events WHERE operation_id = NEW.operation_id ORDER BY event_seq DESC LIMIT 1) = 'terminal') THEN RAISE(ABORT, 'stale or closed operation holder') END;
     SELECT CASE WHEN NEW.event_kind = 'release' AND NEW.holder_kind = 'operation' AND

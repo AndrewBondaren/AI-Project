@@ -156,7 +156,7 @@ node ../node_modules/pyright/index.js app/dataModel/time app/application/time ap
 
 Сверка 8 ноября: 35 синхронных тестов Time и 28 тестов routes/generation прошли. Асинхронный ReadPortTests.test_pinned_reads в этом прогоне не запускался. Production typing — 0 ошибок, вместе с tests/time — 320 ошибок. Для нового файла требовать ноль новых diagnostics; общий gate остаётся открытым.
 
-**Решения пользователя от 2026-11-08.** Первым срезом TL-B согласовано наблюдение PROJECT в `candidate.projected` до появления внешней production composition. Подключение READ_CURRENT, READ_HISTORICAL, PREPARE_ADVANCE и RESOLVE отложено до появления соответствующих production callers. Полная runtime-приёмка §47.3 проводится отдельно. Реализация первого среза предстоит.
+**Решения пользователя от 2026-11-08.** Первым срезом TL-B согласовано наблюдение PROJECT в `candidate.projected` до появления внешней production composition. Подключение READ_CURRENT, READ_HISTORICAL, PREPARE_ADVANCE и RESOLVE отложено до появления соответствующих production callers. Полная runtime-приёмка §47.3 проводится отдельно. Первый срез реализован. [Отчёт по PROJECT и проверкам §6.3](./time-log-project-report.md).
 
 ## 7. Предлагаемая фиксация реализации (не новое согласование §47.1–2)
 

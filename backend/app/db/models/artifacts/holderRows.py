@@ -19,3 +19,4 @@ class ArtifactHolderEventRow:
     predecessor_id: str | None
     event_seq: int
     event_kind: str
+    pin_id: str | None = None

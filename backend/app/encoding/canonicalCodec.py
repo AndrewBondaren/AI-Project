@@ -10,7 +10,7 @@ from pydantic import TypeAdapter
 from typing import get_type_hints
 from struct import unpack
 
-from app.dataModel.fields.validatedFieldPath import ModelIdentity
+from app.dataModel.fields.validatedFieldPath import ModelIdentity, is_model_identity_owner
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest, CanonicalTypeKind, RegisteredTypeEntry
 
 
@@ -179,7 +179,7 @@ def _decode_scalar(tag: int, body: bytes | memoryview) -> object:
 
 def validate_decoded_identity(owner: type, values: dict, manifest: CanonicalSchemaManifest) -> None:
     if owner is ModelIdentity and not any(
-        issubclass(entry.python_type, BaseModel)
+        is_model_identity_owner(entry.python_type)
         and entry.python_type.__module__ == values["module"]
         and entry.python_type.__qualname__ == values["qualname"]
         for entry in manifest.entries

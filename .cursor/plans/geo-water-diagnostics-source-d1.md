@@ -519,3 +519,5 @@ Water/River wire-тесты прошли во всех 21 процессах. Wa
 **Основание выбора.** На чистом `c1e7408bd9008519650837a1c789b2314a60fd2b` production caller, которому нужен путь к полю специализации, не найден. В Hydrology фактический путь — `WaterBody.kind`. При независимой передаче байтов между двумя процессами на Python 3.14.4 / Pydantic 2.14.2 reader с manifest-first импортом отверг и identity, и полный путь к `PlanEnvelope[FineWaterResult].payload`; обе формы для `WaterBody` восстановились.
 
 **Приёмка реализации.** Проверить ранний типизированный отказ, обратное чтение старых записей в обоих canonical readers и cold round-trip обычного owner в независимых процессах с разным порядком импортов. Для surface manifest проверить все 343 ID/type/kind, включая остальные специализации, без привязки ожидаемого результата к модулю первого создания. Сверить Water/River bytes и fingerprints, runtime и fallback.
+
+**S2-FOLLOWUP-ID-1 выполнен.** [Отчёт о приёмке Fields/Encoding](geo-water-fields-identity-report.md).

@@ -4,11 +4,23 @@ Plan: ``.cursor/plans/error-contracts-1.md`` §3.9 C0-3. Built by
 ``CheckedPath.freeze``; ``projection`` is the only flat form, for HTTP/log.
 """
 
-from typing import Annotated, Literal, Self
+from inspect import isabstract
+from typing import Annotated, Literal, Self, TypeGuard
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, model_validator
 
 _RECORD = ConfigDict(frozen=True, strict=True, extra="forbid", revalidate_instances="always")
+
+
+class ModelIdentityError(ValueError):
+    """The supplied owner cannot be represented by a stable model identity."""
+
+
+def is_model_identity_owner(model: object) -> TypeGuard[type[BaseModel]]:
+    if not isinstance(model, type) or not issubclass(model, BaseModel) or model is BaseModel or isabstract(model):
+        return False
+    metadata = model.__pydantic_generic_metadata__
+    return metadata["origin"] is None and not metadata["parameters"]
 
 
 class ModelIdentity(BaseModel):
@@ -20,7 +32,9 @@ class ModelIdentity(BaseModel):
     qualname: StrictStr
 
     @classmethod
-    def of(cls, model: type) -> Self:
+    def of(cls, model: object) -> Self:
+        if not is_model_identity_owner(model):
+            raise ModelIdentityError("model identity requires a named concrete BaseModel class")
         return cls(module=model.__module__, qualname=model.__qualname__)
 
 

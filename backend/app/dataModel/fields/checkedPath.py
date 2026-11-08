@@ -77,16 +77,14 @@ def _union_members(annotation: Any) -> tuple[Any, ...]:
 class CheckedPath(Generic[RootT, CurrentT]):
     __slots__ = ("_root", "_current", "_segments")
 
-    def __init__(self, root: type[BaseModel], current: Any, segments: tuple[PathSegment, ...]) -> None:
+    def __init__(self, root: ModelIdentity, current: Any, segments: tuple[PathSegment, ...]) -> None:
         self._root = root
         self._current = current
         self._segments = segments
 
     @staticmethod
     def root(model: type[RootModelT]) -> "CheckedPath[RootModelT, RootModelT]":
-        if not isinstance(model, type) or not issubclass(model, BaseModel):
-            raise CheckedPathError("path root must be a POJO model")
-        return CheckedPath(model, model, ())
+        return CheckedPath(ModelIdentity.of(model), model, ())
 
     def _step(self, current: Any, segment: PathSegment) -> "CheckedPath[Any, Any]":
         return CheckedPath(self._root, current, (*self._segments, segment))
@@ -153,7 +151,7 @@ class CheckedPath(Generic[RootT, CurrentT]):
     def freeze(self) -> ValidatedFieldPath:
         if not self._segments:
             raise CheckedPathError("a field path needs at least one field segment")
-        return ValidatedFieldPath(root=ModelIdentity.of(self._root), segments=self._segments)
+        return ValidatedFieldPath(root=self._root, segments=self._segments)
 
     @staticmethod
     def from_pydantic_loc(root: type[BaseModel], loc: tuple[str | int, ...]) -> ValidatedFieldPath | None:

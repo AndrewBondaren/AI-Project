@@ -95,7 +95,7 @@ class CanonicalRequestCodecTests(unittest.TestCase):
 
     def test_core_manifests_have_exact_reserved_ids_and_shared_dependencies(self):
         by_id = {entry.type_id: entry for entry in SNAPSHOT_CORE_SCHEMA.entries}
-        self.assertEqual(set(by_id), {110, *range(20001, 20021), *range(20101, 20141)})
+        self.assertEqual(set(by_id), {110, *range(20001, 20021), *range(20101, 20142)})
         self.assertIs(by_id[20101].python_type, WorldSnapshotRef)
         self.assertIs(by_id[20133].python_type, WorldSnapshotMetadata)
         self.assertIs(by_id[20139].python_type, RuntimeIssueContext)
@@ -103,7 +103,7 @@ class CanonicalRequestCodecTests(unittest.TestCase):
         self.assertNotIn(PatchSet, {entry.python_type for entry in SNAPSHOT_CORE_SCHEMA.entries})
         self.assertNotIn(FakeSection, {entry.python_type for entry in SNAPSHOT_CORE_SCHEMA.entries})
         combined = merge_manifests(ARTIFACT_CORE_SCHEMA, PATCH_CORE_SCHEMA, SNAPSHOT_CORE_SCHEMA)
-        self.assertEqual(len(combined.entries), 61)
+        self.assertEqual(len(combined.entries), 62)
         self.assertEqual(encode(self.snapshot, combined), encode(self.snapshot, SNAPSHOT_CORE_SCHEMA))
         # Manifest iteration order and Python names are not wire identities.
         reversed_schema = CanonicalSchemaManifest(entries=tuple(reversed(SNAPSHOT_CORE_SCHEMA.entries)))

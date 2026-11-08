@@ -12,6 +12,7 @@ from app.dataModel.worldSnapshot.identity.refs import SnapshotRef
 class ArtifactHolderKind(StrEnum):
     OPERATION = "operation"
     ARTIFACT = "artifact"
+    PIN = "pin"
     SNAPSHOT = "snapshot"
 
 
@@ -36,8 +37,15 @@ class SnapshotHolder(BaseModel):
     snapshot: SnapshotRef
 
 
+class PinHolder(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
+
+    kind: Literal[ArtifactHolderKind.PIN] = ArtifactHolderKind.PIN
+    pin_id: str = Field(min_length=1)
+
+
 type ArtifactHolderRef = Annotated[
-    OperationHolder | ArtifactRetentionHolder | SnapshotHolder, Field(discriminator="kind"),
+    OperationHolder | ArtifactRetentionHolder | SnapshotHolder | PinHolder, Field(discriminator="kind"),
 ]
 
 
