@@ -309,12 +309,48 @@ class FailOnceTransform(Transform):
 
 
 class RecoveryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_external_cancel_after_hook_caught_its_own_cancellation(self):
+        from app.application.engine.runtime.invocations.memoryExecutionStore import MemoryExecutionStore
+
+        store = MemoryExecutionStore()
+        engine = runtime(store=store, lease_seconds=1)
+        assert isinstance(engine, DAGEngine)
+        key = ExecutionId("caught-hook-cancel")
+        options = LLMExecutionOptions(player_message="", language="ru", repair_iterations=0, repair_mode=RepairMode.MAXIMUM)
+        caught, finish = asyncio.Event(), asyncio.Event()
+
+        async def effect(hooks, view):
+            worker = asyncio.current_task()
+            assert worker is not None
+            worker.cancel()
+            try:
+                await asyncio.sleep(0)
+            except asyncio.CancelledError:
+                caught.set()
+            await finish.wait()
+
+        with patch.object(PipelineHooks, "apply_effects", effect):
+            run = asyncio.create_task(engine.run(key, TaskType.INTENT_DETECTION, max_passes=1, options=options))
+            try:
+                await asyncio.wait_for(caught.wait(), 5)
+                run.cancel()
+                done, _ = await asyncio.wait((run,), timeout=1.2)
+                self.assertIn(run, done)
+                self.assertTrue(run.cancelled())
+            finally:
+                finish.set()
+                await asyncio.gather(run, return_exceptions=True)
+        result = await engine.resume(key, max_passes=1, options=options)
+        assert isinstance(result, ResolveResult)
+        self.assertTrue(result.ok)
+
     async def test_cancelled_effect_keeps_lease_until_hook_finishes(self):
         from app.application.engine.runtime.invocations.memoryExecutionStore import MemoryExecutionStore
 
         store = MemoryExecutionStore()
         owner = runtime(store=store, lease_seconds=1)
         contender = runtime(store=store, lease_seconds=1)
+        assert isinstance(owner, DAGEngine) and isinstance(contender, DAGEngine)
         key = ExecutionId("cancelled-effect-lease")
         options = LLMExecutionOptions(player_message="", language="ru", repair_iterations=0, repair_mode=RepairMode.MAXIMUM)
         entered, draining, finish = asyncio.Event(), asyncio.Event(), asyncio.Event()
@@ -346,13 +382,16 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                     run.cancel()
                 await asyncio.gather(run, return_exceptions=True)
             self.assertTrue(run.cancelled())
-            self.assertTrue((await contender.resume(key, max_passes=1, options=options)).ok)
+            result = await contender.resume(key, max_passes=1, options=options)
+            assert isinstance(result, ResolveResult)
+            self.assertTrue(result.ok)
 
     async def test_cancelled_run_propagates_checkpoint_write_failure(self):
         from app.application.engine.runtime.invocations.memoryExecutionStore import MemoryExecutionStore
 
         store = MemoryExecutionStore()
         engine = runtime(store=store)
+        assert isinstance(engine, DAGEngine)
         key = ExecutionId("cancelled-checkpoint-error")
         options = LLMExecutionOptions(player_message="", language="ru", repair_iterations=0, repair_mode=RepairMode.MAXIMUM)
         entered = asyncio.Event()
@@ -374,7 +413,9 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 run.cancel()
                 await asyncio.gather(run, return_exceptions=True)
-        self.assertTrue((await engine.resume(key, max_passes=1, options=options)).ok)
+        result = await engine.resume(key, max_passes=1, options=options)
+        assert isinstance(result, ResolveResult)
+        self.assertTrue(result.ok)
 
     async def test_repeated_cancellation_drains_child_then_releases_claim(self):
         from app.application.engine.runtime.invocations.memoryExecutionStore import MemoryExecutionStore

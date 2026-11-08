@@ -74,7 +74,7 @@ class ExecutionRecovery[O: BaseModel, S: BaseModel]:
             try:
                 await asyncio.wait((owner,))
             except asyncio.CancelledError:
-                if not task.done() and not task.cancelling():
+                if not task.done():
                     task.cancel()
                 # Keep renewal and release alive while the worker finishes its cancellation hooks.
                 while not owner.done():
