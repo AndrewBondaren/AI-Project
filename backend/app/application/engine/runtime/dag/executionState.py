@@ -64,15 +64,19 @@ class ExecutionState:
     def from_snapshot[S: BaseModel](cls, snapshot: "SessionSnapshot[S]", registry: NodeRegistry) -> "ExecutionState":
         state = cls(snapshot.metadata.execution_id, registry,
                     plan_revision=snapshot.metadata.plan_revision, pass_number=snapshot.metadata.pass_number)
-        state.catalog = DAGContext.from_snapshot(snapshot.catalog, registry)
-        state._statuses = {state.catalog.instance.bindings[node]: status for node, status in snapshot.statuses}
-        state._attempt_passes = {state.catalog.instance.bindings[node]: number for node, number in snapshot.attempt_passes}
-        state._traces = list(snapshot.traces)
-        state._levels = list(snapshot.levels)
-        state._decision = snapshot.decision
-        state._cursor = snapshot.cursor
-        if state.gate != snapshot.gate:
-            raise ValueError("snapshot gate does not match level control")
+        try:
+            state.catalog = DAGContext.from_snapshot(snapshot.catalog, registry)
+            state._statuses = {state.catalog.instance.bindings[node]: status for node, status in snapshot.statuses}
+            state._attempt_passes = {state.catalog.instance.bindings[node]: number for node, number in snapshot.attempt_passes}
+            state._traces = list(snapshot.traces)
+            state._levels = list(snapshot.levels)
+            state._decision = snapshot.decision
+            state._cursor = snapshot.cursor
+            if state.gate != snapshot.gate:
+                raise ValueError("snapshot gate does not match level control")
+        except BaseException:
+            state.release()
+            raise
         return state
 
     def release(self) -> None:

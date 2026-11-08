@@ -65,8 +65,21 @@ class ExecutionRecovery[O: BaseModel, S: BaseModel]:
             finally:
                 if not task.done():
                     task.cancel()
-                await asyncio.gather(task, return_exceptions=True)
-                await settings.store.release(claim)
+
+                async def drain_and_release() -> None:
+                    await asyncio.gather(task, return_exceptions=True)
+                    await settings.store.release(claim)
+
+                cleanup = asyncio.create_task(drain_and_release())
+                cancelled = None
+                while not cleanup.done():
+                    try:
+                        await asyncio.shield(cleanup)
+                    except asyncio.CancelledError as exc:
+                        cancelled = exc
+                cleanup.result()
+                if cancelled is not None:
+                    raise cancelled
         except OwnershipConflict:
             saved = await settings.store.load(execution_id)
             if saved.final_revision is not None:

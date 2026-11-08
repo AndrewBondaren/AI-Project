@@ -64,6 +64,15 @@ class RestoreTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         await self.case.asyncTearDown()
 
+    async def test_gate_mismatch_releases_partial_state(self):
+        snapshot = replace(self.snapshot, decision=levels.LevelDecision.REPLAN,
+                           gate=levels.gate_policy(TestNodeError(item_id=7)), levels=())
+        with patch.object(ExecutionState, "release", autospec=True, side_effect=ExecutionState.release) as release:
+            with self.assertRaisesRegex(ValueError, "snapshot gate does not match"):
+                await self.service.restore(snapshot, self.registry())
+            release.assert_called_once()
+            self.assertTrue(release.call_args.args[0].is_released)
+
     def registry(self, changes=None, omit=(), extra=False):
         registry = NodeRegistry()
         for reg in self.case.registry.graph_registrations():

@@ -58,13 +58,13 @@ class SessionRecovery[O: BaseModel, S: BaseModel]:
             await asyncio.sleep(0)  # deliver a synchronous hook's pending task.cancel()
         except asyncio.CancelledError:
             pass
-        if durable is not None and durable.graph.interaction_owner is not None:
-            saved = await durable.store.load(durable.claim.execution_id)
-            if saved.status == InvocationStatus.CANCELLED and InvocationGraph.model_validate_json(saved.blob).cancellation is not None:
-                # The cancelling request already persisted the terminal graph and revoked our claim.
-                return
         try:
             if durable is not None:
+                if durable.graph.interaction_owner is not None:
+                    saved = await durable.store.load(durable.claim.execution_id)
+                    if saved.status == InvocationStatus.CANCELLED and InvocationGraph.model_validate_json(saved.blob).cancellation is not None:
+                        # The cancelling request already persisted the terminal graph and revoked our claim.
+                        return
                 durable.graph.session = self._snapshots.encode(state, self._registry)
                 await durable.save()
             else:

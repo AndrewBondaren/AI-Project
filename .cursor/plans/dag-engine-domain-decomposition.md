@@ -41,3 +41,28 @@
 Проверить [правило композиции](../rules/folder-composition.mdc): runtime/invocations сейчас содержит 8 непосредственных файлов, после переноса — 8; recovery и interaction получают отдельные подпапки. В runtime/dag/lifecycle число файлов меняется с 1 до 4. Проверить размер и обязанности каждого нового класса, включая вложенные функции. На входе DAGEngine содержит 479 строк при лимите 300. При промежуточном превышении фиксировать остаток по незакрытым зонам; после переноса фасад и каждый владелец укладываются в 300 строк. Фасад не знает wire, retry, CAS, правил snapshot и исполнения фаз.
 
 После шага 7 выполнить полную DAG-команду и положительный Pyright из [отчёта F4](./sp-p2w-f4-verification.md), отдельно `python -m unittest tests.spatial_pack.test_execution_pins`. Проверить типизацию новых файлов и импорт DAGEngine через прежний путь, обновить ссылки проверок на фактических владельцев. Приёмка требует успешных проверок и сверки кода каждого оркестратора с этой картой.
+
+## Ревью шагов 1–7 и агрегации входных ошибок от 2026-11-08
+
+Проверены изменения DAGEngine и его тестов в диапазоне `2360858d..2d3fe679` и рабочей копии, включая три незакоммиченных регрессионных теста в [test_passes.py](../../backend/tests/dag_typing/lifecycle/test_passes.py). Подтверждены три находки P2.
+
+### Открытые находки
+
+1. **P2. Повторная отмена оставляет claim до истечения lease.** Первый `cancel()` переводит recovery в `finally`. Если второй `cancel()` приходит, пока дочерняя задача сохраняет snapshot, ожидание `gather` выбрасывает `CancelledError`, и управление пропускает `store.release(claim)`. В воспроизведении с управляемой дочерней задачей и тестовым store зафиксировано 0 вызовов `release`. Следующий `resume` может получить `OwnershipConflict` до истечения lease. Нарушен контракт шага 6 об освобождении claim при отмене. [executionRecovery.py, строка 68](../../backend/app/application/engine/runtime/invocations/recovery/executionRecovery.py#L68)
+2. **P2. Ошибка внутри фабрики snapshot оставляет созданный ExecutionState без release.** Snapshot с `decision=REPLAN`, заданным `gate` и пустым `levels` проходит `SessionSnapshot.__post_init__`. Фабрика создаёт state, восстанавливает каталог и выбрасывает `ValueError` при сверке gate. Обработчик освобождения в сервисе действует только после возврата фабрики. Сохранённый traceback удерживает каталог. Нарушен контракт шага 4 об освобождении state до передачи следующему владельцу. [executionSnapshotService.py, строка 36](../../backend/app/application/engine/runtime/dag/lifecycle/executionSnapshotService.py#L36), [executionState.py, строка 75](../../backend/app/application/engine/runtime/dag/executionState.py#L75)
+3. **P2. Ошибка чтения при сохранении отмены проходит без SNAPSHOT_FAILED.** Для durable execution с `interaction_owner` метод `save_cancelled` читает checkpoint, чтобы проверить отзыв claim. Если `store.load` выбрасывает `OSError`, сохранение прекращается до входа в обработчик диагностик. Вызывающая сторона получает ошибку, а подписчик lifecycle пропускает событие о неудачном сохранении. Нарушены шаг 4 и §9.3 ТЗ. [sessionRecovery.py, строка 62](../../backend/app/application/engine/runtime/dag/lifecycle/sessionRecovery.py#L62)
+
+### Проверенные инварианты
+
+- `ExecutionAdmission` владеет `_active`, снимает допуск в `finally`, выполняет preflight compile до создания state и освобождает временный state после durable create. `SessionRecovery` восстанавливает memory-сессию, `ActiveCheckpoint` восстанавливает активный durable checkpoint. После передачи в `PassExecution.run` цикл проходов владеет state и освобождает его в `finally`.
+- Claim и heartbeat принадлежат `ExecutionRecovery`. Команды ввода и явной отмены принадлежат `ExecutionInteraction`. При отмене исполняющейся задачи сохранением state управляет `SessionRecovery`.
+- Для finalized checkpoint повторные `run` и `resume` проверяют заголовок и декодируют сохранённый outcome до получения claim. Ветка replay обходит compile, рабочий restore, цикл проходов и эффекты. Если финализация произошла между чтением и попыткой claim, ветка `OwnershipConflict` перечитывает запись и возвращает результат победителя. Тесты покрывают успешный и ошибочный исходы после повторного открытия SQLite.
+- Для admission-полей все три точки входа выбрасывают `pydantic.ValidationError`. У `run` порядок пар «код, путь» — `invalid_execution_id / execution_id`, `invalid_max_passes / max_passes`, `invalid_task_type / task_type`, затем `invalid_options / options` с вложенным путём для ошибки поля. У `resume` и `resume_input` порядок тот же с пропуском `task_type`.
+- При повторной проверке повреждённого экземпляра `LLMExecutionOptions` тест получил обе ошибки в порядке `options.language`, `options.repair_iterations`. При создании экземпляра конструктор собрал ошибки значений в порядке `language`, `system_role`, `repair_iterations`, с путями относительно самого объекта.
+- Валидация admission-полей предшествует `_enter`, чтению обоих store и compile. В `resume_input` она также предшествует `accept_input`. Соответствие payload контракту ожидающего узла проверяет `InputWaitCoordinator.accept` после загрузки графа.
+
+### Прогон и пробелы покрытия
+
+Прошли 82 теста из пяти модулей: `test_passes`, `test_world_calls`, `test_input_wait`, `test_execution_stop_intent` и `test_execution_pins`. Положительный профиль DAG Pyright дал 0 ошибок и 0 предупреждений. Полный DAG-набор в рамках этого ревью не запускался.
+
+Регрессионного покрытия требуют три сценария из открытых находок и один вызов `run` с одновременно неверными `execution_id`, `max_passes`, `task_type` и `options`.

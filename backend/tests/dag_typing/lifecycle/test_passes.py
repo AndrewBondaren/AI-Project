@@ -6,7 +6,7 @@ import gc
 import logging
 from typing import Never
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, patch
 import weakref
 
 from pydantic import ValidationError
@@ -19,6 +19,7 @@ from app.application.engine.runtime.dag.dagExecutor import DAGExecutor
 from app.application.engine.runtime.dag.executionState import ExecutionState
 from app.application.engine.runtime.dag.lifecycle.executionAdmission import ExecutionAdmission
 from app.application.engine.runtime.dag.lifecycle.executionSnapshotService import ExecutionSnapshotService
+from app.application.engine.runtime.dag.lifecycle.sessionRecovery import SessionRecovery
 from app.application.engine.runtime.execution.pythonNodeError import PythonNodeError
 from app.application.engine.runtime.execution.pythonNodeExecutor import PythonNodeExecutor
 from app.application.engine.runtime.graphs.graphCompiler import GraphCompiler
@@ -110,6 +111,64 @@ class PassTests(unittest.IsolatedAsyncioTestCase):
 
     async def resume(self, **kwargs):
         return await self.engine.resume(self.execution_id, max_passes=self.max_passes, options=self.group.options, **kwargs)
+
+    async def test_invalid_run_collects_independent_arguments_before_admission(self):
+        self.setup_engine(groups.Request([]))
+        with (patch.object(ExecutionAdmission, "_enter") as enter, patch.object(self.store, "load") as load,
+              patch.object(self.hooks, "compile") as compile_plan, self.assertRaises(ValidationError) as caught):
+            await self.engine.run(ExecutionId(""), "unknown", max_passes=0, options=None)
+        self.assertEqual([(e["type"], e["loc"]) for e in caught.exception.errors()], [
+            ("invalid_execution_id", ("execution_id",)), ("invalid_max_passes", ("max_passes",)),
+            ("invalid_task_type", ("task_type",)), ("invalid_options", ("options",)),
+        ])
+        enter.assert_not_called()
+        load.assert_not_called()
+        compile_plan.assert_not_called()
+
+    async def test_cancelled_snapshot_load_failure_emits_failed_once(self):
+        self.setup_engine(groups.Request([]))
+        recovery = SessionRecovery(self.service, self.group.registry, self.store, self.hooks, self.events.append, lambda: 1.0)
+        state = ExecutionState(self.execution_id, self.group.registry, plan_revision=PlanRevision("test"))
+        durable = Mock()
+        error = OSError("checkpoint unavailable")
+        durable.store.load = AsyncMock(side_effect=error)
+        durable.save = AsyncMock()
+        try:
+            with self.assertRaises(OSError) as caught:
+                await recovery.save_cancelled(state, durable)
+            self.assertIs(caught.exception, error)
+            self.assertEqual([event.code for event in self.events], [ExecutionEventCode.SNAPSHOT_FAILED])
+            durable.save.assert_not_awaited()
+        finally:
+            state.release()
+
+    async def test_invalid_resume_arguments_precede_claim_and_input_delivery(self):
+        self.setup_engine(groups.Request([]))
+        options = replace(self.group.options)
+        object.__setattr__(options, "language", 17)
+        object.__setattr__(options, "repair_iterations", -1)
+        with (patch.object(ExecutionAdmission, "_enter") as enter, patch.object(self.store, "load") as load,
+              patch.object(self.engine, "accept_input") as accept):
+            for operation in (
+                self.engine.resume(ExecutionId(""), max_passes=True, options=options),
+                self.engine.resume_input(ExecutionId(""), None, max_passes=True, options=options),
+            ):
+                with self.assertRaises(ValidationError) as caught:
+                    await operation
+                self.assertEqual([(e["type"], e["loc"]) for e in caught.exception.errors()], [
+                    ("invalid_execution_id", ("execution_id",)), ("invalid_max_passes", ("max_passes",)),
+                    ("invalid_options", ("options", "language")),
+                    ("invalid_options", ("options", "repair_iterations")),
+                ])
+        enter.assert_not_called()
+        load.assert_not_called()
+        accept.assert_not_awaited()
+
+    def test_options_constructor_reports_all_invalid_fields(self):
+        with self.assertRaises(ValidationError) as caught:
+            replace(self.group.options, language=17, system_role=1, repair_iterations=-1)
+        self.assertEqual([e["loc"] for e in caught.exception.errors()],
+                         [("language",), ("system_role",), ("repair_iterations",)])
 
     async def test_pre_llm_post_effects_response_flow_and_typed_response_identity(self):
         request = groups.Request([groups.response(first=7)])

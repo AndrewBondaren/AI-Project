@@ -309,6 +309,46 @@ class FailOnceTransform(Transform):
 
 
 class RecoveryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_repeated_cancellation_drains_child_then_releases_claim(self):
+        from app.application.engine.runtime.invocations.memoryExecutionStore import MemoryExecutionStore
+        from app.application.engine.runtime.invocations.recovery.executionRecovery import ExecutionRecovery
+
+        store = MemoryExecutionStore()
+        engine = runtime(store=store)
+        key = ExecutionId("repeated-cancel")
+        options = LLMExecutionOptions(player_message="", language="ru", repair_iterations=0, repair_mode=RepairMode.MAXIMUM)
+        started, draining, finish = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        cleanup = []
+
+        async def worker(*args):
+            started.set()
+            try:
+                await asyncio.Future()
+            finally:
+                draining.set()
+                await finish.wait()
+                cleanup.append("drained")
+
+        release = store.release
+        async def record_release(claim):
+            await release(claim)
+            cleanup.append("released")
+
+        with patch.object(ExecutionRecovery, "_resume_claimed", worker), patch.object(store, "release", record_release):
+            parent = asyncio.create_task(engine.run(key, TaskType.INTENT_DETECTION, max_passes=1, options=options))
+            try:
+                await asyncio.wait_for(started.wait(), 5)
+                parent.cancel()
+                await asyncio.wait_for(draining.wait(), 5)
+                parent.cancel()
+                await asyncio.sleep(0)
+            finally:
+                finish.set()
+                with self.assertRaises(asyncio.CancelledError):
+                    await asyncio.wait_for(parent, 5)
+        self.assertEqual(cleanup, ["drained", "released"])
+        self.assertTrue((await engine.resume(key, max_passes=1, options=options)).ok)
+
     async def test_failed_durable_create_releases_state_and_allows_retry(self):
         from app.application.engine.runtime.dag.executionState import ExecutionState
         from app.application.engine.runtime.invocations.memoryExecutionStore import MemoryExecutionStore
