@@ -43,3 +43,9 @@ python -m unittest -v tests.dag_typing.invocations.test_world_calls.RecoveryTest
 
 В контрольном прогоне профильные invocation-тесты прошли 57/57 за 238,912 с. В полном наборе отдельно воспроизведено истечение секундной рабочей lease между commit renew и следующим checkpoint (402/403). В OwnedExecution добавлен один повтор на той же revision при отсутствии stop intent. Повтор заново проходит renew и checkpoint CAS. Независимый ревьюер проверил смену owner/fence и появление intent между чтением и записью, вердикт **ACCEPT**. Прогон двух сценариев terminal replay, обоих store и модуля Pack дал 15/15 за 138,884 с.
 После последней правки OwnedExecution полный DAG-набор по §9 прошёл **403/403 за 177,761 с**, в том числе test_world_calls и тесты секундной и двухсекундной lease.
+
+## Повторная приёмка на рабочем дереве поверх 2360858d
+
+Независимый ревьюер дал **ACCEPT** по текущему коду, включая выделенные read_header и terminal_result. Проверены CAS в обоих store, перечитывание CLOSED и replay после потери ownership.
+
+Совместный прогон test_world_calls, test_execution_stop_intent, test_input_wait и spatial_pack.test_execution_pins прошёл **49/49 за 178,334 с**. Профиль DAG Pyright и проверка семи production-файлов вместе с двумя выделенными recovery-модулями дали 0 ошибок и предупреждений. На исходном списке десяти файлов с тестами получены 114 ошибок и 0 предупреждений. Предыдущее сравнение с базой F3 зафиксировало 120 ошибок на базе и 114 после F4.
