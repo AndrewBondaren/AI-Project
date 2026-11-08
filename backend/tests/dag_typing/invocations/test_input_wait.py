@@ -97,14 +97,14 @@ class InputWaitTests(unittest.IsolatedAsyncioTestCase):
                                           payload=f.Count(value=7))
             await engine.accept_input(KEY, request)
             selected, proceed = asyncio.Event(), asyncio.Event()
-            start = engine._executor._start_selected
+            start = f.DAGExecutor._start_selected
 
-            async def barrier(coordinator, owned, record):
+            async def barrier(executor, coordinator, owned, record):
                 selected.set()
                 await proceed.wait()
-                return await start(coordinator, owned, record)
+                return await start(executor, coordinator, owned, record)
 
-            with patch.object(engine._executor, "_start_selected", barrier), patch.object(Ask, "resume") as continuation:
+            with patch.object(f.DAGExecutor, "_start_selected", barrier), patch.object(Ask, "resume") as continuation:
                 task = asyncio.create_task(engine.resume(KEY, max_passes=1, options=OPTIONS))
                 try:
                     await asyncio.wait_for(selected.wait(), 5)
@@ -127,7 +127,7 @@ class InputWaitTests(unittest.IsolatedAsyncioTestCase):
                     await asyncio.gather(task, return_exceptions=True)
         with closing(sqlite3.connect(self.path)) as db:
             engine = self.engine(db)
-            with patch.object(engine._binding, "compile", side_effect=AssertionError), self.assertRaises(f.ExecutionStopping) as stopped:
+            with patch.object(f.PipelineHooks, "compile", side_effect=AssertionError), self.assertRaises(f.ExecutionStopping) as stopped:
                 await engine.resume(KEY, max_passes=1, options=OPTIONS)
             self.assertEqual(stopped.exception.intent, intent)
 

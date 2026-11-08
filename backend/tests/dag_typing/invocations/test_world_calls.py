@@ -309,6 +309,25 @@ class FailOnceTransform(Transform):
 
 
 class RecoveryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_failed_durable_create_releases_state_and_allows_retry(self):
+        from app.application.engine.runtime.dag.executionState import ExecutionState
+        from app.application.engine.runtime.invocations.memoryExecutionStore import MemoryExecutionStore
+
+        store = MemoryExecutionStore()
+        engine = runtime(store=store)
+        key = ExecutionId("retry-create")
+        options = LLMExecutionOptions(player_message="", language="ru", repair_iterations=0, repair_mode=RepairMode.MAXIMUM)
+        with (patch.object(store, "create", side_effect=OSError("create failed")),
+              patch.object(ExecutionState, "release", autospec=True, side_effect=ExecutionState.release) as release):
+            with self.assertRaisesRegex(OSError, "create failed"):
+                await engine.run(key, TaskType.INTENT_DETECTION, max_passes=1, options=options)
+            release.assert_called_once()
+            self.assertTrue(release.call_args.args[0].is_released)
+        with self.assertRaises(KeyError):
+            await store.load(key)
+        result = await engine.run(key, TaskType.INTENT_DETECTION, max_passes=1, options=options)
+        self.assertTrue(result.ok)
+
     async def test_stop_fences_selected_child_retry_and_join(self):
         schema = Path(__file__).resolve().parents[3] / "app/db/migrations/0001_initial.sql"
         for name, target_node, step, attempt in (("child", COUNT.node_id, 0, 1),
@@ -419,7 +438,7 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         key = ExecutionId("next-pass")
         options = LLMExecutionOptions(player_message="", language="ru", repair_iterations=0, repair_mode=RepairMode.MAXIMUM)
 
-        def choose_pass(view):
+        def choose_pass(self, view):
             nonlocal transition
             transition = True
             return TaskType.INTENT_DETECTION
@@ -431,8 +450,8 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                 await proceed.wait()
             return await checkpoint(claim, revision, status, blob)
 
-        with (patch.object(engine._binding, "transition", choose_pass), patch.object(store, "checkpoint", barrier),
-              patch.object(engine._binding, "compile", wraps=engine._binding.compile) as compile_plan):
+        with (patch.object(PipelineHooks, "transition", choose_pass), patch.object(store, "checkpoint", barrier),
+              patch.object(PipelineHooks, "compile", autospec=True, side_effect=PipelineHooks.compile) as compile_plan):
             task = asyncio.create_task(engine.run(key, TaskType.INTENT_DETECTION, max_passes=2, options=options))
             try:
                 await asyncio.wait_for(selected.wait(), 5)
@@ -442,7 +461,7 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                 proceed.set()
                 with self.assertRaises(OwnershipConflict):
                     await task
-                self.assertTrue(all(call.args[1] == 0 for call in compile_plan.call_args_list))
+                self.assertTrue(all(call.args[2] == 0 for call in compile_plan.call_args_list))
             finally:
                 proceed.set()
                 task.cancel()
@@ -464,7 +483,7 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(TypeAdapter(ResolveResult[Text]).validate_json(intent.outcome.result_json).data, Text(text="joined"))
             with closing(sqlite3.connect(path)) as db:
                 engine = runtime(Group, store=SQLiteExecutionStore(db))
-                with (patch.object(engine._binding, "compile", side_effect=AssertionError("compiled during stop")),
+                with (patch.object(PipelineHooks, "compile", side_effect=AssertionError("compiled during stop")),
                       patch.object(CheckpointCodec, "restore", side_effect=AssertionError("restored during stop"))):
                     for operation in (engine.resume(key, max_passes=1, options=options),
                                       engine.run(key, TaskType.INTENT_DETECTION, max_passes=1, options=options)):
@@ -554,7 +573,7 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                         if not available:
                             payload.unlink()
                         with (patch.object(store, "claim", side_effect=AssertionError),
-                              patch.object(engine._binding, "compile", side_effect=AssertionError),
+                              patch.object(PipelineHooks, "compile", side_effect=AssertionError),
                               patch.object(CheckpointCodec, "restore", side_effect=AssertionError),
                               patch.object(Lifecycle, "validate_restored", side_effect=AssertionError),
                               patch.object(Path, "open", side_effect=AssertionError)):
@@ -586,7 +605,7 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
             with patch.object(store, "claim", side_effect=AssertionError):
                 with self.assertRaises(PermissionError):
                     await stranger.resume(key, max_passes=1, options=options)
-                with patch.object(owner._binding, "response_type", Count), self.assertRaises(RestoreFailure):
+                with patch.object(PipelineHooks, "response_type", Count), self.assertRaises(RestoreFailure):
                     await owner.resume(key, max_passes=1, options=options)
                 db.execute("UPDATE dag_executions SET checksum='corrupt' WHERE execution_id=?", (key,))
                 with self.assertRaises(RestoreFailure):
