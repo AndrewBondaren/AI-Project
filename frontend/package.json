@@ -1,11 +1,13 @@
 {
   "name": "rpg-frontend",
   "version": "0.1.0",
-  "main": "electron/main.js",
+  "main": "dist-electron/main.js",
   "scripts": {
     "dev:browser": "vite",
-    "dev:electron": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron .\"",
-    "build:web": "vite build",
+    "dev:electron": "npm run build:electron && concurrently -k \"vite\" \"wait-on tcp:5173 && electron .\"",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.electron.json --noEmit",
+    "build:web": "tsc -p tsconfig.json && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -15,10 +17,14 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.4",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.0.0",
     "concurrently": "^9.0.0",
     "electron": "^42.11.18",
     "tailwindcss": "^4.3.4",
+    "typescript": "^7.0.2",
     "vite": "^8.0.0",
     "wait-on": "^8.0.0"
   }
