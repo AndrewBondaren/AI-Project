@@ -1,2 +1,2 @@
-This application uses JavaScript. Put shared cross-domain JSDoc types here when needed.
-Types belonging to a domain should live in that entity's model.
+Shared TypeScript contracts for backend responses and the Electron bridge.
+Types used only within a slice belong in that slice.
