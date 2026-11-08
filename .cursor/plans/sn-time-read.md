@@ -46,4 +46,6 @@
 
 ## Статус первого среза
 
+Последующий срез production-чтения T4 прошёл проверку на файловой SQLite. [Отчёт о значениях и происхождении часов](./time-t4-read-report.md).
+
 Реализованы [read_exact](../../backend/app/db/repositories/sqlite/snapshotCore/publications/worldPublicationStore.py) и [AcceptedStateReader](../../backend/app/application/worldSnapshot/service/acceptedStateReader.py). В [SQLite-тесте](../../backend/tests/snapshotCore/storage/publication/test_accepted_state_reader.py) второе соединение принимает две публикации, после чего свежие scopes разрешают исходную P в publication binding, Q и исторический S в точный SectionStateRef, а следующий snapshot в унаследованный ref. Head родительской timeline проверен подстановкой принятой branch publication. Вместе с test_history прошли 9 тестов. Pyright по трём затронутым production-файлам дал 0 ошибок и предупреждений. Следующий срез T4 должен проверить значения через Time storage и production ITimeReadSource.

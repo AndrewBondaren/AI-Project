@@ -1296,9 +1296,9 @@ API/GEN owner получает inventory §11/30/33, lossless transport policy �
 
 ## 48. Внешние зависимости production-интеграции T4/T5 (2026-11-03)
 
-Владелец внешних контрактов и критерии их проверки указаны в [Snapshot, «Контракты Snapshot для интеграции Time»](./world-domain-patches-snapshots.md). Статус всех трёх gates — OPEN.
+Владелец внешних контрактов и критерии их проверки указаны в [Snapshot, «Контракты Snapshot для интеграции Time»](./world-domain-patches-snapshots.md). Production-чтение T4 прошло интеграционную проверку. T5 и branch остаются открыты.
 
-Проект [SN-TIME-READ — точная адресация принятого времени](./sn-time-read.md) содержит контракт, интеграционную проверку P/Q и команду первого среза. Согласовано сохранить проверку актуальности в read_current(expected=P) и добавить read_pinned(P) для повторяемого чтения принятой публикации. Gate T4 открыт до production-проверки.
+Проект [SN-TIME-READ](./sn-time-read.md) задаёт семантику read_current(expected=P) и read_pinned(P). Результаты проверки значений P/Q и исторического snapshot приведены в [отчёте T4](./time-t4-read-report.md).
 
 - **T4, current/historical read.** Требуется SN-TIME-READ и реализация Time state reader. Чтение привязано к уже принятому состоянию. Целевая публикация будущей записи и операция создания ветки этому пути не требуются.
 - **T5, runtime apply.** Требуется SN-TIME-APPLY и применимый Time/World handler в общем CommitScope. Target publication назначает Snapshot. Принятие подтверждается общим результатом commit. Pure prepare_advance доступен независимо.

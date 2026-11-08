@@ -12,13 +12,15 @@ from tests.snapshotCore.storage.publication.test_history import KEY, OTHER, enve
 from tests.snapshotCore.support.fixtures import live_database, live_started, run_async
 
 
-async def publish(bundle, base, operation, snapshot, state, receipts):
+async def publish(bundle, base, operation, snapshot, state, receipts, *, insert_payload=None):
     _, commits, publications, _, history, operations = bundle
     await operations.claim_publication(OperationKind.SNAPSHOT_APPLY, operation, "w1", "a" * 64, "b" * 64)
     target = base.model_copy(update={"publication_id": operation + "-pub", "snapshot_head": snapshot})
     async with commits.transaction(operation) as scope:
         await history.append(scope, envelope(snapshot, operation=operation, parent=base.snapshot_head,
                                              states=(state,)), receipts)
+        if insert_payload is not None:
+            await insert_payload(scope)
         await publications.compare_append(scope, base, target)
         await operations.record_terminal(scope, SnapshotApplyResult(
             operation_id=operation, request_fingerprint="b" * 64, category=SnapshotApplyOutcomeKind.COMMITTED,
@@ -60,6 +62,7 @@ class AcceptedStateReaderTests(unittest.TestCase):
                     forged = target.model_copy(update={"active_timeline_id": "other"})
                     self.assertEqual(await reader.resolve_publication(forged, KEY, scope), PublicationMismatch(target))
                     pregame = await publications.read_exact("w1", "active", scope=scope)
+                    assert pregame is not None
                     self.assertEqual(await reader.resolve_publication(pregame, KEY, scope), StateReadFailure.GAMEPLAY_NOT_STARTED)
         run_async(check())
 

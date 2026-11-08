@@ -2,11 +2,15 @@ from app.dataModel.time.reads.capture import HistoricalTimeCapture, TimeCapture
 from app.dataModel.time.reads.request import CurrentTimeRead, HistoricalTimeRead
 from app.dataModel.time.results.errors import TimeInactiveTimeline, TimePublicationConflict, TimeStateUnavailable
 from .sourcePort import ITimeReadSource
+from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
 
 
 class TimeReader:
     def __init__(self, source: ITimeReadSource):
         self._source = source
+
+    async def read_pinned(self, publication: WorldPublicationRef) -> TimeCapture | TimeStateUnavailable:
+        return await self._source.read_pinned(publication)
 
     async def read_current(self, request: CurrentTimeRead) -> TimeCapture | TimePublicationConflict | TimeInactiveTimeline | TimeStateUnavailable:
         return await self._source.read_current(request)

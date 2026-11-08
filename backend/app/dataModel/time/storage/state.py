@@ -1,4 +1,6 @@
 from typing import Self
+from app.dataModel.patch.registry.sectionMetadata import PatchSectionRegistry
+from app.dataModel.registryKey import RegistryKey
 
 from pydantic import model_validator
 
@@ -7,6 +9,10 @@ from app.dataModel.time.values.point import TimePoint, TimeRecord
 from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
 from app.dataModel.worldSnapshot.identity.refs import WorldSnapshotRef
 from app.dataModel.worldSnapshot.sections.refs import SectionStateRef
+
+
+CLOCK_SECTION = RegistryKey[PatchSectionRegistry]("time_clock")
+CLOCK_FORMAT = 1
 
 
 class TimeClockState(TimeRecord):

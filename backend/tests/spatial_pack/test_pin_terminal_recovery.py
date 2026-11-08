@@ -1,5 +1,7 @@
 """Probe durable cancellation and idempotent Pack cleanup in the same SQLite database."""
 import sqlite3
+from dataclasses import replace
+from unittest.mock import patch
 from contextlib import closing
 from hashlib import sha256
 from pathlib import Path
@@ -17,6 +19,68 @@ from tests.snapshotCore.storage.artifacts.test_staging import SqliteBlobFixture
 from tests.snapshotCore.support.fixtures import live_database
 from tests.spatial_pack.test_pin_binding_replay import acquire, activate
 from tests.spatial_pack.test_pin_intent_checkpoint import ProbePinIntent
+from tests.spatial_pack.test_execution_pins import ExecutionPinFixture
+from app.dataModel.artifacts.lifecycle.holders import PinHolder
+from app.db.repositories.sqlite.worldPack.executionPins import PackIdentityConflict, PackIntentUnavailable
+from app.application.engine.contracts.invocation.executionStore import CloseReceipt
+
+
+class FinalizedCleanupTests(ExecutionPinFixture):
+    async def test_finalized_without_matching_local_receipt_preserves_hold(self):
+        command = await self.stop()
+        receipt = CloseReceipt(command.store_id, command.execution_id, command.stop_revision)
+        await self.dag.finalize(self.claim, command.stop_revision, receipt)
+        with self.assertRaises(PackIdentityConflict):
+            await self.pins.cleanup(command)
+        async with self.bundle[0].transaction():
+            await self.bundle[0].conn.execute("INSERT INTO pack_execution_closed VALUES (?,?,?)",
+                (str(command.store_id), command.execution_id, command.stop_revision + 1))
+        with self.assertRaises(PackIdentityConflict):
+            await self.pins.cleanup(command)
+        self.assertTrue(await self.fixture.holders.is_held(self.manifest, PinHolder(pin_id=self.intent.pin_id)))
+
+    async def test_interrupted_cleanup_reopens_both_stores(self):
+        second = replace(self.intent, pin_id="pin-b", logical_read_key="other")
+        await self.pins.acquire(second)
+        await self.dag.create("foreign", b"checkpoint")
+        foreign = replace(self.intent, execution_id="foreign", pin_id="foreign-pin")
+        await self.pins.acquire(foreign)
+        command = await self.stop()
+        receipt = await self.pins.close(command)
+        with self.assertRaises(PackIdentityConflict):
+            await self.pins.cleanup(command)
+        await self.dag.finalize(self.claim, command.stop_revision, receipt)
+        with patch.object(self.dag, "load", side_effect=OSError("offline")):
+            with self.assertRaises(PackIntentUnavailable):
+                await self.pins.cleanup(command)
+        release = self.fixture.holders._release_pin
+
+        async def interrupt(scope, artifact_id, holder):
+            await release(scope, artifact_id, holder)
+            if holder.pin_id == second.pin_id:
+                raise InterruptedError("second transaction")
+
+        with patch.object(self.fixture.holders, "_release_pin", interrupt):
+            with self.assertRaises(InterruptedError):
+                await self.pins.cleanup(command)
+        await self.stack.aclose()
+        self.dag.db.close()
+        db = self.enterContext(closing(sqlite3.connect(self.path.with_name("dag.db"))))
+        self.dag = SQLiteExecutionStore(db)
+        await self.connect_pack(False)
+        held = self.fixture.holders.is_held
+        self.assertFalse(await held(self.manifest, PinHolder(pin_id=self.intent.pin_id)))
+        self.assertTrue(await held(self.manifest, PinHolder(pin_id=second.pin_id)))
+        for _ in range(2):
+            await self.pins.cleanup(command)
+            self.assertEqual(await self.pins.read_closed(command), receipt)
+            self.assertFalse(await held(self.manifest, PinHolder(pin_id=second.pin_id)))
+            self.assertTrue(await held(self.manifest, PinHolder(pin_id=foreign.pin_id)))
+            async with self.bundle[0].conn.execute(
+                "SELECT state FROM pack_execution_pins WHERE store_id=? AND execution_id=?",
+                (str(command.store_id), command.execution_id),
+            ) as cursor:
+                self.assertEqual([row[0] for row in await cursor.fetchall()], ["RELEASED", "RELEASED"])
 
 
 class PinTerminalRecoveryTests(IsolatedAsyncioTestCase):

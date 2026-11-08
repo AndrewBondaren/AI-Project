@@ -1,7 +1,8 @@
 """Two-connection lifetime probe with explicit test-only head and pin owners."""
 import asyncio
+import sqlite3
 import threading
-from contextlib import AsyncExitStack
+from contextlib import AsyncExitStack, closing
 from hashlib import sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -11,7 +12,10 @@ from app.application.artifacts.staging.artifactStaging import TypedArtifactStage
 from app.application.worldData.generators.hydrology.encoding.packFormats import ROOT_FORMAT, SHARD_FORMAT
 from app.application.worldData.pack.encoding.packManifestCodec import decode_manifest, encode_candidate_manifest
 from app.application.worldData.pack.spatial.openWaterBlobReader import OpenWaterBlobReader
-from app.dataModel.artifacts.lifecycle.holders import ArtifactRetentionHolder
+from app.dataModel.artifacts.lifecycle.holders import ArtifactRetentionHolder, PinHolder
+from app.dataModel.engine.dag.invocations.record import FailedOutcome
+from app.db.repositories.sqlite.dagExecutions.executionStore import SQLiteExecutionStore
+from app.db.repositories.sqlite.worldPack.executionPins import ExecutionPins, PinIntent
 from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind
 from app.dataModel.worldPack.meta.spatial.domainRoot import SpatialDatasetKind, SpatialDomainRootRef
 from app.dataModel.worldPack.meta.worldPackManifest import WorldPackManifest
@@ -106,6 +110,22 @@ class ManifestPinRetentionTests(IsolatedAsyncioTestCase):
         prepared_a = await prepare("pack-a", initial)
         active_a, (manifest_a, root_a, shard_a), _ = prepared_a
         await activate(prepared_a, initial)
+        pending_cleanup = None
+        execution_holds = ()
+        if shared and pin_first:
+            dag_db = connections.enter_context(closing(sqlite3.connect(Path(directory) / "dag.db")))
+            schema = Path(__file__).resolve().parents[2] / "app/db/migrations/0001_initial.sql"
+            dag_db.executescript(schema.read_text("utf8"))
+            dag = SQLiteExecutionStore(dag_db)
+            await dag.create("reader-a", b"checkpoint")
+            claim = await dag.claim("reader-a", "worker", 60)
+            pins = await ExecutionPins.bind(dag, publications, a.holders, registry, a.backend.contract, 1, 100000)
+            intent = PinIntent(await dag.get_store_id(), claim.execution_id, "inv", "water", "pin-a", world)
+            self.assertEqual(await pins.acquire(intent), manifest_a)
+            execution_holds = (PinHolder(pin_id=intent.pin_id),)
+            stop = await dag.record_stop_intent(claim, 0, FailedOutcome(diagnostic="stop"))
+            await dag.finalize(claim, stop.stop_revision, await pins.close(stop))
+            pending_cleanup = (pins, stop)
         prepared_b = await prepare("pack-b", active_a, manifest_a)
         active_b, refs_b, _ = prepared_b
         manifest_b = refs_b[0]
@@ -148,10 +168,10 @@ class ManifestPinRetentionTests(IsolatedAsyncioTestCase):
         self.assertEqual(await observer[2].read(world), active_b)
         candidates = (manifest_a, root_a, shard_a, manifest_b)
         if pin_first:
-            self.assertCountEqual(await b.holders.holders(manifest_a), (pin, second_pin))
+            self.assertCountEqual(await b.holders.holders(manifest_a), (pin, second_pin, *execution_holds))
             await b.holders.release(manifest_a, pin)
             pin = second_pin
-        self.assertEqual(await b.holders.holders(manifest_a), (pin,))
+        self.assertCountEqual(await b.holders.holders(manifest_a), (pin, *execution_holds))
         self.assertEqual((await b.service.collect("gc-pinned", candidates)).retained, candidates)
         owner = ArtifactRetentionHolder(artifact=manifest_a)
         async with b.catalog.guard(manifest_a):
@@ -163,9 +183,13 @@ class ManifestPinRetentionTests(IsolatedAsyncioTestCase):
         if shared:
             self.assertCountEqual(await b.holders.holders(shard_a), (owner, ArtifactRetentionHolder(artifact=manifest_b)))
 
+        await b.holders.release(manifest_a, pin)
+        if pending_cleanup is not None:
+            self.assertEqual(await b.holders.holders(manifest_a), execution_holds)
+            pins, stop = pending_cleanup
+            await pins.cleanup(stop)
         async with observer[1].transaction("release-pin") as scope:
             async with b.catalog._scopes.bind(scope):
-                await b.holders.release(manifest_a, pin)
                 self.assertFalse(await b.holders.holders(manifest_a))
                 for child in (root_a, shard_a):
                     await b.holders.release(child, owner)

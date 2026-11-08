@@ -65,6 +65,9 @@ class SqliteWorldPublicationStore:
         head = WorldSnapshotRef(world_uid=stored["world_uid"], timeline_id=stored["timeline_id"], snapshot_id=stored["snapshot_id"])
         if stored["operation_id"] != row.operation_id:
             raise PublicationInfrastructureError("world head/operation mismatch")
+        # SNAPSHOT_APPLY is the only supported transition that persists a head.
+        if head.world_uid != row.world_uid or head.timeline_id != row.active_timeline_id:
+            raise PublicationInfrastructureError("world head owner/timeline mismatch")
         return head
 
     async def _latest(self, world_uid, scope):
@@ -94,6 +97,12 @@ class SqliteWorldPublicationStore:
         world_uid = _UID.validate_python(world_uid, strict=True)
         async with self._commits.read_scope(scope) as pinned:
             return await self._ref(await self._latest(world_uid, pinned), pinned)
+
+    async def read_current_if_world_exists(self, world_uid: EntityUid, scope: CommitReadScope) -> WorldPublicationRef | None:
+        world = await self._access.one(scope, "SELECT world_uid FROM worlds WHERE world_uid=?", (world_uid,))
+        if world is None:
+            return None
+        return await self._ref(await self._latest(world_uid, scope), scope)
 
     async def initialize(self, scope: CommitScope, world_uid: EntityUid) -> WorldPublicationRef:
         self._registry.check(scope, True)

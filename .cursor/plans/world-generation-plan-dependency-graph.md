@@ -840,9 +840,9 @@ flowchart TD
 | Трек | Последнее решение и evidence | Следующая работа |
 |---|---|---|
 | Water/River / Fields | S1–S4 приняты, S2-FOLLOWUP-ID-1 выполнен. [Отчёт Fields/Encoding](./geo-water-fields-identity-report.md): 64 теста OK на Pydantic 2.13.4. | Учитывать проверенный контракт B в потребителях. |
-| [Snapshot](./world-domain-patches-snapshots.md) | [Независимое ревью rollback trace](./world-domain-snapshot-rollback-trace-independent-review.md) — PASS. | Продолжение 4D2 по открытым validation/apply/terminal gates. |
-| [Spatial](./spatial-distribution-domain.md) | [Проверка реализации F3](./spatial-f3-pack-evidence.md) закрыла P1/P2. CLOSED переживает reopen, после отзыва запрещён физический open, holds сохраняются. DDL внесён в 0001_initial.sql. | DAG F4 по принятым F2 и проверенному F3, затем Pack F5 и совместная F6. |
-| Time | [TL-B PROJECT](./time-log-project-report.md) получил ACCEPT. Выполнены 11 binding-тестов. | Остальные TL-B по фактическим callers и gates §6. Production T4 требует SN-TIME-READ, T5 требует SN-TIME-APPLY. |
+| [Snapshot](./world-domain-patches-snapshots.md) | Согласована семантика SN-TIME-READ. Реализованы read_exact и AcceptedStateReader, 9 тестов с test_history, Pyright production чист. | Передача точной ссылки в Time storage и проверка значений в новой транзакции по [контракту](./sn-time-read.md). |
+| [Spatial](./spatial-distribution-domain.md) | Pack F3 обеспечивает CLOSED; [независимое ревью DAG F4](./sp-p2w-f4-verification.md) завершилось ACCEPT, совместный прогон 49/49. | Реализовать Pack F5: по matching finalized и CLOSED идемпотентно освободить pins execution. После F5 — совместная F6. |
+| Time | TL-B PROJECT принят. Snapshot передаёт publication binding или точный SectionStateRef. | T4: подключить production ITimeReadSource к Time storage и подтвердить разные значения для P и Q после reopen, включая историческое чтение. [Статус первого среза](./sn-time-read.md) |
 | Physics | Подготовительный Physics I0 и общая маршрутизация прошли [совместную техническую проверку](./artifacts-d2-physics-i0-joint-verification.md). | Production I0 требует конкретной точки вызова и execution correlation. |
 | Artifacts | D2 и совместная маршрутизация технически приняты по [отчёту](./artifacts-d2-physics-i0-joint-verification.md). SnapshotCore: 176 тестов, один skip, logging 28/28. | Учитывать этот результат при интеграции. Статус пользовательской приёмки фиксирует владелец. |
 | [API-1](./api-1-transport-boundary.md) | Проверено покрытие полей storage и wire. Climate C1 содержит девять scalars, десять после переноса lapse. | Сопоставить вход каждой операции с версией и выходом владельца, включая presence/aliases. |
@@ -853,9 +853,9 @@ flowchart TD
 
 Предложения новых bindings в этих планах не меняют hard-edge реестр автоматически. Исторические команды §9.3 для приёмки I1/B, preflight P1-A и проектирования уже принятой карты Physics заменены этой очередью.
 
-**Параллельно** можно принимать Artifacts D2-1…D2-4 и Physics D2 и готовить план production bindings для Time TL-B. У каждого трека свои доказательства и решение о приёмке.
+Техническая приёмка Artifacts D2, подготовительного Physics I0 и общей маршрутизации завершена. [Совместный отчёт](./artifacts-d2-physics-i0-joint-verification.md). Первый binding Time TL-B / PROJECT также принят. [Отчёт PROJECT](./time-log-project-report.md).
 
-**Следующий срез реализации — DAG F4.** Сверить сохранённый Pack CLOSED с intent того же execution и stop_revision, зафиксировать finalized и проверить terminal replay после reopen до восстановления outputs. Pack F5 зависит от F4.
+**Параллельно доступны Pack F5 и Time T4.** F5 потребляет подтверждённый F4, Time T4 — результат первого среза SN-TIME-READ. [Декомпозиция DAGEngine](./dag-engine-domain-decomposition.md) предъявлена на согласование отдельным треком.
 
 ### 12.1. Параллельная работа по срезам на 2026-11-06
 

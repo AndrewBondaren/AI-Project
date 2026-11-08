@@ -23,7 +23,7 @@ from tests.snapshotCore.support.fixtures import live_database, operation, STAMP
 from tests.spatial_pack.test_manifest_pin_retention import register_read_formats
 
 
-class ExecutionPinTests(IsolatedAsyncioTestCase):
+class ExecutionPinFixture(IsolatedAsyncioTestCase):
     async def connect_pack(self, seed):
         self.stack = await self.enterAsyncContext(AsyncExitStack())
         bundle = await self.stack.enter_async_context(live_database(str(self.path), seed=seed))
@@ -81,6 +81,7 @@ class ExecutionPinTests(IsolatedAsyncioTestCase):
         await self.stack.aclose()
         await self.connect_pack(False)
 
+class ExecutionPinTests(ExecutionPinFixture):
     async def test_lost_reply(self):
         cmd = await self.stop()
         receipt = await self.pins.close(cmd)

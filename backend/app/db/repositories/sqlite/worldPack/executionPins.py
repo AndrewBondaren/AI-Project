@@ -152,6 +152,26 @@ class ExecutionPins:
                 RETURNING stop_revision""", (*owner, command.stop_revision))
         return replay(inserted)
 
+    async def cleanup(self, command: ExecutionStopIntent) -> None:
+        owner = self._owner(command)
+        checkpoint = await self._checkpoint(command.execution_id)
+        if (checkpoint.stop_intent != command or checkpoint.final_revision != command.stop_revision + 1
+                or checkpoint.revision != checkpoint.final_revision):
+            raise PackIdentityConflict("execution lacks matching finalized stop")
+        while True:
+            async with self._scopes.commits.transaction(runtime_uid()) as scope:
+                closed = await self._closed(scope, owner)
+                if closed is None or closed["stop_revision"] != command.stop_revision:
+                    raise PackIdentityConflict("finalized stop lacks matching CLOSED")
+                row = await self._access.one(scope, """SELECT pin_id, manifest_artifact_id FROM pack_execution_pins
+                    WHERE store_id=? AND execution_id=? AND state='OPEN' ORDER BY pin_id LIMIT 1""", owner)
+                if row is None:
+                    return
+                holder = PinHolder(pin_id=row["pin_id"])
+                await self._holders._release_pin(scope, row["manifest_artifact_id"], holder)
+                await self._access.one(scope, """UPDATE pack_execution_pins SET state='RELEASED'
+                    WHERE pin_id=? RETURNING pin_id""", (holder.pin_id,))
+
     async def _binding(self, scope, intent: PinIntent):
         owner = self._owner(intent)
         if await self._closed(scope, owner):

@@ -78,7 +78,7 @@ class SqliteArtifactHolders:
                     or row.predecessor_id != (None if previous is None else previous.event_id)
                     or (previous is None and row.event_kind != "acquire")
                     or (previous is not None and row.event_kind == previous.event_kind)
-                    or (kind in (ArtifactHolderKind.SNAPSHOT, ArtifactHolderKind.PIN) and row.event_kind == "release")):
+                    or (kind is ArtifactHolderKind.SNAPSHOT and row.event_kind == "release")):
                 raise PublicationInfrastructureError("invalid artifact holder chain")
             latest[key] = row
         return tuple(latest.values())
@@ -205,6 +205,10 @@ class SqliteArtifactHolders:
                     if actual != holder.snapshot:
                         raise ValueError("snapshot holder identity mismatch")
             await self._append(self._access, scope, await self._template(scope, artifact.artifact_id, holder), True)
+
+    async def _release_pin(self, scope: CommitScope, artifact_id: EntityUid, holder: PinHolder) -> None:
+        template = await self._template(scope, artifact_id, holder)
+        await self._append(self._access, scope, template, False)
 
     async def release(self, ref: ArtifactRef, holder: ArtifactHolderRef) -> None:
         ref = ArtifactRef.model_validate(ref, strict=True)

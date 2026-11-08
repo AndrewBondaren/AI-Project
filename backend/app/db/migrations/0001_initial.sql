@@ -1458,6 +1458,32 @@ CREATE TABLE IF NOT EXISTS world_publications (
     CHECK (gameplay_started = 0 OR (pack_hash IS NOT NULL AND active_timeline_id IS NOT NULL))
 );
 
+CREATE TABLE IF NOT EXISTS time_publication_states (
+    publication_id TEXT NOT NULL PRIMARY KEY REFERENCES world_publications(publication_id),
+    payload TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS time_snapshot_states (
+    snapshot_id TEXT NOT NULL PRIMARY KEY REFERENCES world_snapshots(snapshot_id),
+    payload TEXT NOT NULL
+);
+
+CREATE TRIGGER IF NOT EXISTS time_publication_states_no_update BEFORE UPDATE ON time_publication_states
+BEGIN SELECT RAISE(ABORT, 'immutable publication clock'); END;
+CREATE TRIGGER IF NOT EXISTS time_publication_states_no_delete BEFORE DELETE ON time_publication_states
+BEGIN SELECT RAISE(ABORT, 'immutable publication clock'); END;
+CREATE TRIGGER IF NOT EXISTS time_publication_states_no_replace BEFORE INSERT ON time_publication_states
+WHEN EXISTS (SELECT 1 FROM time_publication_states WHERE publication_id = NEW.publication_id)
+BEGIN SELECT RAISE(ABORT, 'immutable publication clock'); END;
+
+CREATE TRIGGER IF NOT EXISTS time_snapshot_states_no_update BEFORE UPDATE ON time_snapshot_states
+BEGIN SELECT RAISE(ABORT, 'immutable snapshot clock'); END;
+CREATE TRIGGER IF NOT EXISTS time_snapshot_states_no_delete BEFORE DELETE ON time_snapshot_states
+BEGIN SELECT RAISE(ABORT, 'immutable snapshot clock'); END;
+CREATE TRIGGER IF NOT EXISTS time_snapshot_states_no_replace BEFORE INSERT ON time_snapshot_states
+WHEN EXISTS (SELECT 1 FROM time_snapshot_states WHERE snapshot_id = NEW.snapshot_id)
+BEGIN SELECT RAISE(ABORT, 'immutable snapshot clock'); END;
+
 CREATE TABLE IF NOT EXISTS player_publications (
     publication_id TEXT NOT NULL PRIMARY KEY CHECK (publication_id IS NULL OR (length(publication_id) > 0)),
     player_uid TEXT NOT NULL CHECK (player_uid IS NULL OR (length(player_uid) > 0)),
@@ -1583,20 +1609,24 @@ CREATE TABLE IF NOT EXISTS pack_execution_pins (
     pin_id TEXT PRIMARY KEY NOT NULL, store_id TEXT NOT NULL, execution_id TEXT NOT NULL,
     invocation_id TEXT NOT NULL, logical_read_key TEXT NOT NULL, world_uid TEXT NOT NULL,
     publication_id TEXT NOT NULL, manifest_artifact_id TEXT NOT NULL REFERENCES artifact_catalog(artifact_id),
-    state TEXT NOT NULL DEFAULT 'OPEN' CHECK(state='OPEN'),
+    state TEXT NOT NULL DEFAULT 'OPEN' CHECK(state IN ('OPEN','RELEASED')),
     UNIQUE(store_id,execution_id,invocation_id,logical_read_key), UNIQUE(pin_id,manifest_artifact_id),
     FOREIGN KEY(world_uid, publication_id) REFERENCES world_publications(world_uid, publication_id)
 );
 CREATE INDEX IF NOT EXISTS ix_execution_pins_state ON pack_execution_pins(store_id, execution_id, state);
 CREATE TRIGGER IF NOT EXISTS pack_execution_closed_no_update BEFORE UPDATE ON pack_execution_closed BEGIN SELECT RAISE(ABORT,'immutable Pack record'); END;
 CREATE TRIGGER IF NOT EXISTS pack_execution_closed_no_delete BEFORE DELETE ON pack_execution_closed BEGIN SELECT RAISE(ABORT,'immutable Pack record'); END;
-CREATE TRIGGER IF NOT EXISTS pack_execution_pins_no_update BEFORE UPDATE ON pack_execution_pins BEGIN SELECT RAISE(ABORT,'immutable Pack record'); END;
+CREATE TRIGGER IF NOT EXISTS pack_execution_pins_no_update BEFORE UPDATE OF pin_id,store_id,execution_id,invocation_id,logical_read_key,world_uid,publication_id,manifest_artifact_id ON pack_execution_pins BEGIN SELECT RAISE(ABORT,'immutable Pack record'); END;
+CREATE TRIGGER IF NOT EXISTS pack_execution_pin_release BEFORE UPDATE OF state ON pack_execution_pins
+WHEN OLD.state != 'OPEN' OR NEW.state != 'RELEASED' OR NOT EXISTS
+    (SELECT 1 FROM artifact_holder_events WHERE pin_id=OLD.pin_id AND event_kind='release')
+BEGIN SELECT RAISE(ABORT,'invalid pin release'); END;
 CREATE TRIGGER IF NOT EXISTS pack_execution_pins_no_delete BEFORE DELETE ON pack_execution_pins BEGIN SELECT RAISE(ABORT,'immutable Pack record'); END;
 CREATE TRIGGER IF NOT EXISTS pack_closed_identity BEFORE INSERT ON pack_execution_closed
 WHEN EXISTS (SELECT 1 FROM pack_execution_closed WHERE store_id=NEW.store_id AND execution_id=NEW.execution_id)
 BEGIN SELECT RAISE(ABORT,'execution already closed'); END;
 CREATE TRIGGER IF NOT EXISTS pack_pin_identity BEFORE INSERT ON pack_execution_pins
-WHEN EXISTS (SELECT 1 FROM pack_execution_closed WHERE store_id=NEW.store_id AND execution_id=NEW.execution_id)
+WHEN NEW.state != 'OPEN' OR EXISTS (SELECT 1 FROM pack_execution_closed WHERE store_id=NEW.store_id AND execution_id=NEW.execution_id)
   OR EXISTS (SELECT 1 FROM pack_execution_pins WHERE pin_id=NEW.pin_id OR
     (store_id,execution_id,invocation_id,logical_read_key) =
     (NEW.store_id,NEW.execution_id,NEW.invocation_id,NEW.logical_read_key))
@@ -1956,7 +1986,11 @@ CREATE TRIGGER IF NOT EXISTS artifact_holder_events_insert_guard BEFORE INSERT O
 BEGIN
     SELECT CASE WHEN NEW.predecessor_id IS NULL AND (NEW.event_kind != 'acquire' OR EXISTS (SELECT 1 FROM artifact_holder_events p WHERE p.artifact_id = NEW.artifact_id AND p.holder_kind IS NEW.holder_kind AND p.operation_id IS NEW.operation_id AND p.fence IS NEW.fence AND p.retained_artifact_id IS NEW.retained_artifact_id AND p.world_snapshot_id IS NEW.world_snapshot_id AND p.player_snapshot_id IS NEW.player_snapshot_id AND p.pin_id IS NEW.pin_id)) THEN RAISE(ABORT, 'invalid holder root') END;
     SELECT CASE WHEN NEW.predecessor_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM artifact_holder_events p WHERE p.event_id = NEW.predecessor_id AND p.artifact_id = NEW.artifact_id AND p.holder_kind IS NEW.holder_kind AND p.operation_id IS NEW.operation_id AND p.fence IS NEW.fence AND p.retained_artifact_id IS NEW.retained_artifact_id AND p.world_snapshot_id IS NEW.world_snapshot_id AND p.player_snapshot_id IS NEW.player_snapshot_id AND p.pin_id IS NEW.pin_id AND p.event_kind != NEW.event_kind) THEN RAISE(ABORT, 'holder identity or transition mismatch') END;
-    SELECT CASE WHEN NEW.holder_kind IN ('snapshot','pin') AND NEW.event_kind = 'release' THEN RAISE(ABORT, 'published history holds cannot be released') END;
+    SELECT CASE WHEN NEW.holder_kind = 'snapshot' AND NEW.event_kind = 'release' THEN RAISE(ABORT, 'published history holds cannot be released') END;
+    SELECT CASE WHEN NEW.holder_kind='pin' AND
+      ((NEW.event_kind='release') != EXISTS (SELECT 1 FROM pack_execution_pins p JOIN pack_execution_closed c
+        USING(store_id,execution_id) WHERE p.pin_id=NEW.pin_id))
+      THEN RAISE(ABORT,'pin event conflicts with admission') END;
     SELECT CASE WHEN NEW.event_kind = 'acquire' AND NEW.holder_kind = 'operation' AND
       ((SELECT fence FROM publication_operation_events WHERE operation_id = NEW.operation_id ORDER BY event_seq DESC LIMIT 1) IS NOT NEW.fence OR (SELECT phase FROM publication_operation_events WHERE operation_id = NEW.operation_id ORDER BY event_seq DESC LIMIT 1) IS NULL OR (SELECT phase FROM publication_operation_events WHERE operation_id = NEW.operation_id ORDER BY event_seq DESC LIMIT 1) = 'terminal') THEN RAISE(ABORT, 'stale or closed operation holder') END;
     SELECT CASE WHEN NEW.event_kind = 'release' AND NEW.holder_kind = 'operation' AND
