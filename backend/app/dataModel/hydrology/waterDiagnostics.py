@@ -193,6 +193,8 @@ def require_water_diagnostic(value: object) -> WaterPlanningDiagnostic | WaterPl
         raise ValueError("expected a water diagnostic")
     if type(diagnostic) is PlanDiagnostic and type(diagnostic.issue) is not WaterKindMismatchIssue:
         raise ValueError("water field diagnostic requires a kind mismatch issue")
+    if type(diagnostic) is PlanDiagnostic and diagnostic.disposition is not PlanDiagnosticDisposition.FALLBACK:
+        raise ValueError("water kind mismatch requires FALLBACK")
     return diagnostic
 
 

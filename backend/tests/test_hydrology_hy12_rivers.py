@@ -1,6 +1,7 @@
 """HY-12/5: receiving waterline, shared topology, absolute river relief."""
 
 from tests.hydrology_fixtures import hydro_topology as _river_test_topology, heightmap_from_z as _river_test_heightmap
+from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
 from app.dataModel.topology.fineTopology import fine_topology
 from app.application.worldData.generators.coordinates.convert import map_cell_fine_span
 from app.dataModel.hydrology.rivers import HydrologyRiversPolicy
@@ -154,10 +155,13 @@ class RiverWaterlineTests(unittest.TestCase):
                      "connection_type": "river", "width_cells": 2}]}]})
         source.map_settings = {"global_cell_size_m": 10}
         from app.application.worldData.generators.hydrology.rivers.planning.fineRiverPlanner import FineRiverPlanner
+        from app.dataModel.hydrology.waterDiagnostics import WaterWorldOceanDiagnostic
+        collector = HydrologyDiagnosticCollector()
         original = FineRiverPlanner.plan
         with patch.object(FineRiverPlanner, "plan", autospec=True, side_effect=original) as fine:
             _, working = SurfacePlanningEntry(composition.assembler, SurfacePlanningCapture()).require_plan_inputs(
-                source, [], wait=RequestPlanWait.unbounded())
+                source, [], on_hydrology=collector.collect, wait=RequestPlanWait.unbounded())
+        self.assertEqual(tuple(map(type, collector.facts)), (WaterWorldOceanDiagnostic,))
         bundle = composition.prepare(capture(source))
         self.assertTrue(bundle.river_relief.payload.coarse_beds)
         self.assertTrue(working.hydrology.fine_z_overrides)

@@ -2,6 +2,7 @@
 
 from typing import assert_type
 
+from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
 from app.application.worldData.generators.terrain.hills.hillPlacement import place_hills
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 
@@ -243,13 +244,12 @@ def captured_geo_assembly(assembler: SurfacePlanningAssembler[GeoWorldPlanProvid
     assert_type(assembler.prepare_geo(view, wait=wait), GeoSurfacePlanBundle | None)
 
 
-from app.application.worldData.planning.composition.surfacePlanningAssembler import prepare_captured_geo_bundle
 from app.application.jsonValidation.resolve import ResolveContext
 
 
 def captured_geo_reporting(assembler: SurfacePlanningAssembler[GeoWorldPlanProviders], view: GeoSurfacePlanningView,
     wait: PlanWaitControl, ctx: ResolveContext) -> None:
-    assert_type(prepare_captured_geo_bundle(view, planning=assembler, wait=wait, resolve_ctx=ctx), GeoSurfacePlanBundle | None)
+    assert_type(assembler.prepare_captured_geo_bundle(view, on_hydrology=HydrologyDiagnosticCollector().collect, wait=wait, resolve_ctx=ctx), GeoSurfacePlanBundle | None)
 
 
 from app.application.worldData.generators.terrain.landcover.planning.preWaterHillHosts import PreWaterHillHostPlanner

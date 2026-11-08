@@ -1,4 +1,5 @@
 """Debug selector reads manifest snapshots; outlines derive geometry from world data."""
+from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
 from app.application.planning.service.planningService import PlanWaitControl
 from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
 from app.application.worldData.generators.terrain.landcover.types import LandcoverCollectContext
@@ -40,8 +41,9 @@ class WildernessRegionReadService:
             raise ValueError("surface planning entry required")
         if self._region_state_repo is None:
             raise ValueError("region state repository required for outline")
+        collector = HydrologyDiagnosticCollector()
         _, working = self._entry.require_plan_inputs(
-            world, locations, wait=wait)
+            world, locations, on_hydrology=collector.collect, wait=wait)
         snapshot = await load_region_state_snapshot(self._region_state_repo, world.world_uid)
         inputs = prepare_landcover_inputs(working, snapshot)
         ctx = LandcoverCollectContext(world, tuple(locations),

@@ -4,6 +4,7 @@ Legacy map_cells ``materialize_surface_stack`` removed; use pack bake modes.
 """
 
 from __future__ import annotations
+from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
 from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
 
 from app.application.jsonValidation.resolve import ResolveContext
@@ -259,10 +260,11 @@ class WorldSurfaceMaterializationOrchestrator:
             if self._relief_loader is not None else {})
         templates = mountain_template_inputs(relief_templates)
         entry = SurfacePlanningEntry(self._planning, self._capture)
+        collector = HydrologyDiagnosticCollector()
         captured = entry.capture_view(world, locations, mode=ResolutionMode.RUNTIME,
             mountain_templates=templates, resolve_ctx=request_ctx)
         prepared = entry.prepare_captured(
-            captured, world=world, wait=wait, resolve_ctx=request_ctx)
+            captured, on_hydrology=collector.collect, world=world, wait=wait, resolve_ctx=request_ctx)
         if prepared is None:
             raise ValueError("surface terrain context unavailable")
         surface_bundle, working = prepared

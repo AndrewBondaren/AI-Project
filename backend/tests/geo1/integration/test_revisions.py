@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 from tests.geo1.integration.support.fixtures import Seam
 
+from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
 from app.application.cache.backends.memoryCache import MemoryCache
 from app.application.cache.service.cacheService import CacheService
 from app.application.planning.providers.planRegistry import PlanRegistry, PlanDependencyReader
@@ -556,6 +557,12 @@ class TerrainRegionProviderTests(TestCase):
                 self.assertEqual(kernel.call_count, calls)
 
 
+def mismatch(slot):
+    from app.dataModel.hydrology.enums.basinKind import BasinKind
+    from app.dataModel.hydrology.waterKindMismatchIssue import WaterKindMismatchIssue
+    return WaterKindMismatchIssue.retained(slot, BasinKind.LAKE, BasinKind.SEA)
+
+
 class GeoCapturedAssemblerTests(TestCase):
     def setUp(self):
         from app.application.worldData.planning.composition.planProviders import GeoWorldPlanProviders
@@ -574,8 +581,7 @@ class GeoCapturedAssemblerTests(TestCase):
             def build(self, request, dependencies, control):
                 owner.events.append(self.name)
                 if owner.fail_slot == self.name:
-                    from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
-                    raise PlanBuildFailure((FieldPathError((self.name,), "fixture failure"),))
+                    raise PlanBuildFailure((mismatch(self.name),))
                 if self.name == "terrain_regions":
                     result = TerrainRegionPlanProvider().build(request, dependencies, control)
                     return result.model_copy(update={"diagnostics": (*result.diagnostics, *owner.diagnostics.get(self.name, ()))})
@@ -675,30 +681,32 @@ class GeoBundleReportingTests(TestCase):
 
     def diagnostic(self, slot, disposition):
         from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic
-        from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
-        return PlanDiagnostic(issue=FieldPathError((slot,), "producer diagnostic", code="SAME_CODE"), disposition=disposition)
+        return PlanDiagnostic(issue=mismatch(slot), disposition=disposition)
 
     def prepare(self, ctx, view=None):
-        from app.application.worldData.planning.composition.surfacePlanningAssembler import prepare_captured_geo_bundle
-        return prepare_captured_geo_bundle(self.fixture.view if view is None else view,
-            planning=self.fixture.assembler, wait=Wait(), resolve_ctx=ctx)
+        return self.fixture.assembler.prepare_captured_geo_bundle(self.fixture.view if view is None else view,
+            on_hydrology=HydrologyDiagnosticCollector().collect, wait=Wait(), resolve_ctx=ctx)
 
     def test_capture_and_all_twelve_phase_diagnostics_keep_order_and_are_deduplicated(self):
         from app.application.jsonValidation.resolve import ResolveContext
         from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnosticDisposition as D
         from tests.geo1.integration.support.pipeline import rebuild
         capture = self.diagnostic("capture", D.FALLBACK)
-        expected = [capture.issue]
+        expected = []
+        continuations = [capture.issue]
         self.fixture.view = rebuild(self.fixture.view, capture_diagnostics=(capture,))
         for index, slot in enumerate(self.fixture.order):
             disposition = (D.ERROR, D.FALLBACK, D.NOTICE)[index % 3]
             diagnostic = self.diagnostic(slot, disposition)
             self.fixture.diagnostics[slot] = (capture, diagnostic)
-            if disposition is not D.NOTICE:
+            if disposition is D.FALLBACK:
+                continuations.append(diagnostic.issue)
+            if disposition is D.ERROR:
                 expected.append(diagnostic.issue)
         ctx = ResolveContext(collect_only=True)
         result = self.prepare(ctx)
         self.assertIsNotNone(result)
+        self.assertEqual(ctx.report.diagnostics, tuple(continuations))
         self.assertEqual(ctx.errors, expected)
         self.assertEqual(len(ctx.errors), len(set(ctx.errors)))
 
@@ -713,10 +721,11 @@ class GeoBundleReportingTests(TestCase):
         self.assertEqual(self.prepare(second), bundle)
         self.assertEqual(self.prepare(second), bundle)
         self.assertEqual(self.fixture.events, [])
-        self.assertEqual(first.errors, [item.issue])
+        self.assertEqual(first.report.diagnostics, (item.issue,))
+        self.assertEqual(second.report.diagnostics, first.report.diagnostics)
         self.assertEqual(second.errors, first.errors)
 
-    def test_validate_only_rejects_error_and_fallback_without_promoting_notice(self):
+    def test_validate_only_rejects_only_error_without_promoting_notice(self):
         from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
         from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnosticDisposition as D
         from app.dataModel.validation.enums.resolutionMode import ResolutionMode
@@ -732,8 +741,8 @@ class GeoBundleReportingTests(TestCase):
         ctx = ResolveContext(validate_only=True, collect_only=True)
         with self.assertRaises(UnresolvedModelError) as error:
             self.prepare(ctx, view)
-        self.assertEqual(tuple(error.exception.issues), (first.issue, fallback.issue))
-        self.assertEqual(ctx.errors, [first.issue, fallback.issue])
+        self.assertEqual(tuple(error.exception.issues), (first.issue,))
+        self.assertEqual(ctx.errors, [first.issue])
 
     def test_runtime_uses_existing_warning_and_notice_reporting_routes(self):
         from app.application.jsonValidation.resolve import ResolveContext
@@ -741,16 +750,16 @@ class GeoBundleReportingTests(TestCase):
         warning, notice = self.diagnostic("water_placement", D.FALLBACK), self.diagnostic("surface_support", D.NOTICE)
         self.fixture.diagnostics.update(water_placement=(warning,), surface_support=(notice,))
         ctx = ResolveContext()
-        with patch("app.application.jsonValidation.resolve.log_issues") as warnings, self.assertLogs(
+        with patch("app.application.jsonValidation.resolution.diagnostics.log_issues") as warnings, self.assertLogs(
                 "app.application.worldData.planning.composition.surfacePlanningAssembler", level="INFO") as logs:
             self.prepare(ctx)
-        warnings.assert_called_once_with((warning.issue,))
-        self.assertEqual(ctx.errors, [warning.issue])
+        warnings.assert_called_once_with([warning.issue])
+        self.assertEqual(ctx.report.diagnostics, (warning.issue,))
         self.assertEqual(len(logs.records), 1)
-        self.assertIn("surface_support", logs.records[0].getMessage())
+        self.assertIn(notice.issue.message, logs.records[0].getMessage())
 
     def test_no_extent_reports_capture_diagnostics_without_building_phases(self):
-        from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
+        from app.application.jsonValidation.resolve import ResolveContext
         from app.application.worldData.planning.contracts.surfacePlanningView import NoExtentSurfacePlanningView
         from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnosticDisposition as D
         capture = self.diagnostic("capture", D.FALLBACK)
@@ -758,9 +767,8 @@ class GeoBundleReportingTests(TestCase):
             revision=self.fixture.view.revision, capture_diagnostics=(capture,))
         ctx = ResolveContext(collect_only=True)
         self.assertIsNone(self.prepare(ctx, view))
-        self.assertEqual(ctx.errors, [capture.issue])
-        with self.assertRaises(UnresolvedModelError):
-            self.prepare(ResolveContext(validate_only=True, collect_only=True), view)
+        self.assertEqual(ctx.report.diagnostics, (capture.issue,))
+        self.assertIsNone(self.prepare(ResolveContext(validate_only=True, collect_only=True), view))
         self.assertEqual(self.fixture.events, [])
 
     def test_preparation_failure_is_not_reported_as_a_successful_partial_bundle(self):

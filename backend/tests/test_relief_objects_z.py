@@ -6,6 +6,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
 from app.application.worldData.generators.climate.anchorDetect import (
     ProminenceScale,
     detect_terrain_features,
@@ -162,7 +163,7 @@ class TestPrepareSurfaceOrder(unittest.TestCase):
         composition = self._surface_composition
         source = world()
         with patch.object(composition.registry, "build", wraps=composition.registry.build) as builds:
-            _, working = SurfacePlanningEntry(deps["planning"], deps["capture"]).require_plan_inputs(source, [], wait=deps["wait"])
+            _, working = SurfacePlanningEntry(deps["planning"], deps["capture"]).require_plan_inputs(source, [], on_hydrology=HydrologyDiagnosticCollector().collect, wait=deps["wait"])
         phases = [str(call.args[0].metadata.id) for call in builds.call_args_list]
         self.assertLess(phases.index("surface.pc.relief"), phases.index("surface.pc.hydrology_routes"))
         terrain = composition.prepare(capture(source))

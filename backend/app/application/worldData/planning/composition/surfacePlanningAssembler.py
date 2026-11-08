@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-import logging
-from collections.abc import Iterable
-from typing import Generic
+from typing import Any, Generic
 from typing_extensions import TypeVar
 
 from pydantic import TypeAdapter
 
-from app.application.jsonValidation.resolve import ResolveContext, report_issues, UnresolvedModelError
-from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
+from app.application.jsonValidation.resolve import ResolveContext
+from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic
 
+from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyCallback
+from app.application.worldData.planning.composition.surfaceDiagnosticReporting import report_surface_diagnostics
 from app.application.planning.providers.planProvider import RegisteredPlanContract
 from app.application.planning.providers.planRegistry import PlanDependencyReader, PlanRegistry
 from app.application.planning.service.planningService import PlanningService, PlanWaitControl
@@ -144,47 +144,33 @@ class SurfacePlanningAssembler(Generic[P]):
             hydrology_routes=routes, river_relief=river, hydrology=final, climate_local=local,
             coastline_boundaries=boundaries, surface_support=support, coating=coating)
 
+    def prepare_captured_bundle(self: SurfacePlanningAssembler[WorldPlanProviders],
+                                view: SurfacePlanningView, *,
+                                on_hydrology: HydrologyCallback, wait: PlanWaitControl,
+                                resolve_ctx: ResolveContext) -> SurfacePlanBundle | None:
+        """One report boundary for captured input and frozen plan diagnostics."""
+        bundle = self.prepare(view, wait=wait)
+        diagnostics: list[PlanDiagnostic[Any]] = list(view.capture_diagnostics)
+        if bundle is not None:
+            for envelope in (bundle.climate_base, bundle.terrain_base, bundle.water_placement,
+                             bundle.relief, bundle.hydrology_routes, bundle.river_relief,
+                             bundle.hydrology, bundle.climate_local):
+                diagnostics.extend(envelope.diagnostics)
+        report_surface_diagnostics(diagnostics, resolve_ctx=resolve_ctx, on_hydrology=on_hydrology)
+        return bundle
 
-def prepare_captured_bundle(view: SurfacePlanningView, *, planning: SurfacePlanningAssembler,
-                            wait: PlanWaitControl, resolve_ctx: ResolveContext) -> SurfacePlanBundle | None:
-    """One report boundary for captured input and frozen plan diagnostics."""
-    bundle = planning.prepare(view, wait=wait)
-    diagnostics = list(view.capture_diagnostics)
-    if bundle is not None:
-        for envelope in (bundle.climate_base, bundle.terrain_base, bundle.water_placement,
-                         bundle.relief, bundle.hydrology_routes, bundle.river_relief,
-                         bundle.hydrology, bundle.climate_local):
-            diagnostics.extend(envelope.diagnostics)
-    report_surface_diagnostics(diagnostics, resolve_ctx=resolve_ctx)
-    return bundle
-
-
-def prepare_captured_geo_bundle(view: GeoSurfacePlanningView | NoExtentSurfacePlanningView, *,
-                                planning: SurfacePlanningAssembler[GeoWorldPlanProviders],
-                                wait: PlanWaitControl, resolve_ctx: ResolveContext) -> GeoSurfacePlanBundle | None:
-    """Report captured and cached GEO diagnostics through the shared reporting policy."""
-    bundle = planning.prepare_geo(view, wait=wait)
-    diagnostics = list(view.capture_diagnostics)
-    if bundle is not None:
-        for envelope in (bundle.climate_base, bundle.terrain_base, bundle.terrain_regions,
-                         bundle.water_placement, bundle.relief, bundle.hydrology_routes,
-                         bundle.river_relief, bundle.hydrology, bundle.climate_local,
-                         bundle.coastline_boundaries, bundle.surface_support, bundle.coating):
-            diagnostics.extend(envelope.diagnostics)
-    report_surface_diagnostics(diagnostics, resolve_ctx=resolve_ctx)
-    return bundle
-
-
-def report_surface_diagnostics(diagnostics: Iterable[PlanDiagnostic], *,
-                               resolve_ctx: ResolveContext) -> None:
-    """Shared reporting policy for capture-only probes and prepared plans."""
-    diagnostics = tuple(dict.fromkeys(diagnostics))
-    issues = tuple(item.issue for item in diagnostics
-        if item.disposition is not PlanDiagnosticDisposition.NOTICE)
-    report_issues(resolve_ctx, (issue for issue in issues if issue not in resolve_ctx.errors))
-    for item in diagnostics:
-        if item.disposition is PlanDiagnosticDisposition.NOTICE and not resolve_ctx.collect_only:
-            logging.getLogger(__name__).info("surface planning | path=%s code=%s | %s",
-                item.issue.path, item.issue.code, item.issue.message)
-    if resolve_ctx.validate_only and issues:
-        raise UnresolvedModelError(list(dict.fromkeys(issues)))
+    def prepare_captured_geo_bundle(self: SurfacePlanningAssembler[GeoWorldPlanProviders],
+                                    view: GeoSurfacePlanningView | NoExtentSurfacePlanningView, *,
+                                    on_hydrology: HydrologyCallback, wait: PlanWaitControl,
+                                    resolve_ctx: ResolveContext) -> GeoSurfacePlanBundle | None:
+        """Report captured and cached GEO diagnostics through the shared reporting policy."""
+        bundle = self.prepare_geo(view, wait=wait)
+        diagnostics: list[PlanDiagnostic[Any]] = list(view.capture_diagnostics)
+        if bundle is not None:
+            for envelope in (bundle.climate_base, bundle.terrain_base, bundle.terrain_regions,
+                             bundle.water_placement, bundle.relief, bundle.hydrology_routes,
+                             bundle.river_relief, bundle.hydrology, bundle.climate_local,
+                             bundle.coastline_boundaries, bundle.surface_support, bundle.coating):
+                diagnostics.extend(envelope.diagnostics)
+        report_surface_diagnostics(diagnostics, resolve_ctx=resolve_ctx, on_hydrology=on_hydrology)
+        return bundle

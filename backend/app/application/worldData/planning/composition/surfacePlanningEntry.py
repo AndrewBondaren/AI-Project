@@ -3,6 +3,8 @@
 from collections.abc import Sequence
 from functools import partial
 
+from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyCallback
+
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.jsonValidation import terrain_scalars
 from app.application.worldData.generators.terrain.passes.bbox import world_bounds_from_world
@@ -11,9 +13,8 @@ from app.application.worldData.generators.climate.materialize.climateWorkingFiel
 from app.application.worldData.generators.climate.registry import profile_for
 from app.application.worldData.generators.hydrology.materialize.hydrologyWorkingFields import HydrologyWorkingFields
 from app.application.worldData.generators.terrain.materialize.terrainWorkingFields import TerrainWorkingFields
-from app.application.worldData.planning.composition.surfacePlanningAssembler import (
-    SurfacePlanningAssembler, prepare_captured_bundle, report_surface_diagnostics,
-)
+from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
+from app.application.worldData.planning.composition.surfaceDiagnosticReporting import report_field_diagnostics
 from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
 from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
 from app.application.worldData.planning.contracts.surfacePlanningView import (
@@ -55,16 +56,17 @@ class SurfacePlanningEntry:
         """Capture and report without preparing plans or projecting working maps."""
         view = self.capture_view(world, locations, mode=mode,
             mountain_templates=mountain_templates, resolve_ctx=resolve_ctx)
-        report_surface_diagnostics(view.capture_diagnostics, resolve_ctx=resolve_ctx)
+        report_field_diagnostics(dict.fromkeys(view.capture_diagnostics), resolve_ctx=resolve_ctx)
         return self.extent_status(view)
 
     # GEO-LEGACY-35: Replace the PC bundle handoff.
     def prepare_captured(self, view: SurfacePlanningView, *, world: World,
-                         wait: PlanWaitControl, resolve_ctx: ResolveContext
+                         on_hydrology: HydrologyCallback, wait: PlanWaitControl, resolve_ctx: ResolveContext
                          ) -> tuple[SurfacePlanBundle, SurfaceWorkingMaps] | None:
         if view.world_uid != world.world_uid:
             raise ValueError("captured surface view belongs to another world")
-        bundle = prepare_captured_bundle(view, planning=self._planning, wait=wait, resolve_ctx=resolve_ctx)
+        bundle = self._planning.prepare_captured_bundle(
+            view, on_hydrology=on_hydrology, wait=wait, resolve_ctx=resolve_ctx)
         if isinstance(view, NoExtentSurfacePlanningView):
             return None
         if bundle is None or bundle.world_uid != view.world_uid or bundle.view_revision != view.revision:
@@ -84,6 +86,7 @@ class SurfacePlanningEntry:
     def require_plan_inputs(
         self, world: World, locations: Sequence[NamedLocation], *,
         wait: PlanWaitControl,
+        on_hydrology: HydrologyCallback,
         resolve_ctx: ResolveContext | None = None,
         mountain_templates: tuple[MountainTemplateInput, ...] = (),
     ) -> tuple[SurfacePlanBundle, SurfaceWorkingMaps]:
@@ -92,7 +95,7 @@ class SurfacePlanningEntry:
         mode = ResolutionMode.VALIDATE_ONLY if ctx.validate_only else ResolutionMode.RUNTIME
         view = self.capture_view(world, locations, mode=mode,
             mountain_templates=mountain_templates, resolve_ctx=ctx)
-        result = self.prepare_captured(view, world=world, wait=wait, resolve_ctx=ctx)
+        result = self.prepare_captured(view, world=world, on_hydrology=on_hydrology, wait=wait, resolve_ctx=ctx)
         if result is None:
             raise ValueError("surface terrain context unavailable")
         return result
@@ -100,8 +103,9 @@ class SurfacePlanningEntry:
     def require_plan_bundle(
         self, world: World, locations: Sequence[NamedLocation], *,
         wait: PlanWaitControl,
+        on_hydrology: HydrologyCallback,
         resolve_ctx: ResolveContext | None = None,
         mountain_templates: tuple[MountainTemplateInput, ...] = (),
     ) -> SurfacePlanBundle:
-        return self.require_plan_inputs(world, locations, wait=wait,
+        return self.require_plan_inputs(world, locations, on_hydrology=on_hydrology, wait=wait,
             resolve_ctx=resolve_ctx, mountain_templates=mountain_templates)[0]

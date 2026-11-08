@@ -308,3 +308,78 @@ Reuse принятого смысла WATER_LEVEL_SPILL: [GEO owning-план](g
 ### Проверка River в S4, 2026-11-08
 
 Для lake=False и mouth=(8,11) историческая ревизия 9ed3bba6 и два свежих процесса S4 дали одинаковые payload digest соответственно 757adfe9… и 38927c0d…. Для первого результата типизированный NO_WATER_BODIES/DRY_MOUTH сохраняет ERROR и failure_cell=(11,11). Для второго за Water mismatch следует REDIRECTED/DRY_MOUTH с FALLBACK и receiver lake/(10,11). Исторический JSON причины в field issue заменён RiverPlanDiagnostic. Digest пары payload/diagnostics обновлён с 36204c39… до cf066fb1… и с a5fcf7d3… до 8cc13ee8…. Mismatch-only golden d632ae06… проходит. Mixed envelope восстановлен bounded reader в свежем процессе и повторно закодирован побайтно. Проверены redirect и validate rejection через PlanningService. Procedural refinement discover — 9 тестов, 1 исходный error в disabled fine routing. [Приёмка локального S4 и отдельная граница P2](geo-water-diagnostics-source-d1.md#s4--реализация-перед-независимой-приёмкой-2026-11-08).
+
+### Production reporting P2 — исправление замечания 1, 2026-11-08
+
+Первой командой из `backend` на ревизии `45c187b0` воспроизведено падение на валидном WaterWorldOcean NOTICE.
+
+```powershell
+.\.venv\Scripts\python -m unittest tests.test_hydrology_hy12_rivers.RiverWaterlineTests.test_pipeline_supplies_pre_river_elevation_to_fine_profiles -q
+```
+
+```text
+Traceback (most recent call last):
+  File "E:\AI Project\backend\tests\test_hydrology_hy12_rivers.py", line 159, in test_pipeline_supplies_pre_river_elevation_to_fine_profiles
+    _, working = SurfacePlanningEntry(composition.assembler, SurfacePlanningCapture()).require_plan_inputs(
+                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        source, [], wait=RequestPlanWait.unbounded())
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\AI Project\backend\app\application\worldData\planning\composition\surfacePlanningEntry.py", line 95, in require_plan_inputs
+    result = self.prepare_captured(view, world=world, wait=wait, resolve_ctx=ctx)
+  File "E:\AI Project\backend\app\application\worldData\planning\composition\surfacePlanningEntry.py", line 67, in prepare_captured
+    bundle = prepare_captured_bundle(view, planning=self._planning, wait=wait, resolve_ctx=resolve_ctx)
+  File "E:\AI Project\backend\app\application\worldData\planning\composition\surfacePlanningAssembler.py", line 158, in prepare_captured_bundle
+    report_surface_diagnostics(diagnostics, resolve_ctx=resolve_ctx)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\AI Project\backend\app\application\worldData\planning\composition\surfacePlanningAssembler.py", line 188, in report_surface_diagnostics
+    item.issue.path, item.issue.code, item.issue.message)
+    ^^^^^^^^^^^^^^^
+  File "E:\AI Project\backend\.venv\Lib\site-packages\pydantic\main.py", line 1042, in __getattr__
+    raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}')
+AttributeError: 'WaterWorldOcean' object has no attribute 'path'
+```
+
+После исправления та же команда проходит (1 test, OK). Тест проверяет единственный WaterWorldOcean у caller, coarse beds, fine overrides и передачу pre-river surface в fine planner.
+
+Методы SurfacePlanningAssembler.prepare_captured_bundle и prepare_captured_geo_bundle вызывают соответствующую сборку и передают факты в surfaceDiagnosticReporting. Модуль reporting также обслуживает field-only probe_extent. Оба метода принимают обязательный keyword `on_hydrology`. Три map route, outline read, L0, detailed materialization и smoke создают collector до capture. `SurfacePlanningEntry` передаёт его метод по всей цепочке. Свойство `facts` возвращает tuple в порядке первого появления. Dispatch принимает семь operational Water carriers и RiverPlanDiagnostic. Field ERROR поступает в errors, FALLBACK — в continuations, NOTICE — в INFO при выключенном collect_only. После обхода validate refusal содержит только field ERROR текущего прохода. WaterPlacementRequired остаётся в прямом apply.
+
+В интеграционном тесте обоих helper на реальных PlanningService и cache проходят четыре сочетания флагов. Каждый запрос дважды читает те же фазы. Проверены порядок Water NOTICE → River FALLBACK → Water ERROR → River ERROR, дедупликация до вызова callback, первый факт при повторной доставке в тот же collector, доставка на HIT новому collector, доступность полного tuple после field refusal и идентичность исключения при сбое callback или PlanBuildFailure. GEO проверяет все двенадцать фаз и NO_EXTENT. У исходного River-теста сохранились проверки маршрутизации. Логика build, cache и публикации не менялась.
+
+Команды из `backend`:
+
+```powershell
+$env:PYTHONPATH='.;tests'
+$py='.\.venv\Scripts\python'
+& $py -m unittest tests.test_hydrology_hy12_rivers.RiverWaterlineTests.test_pipeline_supplies_pre_river_elevation_to_fine_profiles tests.planning.consumers.test_hydrology_reporting tests.geo1.integration.test_revisions.GeoBundleReportingTests tests.planning.consumers.test_request_boundary tests.geo1.fine_water.test_river_diagnostics -q
+& $py -m unittest tests.test_wilderness_region_index.OutlineReadBoundaryTests -q
+& $py -m unittest discover -s tests/planning/consumers -t . -q
+& $py -m unittest tests.geo1.integration.test_revisions.GeoBundleReportingTests tests.planning.consumers.test_request_boundary tests.planning.providers.test_diagnostics -q
+& $py -m unittest tests.geo1.integration.test_revisions.GeoCapturedAssemblerTests tests.test_hydrology_hy12_rivers tests.test_relief_objects_z tests.test_water_placement_pass -q
+```
+
+- Целевой набор — 15/15. Outline read через штатный caller — 6/6.
+- Surface consumers — 82/87 против 80/85 на исходной ревизии. Совпадают все пять ошибок: четыре в climate registry при неизвестном профиле и одна в water placement adapter при projection collapse (базовый FieldPathError). Асинхронные тесты запущены с доступом к локальному socketpair Windows.
+- GEO reporting + request boundary + provider diagnostics — 12/13. В обоих checkout cacheService._failure при имитации отказа cache backend конструирует базовый FieldPathError.
+- GEO assembler + HY-12 rivers + relief + Water placement — 31/34. Те же три ошибки Water placement воспроизведены на исходной ревизии в обоих сценариях world_test_004 и в declared projection collapse. Причина — конструирование базового FieldPathError до передачи bundle.
+
+Pyright 1.1.414 запускался из корня checkout с одним интерпретатором backend для исходной ревизии и рабочей копии. Список для исходной ревизии содержит семь существовавших файлов. Рабочий список содержит также collector и модуль reporting.
+
+```powershell
+$py=(Resolve-Path backend/.venv/Scripts/python.exe).Path
+$files=@(
+    'backend/app/api/routes/map.py'
+    'backend/app/application/worldData/materialize/surface/worldSurfaceMaterializationOrchestrator.py'
+    'backend/app/application/worldData/pack/bake/l0/packMaterializationOrchestrator.py'
+    'backend/app/application/worldData/pack/read/wildernessRegionReadService.py'
+    'backend/app/application/worldData/planning/composition/surfacePlanningAssembler.py'
+    'backend/app/application/worldData/planning/composition/surfacePlanningEntry.py'
+    'backend/scripts/smoke_hydrology_hy12.py'
+    'backend/app/application/worldData/planning/composition/hydrologyDiagnosticCollector.py'
+    'backend/app/application/worldData/planning/composition/surfaceDiagnosticReporting.py'
+)
+node node_modules/pyright/index.js -p pyrightconfig.cascade.json --pythonpath $py --outputjson $files
+node node_modules/pyright/index.js -p pyrightconfig.cascade.json --pythonpath $py --outputjson backend/tests/typing/planning/valid/terrain/geoPipeline.py backend/tests/typing/planning/valid/surface/composition.py
+node node_modules/pyright/index.js -p pyrightconfig.cascade.json --pythonpath $py --outputjson backend/tests/typing/planning/invalid.py
+```
+
+После переноса методов целевой набор прошёл повторно (15/15). Pyright на восьми модулях app дал 0 ошибок. В smoke_hydrology_hy12.py остались 89 исходных reportArgumentType. У положительных typing fixtures 0 ошибок. У отрицательной 297 диагностик. Для вызова GEO-метода у PC assembler ожидаемая диагностика изменилась с reportArgumentType на reportAttributeAccessIssue: Pyright проверяет семейство через тип self.

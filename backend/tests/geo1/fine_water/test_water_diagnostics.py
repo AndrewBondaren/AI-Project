@@ -127,6 +127,52 @@ class WaterDiagnosticsTests(TestCase):
                 reporting.report_water_diagnostics(ResolveContext(), (foreign,))
             sink.assert_not_called()
 
+    def test_mismatch_requires_fallback_before_delivery(self):
+        from unittest.mock import patch
+        from app.application.jsonValidation.resolve import ResolveContext
+        from app.application.worldData.generators.hydrology.water import waterDiagnostics as reporting
+        from app.dataModel.hydrology.enums.basinKind import BasinKind
+        from app.dataModel.hydrology.waterKindMismatchIssue import WaterKindMismatchIssue
+        from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic
+
+        def mismatch(uid, disposition):
+            issue = WaterKindMismatchIssue.retained(uid, BasinKind.LAKE, BasinKind.SEA)
+            return PlanDiagnostic(issue=issue, disposition=disposition)
+
+        first = mismatch("B", D.FALLBACK)
+        for disposition in (D.ERROR, D.NOTICE):
+            bad = mismatch("A", disposition)
+            facts = (first, bad)
+            with self.subTest(disposition=disposition, boundary="constructor"):
+                with self.assertRaisesRegex(ValidationError, "requires FALLBACK"):
+                    w.WaterDiagnosticReport(ordered=facts, continuations=(first,),
+                        blocking=(bad,) if disposition is D.ERROR else (),
+                        notices=(bad,) if disposition is D.NOTICE else ())
+            for ctx in (ResolveContext(), ResolveContext(collect_only=True), ResolveContext(validate_only=True)):
+                with self.subTest(disposition=disposition, collect=ctx.collect_only, validate=ctx.validate_only):
+                    with patch.object(reporting.logger, "warning") as sink:
+                        with self.assertRaisesRegex(ValueError, "requires FALLBACK"):
+                            reporting.report_water_diagnostics(ctx, facts)
+                        sink.assert_not_called()
+                    self.assertEqual(ctx.errors, [])
+                    self.assertEqual(ctx.report.diagnostics, ())
+
+        facts = (first, mismatch("A", D.FALLBACK))
+        for ctx in (ResolveContext(), ResolveContext(collect_only=True), ResolveContext(validate_only=True)):
+            with patch.object(reporting, "log_issues") as log:
+                report = reporting.report_water_diagnostics(ctx, facts)
+            self.assertEqual(report.ordered, facts)
+            self.assertEqual(report.continuations, facts)
+            self.assertTrue(all(type(d) is PlanDiagnostic and type(d.issue) is WaterKindMismatchIssue
+                                for d in report.ordered))
+            issues = [d.issue for d in facts]
+            if ctx.collect_only or ctx.validate_only:
+                log.assert_not_called()
+                self.assertEqual(ctx.errors, issues)
+            else:
+                self.assertEqual([call.args[0] for call in log.call_args_list], [[issue] for issue in issues])
+                self.assertEqual(ctx.errors, [])
+
     def test_apply_exposes_placement_refusal_and_returns_in_every_mode(self):
         from unittest.mock import patch
         from app.application.jsonValidation.resolve import ResolveContext

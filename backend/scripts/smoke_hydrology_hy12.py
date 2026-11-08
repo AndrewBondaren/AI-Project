@@ -21,6 +21,7 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO / "backend") not in sys.path:
     sys.path.insert(0, str(REPO / "backend"))
 
+from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
 from app.application.cancellation.requestPlanWait import RequestPlanWait
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
@@ -45,10 +46,11 @@ def load_fixture(path: Path) -> tuple[World, list[NamedLocation]]:
 
 
 def coarse_snapshot(world, locations, *, planning, capture, wait) -> dict:
+    collector = HydrologyDiagnosticCollector()
     view = capture.capture(world, locations, mode=ResolutionMode.RUNTIME,
         mountain_templates=(), resolve_ctx=ResolveContext())
     prepared = SurfacePlanningEntry(planning, capture).prepare_captured(
-        view, world=world, wait=wait, resolve_ctx=ResolveContext())
+        view, on_hydrology=collector.collect, world=world, wait=wait, resolve_ctx=ResolveContext())
     if prepared is None:
         raise AssertionError("empty coarse heightmap")
     bundle, working = prepared

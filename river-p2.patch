@@ -1,0 +1,1082 @@
+diff --git a/.cursor/plans/geo-river-routing-diagnostics-d1.md b/.cursor/plans/geo-river-routing-diagnostics-d1.md
+index 1a36c749..350975c7 100644
+--- a/.cursor/plans/geo-river-routing-diagnostics-d1.md
++++ b/.cursor/plans/geo-river-routing-diagnostics-d1.md
+@@ -308,3 +308,78 @@ Reuse принятого смысла WATER_LEVEL_SPILL: [GEO owning-план](g
+ ### Проверка River в S4, 2026-11-08
+ 
+ Для lake=False и mouth=(8,11) историческая ревизия 9ed3bba6 и два свежих процесса S4 дали одинаковые payload digest соответственно 757adfe9… и 38927c0d…. Для первого результата типизированный NO_WATER_BODIES/DRY_MOUTH сохраняет ERROR и failure_cell=(11,11). Для второго за Water mismatch следует REDIRECTED/DRY_MOUTH с FALLBACK и receiver lake/(10,11). Исторический JSON причины в field issue заменён RiverPlanDiagnostic. Digest пары payload/diagnostics обновлён с 36204c39… до cf066fb1… и с a5fcf7d3… до 8cc13ee8…. Mismatch-only golden d632ae06… проходит. Mixed envelope восстановлен bounded reader в свежем процессе и повторно закодирован побайтно. Проверены redirect и validate rejection через PlanningService. Procedural refinement discover — 9 тестов, 1 исходный error в disabled fine routing. [Приёмка локального S4 и отдельная граница P2](geo-water-diagnostics-source-d1.md#s4--реализация-перед-независимой-приёмкой-2026-11-08).
++
++### Production reporting P2 — исправление замечания 1, 2026-11-08
++
++Первой командой из `backend` на ревизии `45c187b0` воспроизведено падение на валидном WaterWorldOcean NOTICE.
++
++```powershell
++.\.venv\Scripts\python -m unittest tests.test_hydrology_hy12_rivers.RiverWaterlineTests.test_pipeline_supplies_pre_river_elevation_to_fine_profiles -q
++```
++
++```text
++Traceback (most recent call last):
++  File "E:\AI Project\backend\tests\test_hydrology_hy12_rivers.py", line 159, in test_pipeline_supplies_pre_river_elevation_to_fine_profiles
++    _, working = SurfacePlanningEntry(composition.assembler, SurfacePlanningCapture()).require_plan_inputs(
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
++        source, [], wait=RequestPlanWait.unbounded())
++        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
++  File "E:\AI Project\backend\app\application\worldData\planning\composition\surfacePlanningEntry.py", line 95, in require_plan_inputs
++    result = self.prepare_captured(view, world=world, wait=wait, resolve_ctx=ctx)
++  File "E:\AI Project\backend\app\application\worldData\planning\composition\surfacePlanningEntry.py", line 67, in prepare_captured
++    bundle = prepare_captured_bundle(view, planning=self._planning, wait=wait, resolve_ctx=resolve_ctx)
++  File "E:\AI Project\backend\app\application\worldData\planning\composition\surfacePlanningAssembler.py", line 158, in prepare_captured_bundle
++    report_surface_diagnostics(diagnostics, resolve_ctx=resolve_ctx)
++    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
++  File "E:\AI Project\backend\app\application\worldData\planning\composition\surfacePlanningAssembler.py", line 188, in report_surface_diagnostics
++    item.issue.path, item.issue.code, item.issue.message)
++    ^^^^^^^^^^^^^^^
++  File "E:\AI Project\backend\.venv\Lib\site-packages\pydantic\main.py", line 1042, in __getattr__
++    raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}')
++AttributeError: 'WaterWorldOcean' object has no attribute 'path'
++```
++
++После исправления та же команда проходит (1 test, OK). Тест проверяет единственный WaterWorldOcean у caller, coarse beds, fine overrides и передачу pre-river surface в fine planner.
++
++Методы SurfacePlanningAssembler.prepare_captured_bundle и prepare_captured_geo_bundle вызывают соответствующую сборку и передают факты в surfaceDiagnosticReporting. Модуль reporting также обслуживает field-only probe_extent. Оба метода принимают обязательный keyword `on_hydrology`. Три map route, outline read, L0, detailed materialization и smoke создают collector до capture. `SurfacePlanningEntry` передаёт его метод по всей цепочке. Свойство `facts` возвращает tuple в порядке первого появления. Dispatch принимает семь operational Water carriers и RiverPlanDiagnostic. Field ERROR поступает в errors, FALLBACK — в continuations, NOTICE — в INFO при выключенном collect_only. После обхода validate refusal содержит только field ERROR текущего прохода. WaterPlacementRequired остаётся в прямом apply.
++
++В интеграционном тесте обоих helper на реальных PlanningService и cache проходят четыре сочетания флагов. Каждый запрос дважды читает те же фазы. Проверены порядок Water NOTICE → River FALLBACK → Water ERROR → River ERROR, дедупликация до вызова callback, первый факт при повторной доставке в тот же collector, доставка на HIT новому collector, доступность полного tuple после field refusal и идентичность исключения при сбое callback или PlanBuildFailure. GEO проверяет все двенадцать фаз и NO_EXTENT. У исходного River-теста сохранились проверки маршрутизации. Логика build, cache и публикации не менялась.
++
++Команды из `backend`:
++
++```powershell
++$env:PYTHONPATH='.;tests'
++$py='.\.venv\Scripts\python'
++& $py -m unittest tests.test_hydrology_hy12_rivers.RiverWaterlineTests.test_pipeline_supplies_pre_river_elevation_to_fine_profiles tests.planning.consumers.test_hydrology_reporting tests.geo1.integration.test_revisions.GeoBundleReportingTests tests.planning.consumers.test_request_boundary tests.geo1.fine_water.test_river_diagnostics -q
++& $py -m unittest tests.test_wilderness_region_index.OutlineReadBoundaryTests -q
++& $py -m unittest discover -s tests/planning/consumers -t . -q
++& $py -m unittest tests.geo1.integration.test_revisions.GeoBundleReportingTests tests.planning.consumers.test_request_boundary tests.planning.providers.test_diagnostics -q
++& $py -m unittest tests.geo1.integration.test_revisions.GeoCapturedAssemblerTests tests.test_hydrology_hy12_rivers tests.test_relief_objects_z tests.test_water_placement_pass -q
++```
++
++- Целевой набор — 15/15. Outline read через штатный caller — 6/6.
++- Surface consumers — 82/87 против 80/85 на исходной ревизии. Совпадают все пять ошибок: четыре в climate registry при неизвестном профиле и одна в water placement adapter при projection collapse (базовый FieldPathError). Асинхронные тесты запущены с доступом к локальному socketpair Windows.
++- GEO reporting + request boundary + provider diagnostics — 12/13. В обоих checkout cacheService._failure при имитации отказа cache backend конструирует базовый FieldPathError.
++- GEO assembler + HY-12 rivers + relief + Water placement — 31/34. Те же три ошибки Water placement воспроизведены на исходной ревизии в обоих сценариях world_test_004 и в declared projection collapse. Причина — конструирование базового FieldPathError до передачи bundle.
++
++Pyright 1.1.414 запускался из корня checkout с одним интерпретатором backend для исходной ревизии и рабочей копии. Список для исходной ревизии содержит семь существовавших файлов. Рабочий список содержит также collector и модуль reporting.
++
++```powershell
++$py=(Resolve-Path backend/.venv/Scripts/python.exe).Path
++$files=@(
++    'backend/app/api/routes/map.py'
++    'backend/app/application/worldData/materialize/surface/worldSurfaceMaterializationOrchestrator.py'
++    'backend/app/application/worldData/pack/bake/l0/packMaterializationOrchestrator.py'
++    'backend/app/application/worldData/pack/read/wildernessRegionReadService.py'
++    'backend/app/application/worldData/planning/composition/surfacePlanningAssembler.py'
++    'backend/app/application/worldData/planning/composition/surfacePlanningEntry.py'
++    'backend/scripts/smoke_hydrology_hy12.py'
++    'backend/app/application/worldData/planning/composition/hydrologyDiagnosticCollector.py'
++    'backend/app/application/worldData/planning/composition/surfaceDiagnosticReporting.py'
++)
++node node_modules/pyright/index.js -p pyrightconfig.cascade.json --pythonpath $py --outputjson $files
++node node_modules/pyright/index.js -p pyrightconfig.cascade.json --pythonpath $py --outputjson backend/tests/typing/planning/valid/terrain/geoPipeline.py backend/tests/typing/planning/valid/surface/composition.py
++node node_modules/pyright/index.js -p pyrightconfig.cascade.json --pythonpath $py --outputjson backend/tests/typing/planning/invalid.py
++```
++
++После переноса методов целевой набор прошёл повторно (15/15). Pyright на восьми модулях app дал 0 ошибок. В smoke_hydrology_hy12.py остались 89 исходных reportArgumentType. У положительных typing fixtures 0 ошибок. У отрицательной 297 диагностик. Для вызова GEO-метода у PC assembler ожидаемая диагностика изменилась с reportArgumentType на reportAttributeAccessIssue: Pyright проверяет семейство через тип self.
+diff --git a/backend/app/api/routes/map.py b/backend/app/api/routes/map.py
+index 98cce3f7..2be7826b 100644
+--- a/backend/app/api/routes/map.py
++++ b/backend/app/api/routes/map.py
+@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
+ from fastapi.responses import JSONResponse
+ from dataclasses import asdict
+ 
++from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
+ from app.api.deps import get_container
+ from app.application.cancellation.requestPlanWait import RequestPlanWait
+ from app.api.utils.jsonResolver import JsonResolver
+@@ -495,9 +496,10 @@ async def refine_from_entry_route(
+         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+     locations = await location_svc.list_insert_order(world_uid)
+     try:
++        collector = HydrologyDiagnosticCollector()
+         surface_bundle, working = container.surface_planning_entry().require_plan_inputs(
+             world, locations,
+-            wait=RequestPlanWait.unbounded(),
++            on_hydrology=collector.collect, wait=RequestPlanWait.unbounded(),
+         )
+     except ValueError as exc:
+         raise HTTPException(status_code=422, detail=str(exc)) from exc
+@@ -599,9 +601,10 @@ async def refine_chunk_route(
+         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+     locations = await location_svc.list_insert_order(world_uid)
+     try:
++        collector = HydrologyDiagnosticCollector()
+         surface_bundle, working = container.surface_planning_entry().require_plan_inputs(
+             world, locations,
+-            wait=RequestPlanWait.unbounded(),
++            on_hydrology=collector.collect, wait=RequestPlanWait.unbounded(),
+         )
+     except ValueError as exc:
+         raise HTTPException(status_code=422, detail=str(exc)) from exc
+@@ -670,9 +673,10 @@ async def schedule_chunk_refine_route(
+         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+     locations = await location_svc.list_insert_order(world_uid)
+     try:
++        collector = HydrologyDiagnosticCollector()
+         surface_bundle, working = container.surface_planning_entry().require_plan_inputs(
+             world, locations,
+-            wait=RequestPlanWait.unbounded(),
++            on_hydrology=collector.collect, wait=RequestPlanWait.unbounded(),
+         )
+     except ValueError as exc:
+         raise HTTPException(status_code=422, detail=str(exc)) from exc
+diff --git a/backend/app/application/worldData/materialize/surface/worldSurfaceMaterializationOrchestrator.py b/backend/app/application/worldData/materialize/surface/worldSurfaceMaterializationOrchestrator.py
+index 8faec6f1..049e6885 100644
+--- a/backend/app/application/worldData/materialize/surface/worldSurfaceMaterializationOrchestrator.py
++++ b/backend/app/application/worldData/materialize/surface/worldSurfaceMaterializationOrchestrator.py
+@@ -4,6 +4,7 @@ Legacy map_cells ``materialize_surface_stack`` removed; use pack bake modes.
+ """
+ 
+ from __future__ import annotations
++from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
+ from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
+ 
+ from app.application.jsonValidation.resolve import ResolveContext
+@@ -259,10 +260,11 @@ class WorldSurfaceMaterializationOrchestrator:
+             if self._relief_loader is not None else {})
+         templates = mountain_template_inputs(relief_templates)
+         entry = SurfacePlanningEntry(self._planning, self._capture)
++        collector = HydrologyDiagnosticCollector()
+         captured = entry.capture_view(world, locations, mode=ResolutionMode.RUNTIME,
+             mountain_templates=templates, resolve_ctx=request_ctx)
+         prepared = entry.prepare_captured(
+-            captured, world=world, wait=wait, resolve_ctx=request_ctx)
++            captured, on_hydrology=collector.collect, world=world, wait=wait, resolve_ctx=request_ctx)
+         if prepared is None:
+             raise ValueError("surface terrain context unavailable")
+         surface_bundle, working = prepared
+diff --git a/backend/app/application/worldData/pack/bake/l0/packMaterializationOrchestrator.py b/backend/app/application/worldData/pack/bake/l0/packMaterializationOrchestrator.py
+index 43879577..130cd991 100644
+--- a/backend/app/application/worldData/pack/bake/l0/packMaterializationOrchestrator.py
++++ b/backend/app/application/worldData/pack/bake/l0/packMaterializationOrchestrator.py
+@@ -5,6 +5,7 @@ L0 only (Job boundaries). Entry/L2 — ``EntryRefineOrchestrator`` /
+ """
+ 
+ from __future__ import annotations
++from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
+ from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
+ 
+ import logging
+@@ -173,10 +174,11 @@ class PackMaterializationOrchestrator:
+         relief_templates = await _load_relief_templates(self._relief_loader, world)
+         templates = mountain_template_inputs(relief_templates)
+         entry = SurfacePlanningEntry(self._planning, self._capture)
++        collector = HydrologyDiagnosticCollector()
+         captured = entry.capture_view(world, locations, mode=ResolutionMode.RUNTIME,
+             mountain_templates=templates, resolve_ctx=request_ctx)
+         prepared = entry.prepare_captured(
+-            captured, world=world, wait=wait, resolve_ctx=request_ctx)
++            captured, on_hydrology=collector.collect, world=world, wait=wait, resolve_ctx=request_ctx)
+         if prepared is None:
+             raise ValueError("surface terrain context unavailable")
+         surface_bundle, working = prepared
+diff --git a/backend/app/application/worldData/pack/read/wildernessRegionReadService.py b/backend/app/application/worldData/pack/read/wildernessRegionReadService.py
+index fe7f0c64..e6ad0c04 100644
+--- a/backend/app/application/worldData/pack/read/wildernessRegionReadService.py
++++ b/backend/app/application/worldData/pack/read/wildernessRegionReadService.py
+@@ -1,4 +1,5 @@
+ """Debug selector reads manifest snapshots; outlines derive geometry from world data."""
++from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
+ from app.application.planning.service.planningService import PlanWaitControl
+ from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
+ from app.application.worldData.generators.terrain.landcover.types import LandcoverCollectContext
+@@ -40,8 +41,9 @@ class WildernessRegionReadService:
+             raise ValueError("surface planning entry required")
+         if self._region_state_repo is None:
+             raise ValueError("region state repository required for outline")
++        collector = HydrologyDiagnosticCollector()
+         _, working = self._entry.require_plan_inputs(
+-            world, locations, wait=wait)
++            world, locations, on_hydrology=collector.collect, wait=wait)
+         snapshot = await load_region_state_snapshot(self._region_state_repo, world.world_uid)
+         inputs = prepare_landcover_inputs(working, snapshot)
+         ctx = LandcoverCollectContext(world, tuple(locations),
+diff --git a/backend/app/application/worldData/planning/composition/surfacePlanningAssembler.py b/backend/app/application/worldData/planning/composition/surfacePlanningAssembler.py
+index 03c06ceb..2ba84618 100644
+--- a/backend/app/application/worldData/planning/composition/surfacePlanningAssembler.py
++++ b/backend/app/application/worldData/planning/composition/surfacePlanningAssembler.py
+@@ -2,16 +2,16 @@
+ 
+ from __future__ import annotations
+ 
+-import logging
+-from collections.abc import Iterable
+-from typing import Generic
++from typing import Any, Generic
+ from typing_extensions import TypeVar
+ 
+ from pydantic import TypeAdapter
+ 
+-from app.application.jsonValidation.resolve import ResolveContext, report_issues, UnresolvedModelError
+-from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
++from app.application.jsonValidation.resolve import ResolveContext
++from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic
+ 
++from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyCallback
++from app.application.worldData.planning.composition.surfaceDiagnosticReporting import report_surface_diagnostics
+ from app.application.planning.providers.planProvider import RegisteredPlanContract
+ from app.application.planning.providers.planRegistry import PlanDependencyReader, PlanRegistry
+ from app.application.planning.service.planningService import PlanningService, PlanWaitControl
+@@ -144,47 +144,33 @@ class SurfacePlanningAssembler(Generic[P]):
+             hydrology_routes=routes, river_relief=river, hydrology=final, climate_local=local,
+             coastline_boundaries=boundaries, surface_support=support, coating=coating)
+ 
+-
+-def prepare_captured_bundle(view: SurfacePlanningView, *, planning: SurfacePlanningAssembler,
+-                            wait: PlanWaitControl, resolve_ctx: ResolveContext) -> SurfacePlanBundle | None:
+-    """One report boundary for captured input and frozen plan diagnostics."""
+-    bundle = planning.prepare(view, wait=wait)
+-    diagnostics = list(view.capture_diagnostics)
+-    if bundle is not None:
+-        for envelope in (bundle.climate_base, bundle.terrain_base, bundle.water_placement,
+-                         bundle.relief, bundle.hydrology_routes, bundle.river_relief,
+-                         bundle.hydrology, bundle.climate_local):
+-            diagnostics.extend(envelope.diagnostics)
+-    report_surface_diagnostics(diagnostics, resolve_ctx=resolve_ctx)
+-    return bundle
+-
+-
+-def prepare_captured_geo_bundle(view: GeoSurfacePlanningView | NoExtentSurfacePlanningView, *,
+-                                planning: SurfacePlanningAssembler[GeoWorldPlanProviders],
+-                                wait: PlanWaitControl, resolve_ctx: ResolveContext) -> GeoSurfacePlanBundle | None:
+-    """Report captured and cached GEO diagnostics through the shared reporting policy."""
+-    bundle = planning.prepare_geo(view, wait=wait)
+-    diagnostics = list(view.capture_diagnostics)
+-    if bundle is not None:
+-        for envelope in (bundle.climate_base, bundle.terrain_base, bundle.terrain_regions,
+-                         bundle.water_placement, bundle.relief, bundle.hydrology_routes,
+-                         bundle.river_relief, bundle.hydrology, bundle.climate_local,
+-                         bundle.coastline_boundaries, bundle.surface_support, bundle.coating):
+-            diagnostics.extend(envelope.diagnostics)
+-    report_surface_diagnostics(diagnostics, resolve_ctx=resolve_ctx)
+-    return bundle
+-
+-
+-def report_surface_diagnostics(diagnostics: Iterable[PlanDiagnostic], *,
+-                               resolve_ctx: ResolveContext) -> None:
+-    """Shared reporting policy for capture-only probes and prepared plans."""
+-    diagnostics = tuple(dict.fromkeys(diagnostics))
+-    issues = tuple(item.issue for item in diagnostics
+-        if item.disposition is not PlanDiagnosticDisposition.NOTICE)
+-    report_issues(resolve_ctx, (issue for issue in issues if issue not in resolve_ctx.errors))
+-    for item in diagnostics:
+-        if item.disposition is PlanDiagnosticDisposition.NOTICE and not resolve_ctx.collect_only:
+-            logging.getLogger(__name__).info("surface planning | path=%s code=%s | %s",
+-                item.issue.path, item.issue.code, item.issue.message)
+-    if resolve_ctx.validate_only and issues:
+-        raise UnresolvedModelError(list(dict.fromkeys(issues)))
++    def prepare_captured_bundle(self: SurfacePlanningAssembler[WorldPlanProviders],
++                                view: SurfacePlanningView, *,
++                                on_hydrology: HydrologyCallback, wait: PlanWaitControl,
++                                resolve_ctx: ResolveContext) -> SurfacePlanBundle | None:
++        """One report boundary for captured input and frozen plan diagnostics."""
++        bundle = self.prepare(view, wait=wait)
++        diagnostics: list[PlanDiagnostic[Any]] = list(view.capture_diagnostics)
++        if bundle is not None:
++            for envelope in (bundle.climate_base, bundle.terrain_base, bundle.water_placement,
++                             bundle.relief, bundle.hydrology_routes, bundle.river_relief,
++                             bundle.hydrology, bundle.climate_local):
++                diagnostics.extend(envelope.diagnostics)
++        report_surface_diagnostics(diagnostics, resolve_ctx=resolve_ctx, on_hydrology=on_hydrology)
++        return bundle
++
++    def prepare_captured_geo_bundle(self: SurfacePlanningAssembler[GeoWorldPlanProviders],
++                                    view: GeoSurfacePlanningView | NoExtentSurfacePlanningView, *,
++                                    on_hydrology: HydrologyCallback, wait: PlanWaitControl,
++                                    resolve_ctx: ResolveContext) -> GeoSurfacePlanBundle | None:
++        """Report captured and cached GEO diagnostics through the shared reporting policy."""
++        bundle = self.prepare_geo(view, wait=wait)
++        diagnostics: list[PlanDiagnostic[Any]] = list(view.capture_diagnostics)
++        if bundle is not None:
++            for envelope in (bundle.climate_base, bundle.terrain_base, bundle.terrain_regions,
++                             bundle.water_placement, bundle.relief, bundle.hydrology_routes,
++                             bundle.river_relief, bundle.hydrology, bundle.climate_local,
++                             bundle.coastline_boundaries, bundle.surface_support, bundle.coating):
++                diagnostics.extend(envelope.diagnostics)
++        report_surface_diagnostics(diagnostics, resolve_ctx=resolve_ctx, on_hydrology=on_hydrology)
++        return bundle
+diff --git a/backend/app/application/worldData/planning/composition/surfacePlanningEntry.py b/backend/app/application/worldData/planning/composition/surfacePlanningEntry.py
+index 8b573720..72281ec7 100644
+--- a/backend/app/application/worldData/planning/composition/surfacePlanningEntry.py
++++ b/backend/app/application/worldData/planning/composition/surfacePlanningEntry.py
+@@ -3,6 +3,8 @@
+ from collections.abc import Sequence
+ from functools import partial
+ 
++from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyCallback
++
+ from app.application.jsonValidation.resolve import ResolveContext
+ from app.application.jsonValidation import terrain_scalars
+ from app.application.worldData.generators.terrain.passes.bbox import world_bounds_from_world
+@@ -11,9 +13,8 @@ from app.application.worldData.generators.climate.materialize.climateWorkingFiel
+ from app.application.worldData.generators.climate.registry import profile_for
+ from app.application.worldData.generators.hydrology.materialize.hydrologyWorkingFields import HydrologyWorkingFields
+ from app.application.worldData.generators.terrain.materialize.terrainWorkingFields import TerrainWorkingFields
+-from app.application.worldData.planning.composition.surfacePlanningAssembler import (
+-    SurfacePlanningAssembler, prepare_captured_bundle, report_surface_diagnostics,
+-)
++from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
++from app.application.worldData.planning.composition.surfaceDiagnosticReporting import report_field_diagnostics
+ from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
+ from app.application.worldData.planning.contracts.surfacePlanBundle import SurfacePlanBundle
+ from app.application.worldData.planning.contracts.surfacePlanningView import (
+@@ -55,16 +56,17 @@ class SurfacePlanningEntry:
+         """Capture and report without preparing plans or projecting working maps."""
+         view = self.capture_view(world, locations, mode=mode,
+             mountain_templates=mountain_templates, resolve_ctx=resolve_ctx)
+-        report_surface_diagnostics(view.capture_diagnostics, resolve_ctx=resolve_ctx)
++        report_field_diagnostics(dict.fromkeys(view.capture_diagnostics), resolve_ctx=resolve_ctx)
+         return self.extent_status(view)
+ 
+     # GEO-LEGACY-35: Replace the PC bundle handoff.
+     def prepare_captured(self, view: SurfacePlanningView, *, world: World,
+-                         wait: PlanWaitControl, resolve_ctx: ResolveContext
++                         on_hydrology: HydrologyCallback, wait: PlanWaitControl, resolve_ctx: ResolveContext
+                          ) -> tuple[SurfacePlanBundle, SurfaceWorkingMaps] | None:
+         if view.world_uid != world.world_uid:
+             raise ValueError("captured surface view belongs to another world")
+-        bundle = prepare_captured_bundle(view, planning=self._planning, wait=wait, resolve_ctx=resolve_ctx)
++        bundle = self._planning.prepare_captured_bundle(
++            view, on_hydrology=on_hydrology, wait=wait, resolve_ctx=resolve_ctx)
+         if isinstance(view, NoExtentSurfacePlanningView):
+             return None
+         if bundle is None or bundle.world_uid != view.world_uid or bundle.view_revision != view.revision:
+@@ -84,6 +86,7 @@ class SurfacePlanningEntry:
+     def require_plan_inputs(
+         self, world: World, locations: Sequence[NamedLocation], *,
+         wait: PlanWaitControl,
++        on_hydrology: HydrologyCallback,
+         resolve_ctx: ResolveContext | None = None,
+         mountain_templates: tuple[MountainTemplateInput, ...] = (),
+     ) -> tuple[SurfacePlanBundle, SurfaceWorkingMaps]:
+@@ -92,7 +95,7 @@ class SurfacePlanningEntry:
+         mode = ResolutionMode.VALIDATE_ONLY if ctx.validate_only else ResolutionMode.RUNTIME
+         view = self.capture_view(world, locations, mode=mode,
+             mountain_templates=mountain_templates, resolve_ctx=ctx)
+-        result = self.prepare_captured(view, world=world, wait=wait, resolve_ctx=ctx)
++        result = self.prepare_captured(view, world=world, on_hydrology=on_hydrology, wait=wait, resolve_ctx=ctx)
+         if result is None:
+             raise ValueError("surface terrain context unavailable")
+         return result
+@@ -100,8 +103,9 @@ class SurfacePlanningEntry:
+     def require_plan_bundle(
+         self, world: World, locations: Sequence[NamedLocation], *,
+         wait: PlanWaitControl,
++        on_hydrology: HydrologyCallback,
+         resolve_ctx: ResolveContext | None = None,
+         mountain_templates: tuple[MountainTemplateInput, ...] = (),
+     ) -> SurfacePlanBundle:
+-        return self.require_plan_inputs(world, locations, wait=wait,
++        return self.require_plan_inputs(world, locations, on_hydrology=on_hydrology, wait=wait,
+             resolve_ctx=resolve_ctx, mountain_templates=mountain_templates)[0]
+diff --git a/backend/scripts/smoke_hydrology_hy12.py b/backend/scripts/smoke_hydrology_hy12.py
+index 164b69cd..a05ac39a 100644
+--- a/backend/scripts/smoke_hydrology_hy12.py
++++ b/backend/scripts/smoke_hydrology_hy12.py
+@@ -21,6 +21,7 @@ REPO = Path(__file__).resolve().parents[2]
+ if str(REPO / "backend") not in sys.path:
+     sys.path.insert(0, str(REPO / "backend"))
+ 
++from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
+ from app.application.cancellation.requestPlanWait import RequestPlanWait
+ from app.application.jsonValidation.resolve import ResolveContext
+ from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
+@@ -45,10 +46,11 @@ def load_fixture(path: Path) -> tuple[World, list[NamedLocation]]:
+ 
+ 
+ def coarse_snapshot(world, locations, *, planning, capture, wait) -> dict:
++    collector = HydrologyDiagnosticCollector()
+     view = capture.capture(world, locations, mode=ResolutionMode.RUNTIME,
+         mountain_templates=(), resolve_ctx=ResolveContext())
+     prepared = SurfacePlanningEntry(planning, capture).prepare_captured(
+-        view, world=world, wait=wait, resolve_ctx=ResolveContext())
++        view, on_hydrology=collector.collect, world=world, wait=wait, resolve_ctx=ResolveContext())
+     if prepared is None:
+         raise AssertionError("empty coarse heightmap")
+     bundle, working = prepared
+diff --git a/backend/tests/geo1/integration/test_revisions.py b/backend/tests/geo1/integration/test_revisions.py
+index 7e5e1b74..53d8bf62 100644
+--- a/backend/tests/geo1/integration/test_revisions.py
++++ b/backend/tests/geo1/integration/test_revisions.py
+@@ -6,6 +6,7 @@ from types import SimpleNamespace
+ 
+ from tests.geo1.integration.support.fixtures import Seam
+ 
++from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
+ from app.application.cache.backends.memoryCache import MemoryCache
+ from app.application.cache.service.cacheService import CacheService
+ from app.application.planning.providers.planRegistry import PlanRegistry, PlanDependencyReader
+@@ -556,6 +557,12 @@ class TerrainRegionProviderTests(TestCase):
+                 self.assertEqual(kernel.call_count, calls)
+ 
+ 
++def mismatch(slot):
++    from app.dataModel.hydrology.enums.basinKind import BasinKind
++    from app.dataModel.hydrology.waterKindMismatchIssue import WaterKindMismatchIssue
++    return WaterKindMismatchIssue.retained(slot, BasinKind.LAKE, BasinKind.SEA)
++
++
+ class GeoCapturedAssemblerTests(TestCase):
+     def setUp(self):
+         from app.application.worldData.planning.composition.planProviders import GeoWorldPlanProviders
+@@ -574,8 +581,7 @@ class GeoCapturedAssemblerTests(TestCase):
+             def build(self, request, dependencies, control):
+                 owner.events.append(self.name)
+                 if owner.fail_slot == self.name:
+-                    from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+-                    raise PlanBuildFailure((FieldPathError((self.name,), "fixture failure"),))
++                    raise PlanBuildFailure((mismatch(self.name),))
+                 if self.name == "terrain_regions":
+                     result = TerrainRegionPlanProvider().build(request, dependencies, control)
+                     return result.model_copy(update={"diagnostics": (*result.diagnostics, *owner.diagnostics.get(self.name, ()))})
+@@ -675,30 +681,32 @@ class GeoBundleReportingTests(TestCase):
+ 
+     def diagnostic(self, slot, disposition):
+         from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic
+-        from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+-        return PlanDiagnostic(issue=FieldPathError((slot,), "producer diagnostic", code="SAME_CODE"), disposition=disposition)
++        return PlanDiagnostic(issue=mismatch(slot), disposition=disposition)
+ 
+     def prepare(self, ctx, view=None):
+-        from app.application.worldData.planning.composition.surfacePlanningAssembler import prepare_captured_geo_bundle
+-        return prepare_captured_geo_bundle(self.fixture.view if view is None else view,
+-            planning=self.fixture.assembler, wait=Wait(), resolve_ctx=ctx)
++        return self.fixture.assembler.prepare_captured_geo_bundle(self.fixture.view if view is None else view,
++            on_hydrology=HydrologyDiagnosticCollector().collect, wait=Wait(), resolve_ctx=ctx)
+ 
+     def test_capture_and_all_twelve_phase_diagnostics_keep_order_and_are_deduplicated(self):
+         from app.application.jsonValidation.resolve import ResolveContext
+         from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnosticDisposition as D
+         from tests.geo1.integration.support.pipeline import rebuild
+         capture = self.diagnostic("capture", D.FALLBACK)
+-        expected = [capture.issue]
++        expected = []
++        continuations = [capture.issue]
+         self.fixture.view = rebuild(self.fixture.view, capture_diagnostics=(capture,))
+         for index, slot in enumerate(self.fixture.order):
+             disposition = (D.ERROR, D.FALLBACK, D.NOTICE)[index % 3]
+             diagnostic = self.diagnostic(slot, disposition)
+             self.fixture.diagnostics[slot] = (capture, diagnostic)
+-            if disposition is not D.NOTICE:
++            if disposition is D.FALLBACK:
++                continuations.append(diagnostic.issue)
++            if disposition is D.ERROR:
+                 expected.append(diagnostic.issue)
+         ctx = ResolveContext(collect_only=True)
+         result = self.prepare(ctx)
+         self.assertIsNotNone(result)
++        self.assertEqual(ctx.report.diagnostics, tuple(continuations))
+         self.assertEqual(ctx.errors, expected)
+         self.assertEqual(len(ctx.errors), len(set(ctx.errors)))
+ 
+@@ -713,10 +721,11 @@ class GeoBundleReportingTests(TestCase):
+         self.assertEqual(self.prepare(second), bundle)
+         self.assertEqual(self.prepare(second), bundle)
+         self.assertEqual(self.fixture.events, [])
+-        self.assertEqual(first.errors, [item.issue])
++        self.assertEqual(first.report.diagnostics, (item.issue,))
++        self.assertEqual(second.report.diagnostics, first.report.diagnostics)
+         self.assertEqual(second.errors, first.errors)
+ 
+-    def test_validate_only_rejects_error_and_fallback_without_promoting_notice(self):
++    def test_validate_only_rejects_only_error_without_promoting_notice(self):
+         from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
+         from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnosticDisposition as D
+         from app.dataModel.validation.enums.resolutionMode import ResolutionMode
+@@ -732,8 +741,8 @@ class GeoBundleReportingTests(TestCase):
+         ctx = ResolveContext(validate_only=True, collect_only=True)
+         with self.assertRaises(UnresolvedModelError) as error:
+             self.prepare(ctx, view)
+-        self.assertEqual(tuple(error.exception.issues), (first.issue, fallback.issue))
+-        self.assertEqual(ctx.errors, [first.issue, fallback.issue])
++        self.assertEqual(tuple(error.exception.issues), (first.issue,))
++        self.assertEqual(ctx.errors, [first.issue])
+ 
+     def test_runtime_uses_existing_warning_and_notice_reporting_routes(self):
+         from app.application.jsonValidation.resolve import ResolveContext
+@@ -741,16 +750,16 @@ class GeoBundleReportingTests(TestCase):
+         warning, notice = self.diagnostic("water_placement", D.FALLBACK), self.diagnostic("surface_support", D.NOTICE)
+         self.fixture.diagnostics.update(water_placement=(warning,), surface_support=(notice,))
+         ctx = ResolveContext()
+-        with patch("app.application.jsonValidation.resolve.log_issues") as warnings, self.assertLogs(
++        with patch("app.application.jsonValidation.resolution.diagnostics.log_issues") as warnings, self.assertLogs(
+                 "app.application.worldData.planning.composition.surfacePlanningAssembler", level="INFO") as logs:
+             self.prepare(ctx)
+-        warnings.assert_called_once_with((warning.issue,))
+-        self.assertEqual(ctx.errors, [warning.issue])
++        warnings.assert_called_once_with([warning.issue])
++        self.assertEqual(ctx.report.diagnostics, (warning.issue,))
+         self.assertEqual(len(logs.records), 1)
+-        self.assertIn("surface_support", logs.records[0].getMessage())
++        self.assertIn(notice.issue.message, logs.records[0].getMessage())
+ 
+     def test_no_extent_reports_capture_diagnostics_without_building_phases(self):
+-        from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
++        from app.application.jsonValidation.resolve import ResolveContext
+         from app.application.worldData.planning.contracts.surfacePlanningView import NoExtentSurfacePlanningView
+         from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnosticDisposition as D
+         capture = self.diagnostic("capture", D.FALLBACK)
+@@ -758,9 +767,8 @@ class GeoBundleReportingTests(TestCase):
+             revision=self.fixture.view.revision, capture_diagnostics=(capture,))
+         ctx = ResolveContext(collect_only=True)
+         self.assertIsNone(self.prepare(ctx, view))
+-        self.assertEqual(ctx.errors, [capture.issue])
+-        with self.assertRaises(UnresolvedModelError):
+-            self.prepare(ResolveContext(validate_only=True, collect_only=True), view)
++        self.assertEqual(ctx.report.diagnostics, (capture.issue,))
++        self.assertIsNone(self.prepare(ResolveContext(validate_only=True, collect_only=True), view))
+         self.assertEqual(self.fixture.events, [])
+ 
+     def test_preparation_failure_is_not_reported_as_a_successful_partial_bundle(self):
+diff --git a/backend/tests/planning/consumers/test_l0_l2.py b/backend/tests/planning/consumers/test_l0_l2.py
+index 3aa41a05..d6ec0d9f 100644
+--- a/backend/tests/planning/consumers/test_l0_l2.py
++++ b/backend/tests/planning/consumers/test_l0_l2.py
+@@ -1,6 +1,7 @@
+ """PC-10/PC-11: frozen L0/L2 consumers, cache equality and production refine."""
+ 
+ from tests.planning.consumers.test_wiring import working_fixture
++from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
+ from app.application.jsonValidation import terrain_system_keys
+ from contextlib import ExitStack
+ from copy import deepcopy
+@@ -500,7 +501,7 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
+              patch.object(LandcoverObservations, "from_views", wraps=LandcoverObservations.from_views) as facts_factory, \
+              patch("app.application.worldData.planning.composition.surfacePlanningEntry.world_bounds_from_world",
+                    side_effect=AssertionError("materialization resolved world topology again")):
+-            bundle, working = entry.prepare_captured(view, world=source, wait=Wait(), resolve_ctx=ResolveContext())
++            bundle, working = entry.prepare_captured(view, on_hydrology=HydrologyDiagnosticCollector().collect, world=source, wait=Wait(), resolve_ctx=ResolveContext())
+             with TemporaryDirectory() as tmp:
+                 writer = WorldPackWriter(WorldPackPaths.from_db_parent(str(Path(tmp) / "test.db"), source.world_uid))
+                 tiles = [(0, 0), (1, 0), (2, 0)]
+@@ -548,8 +549,8 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
+         self.addCleanup(composition.service.shutdown)
+         entry = SurfacePlanningEntry(composition.assembler, SurfacePlanningCapture())
+         view = capture(source)
+-        _, first = entry.prepare_captured(view, world=source, wait=Wait(), resolve_ctx=ResolveContext())
+-        _, second = entry.prepare_captured(view, world=source, wait=Wait(), resolve_ctx=ResolveContext())
++        _, first = entry.prepare_captured(view, on_hydrology=HydrologyDiagnosticCollector().collect, world=source, wait=Wait(), resolve_ctx=ResolveContext())
++        _, second = entry.prepare_captured(view, on_hydrology=HydrologyDiagnosticCollector().collect, world=source, wait=Wait(), resolve_ctx=ResolveContext())
+         self.assertIsNot(first.landcover, second.landcover)
+         self.assertIsNot(first.landcover.context, second.landcover.context)
+         old_snapshot = {"region": StateSnapshotEntry("forest")}
+diff --git a/backend/tests/planning/consumers/test_no_second_truth.py b/backend/tests/planning/consumers/test_no_second_truth.py
+index 905a77ab..d65aa4b2 100644
+--- a/backend/tests/planning/consumers/test_no_second_truth.py
++++ b/backend/tests/planning/consumers/test_no_second_truth.py
+@@ -15,6 +15,7 @@ APP = Path(__file__).resolve().parents[3] / "app"
+ class BoundaryTests(unittest.TestCase):
+     def test_preparing_metadata_never_materializes_any_lod_on_miss_hit_or_edit(self):
+         from dataclasses import replace
++        from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
+         from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
+         from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
+         from tests.planning.consumers.test_wiring import Wait
+@@ -34,9 +35,9 @@ class BoundaryTests(unittest.TestCase):
+             ):
+                 stack.enter_context(patch("app.application.worldData." + target,
+                     side_effect=AssertionError("metadata preparation materialized: " + target)))
+-            first, first_working = entry.require_plan_inputs(source, [], wait=Wait())
+-            hit, hit_working = entry.require_plan_inputs(source, [], wait=Wait())
+-            edited, _ = entry.require_plan_inputs(replace(source, z_max=60), [], wait=Wait())
++            first, first_working = entry.require_plan_inputs(source, [], on_hydrology=HydrologyDiagnosticCollector().collect, wait=Wait())
++            hit, hit_working = entry.require_plan_inputs(source, [], on_hydrology=HydrologyDiagnosticCollector().collect, wait=Wait())
++            edited, _ = entry.require_plan_inputs(replace(source, z_max=60), [], on_hydrology=HydrologyDiagnosticCollector().collect, wait=Wait())
+         self.assertEqual(first, hit)
+         self.assertIsNot(first_working, hit_working)
+         self.assertNotEqual(first.view_revision, edited.view_revision)
+diff --git a/backend/tests/planning/consumers/test_request_boundary.py b/backend/tests/planning/consumers/test_request_boundary.py
+index b1824e25..ca133f41 100644
+--- a/backend/tests/planning/consumers/test_request_boundary.py
++++ b/backend/tests/planning/consumers/test_request_boundary.py
+@@ -3,6 +3,7 @@
+ import unittest
+ from unittest.mock import Mock, patch
+ 
++from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
+ from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
+ from app.application.worldData.materialize.surface.worldSurfaceMaterializationOrchestrator import (
+     WorldSurfaceMaterializationOrchestrator,
+@@ -26,7 +27,7 @@ class ProbeTests(unittest.TestCase):
+                     issue = probe_issue("fallback", code=ProbeCode.FALLBACK)
+                     notice = PlanDiagnostic(issue=probe_issue("notice", code=ProbeCode.NOTICE),
+                         disposition=PlanDiagnosticDisposition.NOTICE)
+-                    fallback = PlanDiagnostic(issue=issue, disposition=PlanDiagnosticDisposition.FALLBACK)
++                    error = PlanDiagnostic(issue=issue, disposition=PlanDiagnosticDisposition.ERROR)
+                     planning = Mock()
+                     entry = SurfacePlanningEntry(planning, SurfacePlanningCapture())
+                     ctx = ResolveContext(validate_only=validate_only, collect_only=collect_only)
+@@ -34,8 +35,8 @@ class ProbeTests(unittest.TestCase):
+                     ctx.errors.append(issue)
+                     mode = ResolutionMode.VALIDATE_ONLY if validate_only else ResolutionMode.RUNTIME
+                     with patch("app.application.worldData.planning.composition.surfacePlanningCapture.resolve_base_profiles",
+-                            return_value=(baseline.climate_base.profiles, (fallback, notice, notice))), patch(
+-                            "app.application.worldData.planning.composition.surfacePlanningAssembler.logging.getLogger") as logger:
++                            return_value=(baseline.climate_base.profiles, (error, notice, notice))), patch(
++                            "app.application.worldData.planning.composition.surfaceDiagnosticReporting.logging.getLogger") as logger:
+                         if validate_only:
+                             with self.assertRaises(UnresolvedModelError):
+                                 entry.probe_extent(source, [], mode=mode, mountain_templates=(), resolve_ctx=ctx)
+@@ -61,8 +62,8 @@ class ProbeTests(unittest.TestCase):
+             for hit in (False, True):
+                 with self.subTest(hit=hit), patch.object(composition.registry, "build",
+                         wraps=composition.registry.build) as builds, patch(
+-                        "app.application.worldData.planning.composition.surfacePlanningAssembler.logging.getLogger") as logger:
+-                    entry.require_plan_inputs(source, [], wait=Wait())
++                        "app.application.worldData.planning.composition.surfaceDiagnosticReporting.logging.getLogger") as logger:
++                    entry.require_plan_inputs(source, [], on_hydrology=HydrologyDiagnosticCollector().collect, wait=Wait())
+                     self.assertEqual(logger.return_value.info.call_count, 1)
+                     self.assertEqual(builds.call_count, 0 if hit else 8)
+ 
+diff --git a/backend/tests/planning/consumers/test_wiring.py b/backend/tests/planning/consumers/test_wiring.py
+index d5c64f19..a176b910 100644
+--- a/backend/tests/planning/consumers/test_wiring.py
++++ b/backend/tests/planning/consumers/test_wiring.py
+@@ -7,6 +7,7 @@ from unittest.mock import patch
+ 
+ from pydantic import ValidationError
+ 
++from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
+ from app.application.cache.backends.memoryCache import MemoryCache
+ from app.application.cache.service.cacheService import CacheService
+ from app.application.jsonValidation.resolve import ResolveContext
+@@ -106,27 +107,27 @@ class WiringTests(unittest.TestCase):
+                 backend = container.planning_memory_cache()
+                 registry = container.plan_registry()
+                 with patch.object(backend, "put", wraps=backend.put) as puts:
+-                    first, _ = entry.require_plan_inputs(source, [], wait=Wait())
++                    first, _ = entry.require_plan_inputs(source, [], on_hydrology=HydrologyDiagnosticCollector().collect, wait=Wait())
+                 self.assertEqual({str(call.args[0].key.contract.id) for call in puts.call_args_list},
+                     {str(binding.cache_id) for binding in PC_SURFACE_BINDINGS})
+                 self.assertEqual(puts.call_count, 8)
+                 self.assertGreater(backend.retained_bytes, 0)
+                 with patch.object(registry, "build", wraps=registry.build) as builds:
+-                    hit, _ = entry.require_plan_inputs(source, [], wait=Wait())
++                    hit, _ = entry.require_plan_inputs(source, [], on_hydrology=HydrologyDiagnosticCollector().collect, wait=Wait())
+                 builds.assert_not_called()
+                 self.assertEqual(first, hit)
+                 # No invalidation: authoritative input revision must select new keys.
+                 edited_source = replace(source, hydrology={"enabled": False,
+                     "default_rivers": {"channel_depth_cells": 7}})
+                 with patch.object(registry, "build", wraps=registry.build) as builds:
+-                    edited, _ = entry.require_plan_inputs(edited_source, [], wait=Wait())
++                    edited, _ = entry.require_plan_inputs(edited_source, [], on_hydrology=HydrologyDiagnosticCollector().collect, wait=Wait())
+                 self.assertEqual([str(call.args[0].metadata.id) for call in builds.call_args_list],
+                     ["surface.pc." + slot for slot in
+                         ("hydrology_routes", "river_relief", "hydrology", "climate_local")])
+                 self.assertNotEqual(first.view_revision, edited.view_revision)
+                 backend.clear()
+                 self.assertEqual(backend.retained_bytes, 0)
+-                rebuilt, _ = entry.require_plan_inputs(source, [], wait=Wait())
++                rebuilt, _ = entry.require_plan_inputs(source, [], on_hydrology=HydrologyDiagnosticCollector().collect, wait=Wait())
+                 self.assertEqual(first, rebuilt)
+                 outputs.append(first)
+                 container.shutdown_planning()
+@@ -137,13 +138,13 @@ class WiringTests(unittest.TestCase):
+         source = world(world_bounds=None)
+         entry = SurfacePlanningEntry(self.c.assembler, SurfacePlanningCapture())
+         with self.assertRaises(TypeError):
+-            entry.require_plan_inputs(source, [])
++            entry.require_plan_inputs(source, [], on_hydrology=HydrologyDiagnosticCollector().collect)
+         view = capture(source)
+         with patch.object(self.c.registry, "build", wraps=self.c.registry.build) as builds:
+-            self.assertIsNone(entry.prepare_captured(view, world=source, wait=Wait(),
++            self.assertIsNone(entry.prepare_captured(view, on_hydrology=HydrologyDiagnosticCollector().collect, world=source, wait=Wait(),
+                 resolve_ctx=ResolveContext(collect_only=True)))
+             with self.assertRaisesRegex(ValueError, "unavailable"):
+-                entry.require_plan_inputs(source, [], wait=Wait())
++                entry.require_plan_inputs(source, [], on_hydrology=HydrologyDiagnosticCollector().collect, wait=Wait())
+         builds.assert_not_called()
+ 
+     def test_entry_diagnostics_are_replayed_once_on_hit_and_miss(self):
+@@ -151,15 +152,15 @@ class WiringTests(unittest.TestCase):
+         source = world(default_climate_zone="custom")
+         entry = SurfacePlanningEntry(self.c.assembler, SurfacePlanningCapture())
+         first, second = ResolveContext(collect_only=True), ResolveContext(collect_only=True)
+-        entry.require_plan_inputs(source, [], resolve_ctx=first, wait=Wait())
++        entry.require_plan_inputs(source, [], on_hydrology=HydrologyDiagnosticCollector().collect, resolve_ctx=first, wait=Wait())
+         with patch.object(self.c.registry, "build", wraps=self.c.registry.build) as builds:
+-            entry.require_plan_inputs(source, [], resolve_ctx=second, wait=Wait())
++            entry.require_plan_inputs(source, [], on_hydrology=HydrologyDiagnosticCollector().collect, resolve_ctx=second, wait=Wait())
+         builds.assert_not_called()
+         self.assertTrue(first.errors)
+         self.assertEqual(first.errors, second.errors)
+         self.assertEqual(len(first.errors), len(set(first.errors)))
+         with self.assertRaises(UnresolvedModelError):
+-            entry.require_plan_inputs(source, [], resolve_ctx=ResolveContext(validate_only=True), wait=Wait())
++            entry.require_plan_inputs(source, [], on_hydrology=HydrologyDiagnosticCollector().collect, resolve_ctx=ResolveContext(validate_only=True), wait=Wait())
+ 
+     def test_eight_real_registrations_and_explicit_phase_order(self):
+         with patch.object(self.c.registry, "build", wraps=self.c.registry.build) as builds:
+@@ -279,7 +280,7 @@ class WiringTests(unittest.TestCase):
+     def test_typed_no_hydrology_baseline(self):
+         source = world()
+         bundle, working = SurfacePlanningEntry(self.c.assembler, SurfacePlanningCapture()).require_plan_inputs(
+-            source, [], wait=Wait())
++            source, [], on_hydrology=HydrologyDiagnosticCollector().collect, wait=Wait())
+         self.assertEqual(working.hydrology.coarse_surface_z,
+             {(cell.gx, cell.gy): z for cell, z in bundle.hydrology.payload.coarse_surface_z})
+         self.assertEqual(working.hydrology.coarse_hydro, {})
+@@ -360,7 +361,7 @@ class WorkingFieldsTests(unittest.TestCase):
+         self.entry = SurfacePlanningEntry(self.c.assembler, SurfacePlanningCapture())
+ 
+     def prepared(self):
+-        return self.entry.prepare_captured(self.view, world=self.source,
++        return self.entry.prepare_captured(self.view, on_hydrology=HydrologyDiagnosticCollector().collect, world=self.source,
+             wait=Wait(), resolve_ctx=ResolveContext(collect_only=True))
+ 
+     def test_request_factories_once_and_cache_hit_gets_new_views(self):
+@@ -482,11 +483,11 @@ class WorkingFieldsTests(unittest.TestCase):
+              patch.object(ClimateWorkingFields, "from_plans", side_effect=AssertionError("unexpected projection")):
+             self.assertEqual(self.entry.extent_status(view), SurfacePlanningViewKind.NO_EXTENT)
+             prepare.assert_not_called()
+-            self.assertIsNone(self.entry.prepare_captured(view, world=self.source,
++            self.assertIsNone(self.entry.prepare_captured(view, on_hydrology=HydrologyDiagnosticCollector().collect, world=self.source,
+                 wait=Wait(), resolve_ctx=ResolveContext(collect_only=True)))
+             prepare.assert_called_once()
+             with self.assertRaisesRegex(ValueError, "another world"):
+-                self.entry.prepare_captured(self.view, world=world(world_uid="foreign-world"),
++                self.entry.prepare_captured(self.view, on_hydrology=HydrologyDiagnosticCollector().collect, world=world(world_uid="foreign-world"),
+                     wait=Wait(), resolve_ctx=ResolveContext(collect_only=True))
+             prepare.assert_called_once()
+ 
+diff --git a/backend/tests/test_hydrology_hy12_rivers.py b/backend/tests/test_hydrology_hy12_rivers.py
+index 0dcd032a..9b49be4e 100644
+--- a/backend/tests/test_hydrology_hy12_rivers.py
++++ b/backend/tests/test_hydrology_hy12_rivers.py
+@@ -1,6 +1,7 @@
+ """HY-12/5: receiving waterline, shared topology, absolute river relief."""
+ 
+ from tests.hydrology_fixtures import hydro_topology as _river_test_topology, heightmap_from_z as _river_test_heightmap
++from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
+ from app.dataModel.topology.fineTopology import fine_topology
+ from app.application.worldData.generators.coordinates.convert import map_cell_fine_span
+ from app.dataModel.hydrology.rivers import HydrologyRiversPolicy
+@@ -154,10 +155,13 @@ class RiverWaterlineTests(unittest.TestCase):
+                      "connection_type": "river", "width_cells": 2}]}]})
+         source.map_settings = {"global_cell_size_m": 10}
+         from app.application.worldData.generators.hydrology.rivers.planning.fineRiverPlanner import FineRiverPlanner
++        from app.dataModel.hydrology.waterDiagnostics import WaterWorldOceanDiagnostic
++        collector = HydrologyDiagnosticCollector()
+         original = FineRiverPlanner.plan
+         with patch.object(FineRiverPlanner, "plan", autospec=True, side_effect=original) as fine:
+             _, working = SurfacePlanningEntry(composition.assembler, SurfacePlanningCapture()).require_plan_inputs(
+-                source, [], wait=RequestPlanWait.unbounded())
++                source, [], on_hydrology=collector.collect, wait=RequestPlanWait.unbounded())
++        self.assertEqual(tuple(map(type, collector.facts)), (WaterWorldOceanDiagnostic,))
+         bundle = composition.prepare(capture(source))
+         self.assertTrue(bundle.river_relief.payload.coarse_beds)
+         self.assertTrue(working.hydrology.fine_z_overrides)
+diff --git a/backend/tests/test_relief_objects_z.py b/backend/tests/test_relief_objects_z.py
+index 08686679..8b59e0c0 100644
+--- a/backend/tests/test_relief_objects_z.py
++++ b/backend/tests/test_relief_objects_z.py
+@@ -6,6 +6,7 @@ import unittest
+ from types import SimpleNamespace
+ from unittest.mock import MagicMock, patch
+ 
++from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
+ from app.application.worldData.generators.climate.anchorDetect import (
+     ProminenceScale,
+     detect_terrain_features,
+@@ -162,7 +163,7 @@ class TestPrepareSurfaceOrder(unittest.TestCase):
+         composition = self._surface_composition
+         source = world()
+         with patch.object(composition.registry, "build", wraps=composition.registry.build) as builds:
+-            _, working = SurfacePlanningEntry(deps["planning"], deps["capture"]).require_plan_inputs(source, [], wait=deps["wait"])
++            _, working = SurfacePlanningEntry(deps["planning"], deps["capture"]).require_plan_inputs(source, [], on_hydrology=HydrologyDiagnosticCollector().collect, wait=deps["wait"])
+         phases = [str(call.args[0].metadata.id) for call in builds.call_args_list]
+         self.assertLess(phases.index("surface.pc.relief"), phases.index("surface.pc.hydrology_routes"))
+         terrain = composition.prepare(capture(source))
+diff --git a/backend/tests/test_water_placement_pass.py b/backend/tests/test_water_placement_pass.py
+index a16b539f..b68d54dc 100644
+--- a/backend/tests/test_water_placement_pass.py
++++ b/backend/tests/test_water_placement_pass.py
+@@ -1,5 +1,6 @@
+ """HY-12/3b: pre-1.4 water placement pass wiring + one-carve cutover smoke."""
+ 
++from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
+ from app.core.logging.contracts import LogConsumer
+ import json
+ import unittest
+@@ -117,7 +118,7 @@ class WaterPlacementPassFixtureTests(unittest.TestCase):
+         with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING") as log:
+             deps = planning_kwargs(self)
+             _, working = SurfacePlanningEntry(deps["planning"], deps["capture"]).require_plan_inputs(
+-                world, locations, wait=deps["wait"])
++                world, locations, on_hydrology=HydrologyDiagnosticCollector().collect, wait=deps["wait"])
+         self.assertTrue(any("WATER_PLACEMENT_MERGED_SOURCES" in line
+                             and "loc-geo-ocean-west-004" in line for line in log.output))
+         self.assertIsNotNone(working)
+@@ -154,8 +155,8 @@ class WaterPlacementPassFixtureTests(unittest.TestCase):
+         world, locations = _fixture_world_and_locations()
+         deps = planning_kwargs(self)
+         entry = SurfacePlanningEntry(deps["planning"], deps["capture"])
+-        _, first = entry.require_plan_inputs(world, locations, wait=deps["wait"])
+-        _, second = entry.require_plan_inputs(world, locations, wait=deps["wait"])
++        _, first = entry.require_plan_inputs(world, locations, on_hydrology=HydrologyDiagnosticCollector().collect, wait=deps["wait"])
++        _, second = entry.require_plan_inputs(world, locations, on_hydrology=HydrologyDiagnosticCollector().collect, wait=deps["wait"])
+         self.assertEqual(first.hydrology.coarse_surface_z, second.hydrology.coarse_surface_z)
+         self.assertEqual(first.hydrology.coarse_hydro, second.hydrology.coarse_hydro)
+ 
+diff --git a/backend/tests/typing/planning/invalid.py b/backend/tests/typing/planning/invalid.py
+index 31efb913..a4bf025f 100644
+--- a/backend/tests/typing/planning/invalid.py
++++ b/backend/tests/typing/planning/invalid.py
+@@ -1,5 +1,6 @@
+ """Every marked line must produce its specified pyright diagnostic."""
+ 
++from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
+ from app.application.worldData.masks.collection.defaultCollect import MaskSourceCollector, default_collect
+ from app.application.worldData.generators.terrain.landcover.types import LandcoverCollectContext
+ from app.dataModel.masks.maskCategoryPolicy import MaskCategoryPolicy
+@@ -964,13 +965,12 @@ def invalid_assembler_family(pc: SurfacePlanningAssembler[WorldPlanProviders], g
+     geo.prepare(pc_view, wait=wait)  # EXPECT: reportAttributeAccessIssue
+ 
+ 
+-from app.application.worldData.planning.composition.surfacePlanningAssembler import prepare_captured_geo_bundle
+ from app.application.jsonValidation.resolve import ResolveContext
+ 
+ 
+ def invalid_geo_reporting_family(pc: SurfacePlanningAssembler[WorldPlanProviders], view: GeoSurfacePlanningView,
+     wait: PlanWaitControl, ctx: ResolveContext) -> None:
+-    prepare_captured_geo_bundle(view, planning=pc, wait=wait, resolve_ctx=ctx)  # EXPECT: reportArgumentType
++    pc.prepare_captured_geo_bundle(view, on_hydrology=HydrologyDiagnosticCollector().collect, wait=wait, resolve_ctx=ctx)  # EXPECT: reportAttributeAccessIssue
+ 
+ 
+ from app.application.worldData.generators.terrain.designedWater.preparation.designPreparation import prepare_designed_water
+diff --git a/backend/tests/typing/planning/valid/surface/composition.py b/backend/tests/typing/planning/valid/surface/composition.py
+index 8617192f..c0b3eebc 100644
+--- a/backend/tests/typing/planning/valid/surface/composition.py
++++ b/backend/tests/typing/planning/valid/surface/composition.py
+@@ -3,6 +3,7 @@
+ from collections.abc import Mapping, Sequence
+ from typing import assert_type
+ 
++from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
+ from app.application.jsonValidation.resolve import ResolveContext
+ from app.application.planning.service.planningService import PlanWaitControl
+ from app.application.worldData.generators.climate.locations import static_map_anchors
+@@ -23,7 +24,7 @@ from app.db.models.world import World
+ 
+ def valid_surface_composition(entry: SurfacePlanningEntry, view: SurfacePlanningView,
+     wait: PlanWaitControl, world: World) -> tuple[SurfacePlanBundle, SurfaceWorkingMaps] | None:
+-    return entry.prepare_captured(view, world=world, wait=wait, resolve_ctx=ResolveContext())
++    return entry.prepare_captured(view, on_hydrology=HydrologyDiagnosticCollector().collect, world=world, wait=wait, resolve_ctx=ResolveContext())
+ 
+ 
+ def valid_locations_sequence(world: World, locations: Sequence[NamedLocation],
+diff --git a/backend/tests/typing/planning/valid/terrain/geoPipeline.py b/backend/tests/typing/planning/valid/terrain/geoPipeline.py
+index 34764754..cf6778e2 100644
+--- a/backend/tests/typing/planning/valid/terrain/geoPipeline.py
++++ b/backend/tests/typing/planning/valid/terrain/geoPipeline.py
+@@ -2,6 +2,7 @@
+ 
+ from typing import assert_type
+ 
++from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
+ from app.application.worldData.generators.terrain.hills.hillPlacement import place_hills
+ from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
+ 
+@@ -243,13 +244,12 @@ def captured_geo_assembly(assembler: SurfacePlanningAssembler[GeoWorldPlanProvid
+     assert_type(assembler.prepare_geo(view, wait=wait), GeoSurfacePlanBundle | None)
+ 
+ 
+-from app.application.worldData.planning.composition.surfacePlanningAssembler import prepare_captured_geo_bundle
+ from app.application.jsonValidation.resolve import ResolveContext
+ 
+ 
+ def captured_geo_reporting(assembler: SurfacePlanningAssembler[GeoWorldPlanProviders], view: GeoSurfacePlanningView,
+     wait: PlanWaitControl, ctx: ResolveContext) -> None:
+-    assert_type(prepare_captured_geo_bundle(view, planning=assembler, wait=wait, resolve_ctx=ctx), GeoSurfacePlanBundle | None)
++    assert_type(assembler.prepare_captured_geo_bundle(view, on_hydrology=HydrologyDiagnosticCollector().collect, wait=wait, resolve_ctx=ctx), GeoSurfacePlanBundle | None)
+ 
+ 
+ from app.application.worldData.generators.terrain.landcover.planning.preWaterHillHosts import PreWaterHillHostPlanner
+diff --git a/backend/app/application/worldData/planning/composition/hydrologyDiagnosticCollector.py b/backend/app/application/worldData/planning/composition/hydrologyDiagnosticCollector.py
+new file mode 100644
+index 00000000..b8d6c0f1
+--- /dev/null
++++ b/backend/app/application/worldData/planning/composition/hydrologyDiagnosticCollector.py
+@@ -0,0 +1,24 @@
++from collections.abc import Callable
++
++from app.dataModel.hydrology import waterDiagnostics as water
++from app.dataModel.hydrology.riverRouting import RiverPlanDiagnostic
++
++
++HydrologyDiagnostic = (
++    water.WaterPuddleDiagnostic | water.WaterCannotHoldDiagnostic | water.WaterTerrainUnresolvedDiagnostic
++    | water.WaterNoOceanDepressionDiagnostic | water.WaterLevelSpillDiagnostic
++    | water.WaterLevelSupersededDiagnostic | water.WaterWorldOceanDiagnostic | RiverPlanDiagnostic
++)
++type HydrologyCallback = Callable[[HydrologyDiagnostic], None]
++
++
++class HydrologyDiagnosticCollector:
++    def __init__(self) -> None:
++        self._facts: dict[HydrologyDiagnostic, None] = {}
++
++    def collect(self, diagnostic: HydrologyDiagnostic) -> None:
++        self._facts[diagnostic] = None
++
++    @property
++    def facts(self) -> tuple[HydrologyDiagnostic, ...]:
++        return tuple(self._facts)
+diff --git a/backend/tests/planning/consumers/test_hydrology_reporting.py b/backend/tests/planning/consumers/test_hydrology_reporting.py
+new file mode 100644
+index 00000000..68df50f9
+--- /dev/null
++++ b/backend/tests/planning/consumers/test_hydrology_reporting.py
+@@ -0,0 +1,96 @@
++"""Reporting at the captured bundle boundary, including replay of real cached envelopes."""
++
++from unittest import TestCase
++from unittest.mock import Mock, patch
++
++from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
++from app.application.planning.service.planningService import PlanBuildFailure
++from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
++from app.dataModel.hydrology import waterDiagnostics as water
++from app.dataModel.hydrology.enums.basinKind import BasinKind
++from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
++from app.dataModel.hydrology.riverRouting import RiverPlanDiagnostic, RiverRouteDiagnostic, RiverRoutingCode, RiverRoutingFailure
++from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition as D
++from tests.geo1.integration import test_revisions as geo
++from tests.planning.consumers.test_wiring import Composition, Wait, capture, world
++
++
++class ReportingTests(TestCase):
++    def fixtures(self):
++        pc = Composition()
++        self.addCleanup(pc.service.shutdown)
++        yield pc.assembler.prepare_captured_bundle, pc, capture(world())
++        fixture = geo.GeoCapturedAssemblerTests()
++        fixture.setUp()
++        self.addCleanup(fixture.doCleanups)
++        yield fixture.assembler.prepare_captured_geo_bundle, fixture, fixture.view
++
++    def test_mixed_delivery_refusal_and_replay(self):
++        ocean = water.WaterWorldOceanDiagnostic(issue=water.WaterWorldOcean(
++            code=water.WaterDiagnosticCode.WATER_WORLD_OCEAN, world_uid="w", water_cells=2, world_cells=4),
++            disposition=D.NOTICE)
++        dry = water.WaterCannotHoldDiagnostic(issue=water.WaterCannotHold(
++            code=water.WaterDiagnosticCode.WATER_CANNOT_HOLD, source_uid="dry", effective_level=0), disposition=D.ERROR)
++        redirect = RiverPlanDiagnostic(issue=RiverRouteDiagnostic(world_uid="w", object_uid="r",
++            requested_mouth=None, object_type=HydrologyConnectionType.RIVER, code=RiverRoutingCode.REDIRECTED,
++            reason=RiverRoutingFailure.DRY_MOUTH, receiver_uid="sea", receiver_kind=BasinKind.SEA,
++            receiver_cell=(0, 0)), disposition=D.FALLBACK)
++        unrouted = RiverPlanDiagnostic(issue=RiverRouteDiagnostic(world_uid="w", object_uid="other",
++            requested_mouth=None, object_type=HydrologyConnectionType.RIVER, code=RiverRoutingCode.NO_WATER_BODIES,
++            reason=RiverRoutingFailure.DRY_MOUTH), disposition=D.ERROR)
++        error, fallback, notice = (PlanDiagnostic(issue=geo.mismatch(d.value), disposition=d) for d in
++                                   (D.ERROR, D.FALLBACK, D.NOTICE))
++        for prepare, fixture, view in self.fixtures():
++            build = fixture.registry.build
++
++            def with_facts(contract, *args):
++                result = build(contract, *args)
++                if contract is fixture.handles.relief:
++                    return result.model_copy(update={"diagnostics": (error, ocean, fallback, ocean)})
++                if contract is fixture.handles.hydrology_routes:
++                    return result.model_copy(update={"diagnostics": (redirect, notice, ocean, dry, unrouted)})
++                return result
++
++            with patch.object(fixture.registry, "build", side_effect=with_facts) as builds:
++                for validate in (False, True):
++                    for collect in (False, True):
++                        ctx = ResolveContext(validate_only=validate, collect_only=collect)
++                        collector = HydrologyDiagnosticCollector()
++                        for repeat in range(2):
++                            with self.subTest(entry=prepare.__name__, validate=validate, collect=collect, repeat=repeat):
++                                deliver = Mock(wraps=collector.collect)
++                                kwargs = dict(wait=Wait(), resolve_ctx=ctx,
++                                              on_hydrology=deliver)
++                                if validate:
++                                    with self.assertRaises(UnresolvedModelError) as raised:
++                                        prepare(view, **kwargs)
++                                    self.assertEqual(tuple(raised.exception.issues), (error.issue,))
++                                else:
++                                    self.assertIsNotNone(prepare(view, **kwargs))
++                                self.assertEqual(ctx.errors, [error.issue])
++                                self.assertEqual(ctx.report.diagnostics, (fallback.issue,))
++                                self.assertEqual(collector.facts, (ocean, redirect, dry, unrouted))
++                                self.assertEqual(tuple(c.args[0] for c in deliver.call_args_list), collector.facts)
++                                if repeat or validate or collect:
++                                    builds.assert_not_called()
++                                else:
++                                    self.assertTrue(builds.called)
++                                builds.reset_mock()
++                failure = RuntimeError("delivery")
++                with self.assertRaises(RuntimeError) as raised:
++                    prepare(view, wait=Wait(), resolve_ctx=ResolveContext(collect_only=True),
++                            on_hydrology=Mock(side_effect=failure))
++                self.assertIs(raised.exception, failure)
++
++    def test_build_failure_propagates_without_replaying_partial_facts(self):
++        for prepare, fixture, view in self.fixtures():
++            dry = water.WaterCannotHoldDiagnostic(issue=water.WaterCannotHold(
++                code=water.WaterDiagnosticCode.WATER_CANNOT_HOLD, source_uid="dry", effective_level=0), disposition=D.ERROR)
++            failure = PlanBuildFailure((), diagnostics=(dry,))
++            method = "prepare_geo" if prepare == fixture.assembler.prepare_captured_geo_bundle else "prepare"
++            callback = Mock()
++            with patch.object(fixture.assembler, method, side_effect=failure), self.assertRaises(PlanBuildFailure) as raised:
++                prepare(view, wait=Wait(), resolve_ctx=ResolveContext(), on_hydrology=callback)
++            self.assertIs(raised.exception, failure)
++            self.assertEqual(raised.exception.diagnostics, (dry,))
++            callback.assert_not_called()
+diff --git a/backend/app/application/worldData/planning/composition/surfaceDiagnosticReporting.py b/backend/app/application/worldData/planning/composition/surfaceDiagnosticReporting.py
+new file mode 100644
+index 00000000..4bfd0ce9
+--- /dev/null
++++ b/backend/app/application/worldData/planning/composition/surfaceDiagnosticReporting.py
+@@ -0,0 +1,40 @@
++"""Report captured field issues and operational facts from prepared surface plans."""
++
++import logging
++from collections.abc import Iterable
++from typing import Any
++
++from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError, report_continuation, report_issues
++from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyCallback, HydrologyDiagnostic
++from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition
++
++
++def report_surface_diagnostics(diagnostics: Iterable[PlanDiagnostic[Any]], *,
++                               resolve_ctx: ResolveContext, on_hydrology: HydrologyCallback) -> None:
++    def fields() -> Iterable[PlanDiagnostic]:
++        for item in dict.fromkeys(diagnostics):
++            if isinstance(item, HydrologyDiagnostic):
++                on_hydrology(item)
++            elif type(item) is PlanDiagnostic:
++                yield item
++            else:
++                raise TypeError(f"unexpected surface planning diagnostic: {type(item).__name__}")
++
++    report_field_diagnostics(fields(), resolve_ctx=resolve_ctx)
++
++
++def report_field_diagnostics(diagnostics: Iterable[PlanDiagnostic], *, resolve_ctx: ResolveContext) -> None:
++    errors = []
++    for item in diagnostics:
++        issue = item.issue
++        if item.disposition is PlanDiagnosticDisposition.ERROR:
++            errors.append(issue)
++            if issue not in resolve_ctx.errors:
++                report_issues(resolve_ctx, (issue,))
++        elif item.disposition is PlanDiagnosticDisposition.FALLBACK:
++            report_continuation(resolve_ctx, issue)
++        elif not resolve_ctx.collect_only:
++            logging.getLogger("app.application.worldData.planning.composition.surfacePlanningAssembler").info("surface planning | path=%s code=%s | %s",
++                issue.path, issue.code, issue.message)
++    if resolve_ctx.validate_only and errors:
++        raise UnresolvedModelError(errors)

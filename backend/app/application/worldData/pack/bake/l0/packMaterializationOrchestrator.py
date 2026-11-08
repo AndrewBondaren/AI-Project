@@ -5,6 +5,7 @@ L0 only (Job boundaries). Entry/L2 — ``EntryRefineOrchestrator`` /
 """
 
 from __future__ import annotations
+from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
 from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
 
 import logging
@@ -173,10 +174,11 @@ class PackMaterializationOrchestrator:
         relief_templates = await _load_relief_templates(self._relief_loader, world)
         templates = mountain_template_inputs(relief_templates)
         entry = SurfacePlanningEntry(self._planning, self._capture)
+        collector = HydrologyDiagnosticCollector()
         captured = entry.capture_view(world, locations, mode=ResolutionMode.RUNTIME,
             mountain_templates=templates, resolve_ctx=request_ctx)
         prepared = entry.prepare_captured(
-            captured, world=world, wait=wait, resolve_ctx=request_ctx)
+            captured, on_hydrology=collector.collect, world=world, wait=wait, resolve_ctx=request_ctx)
         if prepared is None:
             raise ValueError("surface terrain context unavailable")
         surface_bundle, working = prepared

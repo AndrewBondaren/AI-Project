@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from pydantic import ValidationError
 
+from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
 from app.application.cache.backends.memoryCache import MemoryCache
 from app.application.cache.service.cacheService import CacheService
 from app.application.jsonValidation.resolve import ResolveContext
@@ -106,27 +107,27 @@ class WiringTests(unittest.TestCase):
                 backend = container.planning_memory_cache()
                 registry = container.plan_registry()
                 with patch.object(backend, "put", wraps=backend.put) as puts:
-                    first, _ = entry.require_plan_inputs(source, [], wait=Wait())
+                    first, _ = entry.require_plan_inputs(source, [], on_hydrology=HydrologyDiagnosticCollector().collect, wait=Wait())
                 self.assertEqual({str(call.args[0].key.contract.id) for call in puts.call_args_list},
                     {str(binding.cache_id) for binding in PC_SURFACE_BINDINGS})
                 self.assertEqual(puts.call_count, 8)
                 self.assertGreater(backend.retained_bytes, 0)
                 with patch.object(registry, "build", wraps=registry.build) as builds:
-                    hit, _ = entry.require_plan_inputs(source, [], wait=Wait())
+                    hit, _ = entry.require_plan_inputs(source, [], on_hydrology=HydrologyDiagnosticCollector().collect, wait=Wait())
                 builds.assert_not_called()
                 self.assertEqual(first, hit)
                 # No invalidation: authoritative input revision must select new keys.
                 edited_source = replace(source, hydrology={"enabled": False,
                     "default_rivers": {"channel_depth_cells": 7}})
                 with patch.object(registry, "build", wraps=registry.build) as builds:
-                    edited, _ = entry.require_plan_inputs(edited_source, [], wait=Wait())
+                    edited, _ = entry.require_plan_inputs(edited_source, [], on_hydrology=HydrologyDiagnosticCollector().collect, wait=Wait())
                 self.assertEqual([str(call.args[0].metadata.id) for call in builds.call_args_list],
                     ["surface.pc." + slot for slot in
                         ("hydrology_routes", "river_relief", "hydrology", "climate_local")])
                 self.assertNotEqual(first.view_revision, edited.view_revision)
                 backend.clear()
                 self.assertEqual(backend.retained_bytes, 0)
-                rebuilt, _ = entry.require_plan_inputs(source, [], wait=Wait())
+                rebuilt, _ = entry.require_plan_inputs(source, [], on_hydrology=HydrologyDiagnosticCollector().collect, wait=Wait())
                 self.assertEqual(first, rebuilt)
                 outputs.append(first)
                 container.shutdown_planning()
@@ -137,13 +138,13 @@ class WiringTests(unittest.TestCase):
         source = world(world_bounds=None)
         entry = SurfacePlanningEntry(self.c.assembler, SurfacePlanningCapture())
         with self.assertRaises(TypeError):
-            entry.require_plan_inputs(source, [])
+            entry.require_plan_inputs(source, [], on_hydrology=HydrologyDiagnosticCollector().collect)
         view = capture(source)
         with patch.object(self.c.registry, "build", wraps=self.c.registry.build) as builds:
-            self.assertIsNone(entry.prepare_captured(view, world=source, wait=Wait(),
+            self.assertIsNone(entry.prepare_captured(view, on_hydrology=HydrologyDiagnosticCollector().collect, world=source, wait=Wait(),
                 resolve_ctx=ResolveContext(collect_only=True)))
             with self.assertRaisesRegex(ValueError, "unavailable"):
-                entry.require_plan_inputs(source, [], wait=Wait())
+                entry.require_plan_inputs(source, [], on_hydrology=HydrologyDiagnosticCollector().collect, wait=Wait())
         builds.assert_not_called()
 
     def test_entry_diagnostics_are_replayed_once_on_hit_and_miss(self):
@@ -151,15 +152,15 @@ class WiringTests(unittest.TestCase):
         source = world(default_climate_zone="custom")
         entry = SurfacePlanningEntry(self.c.assembler, SurfacePlanningCapture())
         first, second = ResolveContext(collect_only=True), ResolveContext(collect_only=True)
-        entry.require_plan_inputs(source, [], resolve_ctx=first, wait=Wait())
+        entry.require_plan_inputs(source, [], on_hydrology=HydrologyDiagnosticCollector().collect, resolve_ctx=first, wait=Wait())
         with patch.object(self.c.registry, "build", wraps=self.c.registry.build) as builds:
-            entry.require_plan_inputs(source, [], resolve_ctx=second, wait=Wait())
+            entry.require_plan_inputs(source, [], on_hydrology=HydrologyDiagnosticCollector().collect, resolve_ctx=second, wait=Wait())
         builds.assert_not_called()
         self.assertTrue(first.errors)
         self.assertEqual(first.errors, second.errors)
         self.assertEqual(len(first.errors), len(set(first.errors)))
         with self.assertRaises(UnresolvedModelError):
-            entry.require_plan_inputs(source, [], resolve_ctx=ResolveContext(validate_only=True), wait=Wait())
+            entry.require_plan_inputs(source, [], on_hydrology=HydrologyDiagnosticCollector().collect, resolve_ctx=ResolveContext(validate_only=True), wait=Wait())
 
     def test_eight_real_registrations_and_explicit_phase_order(self):
         with patch.object(self.c.registry, "build", wraps=self.c.registry.build) as builds:
@@ -279,7 +280,7 @@ class WiringTests(unittest.TestCase):
     def test_typed_no_hydrology_baseline(self):
         source = world()
         bundle, working = SurfacePlanningEntry(self.c.assembler, SurfacePlanningCapture()).require_plan_inputs(
-            source, [], wait=Wait())
+            source, [], on_hydrology=HydrologyDiagnosticCollector().collect, wait=Wait())
         self.assertEqual(working.hydrology.coarse_surface_z,
             {(cell.gx, cell.gy): z for cell, z in bundle.hydrology.payload.coarse_surface_z})
         self.assertEqual(working.hydrology.coarse_hydro, {})
@@ -360,7 +361,7 @@ class WorkingFieldsTests(unittest.TestCase):
         self.entry = SurfacePlanningEntry(self.c.assembler, SurfacePlanningCapture())
 
     def prepared(self):
-        return self.entry.prepare_captured(self.view, world=self.source,
+        return self.entry.prepare_captured(self.view, on_hydrology=HydrologyDiagnosticCollector().collect, world=self.source,
             wait=Wait(), resolve_ctx=ResolveContext(collect_only=True))
 
     def test_request_factories_once_and_cache_hit_gets_new_views(self):
@@ -482,11 +483,11 @@ class WorkingFieldsTests(unittest.TestCase):
              patch.object(ClimateWorkingFields, "from_plans", side_effect=AssertionError("unexpected projection")):
             self.assertEqual(self.entry.extent_status(view), SurfacePlanningViewKind.NO_EXTENT)
             prepare.assert_not_called()
-            self.assertIsNone(self.entry.prepare_captured(view, world=self.source,
+            self.assertIsNone(self.entry.prepare_captured(view, on_hydrology=HydrologyDiagnosticCollector().collect, world=self.source,
                 wait=Wait(), resolve_ctx=ResolveContext(collect_only=True)))
             prepare.assert_called_once()
             with self.assertRaisesRegex(ValueError, "another world"):
-                self.entry.prepare_captured(self.view, world=world(world_uid="foreign-world"),
+                self.entry.prepare_captured(self.view, on_hydrology=HydrologyDiagnosticCollector().collect, world=world(world_uid="foreign-world"),
                     wait=Wait(), resolve_ctx=ResolveContext(collect_only=True))
             prepare.assert_called_once()
 

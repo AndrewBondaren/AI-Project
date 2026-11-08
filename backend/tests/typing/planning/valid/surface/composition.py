@@ -3,6 +3,7 @@
 from collections.abc import Mapping, Sequence
 from typing import assert_type
 
+from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.planning.service.planningService import PlanWaitControl
 from app.application.worldData.generators.climate.locations import static_map_anchors
@@ -23,7 +24,7 @@ from app.db.models.world import World
 
 def valid_surface_composition(entry: SurfacePlanningEntry, view: SurfacePlanningView,
     wait: PlanWaitControl, world: World) -> tuple[SurfacePlanBundle, SurfaceWorkingMaps] | None:
-    return entry.prepare_captured(view, world=world, wait=wait, resolve_ctx=ResolveContext())
+    return entry.prepare_captured(view, on_hydrology=HydrologyDiagnosticCollector().collect, world=world, wait=wait, resolve_ctx=ResolveContext())
 
 
 def valid_locations_sequence(world: World, locations: Sequence[NamedLocation],

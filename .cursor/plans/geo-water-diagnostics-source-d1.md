@@ -445,3 +445,32 @@ WaterDiagnosticReport хранит обязательный ordered и пров�
 | Pyright по 17 изменённым production-файлам | 18 errors, 0 warnings. Все 18 — `reportCallIssue` при позиционном вызове `FieldPathError`. |
 
 Количество ошибок совпало с самопроверкой. Сопоставление исключений с исторической базой приведено в первом ревью выше. В повторном ревью команды запускались на `eaefa7e0`.
+
+### Замечание 2 — исправление и самопроверка
+
+Исходная ревизия `45c187b0`. Сначала добавлена регрессия `test_mismatch_requires_fallback_before_delivery`. До изменения production-кода точный PlanDiagnostic с WaterKindMismatchIssue.retained("A", BasinKind.LAKE, BasinKind.SEA) и ERROR принимался прямым конструктором в blocking. Helper в collect_only возвращал тот же blocking и добавлял один issue в ctx.errors. NOTICE уже приводил к ValidationError, но в прямом конструкторе отказ происходил на notices[0], а в helper — при проверке соответствия групп ordered.
+
+Теперь require_water_diagnostic проверяет FALLBACK у точного field carrier с точным WaterKindMismatchIssue. Это совпадает с require_source_diagnostics_v1 (sourceSchema.py:49). Регрессия проверяет ERROR и NOTICE при корректном первом факте: helper отказывает до записи в ctx.errors и ctx.report.diagnostics и до первого warning в runtime, collect_only и validate_only. Прямой конструктор отклоняет обе disposition по той же причине. Для двух FALLBACK сохранены точные типы carrier и issue, значения и порядок в ordered и continuations, а также прежняя field-доставка в каждом режиме.
+
+Команды unittest из backend:
+
+```powershell
+.\.venv\Scripts\python -m unittest tests.geo1.fine_water.test_water_diagnostics -q
+.\.venv\Scripts\python -m unittest tests.geo1.fine_water.test_water_diagnostics tests.geo1.fine_water.test_kind_mismatch tests.spatial_pack.test_source_schema tests.spatial_pack.test_storage_schema -q
+```
+
+Первая команда до исправления — 7 тестов, 8 упавших subtests новой регрессии. Вторая после исправления — 38/38 OK. Из корня репозитория до и после изменения запущена одна команда по единственному затронутому production-файлу:
+
+```powershell
+.\node_modules\.bin\pyright.cmd --pythonpath .\backend\.venv\Scripts\python.exe backend/app/dataModel/hydrology/waterDiagnostics.py
+```
+
+Pyright — 0 errors, 0 warnings на исходной ревизии и после правки. Замечание 2 предъявлено к повторной проверке.
+
+### Совместная приёмка двух исправлений S4, 2026-11-08
+
+Проверено рабочее дерево поверх 45c187b0, включая новые модули и тест collector. P1 Surface — ACCEPT: исходный pipeline проходит, обработка operational NOTICE сохраняет результат; интеграционный тест обоих assembler проверяет доставку и порядок на повторе, cache HIT и после field refusal. P2 Water mismatch — ACCEPT: общий валидатор допускает только FALLBACK, тест прямого конструктора и helper проверяет отказ до доставки для ERROR и NOTICE.
+
+Адресный прогон — 62/62. Отдельный прогон source/storage, нового Surface reporting и исходного pipeline — 32/32. Расширенный набор на чистой eaefa7e0 и на рабочем дереве: 163/54 errors → 164/53 errors, 0 failures. Исчезло только падение test_pipeline_supplies_pre_river_elevation_to_fine_profiles. У остальных 53 совпали полные имена, subtest и конечные исключения с сообщениями. Procedural refinement — 9 тестов, 1 прежний error в disabled fine routing. Pyright: исходные 17 модулей — 18 errors до и после; объединённый список с учётом smoke — 107 errors на обеих сторонах (24 существующих файла базы и 26 рабочих), 0 warnings.
+
+Итог — ACCEPT по двум замечаниям и выпуску S4 через Surface planning. P3 для сопровождения: в surfaceDiagnosticReporting.py:37 литерал прежнего канала совпадает с LogConsumer.RUNTIME_SURFACE_PLANNING_ASSEMBLER. При уборке использовать объявленный идентификатор канала. В проверенном дереве доставка адресована прежнему каналу.

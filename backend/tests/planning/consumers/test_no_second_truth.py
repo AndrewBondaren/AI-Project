@@ -15,6 +15,7 @@ APP = Path(__file__).resolve().parents[3] / "app"
 class BoundaryTests(unittest.TestCase):
     def test_preparing_metadata_never_materializes_any_lod_on_miss_hit_or_edit(self):
         from dataclasses import replace
+        from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
         from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
         from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
         from tests.planning.consumers.test_wiring import Wait
@@ -34,9 +35,9 @@ class BoundaryTests(unittest.TestCase):
             ):
                 stack.enter_context(patch("app.application.worldData." + target,
                     side_effect=AssertionError("metadata preparation materialized: " + target)))
-            first, first_working = entry.require_plan_inputs(source, [], wait=Wait())
-            hit, hit_working = entry.require_plan_inputs(source, [], wait=Wait())
-            edited, _ = entry.require_plan_inputs(replace(source, z_max=60), [], wait=Wait())
+            first, first_working = entry.require_plan_inputs(source, [], on_hydrology=HydrologyDiagnosticCollector().collect, wait=Wait())
+            hit, hit_working = entry.require_plan_inputs(source, [], on_hydrology=HydrologyDiagnosticCollector().collect, wait=Wait())
+            edited, _ = entry.require_plan_inputs(replace(source, z_max=60), [], on_hydrology=HydrologyDiagnosticCollector().collect, wait=Wait())
         self.assertEqual(first, hit)
         self.assertIsNot(first_working, hit_working)
         self.assertNotEqual(first.view_revision, edited.view_revision)

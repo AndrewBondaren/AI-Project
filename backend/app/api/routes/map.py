@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from fastapi.responses import JSONResponse
 from dataclasses import asdict
 
+from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
 from app.api.deps import get_container
 from app.application.cancellation.requestPlanWait import RequestPlanWait
 from app.api.utils.jsonResolver import JsonResolver
@@ -495,9 +496,10 @@ async def refine_from_entry_route(
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
     locations = await location_svc.list_insert_order(world_uid)
     try:
+        collector = HydrologyDiagnosticCollector()
         surface_bundle, working = container.surface_planning_entry().require_plan_inputs(
             world, locations,
-            wait=RequestPlanWait.unbounded(),
+            on_hydrology=collector.collect, wait=RequestPlanWait.unbounded(),
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -599,9 +601,10 @@ async def refine_chunk_route(
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
     locations = await location_svc.list_insert_order(world_uid)
     try:
+        collector = HydrologyDiagnosticCollector()
         surface_bundle, working = container.surface_planning_entry().require_plan_inputs(
             world, locations,
-            wait=RequestPlanWait.unbounded(),
+            on_hydrology=collector.collect, wait=RequestPlanWait.unbounded(),
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -670,9 +673,10 @@ async def schedule_chunk_refine_route(
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
     locations = await location_svc.list_insert_order(world_uid)
     try:
+        collector = HydrologyDiagnosticCollector()
         surface_bundle, working = container.surface_planning_entry().require_plan_inputs(
             world, locations,
-            wait=RequestPlanWait.unbounded(),
+            on_hydrology=collector.collect, wait=RequestPlanWait.unbounded(),
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

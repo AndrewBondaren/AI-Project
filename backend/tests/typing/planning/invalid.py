@@ -1,5 +1,6 @@
 """Every marked line must produce its specified pyright diagnostic."""
 
+from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
 from app.application.worldData.masks.collection.defaultCollect import MaskSourceCollector, default_collect
 from app.application.worldData.generators.terrain.landcover.types import LandcoverCollectContext
 from app.dataModel.masks.maskCategoryPolicy import MaskCategoryPolicy
@@ -964,13 +965,12 @@ def invalid_assembler_family(pc: SurfacePlanningAssembler[WorldPlanProviders], g
     geo.prepare(pc_view, wait=wait)  # EXPECT: reportAttributeAccessIssue
 
 
-from app.application.worldData.planning.composition.surfacePlanningAssembler import prepare_captured_geo_bundle
 from app.application.jsonValidation.resolve import ResolveContext
 
 
 def invalid_geo_reporting_family(pc: SurfacePlanningAssembler[WorldPlanProviders], view: GeoSurfacePlanningView,
     wait: PlanWaitControl, ctx: ResolveContext) -> None:
-    prepare_captured_geo_bundle(view, planning=pc, wait=wait, resolve_ctx=ctx)  # EXPECT: reportArgumentType
+    pc.prepare_captured_geo_bundle(view, on_hydrology=HydrologyDiagnosticCollector().collect, wait=wait, resolve_ctx=ctx)  # EXPECT: reportAttributeAccessIssue
 
 
 from app.application.worldData.generators.terrain.designedWater.preparation.designPreparation import prepare_designed_water

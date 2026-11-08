@@ -3,6 +3,7 @@
 import unittest
 from unittest.mock import Mock, patch
 
+from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError
 from app.application.worldData.materialize.surface.worldSurfaceMaterializationOrchestrator import (
     WorldSurfaceMaterializationOrchestrator,
@@ -26,7 +27,7 @@ class ProbeTests(unittest.TestCase):
                     issue = probe_issue("fallback", code=ProbeCode.FALLBACK)
                     notice = PlanDiagnostic(issue=probe_issue("notice", code=ProbeCode.NOTICE),
                         disposition=PlanDiagnosticDisposition.NOTICE)
-                    fallback = PlanDiagnostic(issue=issue, disposition=PlanDiagnosticDisposition.FALLBACK)
+                    error = PlanDiagnostic(issue=issue, disposition=PlanDiagnosticDisposition.ERROR)
                     planning = Mock()
                     entry = SurfacePlanningEntry(planning, SurfacePlanningCapture())
                     ctx = ResolveContext(validate_only=validate_only, collect_only=collect_only)
@@ -34,8 +35,8 @@ class ProbeTests(unittest.TestCase):
                     ctx.errors.append(issue)
                     mode = ResolutionMode.VALIDATE_ONLY if validate_only else ResolutionMode.RUNTIME
                     with patch("app.application.worldData.planning.composition.surfacePlanningCapture.resolve_base_profiles",
-                            return_value=(baseline.climate_base.profiles, (fallback, notice, notice))), patch(
-                            "app.application.worldData.planning.composition.surfacePlanningAssembler.logging.getLogger") as logger:
+                            return_value=(baseline.climate_base.profiles, (error, notice, notice))), patch(
+                            "app.application.worldData.planning.composition.surfaceDiagnosticReporting.logging.getLogger") as logger:
                         if validate_only:
                             with self.assertRaises(UnresolvedModelError):
                                 entry.probe_extent(source, [], mode=mode, mountain_templates=(), resolve_ctx=ctx)
@@ -61,8 +62,8 @@ class ProbeTests(unittest.TestCase):
             for hit in (False, True):
                 with self.subTest(hit=hit), patch.object(composition.registry, "build",
                         wraps=composition.registry.build) as builds, patch(
-                        "app.application.worldData.planning.composition.surfacePlanningAssembler.logging.getLogger") as logger:
-                    entry.require_plan_inputs(source, [], wait=Wait())
+                        "app.application.worldData.planning.composition.surfaceDiagnosticReporting.logging.getLogger") as logger:
+                    entry.require_plan_inputs(source, [], on_hydrology=HydrologyDiagnosticCollector().collect, wait=Wait())
                     self.assertEqual(logger.return_value.info.call_count, 1)
                     self.assertEqual(builds.call_count, 0 if hit else 8)
 

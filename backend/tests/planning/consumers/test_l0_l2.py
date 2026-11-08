@@ -1,6 +1,7 @@
 """PC-10/PC-11: frozen L0/L2 consumers, cache equality and production refine."""
 
 from tests.planning.consumers.test_wiring import working_fixture
+from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
 from app.application.jsonValidation import terrain_system_keys
 from contextlib import ExitStack
 from copy import deepcopy
@@ -500,7 +501,7 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
              patch.object(LandcoverObservations, "from_views", wraps=LandcoverObservations.from_views) as facts_factory, \
              patch("app.application.worldData.planning.composition.surfacePlanningEntry.world_bounds_from_world",
                    side_effect=AssertionError("materialization resolved world topology again")):
-            bundle, working = entry.prepare_captured(view, world=source, wait=Wait(), resolve_ctx=ResolveContext())
+            bundle, working = entry.prepare_captured(view, on_hydrology=HydrologyDiagnosticCollector().collect, world=source, wait=Wait(), resolve_ctx=ResolveContext())
             with TemporaryDirectory() as tmp:
                 writer = WorldPackWriter(WorldPackPaths.from_db_parent(str(Path(tmp) / "test.db"), source.world_uid))
                 tiles = [(0, 0), (1, 0), (2, 0)]
@@ -548,8 +549,8 @@ class L2ProductionTests(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(composition.service.shutdown)
         entry = SurfacePlanningEntry(composition.assembler, SurfacePlanningCapture())
         view = capture(source)
-        _, first = entry.prepare_captured(view, world=source, wait=Wait(), resolve_ctx=ResolveContext())
-        _, second = entry.prepare_captured(view, world=source, wait=Wait(), resolve_ctx=ResolveContext())
+        _, first = entry.prepare_captured(view, on_hydrology=HydrologyDiagnosticCollector().collect, world=source, wait=Wait(), resolve_ctx=ResolveContext())
+        _, second = entry.prepare_captured(view, on_hydrology=HydrologyDiagnosticCollector().collect, world=source, wait=Wait(), resolve_ctx=ResolveContext())
         self.assertIsNot(first.landcover, second.landcover)
         self.assertIsNot(first.landcover.context, second.landcover.context)
         old_snapshot = {"region": StateSnapshotEntry("forest")}

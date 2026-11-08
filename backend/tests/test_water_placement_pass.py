@@ -1,5 +1,6 @@
 """HY-12/3b: pre-1.4 water placement pass wiring + one-carve cutover smoke."""
 
+from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
 from app.core.logging.contracts import LogConsumer
 import json
 import unittest
@@ -117,7 +118,7 @@ class WaterPlacementPassFixtureTests(unittest.TestCase):
         with self.assertLogs(LogConsumer.RESOLVE.value, level="WARNING") as log:
             deps = planning_kwargs(self)
             _, working = SurfacePlanningEntry(deps["planning"], deps["capture"]).require_plan_inputs(
-                world, locations, wait=deps["wait"])
+                world, locations, on_hydrology=HydrologyDiagnosticCollector().collect, wait=deps["wait"])
         self.assertTrue(any("WATER_PLACEMENT_MERGED_SOURCES" in line
                             and "loc-geo-ocean-west-004" in line for line in log.output))
         self.assertIsNotNone(working)
@@ -154,8 +155,8 @@ class WaterPlacementPassFixtureTests(unittest.TestCase):
         world, locations = _fixture_world_and_locations()
         deps = planning_kwargs(self)
         entry = SurfacePlanningEntry(deps["planning"], deps["capture"])
-        _, first = entry.require_plan_inputs(world, locations, wait=deps["wait"])
-        _, second = entry.require_plan_inputs(world, locations, wait=deps["wait"])
+        _, first = entry.require_plan_inputs(world, locations, on_hydrology=HydrologyDiagnosticCollector().collect, wait=deps["wait"])
+        _, second = entry.require_plan_inputs(world, locations, on_hydrology=HydrologyDiagnosticCollector().collect, wait=deps["wait"])
         self.assertEqual(first.hydrology.coarse_surface_z, second.hydrology.coarse_surface_z)
         self.assertEqual(first.hydrology.coarse_hydro, second.hydrology.coarse_hydro)
 
