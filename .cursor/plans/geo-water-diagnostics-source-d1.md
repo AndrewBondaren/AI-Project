@@ -475,9 +475,9 @@ Pyright — 0 errors, 0 warnings на исходной ревизии и пос�
 
 Итог — ACCEPT по двум замечаниям и выпуску S4 через Surface planning. P3 для сопровождения: в surfaceDiagnosticReporting.py:37 литерал прежнего канала совпадает с LogConsumer.RUNTIME_SURFACE_PLANNING_ASSEMBLER. При уборке использовать объявленный идентификатор канала. В проверенном дереве доставка адресована прежнему каналу.
 
-## S2-FOLLOWUP-ID-1 — OPEN: нестабильная идентичность generic surface bindings (2026-11-08)
+## S2-FOLLOWUP-ID-1 — контракт B согласован (2026-11-08)
 
-**Статус:** отдельный дефект/риск shared Planning/Encoding после разделения surface manifest; решение контракта и реализация **не согласованы**. Это не дополнительное разрешение на правку codec и не автоматическое изменение статуса S4 Hydrology. Владелец решения — Planning/Encoding совместно с владельцем `ModelIdentity` (Fields/Validation), не Hydrology.
+**Статус.** D1 согласован. Реализация и приёмка открыты.
 
 **Воспроизведение.** На `eaefa7e0` с Python 3.14.9 и Pydantic 2.14.2 `python -m unittest discover -s tests/planning/encoding/comparison -p 'test_*.py' -q` дал четыре failed subtests в `test_registered_types_by_domain`: surface ID **287** (`PlanEnvelope[FineWaterResult]`), **289** (`PlanEnvelope[PlacementBatchResultV2]`), **291** (`PlanEnvelope[FineRiverPlan]`) и **296** (`PlanEnvelope[PreparedNaturalTerrain]`). Fixtures ожидают `app.dataModel.planning.contracts.planEnvelope.PlanEnvelope[...]`, а фактический `__module__` специализации указывает на соответствующий `...encoding.surfaceBindings` — место её первого создания. В другом свежем процессе при создании `PlanEnvelope[FineWaterResult]` до загрузки manifest её `__module__` стал `__main__`; при загрузке manifest первой — `app.dataModel.hydrology.encoding.surfaceBindings`. Следовательно, строка `__module__ + __qualname__` не является стабильной идентичностью параметризованного Pydantic-типа.
 
@@ -485,4 +485,37 @@ Pyright — 0 errors, 0 warnings на исходной ревизии и пос�
 
 **Точки ревью:** [generic carrier](../../backend/app/dataModel/planning/contracts/planEnvelope.py), [domain bindings Hydrology](../../backend/app/dataModel/hydrology/encoding/surfaceBindings.py), [domain comparison](../../backend/tests/planning/encoding/comparison/test_domain_bindings.py), [manifest assembly](../../backend/app/application/worldData/planning/encoding/surfaceManifest.py), `ModelIdentity` и canonical decoder по ссылкам выше. Проверить также остальные специализации `PlanEnvelope[T]`, а не только четыре уже упавших ID.
 
-**Gate перед кодом:** согласовать стабильную идентичность/допуск параметризованных типов на границе `ModelIdentity` (например, через явную manifest identity либо явный запрет с типизированным отказом) с точным контрактом, ownership, обратным чтением и без скрытого legacy fallback. **Не исправлять** тест простым переписыванием TSV под текущий `__module__`: порядок импортов изменит его снова. После решения добавить независимые subprocess-тесты с разным порядком импортов, cold encode/decode `ModelIdentity`, проверку полного набора 343 ID/type/kind, а также сохранения Water/River bytes/fingerprints; отдельно подтвердить отсутствие изменения runtime/fallback-поведения. Пока gate **OPEN**, реализация и обновление эталонов не разрешены.
+### Инвентарь Planning/Encoding на Pydantic 2.13.4 (2026-11-08)
+
+На момент прогона HEAD `c1e7408bd9008519650837a1c789b2314a60fd2b`, `git status --short --branch` до и после вывел только `## master...origin/master`. Интерпретатор из `backend/.venv` — Python 3.14.4 (MSC v.1944, AMD64), Pydantic 2.13.4. Команды из `backend`:
+
+```powershell
+.\.venv\Scripts\python -m unittest discover -s tests/planning/encoding/comparison -p 'test_*.py' -q
+.\.venv\Scripts\python -m unittest discover -s tests/planning/encoding/comparison -p 'test_wire_compatibility.py' -v
+```
+
+Первый прогон: `Ran 4 tests in 0.019s`, `OK`. Отдельный wire-прогон: `test_river_refusal` и `test_water_spill` прошли, `Ran 2 tests in 0.005s`, `OK`.
+
+В одном свежем процессе первым импортирован штатный `SURFACE_MANIFEST`. Ещё в 20 процессах сначала создана одна специализация в `__main__`, проверено отсутствие модуля manifest в `sys.modules`, затем импортирован manifest. Ниже непосредственный вызывающий модуль при первом создании в manifest-first процессе, определённый по стеку `create_generic_submodel`. В порядке specialization-first он равен `__main__` для каждого проверяемого T.
+
+| Первое создание при manifest-first | ID и T |
+|---|---|
+| `app.dataModel.hydrology.encoding.surfaceBindings` | 287 FineWaterResult, 291 FineRiverPlan |
+| `app.dataModel.placement.encoding.surfaceBindings` | 289 PlacementBatchResultV2 |
+| `app.dataModel.terrain.encoding.surfaceBindings` | 296 PreparedNaturalTerrain |
+| `app.application.worldData.planning.contracts.surfacePlanBundle` | 93 ClimateBasePlan, 112 ClimateLocalPlan, 114 TerrainPlan, 117 WaterPlacementPlan, 137 ReliefPlan, 144 RiverReliefPlan, 148 HydrologyRoutesPlan, 164 HydrologyPlan, 223 SurfaceSupportPlan, 224 CoatingPlan, 233 GeoHydrologyPlan, 256 TerrainRegionPlan, 260 GeoWaterPlacementPlan, 276 GeoHydrologyRoutesPlan, 278 CoastlineBoundaryPlan |
+| `pydantic._internal._generics` | 284 FineSurfaceWindow |
+
+Во всех строках в обоих порядках `__module__ = app.dataModel.planning.contracts.planEnvelope`, `__qualname__ = PlanEnvelope[T]` с именем T из таблицы, `kind = record`. В каждом из 20 сравнений совпали все 343 записи по числовому ID, порядку, kind и логическому типу. Записи также сверены с TSV и доменными `BINDINGS`; у специализаций проверены origin, аргумент T и тождество класса `PlanEnvelope[T]` внутри процесса. На 2.13.4 список ID с расхождением идентичности пуст. Результат относится к указанному окружению и дополняет воспроизведение на 2.14.2.
+
+Water/River wire-тесты прошли во всех 21 процессах. Water spill побайтово совпал с `water.hex` (384 байта), fingerprint `abf5c963cb2260752c8afe7b193bf7630fc9672bccd7329342383d5beb102c61`. River refusal побайтово совпал с `river.hex` (901 байт), fingerprint `42fcbf2ba7d6a8e16bab25561c9356c53870c1d90528ad993e7d4bdef3550617`.
+
+### Контракт и приёмка
+
+**Решение B.** Fields/Validation владеет правилом допуска в `ModelIdentity.of`. Допускается конкретный именованный класс `BaseModel`, включая именованный конкретный подкласс generic-базы. Специализация, созданная подпиской (`origin` в Pydantic generic metadata), открытая generic-модель с параметрами и значение вне `type[BaseModel]` получают `ModelIdentityError(ValueError)` до формирования строк. Правило охватывает root, field owner, variant branch и прямые вызовы. Ошибка независима от `CheckedPathError`, чтобы `CheckedPath.from_pydantic_loc` передавал отказ вызывающему коду.
+
+**Чтение и совместимость.** Encoding использует предикат допуска из Fields в `validate_decoded_identity` для обычного и bounded canonical reader. Пара должна совпасть с допустимым классом активного manifest. Старая запись специализации получает `CanonicalEncodingError` даже при совпадении строк с этой специализацией. Формат обычного owner — прежние `module`, `qualname`, record ID 304, ID пути и сегментов 303, 305–308. JSON без manifest проверяет структуру пары. Зависимость направлена из Encoding в Fields. Регистрация самой специализации как record по числовому ID остаётся допустимой.
+
+**Основание выбора.** На чистом `c1e7408bd9008519650837a1c789b2314a60fd2b` production caller, которому нужен путь к полю специализации, не найден. В Hydrology фактический путь — `WaterBody.kind`. При независимой передаче байтов между двумя процессами на Python 3.14.4 / Pydantic 2.14.2 reader с manifest-first импортом отверг и identity, и полный путь к `PlanEnvelope[FineWaterResult].payload`; обе формы для `WaterBody` восстановились.
+
+**Приёмка реализации.** Проверить ранний типизированный отказ, обратное чтение старых записей в обоих canonical readers и cold round-trip обычного owner в независимых процессах с разным порядком импортов. Для surface manifest проверить все 343 ID/type/kind, включая остальные специализации, без привязки ожидаемого результата к модулю первого создания. Сверить Water/River bytes и fingerprints, runtime и fallback.

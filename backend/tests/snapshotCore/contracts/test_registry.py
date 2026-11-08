@@ -243,23 +243,35 @@ class SectionRegistryTests(unittest.TestCase):
 
     def test_application_ports_have_no_concrete_storage_or_service_imports(self) -> None:
         root = Path(__file__).resolve().parents[3] / "app" / "application"
+        logging_api = {
+            "worldSnapshot/logging/snapshotLog.py": {
+                "app.core.logging.contracts": {"UnknownLogConsumerError"},
+            },
+            "artifacts/logging/artifactLog.py": {
+                "app.core.logging.contracts": {"LogConsumer", "UnknownLogConsumerError"},
+                "app.core.logging.consumers": {"get_consumer_logger"},
+            },
+        }
         for namespace in ("patch", "worldSnapshot", "artifacts", "publication"):
             for source in (root / namespace).rglob("*.py"):
+                path = source.relative_to(root).as_posix()
                 tree = ast.parse(source.read_text(encoding="utf-8"))
                 if source.name == "__init__.py":
                     self.assertEqual(tree.body, [])
                 for node in ast.walk(tree):
+                    if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                        allowed = logging_api.get(path, {}).get(node.module)
+                        if allowed is not None:
+                            self.assertLessEqual({alias.name for alias in node.names}, allowed, source)
+                            continue
                     imports = ([node.module or ""] if isinstance(node, ast.ImportFrom) else
                                [alias.name for alias in node.names] if isinstance(node, ast.Import) else [])
                     for name in imports:
-                        emitter = source.relative_to(root).as_posix() in {
-                            "worldSnapshot/logging/snapshotLog.py", "artifacts/logging/artifactLog.py",
-                        }
                         if (source.relative_to(root).as_posix() in {"worldSnapshot/service/snapshotMetadataBuilder.py",
                                                                "worldSnapshot/service/worldSnapshotService.py"}
                                 and name == "app.core.validatorAggregationHelper"):
                             continue
-                        if emitter and name in ("logging", "app.core.logLevel"):
+                        if path in logging_api and name in ("logging", "app.core.logLevel"):
                             continue
                         self.assertFalse(any(name == prefix or name.startswith(prefix + ".")
                             for prefix in ("app.db", "app.core", "app.storage", "sqlite3", "aiosqlite", "logging")), source)

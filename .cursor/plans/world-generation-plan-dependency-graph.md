@@ -1,6 +1,6 @@
 # WORLD-PLAN-GRAPH-1 — Граф зависимостей GEO-1 / SPATIAL-1 / GEN-DAG-1 / PHYSICS-1 / TIME / LOD-SIM-1
 
-**Статус:** архитектурная карта межплановых gates, v6.16 (2026-11-06), с cross-cutting навигацией ERROR-CONTRACTS-1; **не** разрешение на код, изменение POJO/enum, cutover или закрытие owning-планов. Путь документа: `.cursor/plans/world-generation-plan-dependency-graph.md`.
+**Статус:** архитектурная карта межплановых gates, v6.17 (2026-11-08), с cross-cutting навигацией ERROR-CONTRACTS-1; **не** разрешение на код, изменение POJO/enum, cutover или закрытие owning-планов. Путь документа: `.cursor/plans/world-generation-plan-dependency-graph.md`.
 
 **Текущая очередь и источники приёмки приведены в §12.** Разделы 9–11 сохраняют историю последовательных сверок.
 
@@ -525,7 +525,7 @@ print('PASS:', len(edges), 'edges;', len(vertices),
 
 | Когда / стартовый gate | Какие конкретные работы можно вести независимо | Где обязательная синхронизация / что ещё запрещено |
 |---|---|---|
-| **Сейчас** | GEO-I11.1, Snapshot 4D2, проектирование SP-P2W. | Очередь в §12.1. |
+| **Сейчас** | GEO-I11.1, Snapshot 4D2, проектирование SP-P2W. | Очередь в §12. |
 | **После приёмки Snapshot 4C2-R/H** | Snapshot **4C2-O** как **один** собственный атомарный code step может идти одновременно с GEO контрактной/кодовой веткой и независимыми SPATIAL SP-0/1/P0 работами (при их собственных gates). | `4C3` не стартует до принятого `4C2-O`. Внутри Snapshot правило «один подшаг за заход» сохраняется, **4C2-O и 4C3 не параллелить**. |
 | **После SPATIAL SP-0/1/P0 и принятия exact Pack format/POJO** | `SP-P1` (после собственного P0), затем `SP-P2R` (после P1) может разрабатываться независимо от **GEO G10-A** и последовательной ветки Snapshot `4C3+`; кодовые steps только по отдельным разрешениям. | `SP-P2W` дополнительно ждёт **SN-STAGE**; `SP-P3I` ждёт `SP-H/GEO G10-A` и `SP-P1`. Нельзя начать их из-за одного наличия generic contract. |
 | **После GEO-SPATIAL-CONTRACT, GEO G10-A/SP-H и SP-P1** | `SP-P3I` (Hydrology compact facts/index) и `SP-P2R` (Pack read/verify) — **реальные независимые branches**; если к этому моменту уже принят SN-STAGE, `SP-P2W` тоже допустим параллельно, каждый со своей картой файлов и тестами. | `SP-P2` только после P2R+P2W, `SP-P3W` только после P3I+P2 и принятого PACK-ENTRY-CONTRACT; `SP-P3` только после P3W. Не смешивать hydrology source, storage port и writer в один кодовый шаг. |
@@ -833,17 +833,18 @@ flowchart TD
 
 **Проверка v6.10:** добавлен draft LOD трек и обратные ссылки без изменения hard-edge реестра. Markdown/Mermaid/ссылки и static graph должны быть проверены; implementation/runtime evidence отсутствует, GRAPH-AC остаётся OPEN.
 
-## 12. Действующая очередь на 2026-11-06
+## 12. Действующая очередь на 2026-11-08
 
 **После завершения основной очереди:** [LEGACY-POST — поиск оставшихся legacy-путей](./world-generation-post-graph-legacy-audit.md). Трек отложен. При закрытии основных работ координатор фиксирует итоговую ревизию и передаёт её на аудит. LEGACY-POST не входит в условия закрытия основной очереди; локальные проверки legacy у владельцев выполняются в своих срезах.
 
 | Трек | Последнее решение и evidence | Следующая работа |
 |---|---|---|
-| [GEO](./geo-1-designed-water.md) | [Разбор digest](./geo-river-route-digest-verification.md): смена первого эталона обусловлена принятой миграцией diagnostics, payload сохранён. | Следующий scoped D1 — River diagnostics, cold boundary. Группа: 9 тестов, 5 errors, 0 failures. |
-| [Snapshot](./world-domain-patches-snapshots.md) | [Rollback trace исправлен](./world-domain-snapshot-rollback-trace.md): caller получает transaction_outcome=ROLLED_BACK после подтверждённого отката. 7 адресных OK. | Повторное независимое ревью исправления. Полный набор: 171 тест, прежние 8 errors, 1 failure, 1 skip. |
-| [Spatial](./spatial-distribution-domain.md) | Карта F3 принята (§15.103). get_store_id добавлен отдельным срезом. | Подтвердить identity tests, затем реализовать F3 receipt, binding, holder journal и admission. |
-| [Time](./time-domain.md) | Проверены изолированные T3 и подготовка T4. Выполнено ревью политики Time/World settings для validate и runtime. | По owning Time плану диагностика и resolve_world_time_settings уже реализованы; не запускать повторную миграцию. Production T4/T5 требуют соответствующих Snapshot gates. |
-| [Physics](./physics-spatial-dynamics.md) | [Повторная проверка P2](./ps-error-1-d2-review.md) пройдена для обеих операций. 2/2 регрессии, профиль 71/71. | Предъявить D2 на отдельную пользовательскую приёмку. |
+| Water/River | S1–S4 приняты, проверки исправлений S4 прошли 62/62 и 32/32. | Реализовать согласованный [S2-FOLLOWUP-ID-1, контракт B](./geo-water-diagnostics-source-d1.md): ModelIdentity.of и admission в двух canonical readers. |
+| [Snapshot](./world-domain-patches-snapshots.md) | [Независимое ревью rollback trace](./world-domain-snapshot-rollback-trace-independent-review.md) — PASS. | Продолжение 4D2 по открытым validation/apply/terminal gates. |
+| [Spatial](./spatial-distribution-domain.md) | Карта F3 принята. [Проверка store identity](./spatial-f3-verification-report.md) прошла. | Реализовать F3 по §§15.99–15.103: receipt, binding, holder, trusted adapter и admission под guard. |
+| Time | TL-1…TL-3 и TL-R реализованы. Для TL-1…TL-3 прошли 36 тестов, для регистрации TL-R — 24. Production typing чист, общий typing с tests/time остаётся открыт. [Реализация TL-1…TL-3](./time-log-implementation.md#evidence-реализации-tl-1tl-3), [регистрация TL-R](./time-log-implementation.md#5-отдельная-регистрация-tl-r-после-независимого-среза) | Подготовить TL-B: указать application bindings пяти вызовов, точки подключения и интеграционные тесты. Production read, apply и branch зависят соответственно от SN-TIME-READ, SN-TIME-APPLY и SN-TIME-BRANCH. [TIME-LOG §6](./time-log-implementation.md#6-будущие-production-bindings-tl-b-и-gates) |
+| Physics | Подготовительный Physics I0 и общая маршрутизация прошли [совместную техническую проверку](./artifacts-d2-physics-i0-joint-verification.md). | Production I0 требует конкретной точки вызова и execution correlation. |
+| Artifacts | D2 и совместная маршрутизация технически приняты по [отчёту](./artifacts-d2-physics-i0-joint-verification.md). SnapshotCore: 176 тестов, один skip, logging 28/28. | Учитывать этот результат при интеграции. Статус пользовательской приёмки фиксирует владелец. |
 | [API-1](./api-1-transport-boundary.md) | Проверено покрытие полей storage и wire. Climate C1 содержит девять scalars, десять после переноса lapse. | Сопоставить вход каждой операции с версией и выходом владельца, включая presence/aliases. |
 | [GEN-BAKE-READ](./generator-public-bake-reads.md) | Исправленный пакет D1–D7 предъявлен в §17.10.4 | Получить решение пользователя, затем R1/R2 отдельно по операциям. Handoff light, full L0+C23, named terrain и coordinate terrain описан в §17.10.3 |
 | [DAG invocation и bake admission](./dag-invocations-bake-admission.md) | Итог ревью R6 на 7b6104d7, полный набор 392/392. | Далее R7 по условиям owning-плана. |
@@ -852,7 +853,13 @@ flowchart TD
 
 Предложения новых bindings в этих планах не меняют hard-edge реестр автоматически. Исторические команды §9.3 для приёмки I1/B, preflight P1-A и проектирования уже принятой карты Physics заменены этой очередью.
 
-### 12.1. Параллельная работа по текущим срезам
+**Параллельно** можно принимать Artifacts D2-1…D2-4 и Physics D2 и готовить план production bindings для Time TL-B. У каждого трека свои доказательства и решение о приёмке.
+
+**Последний приоритет — реализация S2-FOLLOWUP-ID-1.** Согласован контракт B: Fields отклоняет параметризованный owner при создании ModelIdentity, Encoding проверяет допуск при восстановлении. Реализация и приёмка открыты. [Решение D1 и условия приёмки](./geo-water-diagnostics-source-d1.md#s2-followup-id-1--контракт-b-согласован-2026-11-08)
+
+### 12.1. Параллельная работа по срезам на 2026-11-06
+
+Далее сохранены результаты ревью и решения на указанные даты. Действующая очередь приведена в таблице §12 выше.
 
 | План | Номер трека | О чём трек | Следующий трек или внешняя зависимость |
 |---|---|---|---|
@@ -947,7 +954,7 @@ API-1 ведёт пользователь. GEN-BAKE-READ после решени
 
 ## Решение пользователя: без legacy-компонентов — 2026-11-07
 
-**Текущий статус Water/source:** S2 принят, S3 открыт. Параллельно доступны A (source schema и shape 60008), B (подготовка storage-части Pack) и C (подготовка codec/retention проверок). Совместная проверка Pack следует за A, запись целевых fixtures — за A+B. Владельцы файлов, команды и критерии передачи результата указаны в [плане S3](geo-water-diagnostics-source-d1.md#s3-после-приёмки-s2--параллельные-треки).
+**Состояние Water/source перед реализацией S3 (история):** S2 принят, S3 открыт. Параллельно доступны A (source schema и shape 60008), B (подготовка storage-части Pack) и C (подготовка codec/retention проверок). Совместная проверка Pack следует за A, запись целевых fixtures — за A+B. Владельцы файлов, команды и критерии передачи результата указаны в [плане S3](geo-water-diagnostics-source-d1.md#s3-после-приёмки-s2--параллельные-треки).
 
 Результат следующего среза: [Water diagnostics / source D1](geo-water-diagnostics-source-d1.md) подготовлен на приёмку; это предложение конкретных Water facts, source/Pack admission и границ отказа/reporting, не разрешение River/Water production cutover. Общие материализаторы и оба режима доставки переводятся целостно, без legacy ветки. Time TL-R реализован отдельно: server route time/operations, 24 logging/generation tests OK; Time transcript registration не добавлялась по согласованному §5, TL-B остаётся отдельным. [Time evidence](time-log-implementation.md#5-отдельная-регистрация-tl-r-после-независимого-среза).
 
