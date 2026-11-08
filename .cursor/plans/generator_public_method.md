@@ -29,6 +29,32 @@
 
 Capture boundary, exact types/files и baseline/GEO choice требуют domain freeze. Readers не получают обязанности подготовки или передачи настроек. Имена остальных ещё не разобранных pipeline interfaces не назначаются автоматически.
 
+## Climate и Weather — публичные операции для DAG
+
+Предлагаемая публичная поверхность для DAG. **C1** — первый срез настроек; **расчёт** — методы генерации и сцены; **реестры** — последующий срез редактирования. Имена целевые. R — точная публикация выбранного мира. База изменения включает исходное состояние владельца и версии прочитанных зависимостей. Каждый prepare возвращает результат с этой базой; окончательную проверку свежести и commit выполняет владелец приёмки.
+
+| Домен | Метод | Функционал | Контракт |
+|---|---|---|---|
+| Climate | `read_settings` | C1 · Прочитать настройки климата | (world_uid, R) → R, WorldClimateScalars и WorldClimateZoneRegistry. WorldNotFound / PublicationUnavailable / InvalidStoredSettings. Без записи. |
+| Weather | `read_weather_rules` | C1 · Прочитать правила погоды | (world_uid, R) → WeatherRulesView с WorldWeatherTypeRegistry на R. Те же ошибки чтения. DAG объединяет оба результата только для одной пары (world_uid, R). |
+| Climate | `prepare_change` | C1 · Подготовить частичную правку девяти скаляров | (база, PatchClimateScalars) → полный кандидат Climate, версии зависимостей, consequences. Пропуск сохраняет значение; явный null проверяется типом. InvalidPatch / InvalidSettings / InvalidReference / UnsupportedField. Preview и save используют одну подготовку. |
+| Climate | `prepare_materialization` | Расчёт · Подготовить климатическое поле запрошенной области | (закреплённый план, область, LOD, входы Climate) → покрытие, происхождение данных и refs подготовленных артефактов. Проверить полноту и совместимость входов; возможен staging. Публикацией управляет DAG через Pack/Snapshot. |
+| Climate | `prepare_recalculation` | Расчёт · Пересчитать затронутую часть поля | (закреплённый план, существующая база поля, область, ClimateRecalcRequest) → refs изменённых частей с их базой либо успешный пустой результат. Несовместимая база — ошибка. Форматы refs и ошибок обеих операций материализации OPEN. |
+| Climate | `sample_scene_climate` | Расчёт · Вычислить климат сцены с учётом сезона | (SampleRef, temperature_base:int, rainfall:int, SeasonKey или null, SeasonTempOffsets той же базы) → SceneClimateSample с исходной и эффективной температурой, осадками и ref. Без сезона effective = base. SourceMismatch при несовместимых входах. |
+| Weather | `resolve_weather` | Расчёт · Выбрать погоду сцены одним линейным OpenPipeline | (SceneClimateSample, WeatherRulesView) → WeatherSnapshot с system_weather. Проверить мир и R, применить пороги по priority и fallback clear по ТЗ. SourceMismatch при расхождении. Без записи карты. |
+| Climate | `prepare_upsert_zone` | Реестры · Добавить или заменить одну зону | (база, ClimateZoneEntry) → кандидат реестра с полной записью по system_climate. InvalidSettings / InvalidReference по итоговому состоянию. |
+| Climate | `prepare_remove_zone` | Реестры · Удалить зону | (база, ключ system_climate) → кандидат без записи; EntryNotFound либо InvalidReference, если сохраняется ссылка на зону. |
+| Climate | `prepare_replace_zones` | Реестры · Заменить весь авторский список зон | (база, WorldClimateZoneRegistry) → кандидат после проверки уникальности ключей и ссылок. InvalidSettings / InvalidReference. |
+| Weather | `prepare_upsert_weather_type` | Реестры · Добавить или заменить один тип погоды | (база, WeatherTypeEntry) → кандидат с полной записью по system_weather. InvalidSettings / InvalidReference по итоговому состоянию. |
+| Weather | `prepare_remove_weather_type` | Реестры · Удалить тип погоды | (база, ключ system_weather) → кандидат без записи; EntryNotFound / InvalidReference. |
+| Weather | `prepare_replace_weather_rules` | Реестры · Заменить весь авторский список правил | (база, WorldWeatherTypeRegistry) → кандидат после проверки записей и уникальности system_weather. InvalidSettings / InvalidReference. |
+
+Для этих строк действует [разделение публичных read/write/delete/settings, линейного OpenPipeline и оркестрации материализации](./api-1-climate-c1-d1.md#поверхность-доменов-и-ответственность-dag). DAG явно компонует Climate и Weather reads одной R. Генератор готовит результат своей операции; staging, сборка и принятие публикации следуют контрактам DAG/Pack/Snapshot. Для prepared удаления объектом является конкретная авторская запись соответствующего домена.
+
+Для prepare_materialization и prepare_recalculation уточнён [контракт результата coarse/fine](./api-1-climate-c1-d1.md#результат-материализации-и-пересчёта-climate): адрес и покрытие каждой части, ArtifactRef в staging, полное покрытие или изменение относительно базы, ошибки и граница публикации.
+
+I/O, ошибки, effects и пример — [API-1-C1/D1](./api-1-climate-c1-d1.md#публичные-контракты-climate-и-weather-для-dag). [Legacy inventory и результат проверки по правилам](./api-1-climate-c1-d1.md#проверка-плана-и-legacy-inventory). Статус — предложение, exact freeze и DAG bindings OPEN. Старые имена нод служат для трассировки. Прикладные операции Climate/Weather ведутся в C1; опубликованные bake reads и подготовка surface plan сохраняют своих владельцев.
+
 ## GBR-1 — историческая карта exact proposal
 
 **Заменена поправками GBR-2 ниже; старые classes/fields не действующий freeze.**

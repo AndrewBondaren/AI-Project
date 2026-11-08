@@ -633,6 +633,8 @@ Legacy dict-секции не адаптируются в новый API. Сущ
 
 **Уточнение границы Climate / Weather.** Climate поставляет климатические поля и сезонную температуру. Weather владеет weather_type_registry и определяет погоду сцены по выборке Climate. Составное чтение редактора связывает оба результата одной публикацией World. [Публичные операции для DAG, входы, выходы, ошибки и открытые привязки](./api-1-climate-c1-d1.md#публичные-контракты-climate-и-weather-для-dag).
 
+Кандидаты отражены в [реестре публичных методов генератора](./generator_public_method.md#climate-и-weather--публичные-операции-для-dag). До исполнения требуется закрыть [результаты проверки правил и legacy inventory C1](./api-1-climate-c1-d1.md#проверка-плана-и-legacy-inventory).
+
 **Согласованные решения D1 (2026-11-08).** Read включает девять скаляров и оба реестра, guarded update меняет скаляры. Десятое поле появится после отдельного переноса lapse. R — publication_id выбранного мира. Каждый writer сохраняет только колонки своей операции. В runtime Snapshot владеет транзакцией, в которой проверяются ожидаемая публикация и версия входов Materials. До старта игры редактор может сохранить авторскую ревизию до bake и открыть её повторно. Bake запускается отдельно. Сохранение черновика требует собственного контракта World с проверкой авторской ревизии. [Контракты, граница атомарности и первый срез](./api-1-climate-c1-d1.md).
 
 Для сохранения черновика согласована одна авторская ревизия на девять скаляров Climate. World проверяет её вместе с ревизиями прочитанных климатических реестров и использованных данных Materials. Независимые правки других объектов мира допускают параллельное сохранение.
@@ -662,9 +664,9 @@ Legacy dict-секции не адаптируются в новый API. Сущ
 | `prepare_initial(request: PrepareInitialClimateSettings)` | world_uid; initialization context/actor; concrete complete ClimateSettingsState | PreparedClimateSettings со candidate/consequences; без записи | InvalidClimateSettings, InvalidReference, Forbidden, UnsupportedLifecycle |
 | `prepare_change(request: PrepareClimateSettingsChange)` | world_uid; expected revision; actor; operation_id; nonempty tuple[ClimateChange]; validate_only:bool | ClimateSettingsPreview при validate_only, иначе PreparedClimateSettings; оба без writes | те же + RevisionConflict, DuplicateChange, UnsupportedChange |
 
-`ClimateSettingsState` — строго `scalars:WorldClimateScalars`, `zones:WorldClimateZoneRegistry`, `weather:WorldWeatherTypeRegistry`. Это агрегат одного owning domain, не World bag. Read не называется полностью effective: nullable authored fields могут требовать runtime fallback. Effective profiles, если понадобятся клиенту, должны быть отдельным typed результатом существующего climate resolve; не materialize defaults в storage при чтении. Initial input уже полный POJO: absent/default interpretation выполняет тот же public boundary до construction; API не подставляет значения. Standalone delete Climate settings и generic commit method не предлагаются.
+`ClimateSettingsState` — составной результат редактора: `scalars:WorldClimateScalars` и `zones:WorldClimateZoneRegistry` от Climate, `weather:WorldWeatherTypeRegistry` от Weather. DAG связывает публичные чтения по одной публикации. Nullable authored fields могут требовать runtime fallback. Effective profiles, если понадобятся клиенту, должны быть отдельным typed результатом существующего climate resolve; не materialize defaults в storage при чтении. Initial input уже полный POJO: absent/default interpretation выполняет тот же public boundary до construction; API не подставляет значения. [Граница CRUD, OpenPipeline и публикации](./api-1-climate-c1-d1.md#поверхность-доменов-и-ответственность-dag).
 
-**Closed ClimateChange union**, discriminator — отдельный закрытый enum ClimateChangeKind, не str dispatch:
+**Исходная карта изменений C1 по владельцам.** PatchClimateScalars — согласованный первый срез. Операции с записями зон относятся к Climate, операции с типами погоды — к Weather. При детализации будущих команд каждый владелец определяет свой закрытый typed intent.
 
 | Variant | Concrete payload / semantics |
 |---|---|

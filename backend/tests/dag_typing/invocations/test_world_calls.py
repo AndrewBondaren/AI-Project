@@ -13,6 +13,8 @@ from pydantic import BaseModel, ConfigDict, RootModel, TypeAdapter
 from app.application.cancellation.typed.snapshotStore import SnapshotStore
 from app.application.engine.contracts.invocation.executionOptions import InvocationOptions
 from app.application.engine.contracts.executionBindings import ResolveResult
+from app.application.engine.diagnostics.dagLog import emit as emit_diagnostic
+from app.dataModel.engine.dag.diagnostics import ExecutionEventCode
 from app.application.engine.contracts.outputRef import OutputRef, RequiredOutput
 from app.application.engine.runtime.dag.lifecycle.executionSnapshotService import ExecutionSnapshotService
 from app.application.engine.runtime.dagEngine import DAGEngine
@@ -189,7 +191,7 @@ class Merge(Source):
 
 def runtime(entry=Pipeline, store=None, transform=Transform, retry_policy=None, diamond=False, counter=CountCaller, lease_seconds=300,
             interaction=None, counter_wait=None, entry_lifecycle=None, enable_stop_intent=False, pack_closer=None,
-            workers=1):
+            workers=1, emit=emit_diagnostic):
     registry, bindings = NodeRegistry(), GraphBindings()
     if diamond:
         for cls, deps in ((Source, ()), (Left, (Source.id,)), (Right, (Source.id,)), (Merge, (Left.id, Right.id))):
@@ -219,7 +221,7 @@ def runtime(entry=Pipeline, store=None, transform=Transform, retry_policy=None, 
     plan = compiler.compile(GraphRuleState(), invocation_root=entry.id)
     if store is not None:
         return DAGEngine(executor, None, registry, PipelineHooks(plan), None, ExecutionSnapshotService(), SnapshotStore(),
-                         enable_stop_intent=enable_stop_intent, pack_closer=pack_closer)
+                         enable_stop_intent=enable_stop_intent, pack_closer=pack_closer, emit=emit)
     return executor, plan
 
 
@@ -309,6 +311,57 @@ class FailOnceTransform(Transform):
 
 
 class RecoveryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_external_cancel_during_cancellation_checkpoint(self):
+        from app.application.engine.runtime.invocations.memoryExecutionStore import MemoryExecutionStore
+
+        for fail in (False, True):
+            with self.subTest(fail=fail):
+                store = MemoryExecutionStore()
+                events = []
+                engine = runtime(store=store, emit=events.append)
+                assert isinstance(engine, DAGEngine)
+                key = ExecutionId("cancel-saving")
+                options = LLMExecutionOptions(player_message="", language="ru", repair_iterations=0, repair_mode=RepairMode.MAXIMUM)
+                cancelling, writing, finish = asyncio.Event(), asyncio.Event(), asyncio.Event()
+                checkpoint = store.checkpoint
+                error = OSError("cancel checkpoint failed")
+
+                async def effect(hooks, view):
+                    cancelling.set()
+                    worker = asyncio.current_task()
+                    assert worker is not None
+                    worker.cancel()
+
+                async def blocked_write(*args):
+                    if cancelling.is_set():
+                        writing.set()
+                        await finish.wait()
+                        if fail:
+                            raise error
+                    return await checkpoint(*args)
+
+                with patch.object(PipelineHooks, "apply_effects", effect), patch.object(store, "checkpoint", blocked_write):
+                    run = asyncio.create_task(engine.run(key, TaskType.INTENT_DETECTION, max_passes=1, options=options))
+                    try:
+                        await asyncio.wait_for(writing.wait(), 5)
+                        before = await store.load(key)
+                        run.cancel()
+                        done, _ = await asyncio.wait((run,), timeout=0.1)
+                        self.assertFalse(done)
+                    finally:
+                        finish.set()
+                        await asyncio.gather(run, return_exceptions=True)
+                    after = await store.load(key)
+                    if fail:
+                        self.assertIs(run.exception(), error)
+                        self.assertEqual(after, before)
+                        expected = ExecutionEventCode.SNAPSHOT_FAILED
+                    else:
+                        self.assertTrue(run.cancelled())
+                        self.assertEqual(after.revision, before.revision + 1)
+                        expected = ExecutionEventCode.SNAPSHOT_SAVED
+                    self.assertEqual([event.code for event in events], [expected])
+
     async def test_external_cancel_after_hook_caught_its_own_cancellation(self):
         from app.application.engine.runtime.invocations.memoryExecutionStore import MemoryExecutionStore
 

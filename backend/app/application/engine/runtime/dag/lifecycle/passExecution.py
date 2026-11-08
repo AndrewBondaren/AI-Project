@@ -143,7 +143,14 @@ class PassExecution[O: BaseModel, S: BaseModel]:
                         self._store.delete(state.catalog.execution_id)
                     return result
         except asyncio.CancelledError:
-            await self._sessions.save_cancelled(state, durable)
+            # The pass owns state until the cancellation checkpoint and its diagnostic finish.
+            saving = asyncio.create_task(self._sessions.save_cancelled(state, durable))
+            while not saving.done():
+                try:
+                    await asyncio.wait((saving,))
+                except asyncio.CancelledError:
+                    continue
+            saving.result()
             raise
         finally:
             state.release()

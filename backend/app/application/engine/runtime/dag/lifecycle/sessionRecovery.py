@@ -1,4 +1,3 @@
-import asyncio
 from collections.abc import Callable
 
 from pydantic import BaseModel
@@ -54,10 +53,6 @@ class SessionRecovery[O: BaseModel, S: BaseModel]:
             raise
 
     async def save_cancelled(self, state: ExecutionState, durable: OwnedExecution | None) -> None:
-        try:
-            await asyncio.sleep(0)  # deliver a synchronous hook's pending task.cancel()
-        except asyncio.CancelledError:
-            pass
         try:
             if durable is not None:
                 if durable.graph.interaction_owner is not None:
