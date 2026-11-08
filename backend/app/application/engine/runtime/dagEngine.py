@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, TypeAdapter
 from app.application.engine.contracts.invocation.inputWait import Failed, ResumeInput
 from app.application.engine.runtime.invocations.inputWaitCoordinator import InputWaitCoordinator
 from app.dataModel.engine.dag.invocations.inputWait import InputReceipt
-from app.dataModel.engine.dag.invocations.record import CompletedOutcome, FailedOutcome, InvocationStatus
+from app.dataModel.engine.dag.invocations.record import CompletedOutcome, FailedOutcome
 from app.application.engine.contracts.invocation.executionOptions import InvocationOptions
 from app.application.engine.contracts.invocation.executionStore import PackCloser, OwnershipConflict, RestoreFailure
 from app.application.engine.runtime.invocations.checkpointCodec import CheckpointCodec
@@ -21,7 +21,6 @@ from app.application.engine.runtime.invocations.recovery.checkpointHeader import
 from app.application.engine.runtime.invocations.recovery.closeConfirmation import confirm_closed
 from app.application.engine.runtime.invocations.recovery.terminalReplay import terminal_result
 from app.application.engine.runtime.invocations.interaction.executionInteraction import ExecutionInteraction
-from app.dataModel.engine.dag.invocations.record import InvocationGraph
 from app.application.cancellation.typed.snapshotStore import SnapshotStore
 from app.application.engine.contracts.executionBindings import ExecutionCursor, ExecutionResult, InputDelivery, LifecycleBinding, PassStage, ResolveResult
 from app.application.engine.diagnostics.dagLog import emit as emit_diagnostic
@@ -31,16 +30,16 @@ from app.application.engine.runtime.dag.dagExecutor import DAGExecutor
 from app.application.engine.runtime.dag.executionPlan import ExecutionPlan
 from app.application.engine.runtime.dag.executionState import ExecutionState
 from app.application.engine.runtime.dag.lifecycle.executionSnapshotService import ExecutionSnapshotService
+from app.application.engine.runtime.dag.lifecycle.sessionRecovery import SessionRecovery
 from app.application.engine.runtime.execution.llm.llmRequest import LLMExecutionOptions, LLMRequest
 from app.application.engine.runtime.execution.llmAggregateExecutor import LLMAggregateExecutor
 from app.application.engine.runtime.execution.nodeOutcome import LevelDecision
 from app.application.engine.runtime.repair.repairOrchestrator import cancellation_checkpoint
 from app.application.engine.runtime.responseResolver import ResponseResolver
 from app.application.engine.taskType import TaskType
-from app.dataModel.engine.dag.diagnostics import CancellationRequest, ExecutionEventCode, ExecutionSeverity
+from app.dataModel.engine.dag.diagnostics import CancellationRequest
 from app.dataModel.engine.dag.executionPhase import ExecutionPhase
 from app.dataModel.engine.dag.identity import DomainRevision, ExecutionId, ExecutionIdValue, PlanInstanceId, WaitId
-from app.dataModel.engine.dag.nodeStatus import NodeStatus
 
 O = TypeVar("O", bound=BaseModel)
 S = TypeVar("S", bound=BaseModel)
@@ -57,7 +56,7 @@ class DAGEngine(Generic[O, S]):
         self._binding, self._request = binding, request
         self._interaction = ExecutionInteraction(executor.invocation_options, binding)
         self._snapshots, self._store = snapshots, store
-        self._emit, self._clock = emit, clock
+        self._sessions = SessionRecovery(snapshots, registry, store, binding, emit, clock)
         self._pack_closer = pack_closer
         self._enable_stop_intent = enable_stop_intent or pack_closer is not None
         self._active: set[ExecutionId] = set()
@@ -115,7 +114,6 @@ class DAGEngine(Generic[O, S]):
         confirmed_domain_revisions: Mapping[str, DomainRevision] | None = None, cancellation: CancellationRequest | None = None,
     ) -> ExecutionResult[O]:
         self._enter(execution_id, max_passes)
-        state: ExecutionState | None = None
         try:
             options.__post_init__()
             invocation_options = self._executor.invocation_options
@@ -127,27 +125,9 @@ class DAGEngine(Generic[O, S]):
                 else:
                     return await self._restore_durable(execution_id, invocation_options, max_passes, options,
                                                        confirmed_domain_revisions, cancellation)
-            snapshot = self._store.load(execution_id)
-            if snapshot is None:
-                raise LookupError("execution snapshot is unavailable")
-            try:
-                if snapshot.cursor is None or snapshot.metadata.pass_number >= max_passes:
-                    raise ValueError("snapshot cursor/pass is incompatible with resume")
-                state = await self._snapshots.restore(snapshot, self._registry)
-                revision, plan = self._binding.compile(snapshot.cursor.task_type, snapshot.metadata.pass_number)
-                if revision != snapshot.metadata.plan_revision:
-                    raise ValueError("resume plan revision mismatch")
-            except Exception:
-                self._emit(LifecycleDiagnostic(
-                    execution_id=execution_id, plan_revision=snapshot.metadata.plan_revision, pass_number=snapshot.metadata.pass_number,
-                    stage=snapshot.cursor.stage if snapshot.cursor else None, code=ExecutionEventCode.RESTORE_FAILED,
-                    severity=ExecutionSeverity.ERROR, timestamp=self._clock(), status=NodeStatus.FAILED, message="snapshot restore failed",
-                ))
-                raise
+            state, plan = await self._sessions.restore(execution_id, max_passes)
             return await self._drive(state, plan, max_passes, options, confirmed_domain_revisions, cancellation)
         finally:
-            if state is not None and not state.is_released:
-                state.release()
             self._active.discard(execution_id)
 
     async def accept_input[U: BaseModel](self, execution_id: ExecutionId, request: ResumeInput[U]) -> InputReceipt:
@@ -364,39 +344,10 @@ class DAGEngine(Generic[O, S]):
                         self._store.delete(state.catalog.execution_id)
                     return result
         except asyncio.CancelledError:
-            try:
-                await asyncio.sleep(0)  # deliver a synchronous hook's pending task.cancel()
-            except asyncio.CancelledError:
-                pass
-            if durable is not None and durable.graph.interaction_owner is not None:
-                saved = await durable.store.load(durable.claim.execution_id)
-                if saved.status == InvocationStatus.CANCELLED and InvocationGraph.model_validate_json(saved.blob).cancellation is not None:
-                    # The cancelling request already persisted the terminal graph and revoked our claim.
-                    raise
-            try:
-                if durable is not None:
-                    durable.graph.session = self._snapshots.encode(state, self._registry)
-                    await durable.save()
-                else:
-                    snapshot = self._snapshots.capture(state)
-                    self._store.save(snapshot)
-            except Exception:
-                self._lifecycle_event(state, ExecutionEventCode.SNAPSHOT_FAILED, NodeStatus.FAILED, ExecutionSeverity.ERROR)
-                raise
-            self._lifecycle_event(state, ExecutionEventCode.SNAPSHOT_SAVED, NodeStatus.CANCELLED, ExecutionSeverity.INFO)
+            await self._sessions.save_cancelled(state, durable)
             raise
         finally:
             state.release()
-
-    def _lifecycle_event(self, state: ExecutionState, code: ExecutionEventCode, status: NodeStatus, severity: ExecutionSeverity) -> None:
-        revision = state.plan_revision
-        if revision is None:
-            raise RuntimeError("snapshot lifecycle requires a plan revision")
-        self._emit(LifecycleDiagnostic(
-            execution_id=state.catalog.execution_id, plan_revision=revision, pass_number=state.pass_number,
-            stage=state.cursor.stage if state.cursor else None, code=code, severity=severity,
-            timestamp=self._clock(), status=status, message=code.value,
-        ))
 
     @staticmethod
     def _prepare_reuse(state: ExecutionState, confirmed: Mapping[str, DomainRevision] | None) -> None:

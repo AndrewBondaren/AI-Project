@@ -631,6 +631,8 @@ Legacy dict-секции не адаптируются в новый API. Сущ
 
 ## API-1-C1 — конкретный Climate settings contract proposal (2026-11-02)
 
+**D1 к согласованию (2026-11-08).** [Сквозная пара read / guarded update, источники полей и граница атомарности](./api-1-climate-c1-d1.md). Для первого update предлагается patch девяти скаляров, оба реестра входят в read и проверку ссылок. Строка PatchClimateScalars ниже с десятью полями описывает состояние после отдельного переноса lapse. Решение о реализации и переключении маршрутов остаётся за пользователем.
+
 **Статус:** DOCUMENT PROPOSAL, exact foreign publication/security seams OPEN; реализация и ноды не разрешены. Первый срез — Climate, включая принятый перенос elevation_lapse_rate. Данный раздел уточняет generic templates R2/R3 и не объявляет их placeholders existing types.
 
 ### Проверенные actual contracts и существенные findings

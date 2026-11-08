@@ -34,22 +34,26 @@ class ExecutionSnapshotService(Generic[S]):
                 raise TypeError("snapshot extension class mismatch")
             validate_immutable(value)
         state = ExecutionState.from_snapshot(snapshot, registry)
-        for registration in registry.graph_registrations():
-            contract = registration.contract
-            record = snapshot.catalog.record(registration.node_id, contract)
-            if record is not None and contract.lifecycle is not None:
+        try:
+            for registration in registry.graph_registrations():
+                contract = registration.contract
+                record = snapshot.catalog.record(registration.node_id, contract)
+                if record is not None and contract.lifecycle is not None:
+                    try:
+                        await contract.lifecycle.validate_restored(record.output)
+                    except Exception as error:
+                        raise ValueError(
+                            f"snapshot producer '{record.identity.node_id}' attempt {record.identity.attempt}: {error}"
+                        ) from error
+            if extension is not None and value is not None:
                 try:
-                    await contract.lifecycle.validate_restored(record.output)
+                    await extension.validate_restored(value)
+                    await extension.restore(value)
                 except Exception as error:
-                    raise ValueError(
-                        f"snapshot producer '{record.identity.node_id}' attempt {record.identity.attempt}: {error}"
-                    ) from error
-        if extension is not None and value is not None:
-            try:
-                await extension.validate_restored(value)
-                await extension.restore(value)
-            except Exception as error:
-                raise ValueError(f"snapshot extension '{extension.contract_id}': {error}") from error
+                    raise ValueError(f"snapshot extension '{extension.contract_id}': {error}") from error
+        except BaseException:
+            state.release()
+            raise
         return state
 
     def encode(self, state: ExecutionState, registry: NodeRegistry) -> str:

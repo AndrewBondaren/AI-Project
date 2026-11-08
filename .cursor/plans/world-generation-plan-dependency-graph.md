@@ -840,9 +840,9 @@ flowchart TD
 | Трек | Последнее решение и evidence | Следующая работа |
 |---|---|---|
 | Water/River / Fields | S1–S4 приняты, S2-FOLLOWUP-ID-1 выполнен. [Отчёт Fields/Encoding](./geo-water-fields-identity-report.md): 64 теста OK на Pydantic 2.13.4. | Учитывать проверенный контракт B в потребителях. |
-| [Snapshot](./world-domain-patches-snapshots.md) | SN-TIME-READ используется производственным TimeReader. Исправлена проверка обязательного head у SNAPSHOT_APPLY. | Совместно с Time перепроверить исправление integrity error на current и pinned. [T4](./time-t4-read-report.md) |
-| [Spatial](./spatial-distribution-domain.md) | [Независимое ревью F5](./spatial-f5-pack-review.md) — ACCEPT для F6, 17/17 на отдельных DAG/Pack БД. | F6: совместная проверка F1–F5 через штатные точки входа с reopen, поздним IO и сохранностью чужих holds. |
-| Time | Производственный T4 реализован. После ревью 29b29aec исправлены замена по rowid и NULL head у SNAPSHOT_APPLY. Time 51/51, snapshotCore 178 (1 skip), Pyright 0 по 11 файлам по [отчёту](./time-t4-read-report.md). | Независимо перепроверить последние P1/P2 на bda52ad2. Следующий integration slice T5 требует атомарного сохранения времени и эффектов. |
+| [Snapshot](./world-domain-patches-snapshots.md) | Независимая проверка T4 подтвердила отказ current/pinned при NULL head у SNAPSHOT_APPLY и чтение легальной initial publication. | Для T5 проверить применимый Time/World handler в том же CommitScope, что и CAS. |
+| [Spatial](./spatial-distribution-domain.md) | [F6 ACCEPT](./spatial-f6-finality-report.md): COMPLETED и окончательный FAILED прошли общую матрицу reopen на двух SQLite-базах, 2/2. | F1–F6 проверены в объёме протокола. Подключение к конкретному production caller и deployment имеют отдельные условия. |
+| Time | [Повторная проверка T4](./time-t4-read-verification.md) закрыла P1 на актуальной 0001 и P2 по обязательному head. Time 51/51, SnapshotCore 178 с одним skip, Pyright по 11 файлам чист. | Следующий срез T5: проследить и связать Time state и эффекты с принятой target publication в одном CommitScope; доказать rollback и retry. |
 | Physics | Подготовительный Physics I0 и общая маршрутизация прошли [совместную техническую проверку](./artifacts-d2-physics-i0-joint-verification.md). | Production I0 требует конкретной точки вызова и execution correlation. |
 | Artifacts | D2 и совместная маршрутизация технически приняты по [отчёту](./artifacts-d2-physics-i0-joint-verification.md). SnapshotCore: 176 тестов, один skip, logging 28/28. | Учитывать этот результат при интеграции. Статус пользовательской приёмки фиксирует владелец. |
 | [API-1](./api-1-transport-boundary.md) | Проверено покрытие полей storage и wire. Climate C1 содержит девять scalars, десять после переноса lapse. | Сопоставить вход каждой операции с версией и выходом владельца, включая presence/aliases. |
@@ -855,7 +855,7 @@ flowchart TD
 
 Техническая приёмка Artifacts D2, подготовительного Physics I0 и общей маршрутизации завершена. [Совместный отчёт](./artifacts-d2-physics-i0-joint-verification.md). Первый binding Time TL-B / PROJECT также принят. [Отчёт PROJECT](./time-log-project-report.md).
 
-**Можно брать параллельно F6 и повторную проверку T4.** Владелец F6 проверяет протокол DAG/Pack на двух БД. Ревьюер Time воспроизводит два последних контрпримера на исправленной ревизии.
+**Следующий срез Time/Snapshot — T5.** Первый шаг — зафиксировать production handler и путь записи до общего commit, включая CAS conflict и повтор по operation_id. Параллельно можно проверить уже внесённый перенос ExecutionInteraction по [плану декомпозиции DAGEngine](./dag-engine-domain-decomposition.md) до следующего переноса.
 
 ### 12.1. Параллельная работа по срезам на 2026-11-06
 

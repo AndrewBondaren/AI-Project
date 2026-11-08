@@ -4,6 +4,8 @@
 
 **Путь / owning-план:** `.cursor/plans/lod-simulation-handoff.md`.
 
+**LOD-A0:** [инвентаризация и проверка продолжения перехода региона после reopen](./lod-a0-region-continuation.md). На согласование LOD-C1 вынесены единицы времени, владение интервалом при overlap и граница атомарной записи.
+
 **Навигационный граф разработки:** [WORLD-PLAN-GRAPH-1](./world-generation-plan-dependency-graph.md), §11. Граф показывает зависимости разработки, не causal runtime DAG.
 
 **Нормативные соседи:** [Lazy Simulation ТЗ](../../docs/tz_lazy_simulation.md) (LS-T1–T9), [PHYSICS-1](./physics-spatial-dynamics.md) (PH-ORCH / PH-LOD / PH-HANDOFF), [SPATIAL-1](./spatial-distribution-domain.md), [Snapshot/Patches](./world-domain-patches-snapshots.md), [Time](./time-domain.md), [GEN-DAG-1](./gen-dag-1-post-geo-ws.md), [Structural Mutations](../../docs/tz_structural_mutations.md), [World Snapshot ТЗ](../../docs/tz_world_snapshot.md).
