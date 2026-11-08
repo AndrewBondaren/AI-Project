@@ -1300,6 +1300,8 @@ API/GEN owner получает inventory §11/30/33, lossless transport policy �
 
 Проект [SN-TIME-READ](./sn-time-read.md) задаёт семантику read_current(expected=P) и read_pinned(P). Результаты проверки значений P/Q и исторического snapshot приведены в [отчёте T4](./time-t4-read-report.md).
 
+Исправления P1 и P2 проверены в [независимом ревью T4 на 8d6e6785](./time-t4-read-verification.md).
+
 - **T4, current/historical read.** Требуется SN-TIME-READ и реализация Time state reader. Чтение привязано к уже принятому состоянию. Целевая публикация будущей записи и операция создания ветки этому пути не требуются.
 - **T5, runtime apply.** Требуется SN-TIME-APPLY и применимый Time/World handler в общем CommitScope. Target publication назначает Snapshot. Принятие подтверждается общим результатом commit. Pure prepare_advance доступен независимо.
 - **Restore/branch.** SN-TIME-BRANCH требуется именно для создания и восстановления результата новой ветки. Чтение существующей исторической точки использует SN-TIME-READ.

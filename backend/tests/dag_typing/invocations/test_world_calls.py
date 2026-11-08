@@ -188,7 +188,8 @@ class Merge(Source):
 
 
 def runtime(entry=Pipeline, store=None, transform=Transform, retry_policy=None, diamond=False, counter=CountCaller, lease_seconds=300,
-            interaction=None, counter_wait=None, entry_lifecycle=None, enable_stop_intent=False, pack_closer=None):
+            interaction=None, counter_wait=None, entry_lifecycle=None, enable_stop_intent=False, pack_closer=None,
+            workers=1):
     registry, bindings = NodeRegistry(), GraphBindings()
     if diamond:
         for cls, deps in ((Source, ()), (Left, (Source.id,)), (Right, (Source.id,)), (Merge, (Left.id, Right.id))):
@@ -212,7 +213,7 @@ def runtime(entry=Pipeline, store=None, transform=Transform, retry_policy=None, 
         bindings.nodes[cls.id] = cls(deps=(Merge.id,)) if diamond and cls is transform else cls()
     compiler = GraphCompiler(registry, bindings, compile_rules=lambda rules: (), evaluate_rules=lambda *_: True)
     compiler.precompile()
-    config = InvocationOptions(store, workers=1, invocation_limit=16, lease_seconds=lease_seconds, interaction=interaction) if store else None
+    config = InvocationOptions(store, workers=workers, invocation_limit=16, lease_seconds=lease_seconds, interaction=interaction) if store else None
     executor = DAGExecutor(NodeRunner(ContractValidator(), NodeValidator()), {FakeExecutor: FakeExecutor()},
                            invocation_options=config)
     plan = compiler.compile(GraphRuleState(), invocation_root=entry.id)

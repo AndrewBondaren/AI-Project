@@ -8,19 +8,19 @@ from typing import Annotated, Generic, TypeVar
 
 from pydantic import BaseModel, Field, TypeAdapter
 
-from app.application.engine.contracts.invocation.inputWait import Failed, InputConflict, ResumeInput
+from app.application.engine.contracts.invocation.inputWait import Failed, ResumeInput
 from app.application.engine.runtime.invocations.inputWaitCoordinator import InputWaitCoordinator
 from app.dataModel.engine.dag.invocations.inputWait import InputReceipt
 from app.dataModel.engine.dag.invocations.record import CompletedOutcome, FailedOutcome, InvocationStatus
 from app.application.engine.contracts.invocation.executionOptions import InvocationOptions
-from app.application.engine.contracts.invocation.executionStore import Checkpoint, PackCloser, OwnershipConflict, RestoreFailure
+from app.application.engine.contracts.invocation.executionStore import PackCloser, OwnershipConflict, RestoreFailure
 from app.application.engine.runtime.invocations.checkpointCodec import CheckpointCodec
 from app.application.engine.runtime.invocations.invocationCoordinator import InvocationCoordinator
 from app.application.engine.runtime.invocations.ownedExecution import ExecutionStopping, OwnedExecution
 from app.application.engine.runtime.invocations.recovery.checkpointHeader import read_header
 from app.application.engine.runtime.invocations.recovery.closeConfirmation import confirm_closed
 from app.application.engine.runtime.invocations.recovery.terminalReplay import terminal_result
-from app.application.engine.runtime.invocations.sessionFrame import SessionFrame
+from app.application.engine.runtime.invocations.interaction.executionInteraction import ExecutionInteraction
 from app.dataModel.engine.dag.invocations.record import InvocationGraph
 from app.application.cancellation.typed.snapshotStore import SnapshotStore
 from app.application.engine.contracts.executionBindings import ExecutionCursor, ExecutionResult, InputDelivery, LifecycleBinding, PassStage, ResolveResult
@@ -39,7 +39,7 @@ from app.application.engine.runtime.responseResolver import ResponseResolver
 from app.application.engine.taskType import TaskType
 from app.dataModel.engine.dag.diagnostics import CancellationRequest, ExecutionEventCode, ExecutionSeverity
 from app.dataModel.engine.dag.executionPhase import ExecutionPhase
-from app.dataModel.engine.dag.identity import DomainRevision, ExecutionId, ExecutionIdValue, Ordinal, PlanInstanceId, WaitId
+from app.dataModel.engine.dag.identity import DomainRevision, ExecutionId, ExecutionIdValue, PlanInstanceId, WaitId
 from app.dataModel.engine.dag.nodeStatus import NodeStatus
 
 O = TypeVar("O", bound=BaseModel)
@@ -55,6 +55,7 @@ class DAGEngine(Generic[O, S]):
     ) -> None:
         self._executor, self._aggregate, self._registry = executor, aggregate, registry
         self._binding, self._request = binding, request
+        self._interaction = ExecutionInteraction(executor.invocation_options, binding)
         self._snapshots, self._store = snapshots, store
         self._emit, self._clock = emit, clock
         self._pack_closer = pack_closer
@@ -149,53 +150,8 @@ class DAGEngine(Generic[O, S]):
                 state.release()
             self._active.discard(execution_id)
 
-    def _interaction_settings(self) -> InvocationOptions:
-        settings = self._executor.invocation_options
-        if settings is None or settings.interaction is None:
-            raise PermissionError("authenticated interaction binding required")
-        return settings
-
-    def _interaction_graph(self, execution_id: ExecutionId, settings: InvocationOptions,
-                           saved: Checkpoint) -> tuple[InvocationGraph, ExecutionPlan]:
-        header = InvocationGraph.model_validate_json(saved.blob)
-        InputWaitCoordinator.check_owner(header, settings.interaction)
-        if header.execution_id != execution_id or header.session is None:
-            raise RestoreFailure("invalid interaction execution")
-        frame = SessionFrame.model_validate_json(header.session)
-        if frame.cursor is None:
-            raise RestoreFailure("missing lifecycle cursor")
-        if saved.stop_intent is not None:
-            raise InputConflict("execution is stopping")
-        revision, plan = self._binding.compile(frame.cursor.task_type, frame.metadata.pass_number)
-        graph = CheckpointCodec.decode(saved.blob, plan)
-        if revision != graph.revision or plan.invocation_root != graph.records[graph.root].node_id:
-            raise RestoreFailure("durable plan changed")
-        return graph, plan
-
     async def accept_input[U: BaseModel](self, execution_id: ExecutionId, request: ResumeInput[U]) -> InputReceipt:
-        settings = self._interaction_settings()
-        before = await settings.store.load(execution_id)
-        if before.stop_intent is not None:
-            self._interaction_graph(execution_id, settings, before)
-        try:
-            claim = await settings.store.claim(execution_id, str(uuid4()), settings.lease_seconds)
-        except OwnershipConflict:
-            saved = await settings.store.load(execution_id)
-            graph, _ = self._interaction_graph(execution_id, settings, saved)
-            wait = graph.waits.get(request.wait_id)
-            if wait is not None and wait.accepted is None and graph.records[wait.invocation_id].status == InvocationStatus.CANCELLED:
-                raise InputConflict("child wait was cancelled") from None
-            raise
-        try:
-            saved = await settings.store.load(execution_id)
-            graph, plan = self._interaction_graph(execution_id, settings, saved)
-            receipt, fresh = InputWaitCoordinator.accept(graph, plan, request, settings.interaction)
-            if fresh:
-                owned = OwnedExecution(settings.store, claim, saved.revision, graph, settings.lease_seconds)
-                await owned.save()
-            return receipt
-        finally:
-            await settings.store.release(claim)
+        return await self._interaction.accept_input(execution_id, request)
 
     async def resume_input[U: BaseModel](self, execution_id: ExecutionId, request: ResumeInput[U], *,
                                          max_passes: int, options: LLMExecutionOptions) -> InputDelivery[O]:
@@ -206,40 +162,10 @@ class DAGEngine(Generic[O, S]):
         return InputDelivery(receipt, result)
 
     async def cancel_waiting_child(self, execution_id: ExecutionId, wait_id: WaitId, *, expected_revision: int) -> None:
-        """Cancel the child bound to this wait. Resume drives the caller's join."""
-        TypeAdapter[int](Ordinal).validate_python(expected_revision)
-        settings = self._interaction_settings()
-        while True:
-            saved = await settings.store.load(execution_id)
-            graph, _ = self._interaction_graph(execution_id, settings, saved)
-            wait = graph.waits.get(wait_id)
-            if (graph.cancellation is not None or wait is None or wait.accepted is not None
-                    or wait.binding.revision != expected_revision):
-                raise InputConflict("unknown, consumed or stale child wait")
-            child = graph.records[wait.invocation_id]
-            if child.caller_invocation_id is None or child.step_index != wait.step_index:
-                raise InputConflict("wait does not belong to a child at this step")
-            if child.status == InvocationStatus.CANCELLED:
-                return
-            if child.status != InvocationStatus.WAITING_INPUT:
-                raise InputConflict("child is not waiting for input")
-            if await settings.store.cancel_child(execution_id, saved.revision, wait_id):
-                return
+        await self._interaction.cancel_waiting_child(execution_id, wait_id, expected_revision=expected_revision)
 
     async def cancel_execution(self, execution_id: ExecutionId) -> None:
-        settings = self._interaction_settings()
-        while True:
-            saved = await settings.store.load(execution_id)
-            graph, _ = self._interaction_graph(execution_id, settings, saved)
-            if graph.response is not None or graph.failure is not None or graph.cancellation is not None:
-                return
-            for record in graph.records.values():
-                if record.status not in (InvocationStatus.SUCCEEDED, InvocationStatus.FAILED, InvocationStatus.CANCELLED):
-                    record.status = InvocationStatus.CANCELLED
-            graph.waiting_for_input = False
-            graph.cancellation = "execution cancelled"
-            if await settings.store.cancel(execution_id, saved.revision, CheckpointCodec.encode(graph)):
-                return
+        await self._interaction.cancel_execution(execution_id)
 
     async def _restore_durable(
         self, execution_id: ExecutionId, settings: InvocationOptions, max_passes: int, options: LLMExecutionOptions,
@@ -331,14 +257,12 @@ class DAGEngine(Generic[O, S]):
             if saved.final_revision is not None:
                 read_header(saved, execution_id, settings, max_passes, requested_task)
                 return terminal_result(saved, execution_id, self._binding.response_type)
-            if saved.stop_intent is not None or saved.status != InvocationStatus.CANCELLED or settings.interaction is None:
-                raise
-            graph, _ = self._interaction_graph(execution_id, settings, saved)
-            if graph.cancellation is None:
+            diagnostic = self._interaction.cancelled_diagnostic(execution_id, saved)
+            if diagnostic is None:
                 raise
             if self._enable_stop_intent:
                 return await self._restore_durable(execution_id, settings, max_passes, options, confirmed, cancellation)
-            return Failed(graph.cancellation)
+            return Failed(diagnostic)
 
     async def _drive(
         self, state: ExecutionState, plan: ExecutionPlan, max_passes: int, options: LLMExecutionOptions,
