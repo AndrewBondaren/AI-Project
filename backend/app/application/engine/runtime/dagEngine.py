@@ -18,6 +18,7 @@ from app.application.engine.runtime.invocations.checkpointCodec import Checkpoin
 from app.application.engine.runtime.invocations.invocationCoordinator import InvocationCoordinator
 from app.application.engine.runtime.invocations.ownedExecution import ExecutionStopping, OwnedExecution
 from app.application.engine.runtime.invocations.recovery.checkpointHeader import read_header
+from app.application.engine.runtime.invocations.recovery.closeConfirmation import confirm_closed
 from app.application.engine.runtime.invocations.recovery.terminalReplay import terminal_result
 from app.application.engine.runtime.invocations.sessionFrame import SessionFrame
 from app.dataModel.engine.dag.invocations.record import InvocationGraph
@@ -35,7 +36,6 @@ from app.application.engine.runtime.execution.llmAggregateExecutor import LLMAgg
 from app.application.engine.runtime.execution.nodeOutcome import LevelDecision
 from app.application.engine.runtime.repair.repairOrchestrator import cancellation_checkpoint
 from app.application.engine.runtime.responseResolver import ResponseResolver
-from app.application.publication.errors import UnknownCommitOutcome
 from app.application.engine.taskType import TaskType
 from app.dataModel.engine.dag.diagnostics import CancellationRequest, ExecutionEventCode, ExecutionSeverity
 from app.dataModel.engine.dag.executionPhase import ExecutionPhase
@@ -306,18 +306,7 @@ class DAGEngine(Generic[O, S]):
                 if self._pack_closer is None:
                     raise
                 intent = stopped.intent
-                closed = await self._pack_closer.read_closed(intent)
-                if closed is None:
-                    try:
-                        await self._pack_closer.close(intent)
-                    except (UnknownCommitOutcome, OSError):
-                        closed = await self._pack_closer.read_closed(intent)
-                        if closed is None:
-                            raise
-                    else:
-                        closed = await self._pack_closer.read_closed(intent)
-                if closed is None:
-                    raise RestoreFailure("Pack CLOSED unavailable after close")
+                closed = await confirm_closed(self._pack_closer, intent)
                 final = await settings.store.finalize(claim, intent.stop_revision, closed)
                 return terminal_result(final, execution_id, self._binding.response_type)
 

@@ -1461,12 +1461,12 @@ CREATE TABLE IF NOT EXISTS world_publications (
 CREATE TABLE IF NOT EXISTS time_publication_states (
     publication_id TEXT NOT NULL PRIMARY KEY REFERENCES world_publications(publication_id),
     payload TEXT NOT NULL
-);
+) WITHOUT ROWID;
 
 CREATE TABLE IF NOT EXISTS time_snapshot_states (
     snapshot_id TEXT NOT NULL PRIMARY KEY REFERENCES world_snapshots(snapshot_id),
     payload TEXT NOT NULL
-);
+) WITHOUT ROWID;
 
 CREATE TRIGGER IF NOT EXISTS time_publication_states_no_update BEFORE UPDATE ON time_publication_states
 BEGIN SELECT RAISE(ABORT, 'immutable publication clock'); END;

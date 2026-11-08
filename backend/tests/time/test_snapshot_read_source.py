@@ -66,6 +66,18 @@ class SnapshotTimeReadTests(unittest.TestCase):
                                  HistoricalTimeCapture(snapshot=snapshot, point=later))
                 child = snapshot.model_copy(update={"snapshot_id": "child"})
                 inherited = await publish(bundle, target, "next", child, section, ())
+                for table, key, old, new in (
+                    ("time_publication_states", "publication_id", pinned.publication_id, target.publication_id),
+                    ("time_snapshot_states", "snapshot_id", snapshot.snapshot_id, child.snapshot_id),
+                ):
+                    with self.subTest(table=table), self.assertRaisesRegex(sqlite3.OperationalError, "rowid"):
+                        async with db.transaction():
+                            await db.conn.execute(
+                                f"INSERT OR REPLACE INTO {table}(rowid,{key},payload) "
+                                f"SELECT rowid,?,payload FROM {table} WHERE {key}=?", (new, old))
+                self.assertEqual(await reader.read_pinned(pinned), TimeCapture(publication=pinned, point=origin))
+                self.assertEqual(await reader.read_historical(HistoricalTimeRead(snapshot=snapshot)),
+                                 HistoricalTimeCapture(snapshot=snapshot, point=later))
                 self.assertEqual(await reader.read_pinned(inherited), TimeCapture(publication=inherited, point=later))
                 self.assertEqual(await reader.read_historical(HistoricalTimeRead(snapshot=child)),
                                  HistoricalTimeCapture(snapshot=child, point=later))
@@ -124,8 +136,8 @@ class SnapshotTimeReadTests(unittest.TestCase):
             with self.subTest(key=key, version=version):
                 run_async(check(key, version))
 
-    def test_corrupt_snapshot_apply_head_timeline(self):
-        async def check():
+    def test_corrupt_snapshot_apply_head(self):
+        async def check(missing_head):
             async with live_database() as bundle:
                 db, commits, *_ = bundle
                 initial = await live_started(bundle)
@@ -134,13 +146,20 @@ class SnapshotTimeReadTests(unittest.TestCase):
                 target = await publish(bundle, initial, "op", snapshot, section,
                                        (receipt(key=CLOCK_SECTION, states=(section,)),))
                 async with db.transaction():
-                    await db.conn.execute("INSERT INTO timelines(timeline_id,world_uid,created_at) "
-                                          "SELECT 'other',world_uid,created_at FROM timelines WHERE timeline_id='t1'")
-                    await db.conn.execute("DROP TRIGGER world_snapshots_no_update")
-                    await db.conn.execute("UPDATE world_snapshots SET timeline_id='other' WHERE snapshot_id='s'")
+                    if missing_head:
+                        await db.conn.execute("DROP TRIGGER world_publications_no_update")
+                        await db.conn.execute("UPDATE world_publications SET snapshot_head_id=NULL WHERE publication_id=?",
+                                              (target.publication_id,))
+                    else:
+                        await db.conn.execute("INSERT INTO timelines(timeline_id,world_uid,created_at) "
+                                              "SELECT 'other',world_uid,created_at FROM timelines WHERE timeline_id='t1'")
+                        await db.conn.execute("DROP TRIGGER world_snapshots_no_update")
+                        await db.conn.execute("UPDATE world_snapshots SET timeline_id='other' WHERE snapshot_id='s'")
                 reader = make_time_reader(commits)
                 with self.assertRaises(PublicationInfrastructureError):
                     await reader.read_current(CurrentTimeRead(expected=target))
                 with self.assertRaises(PublicationInfrastructureError):
                     await reader.read_pinned(target)
-        run_async(check())
+        for missing_head in (False, True):
+            with self.subTest(missing_head=missing_head):
+                run_async(check(missing_head))

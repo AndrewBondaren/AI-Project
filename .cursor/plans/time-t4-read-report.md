@@ -42,6 +42,10 @@ address = await self._accepted.resolve_publication(publication, CLOCK_SECTION, s
 
 ### Полный перечень среза
 
+После повторного ревью 29b29aec обе таблицы часов в исходной схеме объявлены `WITHOUT ROWID`. Регрессия пытается заменить строку через её скрытый ключ с другим существующим внешним ключом и повторно проверяет capture P и S. При восстановлении SNAPSHOT_APPLY валидатор требует snapshot_head_id до сравнения полной ссылки. При повреждении этого поля current и pinned завершаются PublicationInfrastructureError. [Регрессии](../../backend/tests/time/test_snapshot_read_source.py#L69) · [Валидация перехода](../../backend/app/db/repositories/sqlite/snapshotCore/publications/worldPublicationValidation.py#L36)
+
+Повторная проверка: Time 51/51, SnapshotCore 178 (один skip), Pyright по 11 Python-файлам — 0 ошибок и предупреждений. Четыре файла этой итерации изменены через apply_patch: 0001_initial.sql, worldPublicationValidation.py, test_snapshot_read_source.py и этот отчёт. Изменение исходной схемы применяется при создании БД. Для существующих БД с уже зарегистрированной версией 0001 автоматическое обновление таблиц не предусмотрено.
+
 - `backend/app/application/time/composition/factory.py`
 - `backend/app/application/time/reads/reader.py`
 - `backend/app/application/time/reads/sourcePort.py`
@@ -51,6 +55,7 @@ address = await self._accepted.resolve_publication(publication, CLOCK_SECTION, s
 - `backend/app/db/migrations/0001_initial.sql` (две таблицы Time)
 - `backend/app/db/repositories/sqlite/timeStateReader.py`
 - `backend/app/db/repositories/sqlite/snapshotCore/publications/worldPublicationStore.py`
+- `backend/app/db/repositories/sqlite/snapshotCore/publications/worldPublicationValidation.py`
 - `backend/tests/snapshotCore/storage/publication/test_accepted_state_reader.py`
 - `backend/tests/time/test_snapshot_read_source.py`
 - `.cursor/plans/sn-time-read.md`

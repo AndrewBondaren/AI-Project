@@ -34,7 +34,7 @@ def validate_transition(parent: WorldPublicationRow, row: WorldPublicationRow, o
     if operation.world_uid != row.world_uid:
         raise PublicationInfrastructureError("publication operation belongs to another world")
     if parent.gameplay_started:
-        if (kind is not OperationKind.SNAPSHOT_APPLY or not row.gameplay_started
+        if (kind is not OperationKind.SNAPSHOT_APPLY or row.snapshot_head_id is None or not row.gameplay_started
                 or row.pack_hash != parent.pack_hash or row.active_timeline_id != parent.active_timeline_id):
             raise PublicationInfrastructureError("invalid runtime publication transition")
     elif row.gameplay_started:
