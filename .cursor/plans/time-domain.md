@@ -1,5 +1,7 @@
 # Time — owning architectural proposal
 
+**Навигационный граф разработки:** [WORLD-PLAN-GRAPH-1](./world-generation-plan-dependency-graph.md) показывает межплановые зависимости Time, Snapshot, DAG, Physics и Spatial. Нормативные Time contracts, статусы этапов и пользовательская приёмка принадлежат этому owning-плану; граф не является runtime causal DAG и не подменяет Time freeze.
+
 Исторический статус документальной итерации до разрешения разработки: SPECIFICATION CANDIDATE / USER REVIEW PENDING (§§29–35); accepted freeze и внешние integration gates не закрыты. Не CODE-READY, не пользовательская приёмка всего proposal. Только документы; production POJO, DDL, DAG nodes, publication и cutover запрещены текущим scope.
 
 ## Выполнение изолированного core (2026-11-03)

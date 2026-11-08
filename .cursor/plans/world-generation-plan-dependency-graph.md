@@ -17,7 +17,7 @@
 | [GEN-DAG-1](./gen-dag-1-post-geo-ws.md) — `.cursor/plans/gen-dag-1-post-geo-ws.md` | **Совместный дизайн нового production DAG**, точные Input/Output/Error POJO, factories, публичные domain operations и единый cutover. Старые 15 ID — AS-IS inventory, **все legacy concrete-ноды под удаление, кроме перерабатываемой `check_scene`**; нет 1:1 миграции. **GEN-NODE-JOINT-REVIEW** обязателен с мастером: Mermaid-карта зависимостей, решения keep/split публичных pipelines и per-node contracts до кода. **DRAFT/DEFERRED**: GEO-1, необходимые Patch/Snapshot gates и concrete contracts/приёмка OPEN. |
 | [PHYSICS-1](./physics-spatial-dynamics.md) — `.cursor/plans/physics-spatial-dynamics.md` | **Owning план PH-0/PH-ARCH/PH-ORCH/PH-AGG/PH-LOCAL/PH-LOD/PH-HANDOFF/PH-PUBLISH**: DAG-node-only trigger, FAR/MEDIUM/NEAR через DAG+settings, **Grade/SQL только bounded NEAR (FAR/MEDIUM — без Grade)**; фоновая aggregate и локальная подробная стратегии; typed input/output, изменения только через domain-owned operations → Patch/Snapshot. Материалы — отдельный mutable-property owner и внешний контракт, не внутренний поддомен Physics; Physics формирует effects, DAG маршрутизирует Materials/domain change. PH-0 принят статически; направления P1.6, D1–D5 P2.10, SI/scope P2.11 и public pipelines boundary P2.12 приняты; полный PH-ARCH **OPEN**, exact freeze и runtime **OPEN**. В §5 выделены будущие water-first acceptance aliases `PH-AGG-RUNTIME`, `PH-LOCAL-RUNTIME`, `PH-GAMEPLAY-E2E`; это **не implementation steps** и не prerequisite GEO/Pack/GEN initial cutover. |
 | [LOD-SIM-1](./lod-simulation-handoff.md) — `.cursor/plans/lod-simulation-handoff.md` | **Новый DRAFT owning-план** generic LOD policy/consumer, FAR↔NEAR handoff, Time/revision continuity, causal interest, resource budgets и invariant validators. PH-AGG/LOCAL transforms принадлежат PHYSICS-1; Snapshot и Spatial не приобретают нового storage/orchestrator. Только предлагаемая документальная ветка §11; не hard gate и не prerequisite GEO/Pack/GEN initial cutover. |
-| [ERROR-CONTRACTS-1](./error-contracts-1.md) | A0 и C0 приняты владельцем 2026-11-04. C1 реализован локально. Доменные D1/D2 и интеграционные проверки продолжаются. Production-приёмка конкретной операции требует её migration и применимого I0 evidence. Изменение общего ядра проверяется по impact register затронутых consumers. |
+| [ERROR-CONTRACTS-1](./error-contracts-1.md) | A0 и C0 приняты владельцем 2026-11-04. C1 реализован и находится в `master`; его наличие не закрывает TC-22 — миграция всех direct consumers ещё не подтверждена. Доменные D1/D2 и интеграционные проверки продолжаются. Production-приёмка конкретной операции требует её migration и применимого I0 evidence. Изменение общего ядра проверяется по impact register затронутых consumers. |
 
 **Новый owning-трек:** [Time](./time-domain.md) — world clock values, intervals, pure conversions, coherent reads и preparation. Calendar/settings/epochs принадлежат World, стоимость действий — Actions, выбор операций — DAG, commit/restore/branch — Snapshot. **RESEARCHED PROPOSAL; частные решения приняты, общий API/foreign freeze OPEN.** Этапы, статусы и реестр зависимостей Time — §10; это часть общего графа, не отдельный план реализации.
 
@@ -494,7 +494,7 @@ for target in re.findall(r'\]\(([^)]+)\)', prose):
 owners = ['geo-1-designed-water', 'spatial-distribution-domain',
           'world-domain-patches-snapshots', 'dag-typing-1',
           'gen-dag-1-post-geo-ws', 'physics-spatial-dynamics',
-          'lod-simulation-handoff', 'error-contracts-1']
+          'lod-simulation-handoff', 'error-contracts-1', 'time-domain']
 for owner in owners:
     assert '](./world-generation-plan-dependency-graph.md)' in (
         p.parent / (owner + '.md')).read_text(encoding='utf-8'), owner
@@ -521,11 +521,13 @@ print('PASS:', len(edges), 'edges;', len(vertices),
 
 ## 8. Матрица допустимой параллельности: конкретные шаги после gates
 
+**Исторические строки «Сейчас» и уже пройденные этапы ниже относятся к исходному срезу v6 (2026-11-01); действующая очередь и приёмки — §12.** Архитектурные prerequisite-правила таблицы сохраняются, пока их не изменит owning-план.
+
 **Как читать:** «можно параллельно» означает **независимость по архитектурным prerequisites**, не распоряжение запустить несколько кодовых изменений сразу. Каждый code step выполняется по своему owning-плану, с точными contract/POJO/enum/file freeze и отдельным разрешением мастера. Отдельные owners могут вести архитектурный анализ одновременно; code-группы с общими файлами/consumer cutover требуют сверки import/caller map перед стартом. Условный gate `OPEN` не считается выполненным.
 
 | Когда / стартовый gate | Какие конкретные работы можно вести независимо | Где обязательная синхронизация / что ещё запрещено |
 |---|---|---|
-| **Сейчас** | GEO-I11.1, Snapshot 4D2, проектирование SP-P2W. | Очередь в §12. |
+| **Срез 2026-11-01** | GEO-I11.1, Snapshot 4D2, проектирование SP-P2W. | Очередь в §12. |
 | **После приёмки Snapshot 4C2-R/H** | Snapshot **4C2-O** как **один** собственный атомарный code step может идти одновременно с GEO контрактной/кодовой веткой и независимыми SPATIAL SP-0/1/P0 работами (при их собственных gates). | `4C3` не стартует до принятого `4C2-O`. Внутри Snapshot правило «один подшаг за заход» сохраняется, **4C2-O и 4C3 не параллелить**. |
 | **После SPATIAL SP-0/1/P0 и принятия exact Pack format/POJO** | `SP-P1` (после собственного P0), затем `SP-P2R` (после P1) может разрабатываться независимо от **GEO G10-A** и последовательной ветки Snapshot `4C3+`; кодовые steps только по отдельным разрешениям. | `SP-P2W` дополнительно ждёт **SN-STAGE**; `SP-P3I` ждёт `SP-H/GEO G10-A` и `SP-P1`. Нельзя начать их из-за одного наличия generic contract. |
 | **После GEO-SPATIAL-CONTRACT, GEO G10-A/SP-H и SP-P1** | `SP-P3I` (Hydrology compact facts/index) и `SP-P2R` (Pack read/verify) — **реальные независимые branches**; если к этому моменту уже принят SN-STAGE, `SP-P2W` тоже допустим параллельно, каждый со своей картой файлов и тестами. | `SP-P2` только после P2R+P2W, `SP-P3W` только после P3I+P2 и принятого PACK-ENTRY-CONTRACT; `SP-P3` только после P3W. Не смешивать hydrology source, storage port и writer в один кодовый шаг. |
@@ -840,22 +842,22 @@ flowchart TD
 | Трек | Последнее решение и evidence | Следующая работа |
 |---|---|---|
 | Water/River / Fields | S1–S4 приняты, S2-FOLLOWUP-ID-1 выполнен. [Отчёт Fields/Encoding](./geo-water-fields-identity-report.md): 64 теста OK на Pydantic 2.13.4. | Учитывать проверенный контракт B в потребителях. |
-| [Snapshot](./world-domain-patches-snapshots.md) | Независимая проверка T4 подтвердила отказ current/pinned при NULL head у SNAPSHOT_APPLY и чтение легальной initial publication. | Для T5 проверить применимый Time/World handler в том же CommitScope, что и CAS. |
-| [Spatial](./spatial-distribution-domain.md) | [F6 ACCEPT](./spatial-f6-finality-report.md): COMPLETED и окончательный FAILED прошли общую матрицу reopen на двух SQLite-базах, 2/2. | F1–F6 проверены в объёме протокола. Подключение к конкретному production caller и deployment имеют отдельные условия. |
-| Time | [Повторная проверка T4](./time-t4-read-verification.md) закрыла P1 на актуальной 0001 и P2 по обязательному head. Time 51/51, SnapshotCore 178 с одним skip, Pyright по 11 файлам чист. | Следующий срез T5: проследить и связать Time state и эффекты с принятой target publication в одном CommitScope; доказать rollback и retry. |
+| [Snapshot](./world-domain-patches-snapshots.md) | SN-TIME-READ используется производственным TimeReader. [Независимая проверка T4](./time-t4-read-verification.md) подтвердила исправление stale rowid и отказ current/pinned при NULL head у SNAPSHOT_APPLY; легальная initial publication читается. | Для T5 проверить Time/World handler в одном CommitScope с CAS. Другие Snapshot consumers требуют собственных acceptance gates; T4 не закрывает SN-RUNTIME или T5. |
+| [Spatial](./spatial-distribution-domain.md) | [F6 ACCEPT](./spatial-f6-finality-report.md): DAG+Pack F1–F5 прошли 2/2 интеграционных теста на двух БД, включая FAILED/COMPLETED, reopen, CLOSED/finalized/release и сохранность чужих holds. | Использовать F6 как evidence проверенного среза SP-P2W; это не автоматическая приёмка всего SPATIAL, production binding или deployment. |
+| Time | [Независимый повторный review T4](./time-t4-read-verification.md) подтвердил исправление P1/P2 на `8d6e6785`: Time 51/51, SnapshotCore 178 (1 skip), Pyright 0 по 11 файлам. | Следующий T5 — связать Time state и эффекты с target publication в одном CommitScope, доказать rollback и retry; общий Time freeze не закрыт. |
 | Physics | Подготовительный Physics I0 и общая маршрутизация прошли [совместную техническую проверку](./artifacts-d2-physics-i0-joint-verification.md). | Production I0 требует конкретной точки вызова и execution correlation. |
 | Artifacts | D2 и совместная маршрутизация технически приняты по [отчёту](./artifacts-d2-physics-i0-joint-verification.md). SnapshotCore: 176 тестов, один skip, logging 28/28. | Учитывать этот результат при интеграции. Статус пользовательской приёмки фиксирует владелец. |
 | [API-1](./api-1-transport-boundary.md) | Проверено покрытие полей storage и wire. Climate C1 содержит девять scalars, десять после переноса lapse. | Сопоставить вход каждой операции с версией и выходом владельца, включая presence/aliases. |
 | [GEN-BAKE-READ](./generator-public-bake-reads.md) | Исправленный пакет D1–D7 предъявлен в §17.10.4 | Получить решение пользователя, затем R1/R2 отдельно по операциям. Handoff light, full L0+C23, named terrain и coordinate terrain описан в §17.10.3 |
 | [DAG invocation и bake admission](./dag-invocations-bake-admission.md) | Итог ревью R6 на 7b6104d7, полный набор 392/392. | Далее R7 по условиям owning-плана. |
-| [ERROR-CONTRACTS-1](./error-contracts-1.md) | GEO D1 №1–3 принят; Snapshot D1 metadata принят и реализован. | GEO предъявляет D2 evidence; другие Snapshot producers требуют отдельной миграции. |
+| [ERROR-CONTRACTS-1](./error-contracts-1.md) | GEO D1 №1–3 принят; Snapshot D1 metadata принят и реализован. Поправка C0-3 / VARIANT-1 (`VariantSegment(branch: ModelIdentity)`) принята владельцем 2026-11-08 и согласована с текущей реализацией. | GEO предъявляет D2 evidence; другие Snapshot producers требуют отдельной миграции. VARIANT-1 закрыт; TC-22 и остальные локальные D2/I0 остаются открытыми без глобального блокирования независимых доменов. |
 | [LOD](./lod-simulation-handoff.md) | §11 учитывает draft и открытые вопросы coherent capture, continuation и неизменности мира | Продолжать согласование с владельцами первого consumer. Конкретные зависимости runtime уточняются по сценарию |
 
 Предложения новых bindings в этих планах не меняют hard-edge реестр автоматически. Исторические команды §9.3 для приёмки I1/B, preflight P1-A и проектирования уже принятой карты Physics заменены этой очередью.
 
 Техническая приёмка Artifacts D2, подготовительного Physics I0 и общей маршрутизации завершена. [Совместный отчёт](./artifacts-d2-physics-i0-joint-verification.md). Первый binding Time TL-B / PROJECT также принят. [Отчёт PROJECT](./time-log-project-report.md).
 
-**Следующий срез Time/Snapshot — T5.** Первый шаг — зафиксировать production handler и путь записи до общего commit, включая CAS conflict и повтор по operation_id. Параллельно можно проверить уже внесённый перенос ExecutionInteraction по [плану декомпозиции DAGEngine](./dag-engine-domain-decomposition.md) до следующего переноса.
+**Обновление 2026-11-08 после `6b256003`:** F6 и повторная проверка T4 завершены отдельными отчётами; старое указание «можно брать параллельно» утратило актуальность. Следующие срезы определяют owning Spatial и Time, с отдельными contract/acceptance gates. F6 не закрывает весь SP-P2W, а T4 — T5. **Следующий срез Time/Snapshot — T5:** зафиксировать production handler и путь записи до общего commit, включая CAS conflict и повтор по operation_id. Параллельно можно проверить перенос ExecutionInteraction по [плану декомпозиции DAGEngine](./dag-engine-domain-decomposition.md) до следующего переноса.
 
 ### 12.1. Параллельная работа по срезам на 2026-11-06
 
@@ -888,6 +890,8 @@ API-1 ведёт пользователь. GEN-BAKE-READ после решени
 
 ### 12.3. Artifacts — миграция cancel и GC после C1
 
+**Исторический снимок до технической приёмки 2026-11-08.** Ниже сохранены исходные prerequisites и задания; текущая техническая приёмка D2 и подготовительного I0 отражена в §12 и [совместном отчёте](./artifacts-d2-physics-i0-joint-verification.md).
+
 По [уточнённому отчёту](./world-domain-snapshot-rollback-trace.md) семь ошибок cancel возникают в leaseStore.py при создании причины, одна ошибка GC — в artifactGc.py при упаковке исходного отказа удаления. Это два producers. Владелец — artifact lifecycle.
 
 | Шаг | Вход | Результат и передача |
@@ -903,11 +907,13 @@ API-1 ведёт пользователь. GEN-BAKE-READ после решени
 
 [Owning D1 §9](world-domain-artifacts-cancel-gc-d1.md#9-trace-и-доставка-причины--уточнение-d1) определяет локальный EC-I0 artifact logging **внутри рабочего среза и приёмки D2**. D2 реализует DTO/producers, семантические методы существующего ArtifactLifecycleLog и регистрации route/transcript. Локальный I0 отдельно подтверждает настоящий sink/transcript, traceback, failure correlation и отсутствие дублирования owning emit. В отчёте результаты D2 и локального I0 перечисляются раздельно.
 
-Это не закрывает общий EC-I0 или эксплуатационную готовность отсутствующей production binding. Перед эксплуатацией конкретного entrypoint остаются обязательными назначение runtime/infra root-cause owner, фактическая корреляция и проверка domain/DAG lifecycle без дублирования причин. [D1 §11](world-domain-artifacts-cancel-gc-d1.md#11-принятое-направление-reuse-инфраструктуры-и-доменные-адаптеры-ошибок-и-диагностики) задаёт границу владения. Глобальный ERROR-CONTRACTS DONE не становится prerequisite локального D2. Новая общая инфраструктура и массовая унификация не вводятся. Статус: документы уточнены; D2 и его локальный I0 не выполнены.
+Это не закрывает общий EC-I0 или эксплуатационную готовность отсутствующей production binding. Перед эксплуатацией конкретного entrypoint остаются обязательными назначение runtime/infra root-cause owner, фактическая корреляция и проверка domain/DAG lifecycle без дублирования причин. [D1 §11](world-domain-artifacts-cancel-gc-d1.md#11-принятое-направление-reuse-инфраструктуры-и-доменные-адаптеры-ошибок-и-диагностики) задаёт границу владения. Глобальный ERROR-CONTRACTS DONE не становится prerequisite локального D2. Новая общая инфраструктура и массовая унификация не вводятся. Исторический статус на момент ревью 2026-11-06: D2 и локальный I0 ещё не выполнены. **По техническому отчёту 2026-11-08** локальный D2/подготовительный I0 и общая маршрутизация проверены; эксплуатационный production I0 и пользовательская приёмка остаются самостоятельными gates.
 
 ### 12.5. Независимая сверка 2026-11-06
 
 [Отчёт проверки, границы доказательств, задания владельцам и команды](./world-generation-plan-dependency-graph-review-2026-11-06.md). Проверенный HEAD: `a15e502eeb87fe1c51994a08ce0bf1e42071b241`. Структурная проверка: 86 + 12 = 98 уникальных рёбер, 67 вершин, обе отдельные cutover-альтернативы ацикличны. Это датированное evidence, не приёмка implementation. GRAPH-AC остаётся OPEN: полный legacy/caller audit и Mermaid render не выполнены; у Time не найдена Markdown-обратная ссылка на граф.
+
+**Синхронизация 2026-11-08:** отсутствовавшая на HEAD `a15e502e` обратная ссылка Time добавлена в owning `time-domain.md`, а `time-domain` включён в обязательный `owners`-список §7.2. Исторический verdict ревью 6 ноября не переаттестовывается; `GRAPH-AC` и `LEGACY-AC` остаются OPEN до полного повторного прогона.
 
 **Точная передача finality:** проверенные F1/F2 → проверка нового store identity → Pack F3 (durable CLOSED, без release) → DAG F4 (durable finalized и terminal replay) → Pack F5 (release по перечитанному finalized) → F6 (две БД, recovery/retention) → отдельное разрешение production binding. Карта F3 принята; реализация одного get_store_id не закрывает F3. Эти локальные шаги уточняют SP-P2W, не заменяют SN-STAGE.
 
