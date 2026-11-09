@@ -6,6 +6,23 @@
 
 ## Действующая граница Time и публичного управления записями (2026-11-09)
 
+### Ответ владельца Time по temporal provenance (Physics P3.27, предложение к совместной приёмке)
+
+Для опубликованного времени гарантию даёт успешное чтение TimeReader через SnapshotTimeReadSource и scoped clock payload. CurrentTimeRead(expected) проверяет текущую publication и активную timeline; read_pinned(publication) читает именно закреплённую publication без проверки latest. В обоих случаях observed = TimeCapture.point, source = TimeCapture.publication. HistoricalTimeRead(snapshot) даёт observed = HistoricalTimeCapture.point и source = HistoricalTimeCapture.snapshot. Snapshot head унаследованной ветки может принадлежать другой timeline. [Реализация чтения](../../backend/app/application/time/reads/snapshotSource.py)
+
+**Предлагаемый общий контракт.** Time возвращает immutable temporal observation в одном из четырёх вариантов. Для первых двух DAG может уже сегодня перенести факты из результата чтения. Новые типы и методы ниже — proposal.
+
+| Вариант | Содержание и producer |
+|---|---|
+| PublicationObservation | publication:WorldPublicationRef, observed:TimePoint — проекция успешного current/pinned read. Требование актуальности определяется выбранным методом чтения. |
+| SnapshotObservation | snapshot:WorldSnapshotRef, observed:TimePoint — проекция успешного historical read. |
+| InitialObservation | basis_uid:EntityUid, basis_revision:RevisionHex, observed:TimePoint — результат предлагаемого Time.read_initial_observation(basis_uid, expected_revision), читающего у владельца исходного базиса запись с точными world/timeline/point. Missing, revision conflict или отсутствие назначенного scope дают отказ. Публичный источник такого базиса пока OPEN; ручная сборка из UID и желаемой точки не удовлетворяет контракту. |
+| DerivedObservation | parent_id:RevisionHex, interval:TimeInterval, step_uid:EntityUid, observed:TimePoint — результат предлагаемой чистой Time.derive_observation(parent, interval, step_uid). Обязательны interval.start == parent.observed, общий scope и ordered endpoints. При успехе observed = interval.end. При несовпадении начала или scope — типизированный отказ. |
+
+У каждого варианта observation_id:RevisionHex — канонический digest тега и всех перечисленных полей; для DerivedObservation parent_id берётся из входного parent. Источник root читается доверенным producer; цепочка передаётся через результаты доверенных вызовов либо восстанавливается по удержанным записям с проверкой digest и происхождения root. Сама контрольная сумма произвольного пользовательского payload не удостоверяет принятие. Формат кодирования и retention для восстановления после потери цепочки требуют freeze до реализации.
+
+**Предлагаем разрешить resume без публикации clock на C.at.** Из проверенного observation в t0 и предыдущего интервала [t0,t1] Time выводит DerivedObservation в t1. Внешний владелец acceptance привязывает именно этот observation_id к принятому continuation, его UID/lineage и совместимому canonical basis. DAG берёт эту пару из trusted acceptance и через interval/elapsed готовит следующий интервал от t1. Обязательны accepted.at == observation.observed == next.start и соответствие принятой привязки по observation_id и basis. Два результата в одной координате могут принадлежать разным цепочкам. Для zero resume на той же точке повторно используется прежнее observation. Кандидат C, отдельный C.at или TimeAdvanceProposal сами по себе не разрешают resume. При отсутствии accepted binding или доверенного корня этот путь остаётся недоступным; подстановка current clock с прежним временем запрещена. Реализация derived и binding accepted continuation пока OPEN. Commit на каждый вычислительный шаг в этом предложении не требуется.
+
 ### Общие публичные контракты Time и пример потребления через DAG (2026-11-09)
 
 **Статус.** Реализованы значения и операции Time из §§10–11. Приняты владельцы: DAG выбирает одну из четырёх операций Physics; Time владеет точной арифметикой; Physics вычисляет результат модели; Snapshot принимает общую группу изменений. Ниже предложение владельца Time в ответ на [Physics P3.24–25](physics-spatial-dynamics.md). Поля Physics и представление provenance требуют совместной приёмки. Прежние упоминания обязательного TimeCapture для Physics в §§12, 14, 16 читать с этим уточнением.
