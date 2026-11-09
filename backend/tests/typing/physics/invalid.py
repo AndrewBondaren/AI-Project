@@ -12,5 +12,5 @@ from app.dataModel.validation.importIssues.wireLocation import WireLocation
 def invalid(cause: PhysicsGravityTypeError, foreign: object) -> None:
     PhysicsGravityArguments(pydantic_type="missing")  # EXPECT: reportArgumentType
     PhysicsGravityTypeError(code=JsonValidationCode.DOMAIN_RANGE, path=GRAVITY_PATH, arguments=cause.arguments, location=WireLocation(), message="invalid")  # EXPECT: reportArgumentType
-    PhysicsSettingsAdmissionFailure(cause=foreign)  # EXPECT: reportArgumentType
+    PhysicsSettingsAdmissionFailure(causes=(foreign,))  # EXPECT: reportArgumentType
     PhysicsSettingsInputResolved(settings=WorldPhysicsSettings(), diagnostics=(cause,))  # EXPECT: reportArgumentType

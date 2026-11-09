@@ -631,6 +631,8 @@ Legacy dict-секции не адаптируются в новый API. Сущ
 
 ## API-1-C1 — конкретный Climate settings contract proposal (2026-11-02)
 
+[1. Целевая архитектура C1](./api-1-climate-c1-d1.md#1-целевая-архитектура) — владельцы World/Time/Climate/Weather, оркестрация DAG, чтение, запись и расширение сезонного payload.
+
 **Уточнение границы Climate / Weather.** Climate поставляет климатические поля и сезонную температуру. Weather владеет weather_type_registry и определяет погоду сцены по выборке Climate. Составное чтение редактора связывает оба результата одной публикацией World. [Публичные операции для DAG, входы, выходы, ошибки и открытые привязки](./api-1-climate-c1-d1.md#публичные-контракты-climate-и-weather-для-dag).
 
 Кандидаты отражены в [реестре публичных методов генератора](./generator_public_method.md#climate-и-weather--публичные-операции-для-dag). До исполнения требуется закрыть [результаты проверки правил и legacy inventory C1](./api-1-climate-c1-d1.md#проверка-плана-и-legacy-inventory).
@@ -718,7 +720,7 @@ Foreign requests для freeze (не новые production ports):
 | Existing | Target proposal | Disposition |
 |---|---|---|
 | dataModel/climate/worldClimateScalars.py, climateZone/*, weatherType/* | Сохранить owning POJO; перенести lapse из terrain/worldTerrainScalars.py в Climate | retain + targeted replace; один WorldSlice key owner, без второго default |
-| WorldService.get_by_id/update/prepare_import | application/worldData/climate/settings/prepareOpenPipeline.py: IClimateSettingsPrepareOpenPipeline и ClimateSettingsPrepareOpenPipeline; непосредственный вход DAG | новые owner public методы; legacy не fallback перенесённой операции |
+| WorldService.get_by_id/update/prepare_import | Порт IClimateSettingsPrepareOpenPipeline в application/worldData/climate/ports/settingsPrepareOpenPipeline.py; реализация ClimateSettingsPrepareOpenPipeline в application/worldData/climate/settings/prepareOpenPipeline.py. DI связывает их в composition root. | Нода вызывает порт; импорт реализации и legacy fallback дают FAIL. [Карта абстракций и критерии](./api-1-climate-c1-d1.md#что-публично-и-где-заканчивается-абстракция) |
 | Нет settings command/result POJO | dataModel/climate/settings/{commands,state,results,errors}.py | proposed Climate-only closed types; imports existing POJO/RegistryKey/FieldPathError |
 | resolve.py, worldSlices.py, worldSliceMerge.py | retain resolver/schema inventory; application/settingsContracts/preparation.py + dataModel/settingsContracts/presence.py | common skeleton, без Climate imports, domain tables/defaults |
 | core/container/worldData.py | отдельные фабрики reader и `make_climate_settings_prepare_pipeline()`, явная сборка capture/security dependencies | composition only; exact injected foreign contracts OPEN |

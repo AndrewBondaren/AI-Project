@@ -31,6 +31,8 @@ Capture boundary, exact types/files и baseline/GEO choice требуют domain
 
 ## Climate и Weather — публичные операции для DAG
 
+[Целевая архитектура C1](./api-1-climate-c1-d1.md#1-целевая-архитектура) определяет владельцев, поток данных и границы записи для методов этого раздела.
+
 Для обоих доменов предложен [типизированный сезонный payload](./api-1-climate-c1-d1.md#типизированные-сезонные-эффекты). Для sample_scene_climate см. [контракт календарного сезона и Climate с определениями типов](./api-1-climate-c1-d1.md#контракт-календарного-сезона-и-climate).
 
 [Пример оркестрации погоды сцены через DAG](./api-1-climate-c1-d1.md#пример-оркестрации-погоды-сцены-через-dag) показывает вызовы доменных методов из нод и передачу результатов между нодами.
@@ -47,7 +49,7 @@ Capture boundary, exact types/files и baseline/GEO choice требуют domain
 | Climate | `prepare_materialization` | Расчёт · Подготовить климатическое поле запрошенной области | (закреплённый план, область, LOD, входы Climate) → покрытие, происхождение данных и refs подготовленных артефактов. Проверить полноту и совместимость входов; возможен staging. Публикацией управляет DAG через Pack/Snapshot. |
 | Climate | `prepare_recalculation` | Расчёт · Пересчитать затронутую часть поля | (закреплённый план, существующая база поля, ClimateFieldRecalcInput с областью без флагов стадий) → refs изменённых частей с их базой либо успешный пустой результат. Несовместимая база — ошибка. Форматы refs и ошибок обеих операций материализации OPEN. |
 | Climate | `sample_scene_climate` | Расчёт · Вычислить климат сцены с учётом сезона | (SampleRef, temperature_base:int или null, rainfall:int или null, season:Key[CalendarSeasonRegistry] или null от Time через DAG, ClimateSeasonEffects той же базы) → SceneClimateSample с исходной и эффективной температурой, осадками и ref либо IncompleteSceneClimate с ref, доступными значениями и именами отсутствующих полей. Измеренный 0 сохраняется. Без сезона effective = base. Заданный ключ без поправки → SeasonContractMismatch. SourceMismatch при несовместимых входах. |
-| Weather | `resolve_weather` | Расчёт · Выбрать погоду сцены одним линейным OpenPipeline | (полный SceneClimateSample, тот же system_season или null, WeatherRulesView, WeatherSeasonEffects на R) → WeatherSnapshot с system_weather. Проверить мир и R, применить пороги по priority и fallback clear по ТЗ. SourceMismatch при расхождении. Без записи карты. |
+| Weather | `resolve_weather` | Расчёт · Выбрать погоду сцены одним линейным OpenPipeline | (полный SceneClimateSample, тот же system_season или null, WeatherRulesView, WeatherSeasonEffects на R) → WeatherSnapshot с system_weather. Фиксированный порядок: проверить вход → вычислить погодный результат → собрать WeatherSnapshot. Изменение маршрута внутри pipeline — FAIL. SourceMismatch при расхождении. Без записи карты. |
 | Climate | `prepare_upsert_zone` | Реестры · Добавить или заменить одну зону | (база, ClimateZoneEntry) → кандидат реестра с полной записью по system_climate. InvalidSettings / InvalidReference по итоговому состоянию. |
 | Climate | `prepare_remove_zone` | Реестры · Удалить зону | (база, ключ system_climate, RegistryUsageView[] от DAG) → кандидат без записи; EntryNotFound либо InvalidReference, если сохраняется ссылка на зону. |
 | Climate | `prepare_replace_zones` | Реестры · Заменить весь авторский список зон | (база, WorldClimateZoneRegistry, RegistryUsageView[] для затронутых ключей) → кандидат после проверки уникальности ключей и ссылок. InvalidSettings / InvalidReference. |

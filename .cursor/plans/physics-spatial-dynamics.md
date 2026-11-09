@@ -1563,3 +1563,137 @@ PASS. Один чужой незакоммиченный Artifacts GC test за�
 [Отчёт](./physics-i0-report.md) содержит scope, проверки и ограничения.
 Production I0/execution correlation, activation, World/Snapshot/storage integration
 и пользовательская приёмка D2 остаются открытыми.
+
+## PH-GATE — блокеры приёмки по правилам агента (2026-11-09)
+
+**Основание:** пользователь поручил зафиксировать результаты проверки как блокеры. Применимы [обязательные критерии приёмки плана любого домена](../rules/dag-generator-interface.mdc#обязательная-приёмка-плана-любого-домена) и [implement-plan](../../.agents/skills/implement-plan/SKILL.md). До снятия перечисленных ниже блокеров приёмка Physics-плана/соответствующего implementation scope не подтверждается. P2 одиночного отрицательного ключа остаётся FIXED в своём проверенном scope; это не закрывает новые findings.
+
+### PH-GATE-B01 — неполная проверка независимых входов prepare — OPEN
+
+**Evidence:** [prepare_replace_world_physics_settings](../../backend/app/application/physics/settings/prepare.py:35) и [prepare_reset_world_physics_settings](../../backend/app/application/physics/settings/prepare.py:54) возвращают failure request до admission current. Контрпример: валидный Reset копируется с world_uid=None; независимо текущий view копируется с ref.schema_version=2. prepare_reset возвращает только SettingsMalformedContract(subject=RESET) с причиной world_uid; дефект current не проверен. Integrity current не зависит от валидности request. Общий порядок «admission до prepare» сам по себе не обосновывает пропуск независимой проверки.
+
+**Критерий снятия:** согласовать treatment с invariant «runtime не меняется» выше и общим error-контрактом; доказать aggregation всех доступных независимых причин в стабильном порядке для replace/reset либо явно согласовать обоснованное исключение. Добавить mixed-invalid regression и доказать отсутствие prepare/effects. Исправление результата/порядка не вносить под видом одного logging refactor; новые result schemas требуют согласования. Эта запись код не разрешает и runtime policy не меняет.
+
+### PH-GATE-B02 — неполный поклассовый acceptance register — OPEN
+
+**Evidence:** §P3.5, §P3.20 D0/D1 и §P3.21 содержат файловые карты, schemas и общие проверки, но не задают для каждого класса в принимаемом scope полный набор «роль / ответственность / допустимые зависимости / эффекты / проверяемая приёмка / конкретный признак нарушения ответственности». В частности, новые [_InputEvent и concrete logging projections](../../backend/app/application/physics/settings/reporting.py:25) не покрыты отдельными проверяемыми критериями ответственности. Одна общая таблица файлов не заменяет обязательный register.
+
+**Критерий снятия:** определить точный принимаемый scope и дополнить register всеми задействованными новыми/существующими классами, с definition links и конкретными acceptance/rejection checks. Для операций указать public contract → open pipeline → internal implementation, вызывающую сторону, nested calls и источник утверждённой последовательности. Не создавать классы ради заполнения таблицы. Непринятые DAG bindings оставить OPEN; отсутствие сведений нельзя закрыть unit PASS.
+
+### PH-GATE-B03 — сверка статуса подготовительного I0 с фактической реализацией — OPEN VERIFICATION
+
+**Evidence исходной проверки:** §P3.22 называл adapter/sink будущим предложением при уже существующих [reporting.py](../../backend/app/application/physics/settings/reporting.py) и [test_settings_logging.py](../../backend/tests/physics/test_settings_logging.py). **Уточнение при фиксации:** в конце плана уже присутствует запись о завершённом подготовительном срезе и [physics-i0-report.md](./physics-i0-report.md) с заявленными 79 профильными и 16 route checks. Поэтому отсутствие outcome-записи более не утверждается; существующий результат не требуется реализовывать заново.
+
+**Критерий снятия:** сверить acceptance технической карты/порядка, реальные файлы, актуальные проверки и границы из отчёта; пометить исходный future-only текст как исторический и дать однозначный current status. Подготовительный sink/transcript test не приравнивать к production execution correlation или activation. Независимой проверки полного заявленного I0 набора в данном review не было; числа из чужого отчёта не выдаются за собственный PASS.
+
+### PH-GATE-B04 — неоднозначная кратность result/report diagnostics — OPEN CONTRACT
+
+**Воспроизведение:** обе input operations на Python dict {-1: 1, -2: 2}, с отдельным ctx и collect_only=True, возвращают PhysicsSettingsInputRefused с двумя одинаковыми WireShapeIssue; ctx.report.issues содержит одну причину. [_read_full_input](../../backend/app/application/physics/settings/input.py:36) строит причины на containing object; [report_issues](../../backend/app/application/physics/settings/reporting.py:74) применяет dict.fromkeys. tuple(ctx.report.issues) != result.issues.
+
+Batch dedup предусмотрен §P3.22, поэтому это **не объявляется доказанной регрессией dedup**. Блокер — отсутствие однозначного принятого правила кратности/identity между публичным result и report для этого случая; single-key tests его не закрывают.
+
+**Критерий снятия:** зафиксировать, считаются ли эти две записи одним структурным фактом либо двумя отдельными причинами, и точное соответствие result/report/log. Закрепить обе операции, emit/collect_only, порядок и кратность mixed causes регрессией. Не добавлять stringify ключей, отрицательные WirePart indices, новый collector или новую suppression policy без согласования.
+
+### Граница verdict и evidence
+
+Профиль §P3.21 при проверке 2026-11-09 выполнен: **72/72 PASS**, включая positive/negative typing. B01/B04 воспроизведены отдельными in-memory вызовами и этим набором не покрыты. Это не повторное ревью всего Physics runtime. В проверенном settings scope межоперационный dispatcher, production caller или direct cross-domain domain operation не обнаружены; нет основания объявлять готовым прямой DAG binding. Утверждённая последовательность разработки сохраняется; дальнейшая реализация и activation этой записью не разрешены.
+
+Статус: **приёмка не пройдена; B01/B02/B03/B04 OPEN в указанных категориях**. Storage, production I0, DAG bindings, PH-ARCH/PH-ORCH и пользовательская приёмка автоматически не закрываются. Исходники, независимые review reports, чужие планы и общий graph не изменены этой фиксацией.
+
+## PH-GATE correction proposal — 2026-11-09
+
+Пользователь поручил проработать блокеры. Это документальная подготовка исправления, **новые signatures/semantics ниже — PROPOSAL**, до их принятия код не меняется. Основание stop boundary: implement-plan требует остановиться до реализации при незакрытых acceptance criteria, B01 требует согласования изменяемой result schema, B04 — правила identity. Здесь не вводятся production bindings и не переопределяется общий error-план.
+
+### B01 — exact предложение агрегации
+
+Сохранить существующие пять concrete F02 causes. В settingsIssues.py определить один alias `PhysicsSettingsAdmissionCause` как существующий discriminated union SettingsWorldMismatch | SettingsSchemaMismatch | SettingsContentMismatch | SettingsMalformedContract | SettingsPolicyMismatch. Предложено заменить `PhysicsSettingsAdmissionFailure.cause` на `causes: Annotated[tuple[PhysicsSettingsAdmissionCause, ...], Field(min_length=1)]`. Новый класс batch failure и рекурсивная причина не нужны. Одиночный отказ содержит один элемент; старое поле/alias/fallback не сохраняется. Public function return unions не расширяются, но error payload/JSON/callers/typing должны мигрировать атомарно.
+
+prepare_replace/reset проверяют два независимых integrity входа в фиксированном порядке request → current, даже если первый не прошёл. На один вызов reuse существующий ValidatorAggregationHelper с exact пятью concrete cause classes; add готовых causes, snapshot после обоих admissions. Его actual owner — [dataModel/validation/diagnostics/validatorAggregationHelper.py](../../backend/app/dataModel/validation/diagnostics/validatorAggregationHelper.py), а не удалённый app.core путь из старого текста skill. Новый collector/alias не вводить; не превращать F02 в FieldPathError с фиктивным path.
+
+Если snapshot непустой — вернуть Failure(causes=snapshot); expectation comparison/prepare не запускать. Если оба integrity входа валидны — прежние world → schema → content-revision checks, затем preparation. Эти проверки связей зависят от обоих admitted inputs и не запускаются на malformed records. Field diagnostics внутри SettingsMalformedContract сохраняют свой порядок. Не агрегировать technical fault/cancellation как F02. Outcome остаётся отказом при любом integrity failure; изменяется полнота typed payload, а не право runtime продолжать или применять default.
+
+Required acceptance: обе операции, два independently invalid records; точные причины в request/current порядке; next-stage spy не вызван; один дефект сохраняет единственную cause; valid/no-op/revision mismatch и no mutation остаются прежними. Обновить constructor/model_validate/JSON, все .cause consumers и static positive/negative fixtures одним срезом. До согласования tuple schema B01 остаётся OPEN.
+
+### B04 — exact предложение identity
+
+Предлагается считать одинаковые immutable (concrete type + все machine/presentation поля) issues одним структурным фактом на containing object, как уже делает batch report. Два nonstring keys при одинаковом location дают один факт «keys must be strings», не два адресованных поля. Не утверждать, что это перечисление каждого плохого raw key.
+
+В _read_full_input перед созданием Refused канонизировать issues stable first-occurrence dedup тем же identity, что reporting: `tuple(dict.fromkeys(issues))`. Тогда result.issues и добавленный batch report равны; между отдельными вызовами blocking reports по-прежнему повторяются. F07 request-local continuation dedup не меняется. Разные code/path/arguments/location/message либо concrete type не схлопываются. Не добавлять raw keys в типы, stringify, отрицательные indices или глобальное suppression.
+
+Required acceptance: {-1:1,-2:2}, отдельно строковые ключи '-1'/'-2', смесь invalid gravity с несколькими nonstring keys; обе операции × emit/collect_only. Проверить точные types/code/location/порядок/кратность output/report/log, сохранение входа и отказа. Эта нормализация кратности требует принятия B04 proposal, не считается текущим поведением.
+
+### B02 — scoped class responsibility register
+
+Scope register: существующий Physics settings D2 и подготовительный logging adapter; future numerical process classes §P3.5 и внешние production operations этим не принимаются. Для всех перечисленных POJO/enum разрешены только pure schema validation и immutable values: IO, логирование, выбор самостоятельной операции и запись мира запрещены. Общее основание отказа каждого POJO — любой такой эффект; ниже дополнительно указан предметный acceptance/rejection. Все definitions проверены в текущих файлах.
+
+| Definition / класс | Ответственность и допустимые зависимости | Acceptance / предметный reject |
+| --- | --- | --- |
+| [worldPhysicsSettings.py](../../backend/app/dataModel/physics/settings/worldPhysicsSettings.py) WorldPhysicsSettings | SI value/default; neutral annotation/immutable validation | finite>=0, explicit zero, corrupted instance rejection / скрытый default-repair captured value |
+| [settingsCapture.py](../../backend/app/dataModel/physics/settings/settingsCapture.py) WorldPhysicsSettingsRef | World/version/content identity; EntityUid/RevisionHex | strict identity fields / ссылка без world/version |
+| Там же WorldPhysicsSettingsView | Связать settings и ref; value/ref, единственный neutral codec | constructor/JSON digest+schema coherence / success при подмене значения/hash |
+| [settingsChange.py](../../backend/app/dataModel/physics/settings/settingsChange.py) WorldPhysicsSettingsReplace | Full replacement intent; value/ref | world совпадает / request скрыто изменяет current |
+| Там же WorldPhysicsSettingsReset | Reset intent; ref | explicit intent+expected_ref / отсутствие expectation |
+| Там же PreparedPhysicsSettingsChange | Proposed value/ref, не receipt; value/ref/View | coherent proposed/world/schema / выдача prepared за accepted |
+| [settingsResults.py](../../backend/app/dataModel/physics/settings/settingsResults.py) PhysicsSettingsChangeReason | Только реализованный revision mismatch | foreign enum rejected / неподдержанный producer code |
+| Там же PhysicsSettingsChangeRefused | Полные expected/observed facts | same world/schema, разные revisions / заявление, какая версия новее |
+| [settingsInput.py](../../backend/app/dataModel/physics/settings/settingsInput.py) PhysicsGravityDefaultApplied | F07 причина+selected; gravity issue/value | exact standard default / произвольный selected |
+| Там же PhysicsSettingsInputResolved | Пригодный value + F07 | value совпадает с selected / противоречащая diagnostic |
+| Там же PhysicsSettingsInputRefused | Непустой closed issue batch | known concrete types, JSON restore; B04 identity отдельно / value или скрытая partial success |
+| [settingsIssues.py](../../backend/app/dataModel/physics/settings/settingsIssues.py) PhysicsGravityCode | Singleton invalid magnitude code | exact Enum / чужой code |
+| Там же PhysicsGravityArguments | Known pydantic magnitude reason | три accepted literal kind / unknown mapper type |
+| Там же PhysicsGravityTypeError | F01 cause+exact checked field; neutral FieldPathError/fields | foreign enum/args/path denied / свободная строка вместо identity |
+| Там же PhysicsSettingsSubject | Closed admission subject | известный субъект / arbitrary string |
+| Там же PhysicsSettingsInputOperation | Closed input operation identity | VALIDATE/RUNTIME / выбор численного pipeline |
+| Там же PhysicsSettingsContextMode | Immutable snapshot режима | IMPORT/RUNTIME / импорт application ResolveMode в domain |
+| Там же PhysicsSettingsAdmissionKind | Closed discriminator | пять causes / generic catch-all code |
+| Там же SettingsWorldMismatch | Два world uid | разные uid / совпадающие uid |
+| Там же SettingsSchemaMismatch | Две версии | strict positive, разные / порядок версий выдаётся за миграцию |
+| Там же SettingsContentMismatch | Declared/computed refs | same world/schema, different hash / silent hash repair |
+| Там же SettingsMalformedContract | Subject+structural facts | непустой concrete batch / потеря typed path/arguments |
+| Там же SettingsPolicyMismatch | Operation/context mismatch | действительно несовместимый context / dispatch другой операции |
+| Там же PhysicsSettingsAdmissionFailure | F02 envelope | сейчас singleton; B01 предлагает nonempty closed tuple / стирание causes в message |
+| [capture.py](../../backend/app/application/physics/settings/capture.py) PhysicsSettingsBoundaryFault | F05 transport для unknown mapping | unknown code/loc/args не default / маскировка technical fault как invalid gravity |
+| [reporting.py](../../backend/app/application/physics/settings/reporting.py) _InputEvent | Base safe log projection; WirePart | fixed activity+location / raw input или управление outcome |
+| Там же _ShapeEvent | Shape code projection | literal shape identity+typed code / чужой event kind |
+| Там же _FieldEvent | Field code/path projection | concrete identity сохранена / потерян field path |
+| Там же _GravityEvent | Gravity args/path projection | typed arguments сохранены / message парсится как причина |
+| Там же _FallbackEvent | Selected default projection | quantity из F07 / default hardcoded в emitter |
+
+Reused class boundaries (их чужая внутренняя реализация не меняется этим срезом):
+
+| Existing definition | Роль/допустимые эффекты | Acceptance / reject |
+| --- | --- | --- |
+| [FieldRef](../../backend/app/dataModel/fields/fieldRef.py), [CheckedPath/CheckedPathError](../../backend/app/dataModel/fields/checkedPath.py) | Pure selector/construction admission, no IO | exact gravity selection; неверный шаг → construction fault / свободный придуманный path |
+| [ModelIdentity, FieldSegment, IndexSegment, KeySegment, VariantSegment, ValidatedFieldPath](../../backend/app/dataModel/fields/validatedFieldPath.py) | Immutable path records, no runtime model importing | legitimate owner/segments, nonnegative indices / подмена root или отрицательный index |
+| [FieldPathError](../../backend/app/dataModel/validation/diagnostics/fieldPathError.py) | Generic concrete issue admission, no policy | named concrete enum-bound subclass / naked base/erased foreign code |
+| [JsonFieldError](../../backend/app/dataModel/validation/importIssues/jsonFieldError.py) | JSON field cause, no outcome policy | canonical path и wire position / потеря причины при restore |
+| [WireShapeIssue](../../backend/app/dataModel/validation/importIssues/wireShapeIssue.py), [WireLocation](../../backend/app/dataModel/validation/importIssues/wireLocation.py) | Structural cause/address, no default selection | malformed key на container; string key сохраняется / stringify либо negative index |
+| [ResolveContext/ResolveMode](../../backend/app/application/jsonValidation/resolution/diagnostics.py) | Request-local policy/delivery context | collect_only меняет только emit / переключение доменной операции |
+| [ResolveReport](../../backend/app/application/jsonValidation/types.py) | Единственный mutable request-local collector | blocking отдельно от continuations / shared/global state |
+| [ValidatorAggregationHelper/IssueAdmissionError](../../backend/app/dataModel/validation/diagnostics/validatorAggregationHelper.py) | Typed request-local collection; only local memory | exact immutable causes, stable snapshot / чужой тип или early raise на независимых проверках |
+
+Public/current boundary: input functions принимают authored object + application ResolveContext, возвращают declared domain unions; это изолированный application contract, не готовый внешний DAG порт. prepare_* принимают typed domain intent/view и возвращают подготовку/refusal/admission. capture helpers и reporting — внутренняя реализация, DAG не должен по отдельности вызывать их стадии или _emit. Reporting единственный emitter, получает готовые facts, route/handlers принадлежат общей logging infrastructure. Нет междоменных domain operations или самостоятельного планирования.
+
+Target acceptance: прямой DAG → согласованный public OpenPipeline contract → internal functions; exact external request context, interface/factory/OpenPipeline placement остаются совместным GEN/Physics gate. Не переименовывать каждый pure helper в OpenPipeline и не создавать wrapper ради суффикса. Регистрация concrete nodes/внешний маршрут не выводятся из tests. Поэтому этот register уточняет B02 для текущего среза, но не закрывает глобальную приёмку архитектуры/production DAG.
+
+Порядок: ранее принятый D0 → D1 → D2 → подготовительный sink test сохраняется; B01/B04 schema/identity сначала согласуются, затем один атомарный кодовый срез с caller/JSON/typing migration и mixed regressions. Никаких параллельных writers или исполнения следующих стадий после failed admission. Подготовка B02/B03 документально независима и допустима до решения B01/B04.
+
+### B03 — перепроверка evidence 2026-11-09
+
+§P3.22 future-only формулировки читаются как историческое предложение, current outcome — [physics-i0-report.md](./physics-i0-report.md) и запись о подготовительном I0 после него. Его поздняя совместная проверка уже снимает оговорку об исключённом Artifacts GC test; не воспроизводить эту оговорку как текущий blocker.
+
+Из backend выполнен общий запуск tests.physics.test_settings_policy, test_settings_logging, test_settings_core, test_settings_typing, test_codec_compatibility; tests.test_generation_logging; tests.planning.encoding.test_canonical_codec; Snapshot raw-digest case; tests.errorContracts.test_import_issues, test_resolve_issues, test_typing, test_core; tests.test_logging_routes. TEMP/TMP=E:/AI Project/backend/.tmp_snapshot_core. **103/103 PASS**, без исключений route/GC cases. Это актуальный scoped run, не full backend proof. Классификация B03: documentation/evidence correction prepared, independent review/пользовательская приёмка остаются OPEN; production execution correlation не доказана.
+
+**Следующий согласуемый шаг:** принять B01 `cause → causes` без compatibility alias и B04 stable batch identity. Затем разрешён только correction срез settings + все callers/tests; storage/production I0/DAG bindings/activation исключены. Ни один blocker этой записью не объявлен принятым пользователем.
+
+### B01/B04 — согласование и implementation outcome (2026-11-09)
+
+Пользователь ответил «Делай» на предложение принять B01/B04. Предложения выше приняты для данного correction scope; прежний stop до согласования tuple schema/identity снят, а внешние gates не изменены.
+
+**B01 — FIXED candidate / awaiting independent review:** [settingsIssues.py](../../backend/app/dataModel/physics/settings/settingsIssues.py) теперь определяет закрытый PhysicsSettingsAdmissionCause и непустой PhysicsSettingsAdmissionFailure.causes. Старое cause поле/alias отсутствует; F07 diagnostic.cause не меняется, это другой контракт. Все найденные producers/callers, JSON и typing fixtures мигрированы. [prepare.py](../../backend/app/application/physics/settings/prepare.py) выполняет request/current admission независимо в этом порядке; _admission_failures использует существующий ValidatorAggregationHelper с exact пятью concrete cause classes и ordered snapshot. Только после пустого snapshot допускаются expectation checks и preparation. Runtime отказ/разрешение fallback/запись мира не меняются. Три новые регрессии в [test_settings_policy.py](../../backend/tests/physics/test_settings_policy.py) проверяют mixed input для replace/reset, порядок causes и field code/path, запрет вызова зависимых стадий, no mutation, singleton, nonempty/foreign/old-shape rejection и Python/JSON restore.
+
+**B04 — FIXED candidate / awaiting independent review:** _read_full_input формирует Refused с stable first-occurrence batch dedup. На нескольких nonstring keys это один структурный факт на containing object; distinct строковые locations и gravity cause не теряются. Result batch и report batch совпадают. Повторный вызов по-прежнему добавляет новый blocking batch/emit; F07 continuation dedup и collect_only semantics сохранены. Reporting/shared error core не изменялись.
+
+Verification: тот же набор из B03 (все Physics settings/logging/typing, canonical, Snapshot raw-digest, error core/JSON/typing, generation logging и все logging routes), TEMP/TMP=backend/.tmp_snapshot_core — **106/106 PASS** (103+3). Positive Pyright дополнительно проверяет exact causes tuple; negative fixture отвергает foreign element. Scoped git diff --check PASS; diff по всем восьми изменённым Python files просмотрен. Нормализован CRLF→LF в positive typing fixture для чистого whitespace check. Новых source files/классов/compatibility bridges нет; чужие edits сохранены.
+
+B02 register и B03 актуальная evidence подготовлены выше; их независимая проверка и пользовательская приёмка всего correction остаются открытыми. Storage, production I0, DAG bindings, numerical runtime и activation не затронуты. Review PASS/зелёные tests не подменяют приёмку плана либо PH-ARCH/PH-ORCH.

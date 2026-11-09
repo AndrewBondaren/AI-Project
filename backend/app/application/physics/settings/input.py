@@ -27,10 +27,10 @@ _GRAVITY_ERRORS = frozenset(("float_type", "greater_than_equal", "finite_number"
 
 
 def _policy_failure(operation: PhysicsSettingsInputOperation, ctx: ResolveContext) -> PhysicsSettingsAdmissionFailure:
-    return PhysicsSettingsAdmissionFailure(cause=SettingsPolicyMismatch(
+    return PhysicsSettingsAdmissionFailure(causes=(SettingsPolicyMismatch(
         operation=operation, actual_mode=PhysicsSettingsContextMode(ctx.mode.value),
         actual_validate_only=ctx.validate_only,
-    ))
+    ),))
 
 
 def _read_full_input(raw: object, ctx: ResolveContext) -> PhysicsSettingsInputResolved | PhysicsSettingsInputRefused:
@@ -65,7 +65,7 @@ def _read_full_input(raw: object, ctx: ResolveContext) -> PhysicsSettingsInputRe
                 issues.append(mapped)
             else:
                 raise PhysicsSettingsBoundaryFault("unmapped Physics settings input error") from exc
-        return PhysicsSettingsInputRefused(issues=tuple(issues))
+        return PhysicsSettingsInputRefused(issues=tuple(dict.fromkeys(issues)))
 
 
 def validate_world_physics_settings_input(

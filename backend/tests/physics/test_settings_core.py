@@ -94,7 +94,7 @@ class SettingsCoreTests(unittest.TestCase):
         other = WorldPhysicsSettingsReset(world_uid="other", expected_ref=build_settings_view("other", current.settings).ref)
         failure = prepare_reset_world_physics_settings(other, current)
         self.assertIsInstance(failure, PhysicsSettingsAdmissionFailure)
-        self.assertIsInstance(failure.cause, SettingsWorldMismatch)
+        self.assertIsInstance(failure.causes[0], SettingsWorldMismatch)
         with self.assertRaises(ValidationError):
             WorldPhysicsSettingsReset(world_uid="other", expected_ref=current.ref)
 

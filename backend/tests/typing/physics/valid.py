@@ -10,7 +10,7 @@ from app.dataModel.physics.settings.settingsChange import PreparedPhysicsSetting
 from app.dataModel.physics.settings.settingsInput import PhysicsSettingsInputRefused, PhysicsSettingsInputResolved
 from app.dataModel.physics.settings.settingsIssues import (
     GRAVITY_PATH, PhysicsGravityArguments, PhysicsGravityCode, PhysicsGravityTypeError,
-    PhysicsSettingsAdmissionFailure,
+    PhysicsSettingsAdmissionCause, PhysicsSettingsAdmissionFailure,
 )
 from app.dataModel.physics.settings.settingsResults import PhysicsSettingsChangeRefused
 from app.dataModel.validation.importIssues.wireLocation import WireLocation
@@ -26,6 +26,7 @@ def cause() -> PhysicsGravityTypeError:
 def outcomes(request: WorldPhysicsSettingsReset, current: WorldPhysicsSettingsView) -> None:
     result = prepare_reset_world_physics_settings(request, current)
     if isinstance(result, PhysicsSettingsAdmissionFailure):
+        assert_type(result.causes, tuple[PhysicsSettingsAdmissionCause, ...])
         return
     if isinstance(result, PhysicsSettingsChangeRefused):
         assert_type(result.expected_ref, WorldPhysicsSettingsRef)

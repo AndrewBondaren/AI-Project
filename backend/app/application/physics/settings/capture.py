@@ -31,11 +31,11 @@ class PhysicsSettingsBoundaryFault(RuntimeError):
 
 
 def malformed(subject: PhysicsSettingsSubject, message: str) -> PhysicsSettingsAdmissionFailure:
-    return PhysicsSettingsAdmissionFailure(cause=SettingsMalformedContract(
+    return PhysicsSettingsAdmissionFailure(causes=(SettingsMalformedContract(
         subject=subject, issues=(WireShapeIssue(
             code=JsonValidationCode.VALIDATION_ERROR, location=WireLocation(), message=message,
         ),),
-    ))
+    ),))
 
 
 def _structural_issues(issues: list[ImportIssue]) -> tuple[JsonFieldError | WireShapeIssue, ...]:
@@ -57,11 +57,11 @@ def validation_failure(
         context = error.get("ctx", {})
         try:
             if error["type"] == "physics_settings_world":
-                return PhysicsSettingsAdmissionFailure(cause=SettingsWorldMismatch.model_validate(context))
+                return PhysicsSettingsAdmissionFailure(causes=(SettingsWorldMismatch.model_validate(context),))
             if error["type"] == "physics_settings_schema":
-                return PhysicsSettingsAdmissionFailure(cause=SettingsSchemaMismatch.model_validate(context))
+                return PhysicsSettingsAdmissionFailure(causes=(SettingsSchemaMismatch.model_validate(context),))
             if error["type"] == "physics_settings_content":
-                return PhysicsSettingsAdmissionFailure(cause=SettingsContentMismatch.model_validate(context))
+                return PhysicsSettingsAdmissionFailure(causes=(SettingsContentMismatch.model_validate(context),))
         except ValidationError as mapper_error:
             raise PhysicsSettingsBoundaryFault("invalid Physics invariant arguments") from mapper_error
     # Unknown custom validator kinds must not fall through the generic mapper.
@@ -82,7 +82,7 @@ def validation_failure(
                                       ctx=error.get("ctx", {}))
             single = ValidationError.from_exception_data("settings", [detail])
             issues.extend(_structural_issues(pydantic_issues(ResolveContext(), model, single)))
-    return PhysicsSettingsAdmissionFailure(cause=SettingsMalformedContract(subject=subject, issues=tuple(issues)))
+    return PhysicsSettingsAdmissionFailure(causes=(SettingsMalformedContract(subject=subject, issues=tuple(issues)),))
 
 
 def admit_record[RecordT: BaseModel](

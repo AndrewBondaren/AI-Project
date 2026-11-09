@@ -175,10 +175,13 @@ class SettingsPolicyMismatch(BaseModel):
         return self
 
 
+type PhysicsSettingsAdmissionCause = Annotated[
+    SettingsWorldMismatch | SettingsSchemaMismatch | SettingsContentMismatch
+    | SettingsMalformedContract | SettingsPolicyMismatch,
+    Field(discriminator="kind"),
+]
+
+
 class PhysicsSettingsAdmissionFailure(BaseModel):
     model_config = _RECORD
-    cause: Annotated[
-        SettingsWorldMismatch | SettingsSchemaMismatch | SettingsContentMismatch
-        | SettingsMalformedContract | SettingsPolicyMismatch,
-        Field(discriminator="kind"),
-    ]
+    causes: Annotated[tuple[PhysicsSettingsAdmissionCause, ...], Field(min_length=1)]
