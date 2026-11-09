@@ -626,7 +626,7 @@ service выдаёт OperationBusyError без hidden wait/retry, DAG явно �
 OperationClaimKind(StrEnum): OWNER/TERMINAL/BUSY. Record_refusal вызывается
 Snapshot после полного rollback domain transaction и сохраняет outcome
 отдельной common bookkeeping transaction; handler не получает этот порт.
-Неизвестный COMMIT outcome запрещает record_refusal до recovery сверки marker.
+Неизвестный COMMIT outcome запрещает record_refusal до recovery сверки marker. Для pregame Pack при доменном отказе под действующим OWNER до открытия транзакции публикации record_refusal сохраняет отказ в собственной bookkeeping-транзакции. После открытия транзакции публикации действует требование подтверждённого rollback. [Порядок активации Pack](./tz_world_pack_storage.md#внутренняя-реализация-одной-атомарной-активации)
 Имена concrete transaction/adapters, ограничения SQL и binding к existing
 Database/GuardedConnection обязательны в шаге 3; ambient transaction alone
 не является capability или доказательством Snapshot ownership.
