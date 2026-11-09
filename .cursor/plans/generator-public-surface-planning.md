@@ -90,3 +90,28 @@ Pipeline не принимает решений о выборе старта, mi
 - [LIGHT-RELIEF — классы рельефа, подтверждённые вызовы и границы pipeline](./generator-light-relief-classes.md). Статический аудит; runtime execution не подтверждается этим документом.
 
 - [LIGHT-RELIEF-REVIEW — отдельная ревизия рельефа light_bake](./generator-light-relief-review.md). Подтверждённые расхождения AS-IS/target и незакрытые вопросы.
+
+### Публичный вход вычисления и передача результата в DAG
+
+Владелец общих planning-контрактов проверяет идентичность запроса и обязанности классов. Каждый конкретный генератор предъявляет свой публичный метод и типы результата. Обязанность GEN-DAG — вызвать принятый метод из согласованной с пользователем ноды.
+
+**Проверяемая передача планов.** До lookup владелец planning-контракта валидирует `PlanRequest[I]`, зарегистрированные schema/algorithm, exact slots/refs и fingerprint входов. Ключ строится имеющейся формулой `cache_item_key(checked.key, contract.manifest)`. На hit необходимо сверить точный envelope.ref.key и зависимости с тем же запросом. При build интерфейс провайдера принимает `PlanRequest[I], PlanDependencyReader, PlanBuildControl` и возвращает `PlanBuildResult[T]`. Подготовка `PlanEnvelope[T]` сохраняет payload, diagnostics, dependencies и output fingerprint из действующей формулы. Только успешно проверенный envelope передаётся в DAG для put. Нужны идентичные результат и диагностика на cold/warm путях. Методы `PlanningService._request/_envelope/_build` — источники существующих гарантий. Публичные методы конкретных владельцев планов для переноса подлежат отдельной сверке по каждому binding. [Правила ключей и ошибок](../../docs/tz_terrain_generation.md) · [Исходный порядок проверок](../../backend/app/application/planning/service/planningService.py) · [Формулы](../../backend/app/application/planning/service/planFingerprints.py) · [PlanEnvelope](../../backend/app/dataModel/planning/contracts/planEnvelope.py)
+
+| Ответственный за поведение | Допустимые зависимости и эффекты | Проверка / основание отклонить перенос |
+|---|---|---|
+| RegisteredPlanContract, PlanRegistry и PlanDependencyReader | Проверка зарегистрированной схемы и переданных dependency envelopes, один явный вызов выбранного provider. | Чужой registry, пропущенный slot, неверный ref/fingerprint отклоняются до использования значения. Рекурсивный запуск зависимого provider через reader запрещён. |
+
+**Предлагаемый внешний контракт вычисления плана.** Для проверки на первом согласованном доменном binding предлагается конкретный типизированный класс `PlanEvaluation[I,T]` в `application/planning/service/planEvaluation.py`, собранный с фиксированным RegisteredPlanContract и его provider. Поля binding/registry не передаются между операциями. Новые POJO предлагается разместить в `dataModel/planning/contracts/planEvaluation.py`. Это проект замены вычислительной части существующего get_or_build; имя конкретного владельца и специализацию I/T подтвердить до реализации.
+
+| Метод | Данные, результат и причина выделения |
+|---|---|
+| `identify(input: PlanEvaluationInput[I]) -> CacheKey[PlanEnvelope[T]]` | Вход объединяет существующий PlanRequest[I] и immutable набор фактически полученных dependency envelopes с их именованными slots. Из этого набора локально строится проверяемый PlanDependencyReader. Метод проверяет request/refs и возвращает ключ по существующей формуле; эффектов хранения нет. |
+| `evaluate(input: PlanEvaluationInput[I], *, control: PlanBuildControl) -> PlanEnvelope[T]` | Один расчёт provider по уже переданным входам, затем output fingerprint и диагностика. Control — сигнал жизненного цикла вычисления, без доступа к Cache и запуска других операций. Доменные ошибки сохраняют PlanBuildFailure, технический сбой provider — PlanProviderFault. |
+| `admit(input: PlanCachedInput[I,T]) -> PlanEnvelope[T]` | POJO содержит PlanEvaluationInput и полученную CacheEntry[PlanEnvelope[T]]. Проверить ключ, схему, ref, зависимости и output fingerprint; вернуть валидированный envelope. При несовпадении — PlanContractFailure; запуск provider внутри admit запрещён. |
+
+Для identify/admit отказ по неверному входу или binding относится к PlanContractFailure. Причины CacheFailure остаются за Cache; ожидание и отмену обрабатывает execution. При freeze конкретного доменного контракта зафиксировать точные типы каждого dependency slot и именованные error POJO; доменный binding с неподтверждённым I/O остаётся OPEN. [PlanRequest](../../backend/app/dataModel/planning/contracts/planRequest.py) · [PlanBuildResult и PlanEnvelope](../../backend/app/dataModel/planning/contracts/planEnvelope.py) · [RegisteredPlanContract и PlanBuildControl](../../backend/app/application/planning/providers/planProvider.py)
+
+| Статус | Замечание | Условие закрытия |
+|---|---|---|
+| OPEN | Прямой вход в домен при miss. Проект общего PlanEvaluation с provider допускает цепочку через PlanRegistry.build и callback другого домена. | Для первого конкретного binding предъявить публичный метод владельца вычисления, POJO и вложенные вызовы; проследить возврат результата в DAG и отдельную запись через Cache. [Вызов provider](../../backend/app/application/planning/providers/planRegistry.py) |
+| OPEN | Ответственность RegisteredPlanContract, PlanRegistry и PlanDependencyReader описана совместно. | Для каждого указать его методы, разрешённые зависимости, эффекты, критерий приёмки и признак нарушения. Проверить путь до фактического provider, включая callbacks. [Правило](../rules/dag-generator-interface.mdc#обязательная-приёмка-плана-любого-домена) |

@@ -71,6 +71,8 @@ def retained_entry_bytes(value: object) -> int:
 
 
 class CacheService:
+    # LEGACY REMOVE(CACHE-V1-BINDING): migrate get/put/evict from caller-supplied
+    # bindings to Cache-owned resolution. See .cursor/plans/cache-public-contracts.md.
     def __init__(self, backend: CacheBackend, policy: CachePolicy):
         self._backend = backend
         self._policy = CachePolicy.model_validate(policy)

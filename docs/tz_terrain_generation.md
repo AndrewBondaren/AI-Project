@@ -2595,6 +2595,8 @@ production domain registration/caller/lifecycle activation остаётся PC-9
 Проверки: encoding7/providers27/contracts56/cache20 — 110 tests OK;
 pyright valid 0 errors/warnings, negative 21 ожидаемых diagnostics.
 
+**Переход на GEN-DAG (решение 2026-11-09).** Ниже описана действующая связка PlanningService → CacheService. Целевой caller Cache — engine DAG: он читает кэш, вызывает владельца вычисления при промахе и записывает возвращённый результат через типизированный контракт Cache. Порядок переноса и критерии сохранения поведения приведены в [плане GEN-DAG](../.cursor/plans/gen-dag-1-post-geo-ws.md).
+
 **PC-3 реализован 2026-10-23:** bounded process-local MemoryCache в
 application/cache/backends/memoryCache.py разделяет один LRU/byte budget
 между typed namespaces; clear/evict/replacement освобождают accounting.
@@ -2746,7 +2748,7 @@ codec'ами. Fingerprint формулы — единая реализация
 binding подаёт свой manifest, копий формул в доменах нет.
 Реализация — шаг PC-3E плана geo-1-designed-water до PC-4.
 
-**Общий sync API и ошибки.** В application:
+**Общий sync API и ошибки.** Ниже для Cache приведены действующие сигнатуры V1 с явным binding. Целевой caller передаёт ключ или запись; кодек разрешает Cache. [Решение и критерии удаления V1](../.cursor/plans/cache-public-contracts.md#обязательная-приёмка-удаления-cache-v1). В application:
 - `CacheBackend.get[T](key: CacheKey[T]) -> CacheLookup[T]`,
   `put[T](entry: CacheEntry[T]) -> None`,
   `evict[T](key: CacheKey[T]) -> None` остаются protocol backend.

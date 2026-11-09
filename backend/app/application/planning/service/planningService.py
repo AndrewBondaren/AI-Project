@@ -180,6 +180,7 @@ class PlanningService:
                 raise PlanProviderFault(f"{type(exc).__qualname__}: {exc}") from exc
             with self._lock:
                 control.raise_if_shutdown()
+                # LEGACY REMOVE(CACHE-V1-BINDING): DAG owns the cache write after caller migration.
                 self._cache.put(contract.cache_binding, CacheEntry[PlanEnvelope[T]](key=key, value=envelope))
             return envelope
         finally:
@@ -219,6 +220,7 @@ class PlanningService:
         address = (key.contract.id, key.contract.schema_version, key.item_key)
         with self._lock:
             self._check_wait(wait)
+            # LEGACY REMOVE(CACHE-V1-BINDING): DAG owns lookup; Cache resolves the binding.
             lookup = self._cache.get(contract.cache_binding, key)
             if isinstance(lookup, CacheHit):
                 return self._envelope(contract, lookup.entry.value, checked)

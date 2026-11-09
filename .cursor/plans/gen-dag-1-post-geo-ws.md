@@ -12,12 +12,16 @@
 
 ## Стык с DAG-TYPING-1 и удаление legacy (решения 2026-10-30 и 2026-11-02)
 
+**Перенос оркестрации из PlanningService в DAG, решение пользователя 2026-11-09.** Оркестрация `get_or_build` переходит в engine DAG. Для планов и целевого кэша manifest Pack V2 единственный caller публичных операций Cache — DAG. DAG вызывает публичное чтение Cache, на miss получает проверенный результат непосредственно от домена и передаёт его в публичную запись Cache. DAG передаёт ключ или запись. Выбор binding по id и проверка версии принадлежат Cache. [Приёмка удаления V1](./cache-public-contracts.md#обязательная-приёмка-удаления-cache-v1). На hit DAG использует результат согласно контракту потребителя. Доменные операции возвращают данные в DAG; скрытый get/build/put в доменном pipeline или worker запрещён. Cache сохраняет ответственность за проверку binding, лимиты RAM и вытеснение. До cutover проследить существующих callers и подтвердить эквивалентное поведение для одинаковых конкурентных запросов, проверки зависимостей, busy, timeout, отмены и shutdown. После переноса callers убрать прежнюю оркестрацию. Состав нод определяется пользователем при GEN-NODE-JOINT-REVIEW. [Текущий PlanningService](../../backend/app/application/planning/service/planningService.py) · [Контракт Cache](../../backend/app/application/cache/service/cacheService.py)
+
 - **GEN-DAG-1 проектирует новый production DAG.** 15 зарегистрированных старых нод — трассируемый AS-IS inventory, не целевой backlog и не обязательная пара «old ID → new ID». Все их прежние concrete implementations/side-effect registrations удаляются после единого cutover; исключение — `check_scene`, которую **перерабатываем**, оставляя её смысл проверки сцены. Новые роли/NodeId/`deps` и покрытие обязательных сценариев совместно утверждаются в GEN-NODE-JOINT-REVIEW ниже.
 - **DAG-TYPING-1 владеет только общей инфраструктурой**: типизированные NodeContract/Input/Output/Error, DAGContext, GraphCompiler, NodeRegistry и runtime. Генераторные/LLM/scene конкретные контракты и удаление старых concrete-нод — GEN-DAG-1. Не переносить legacy-ноды 1:1 ради типизации, не вводить mixed runtime или adapters.
 - A1–A3 инфраструктуры проверяются на изолированных тестовых нодах; после общего production switch GEN-DAG передаёт handoff B1. B2 удаляет общие predecessor runtime-файлы, GEN-DAG удаляет прежние concrete-ноды и регистрацию, включая неактивные дубликаты после usage audit. До cutover target bindings могут проверяться изолированно, но не маршрутизируют реальные запросы.
 - **Приёмка удаления:** отсутствуют все старые concrete-регистрации/импорты и прямые repository writes; `check_scene` имеет только согласованную новую реализацию и typed binding, а её старые shared_context/NodeResult пути отсутствуют. Все обязательные старые сценарии либо реализованы в **новом** графе, либо явно признаны неподдерживаемыми мастером; параллелизм, ошибки, resume и Snapshot-публикация проверены. Пользовательские данные/snapshots удалять запрещено.
 
 ### Последовательность переключения после preflight A1.2
+
+Доменные входы для совместного проектирования нод перечислены в разделе [зависимостей нод от публичных контрактов](#зависимости-нод-от-публичных-контрактов).
 
 1. DAG-TYPING-1 готовит target declarations в `backend/app/application/engine/contracts/`, `registration/`, `nodeTypes/` и реализации в `engine/runtime/`, `application/cancellation/typed/`. Они проверяются isolated registry и тестовыми нодами, без импорта production side effects. Общие NodeKind/NodeCost/PythonNodeError переносятся в `engine/nodeTypes/support/` с обновлением imports; это не переписывание конкретных контрактов.
 2. После совместного утверждения **нового** графа и контрактов GEN-DAG-1 готовит новые concrete bindings и явный `backend/app/application/engine/registration/productionNodes.py` с `register_production_nodes(registry: NodeRegistry) -> None`. Это регистрация целевого состава, а не перенос всех старых 15 ID. До переключения production использует только старые decorators/registry, target не принимает старый API.
@@ -286,3 +290,15 @@ GEN-P0 сопоставляет node IDs/callers с пакетом совмес�
 
 
 **Нормативный sync 2026-11-02 — GEN-ALIGN-01/03/05:** после проверки текстов и статических callers исправлены engine-nodes.mdc (generic vs concrete owner), tz_world_generation_dag.md (все старые карты/backlog/G1–G5 — исторические, не автоматический target), project-context.mdc (legacy registration, доступный GEN-P0 и отдельные code/cutover gates). pending_patches/RepairPatchApplier явно отделены от записи мира через World Snapshot; замена запрещена. Эти документальные расхождения исправлены, но новый граф, per-node contracts, runtime/legacy closure и общая приёмка остаются OPEN. SP-R2 не назначен обязательным для первого cutover: решение по сценариям принимает GEN-P0.
+
+### Зависимости нод от публичных контрактов
+
+GEN-DAG отвечает за совместное с пользователем проектирование нод, их входы, результаты и ошибки, deps, выбор ветви и проверку фактических вызовов при подключении. До согласования нод разрешены только анализ и проверка зависимостей. Реестр внешних входов:
+
+| Владелец | Что требуется для соответствующего node binding |
+|---|---|
+| Cache | Принятые операции чтения/записи, ключ, типизированные hit/miss/admission и ошибки. Доменные замечания и полный CRUD ведёт [план Cache](./cache-public-contracts.md). |
+| Planning и конкретный генератор | Прямой публичный вход для расчёта и контракт проверки результата: [план публичной подготовки](./generator-public-surface-planning.md#публичный-вход-вычисления-и-передача-результата-в-dag). |
+| World Pack | При использовании кэша manifest Pack предоставляет операции разрешения pin и допуска bytes: [ТЗ Pack](../../docs/tz_world_pack_storage.md#контракты-чтения-manifest-через-cache--проект-для-приёмки-владельцами). |
+
+Для интеграции нод проверить сохранение действующих гарантий конкурентного вызова, отмены и shutdown. Общие механизмы исполнения закрепляются за владельцем runtime; конкретная привязка к нодам остаётся открытой до совместного проектирования. [Норматив поведения](../../docs/tz_terrain_generation.md#surface-planningcache--норматив-pc-0-2026-10-23)
