@@ -77,7 +77,7 @@ flowchart TD
     P0 --> I
     I --> W["SP-P3W: root publication"]
     P2 --> W
-    PC["PACK-ENTRY-CONTRACT: accepted entrypoint"] --> W
+    PC["PACK-ENTRY-CONTRACT: активация Pack V2 · OPEN"] --> W
     W --> P3["SP-P3: publication proof"]
     P3 --> R["SP-3: base reader"]
     S1 --> SC["SP-1C: открытые read-контракты"]
@@ -90,7 +90,8 @@ flowchart TD
 **Точные исключения и дополнительные внешние gates:**
 
 1. `SP-P2W` требует отдельно принятого **staged World Pack/pregame publication port** (`SN-STAGE`, owning Snapshot 4D1/4D3/4E2 и профильный World Pack contract), включая manifest CAS, hash/format/revision и rollback. `SP-P2R` может проверять read/verify независимо после SP-P1; **он не ждёт SN-STAGE**. В текущем Snapshot code-order 4D3 следует за 4D2, но pregame activation **не является runtime Snapshot.apply**.
-2. `SP-P3I` требует одновременно `SP-H` (принятый G10-A), `SP-P0` и `SP-P1`; `SP-P3W` требует `SP-P3I` и `SP-P2`. Отдельный physical source GEO и transport/index/publish steps SPATIAL **не дублируют друг друга**.
+2. Для `SP-P3W` обязательны `SP-P3I`, `SP-P2`, `SP-H` и `PACK-ENTRY-CONTRACT`. На 2026-11-09 граница активации V2 открыта: World Pack и GEN-DAG должны согласовать вход (готовый кандидат и ожидаемая публикация), результат, ошибки и вызывающую ноду. Сквозная проверка требует исполняемого вызова и подтверждения активации либо сохранения прежней публикации при конфликте или сбое передачи удержаний. [ТЗ World Pack](../../docs/tz_world_pack_storage.md), [SPATIAL §15.75](./spatial-distribution-domain.md#1575-spatial-и-активация-pack--callers-и-граница-операции).
+   Блокер распространяется через `SP-P3W → SP-P3 → SP-3` на чтение опубликованной базы и далее на `SP-4`. Подготовка доменных фактов и compact root (`SP-P3I`) и проверка чтения артефактов (`SP-P2R`) идут по собственным входам. Существующий [WorldPackWriter](../../backend/app/application/worldData/pack/io/worldPackWriter.py) допускает только V1. Для V2 [кодек](../../backend/app/application/worldData/pack/encoding/packManifestCodec.py) выдаёт байты кандидата; публикация остаётся отдельной операцией.
 3. `SP-3` — Hydrology-owned bounded immutable-base reader, **не** универсальный Spatial solver. `SP-4` — только base/pre-game L2; не считать его доказательством runtime Snapshot-aware read.
 4. Текущий `FineWaterJob.fill` требует полного fine-покрытия как **AS-IS cost**; source A/R1/G1/Z принят документально в GEO EF-1; implementation/cutover и storage budgets принимаются отдельно. Маленький `read_window` не запускает fill/routes и не сканирует весь мир.
 5. `SP-P0/P1/P2R` и часть Pack-инфраструктуры могут проектироваться/приниматься независимо от G10-A, если их **собственные** prerequisites и code-gates закрыты; не превращать порядок таблицы SPATIAL в глобальную последовательную блокировку.
@@ -356,7 +357,7 @@ SP-1 + SP-M разрешают проектирование SP-R0; совмес�
 | GEN-PORTS | Внешние условия / критерии owning-плана | НЕ УТОЧНЁН | BLOCKED | Не предъявлены все **применимые выбранным нодам** public domain read/prepare/CRUD implementations и verification, Patch/Snapshot ports/handlers и решение Q01. GEN-BAKE-READ R1–R5 и GEN-SURFACE-PLAN §7 OPEN по своим локальным срезам; один generic Snapshot.apply или AS-IS метод не закрывает gate. [GEN-P0 / production gates](./gen-dag-1-post-geo-ws.md) |
 | GEO-SPATIAL-CONTRACT | SP-1 | ПРИНЯТ документально | Независимый producer/storage design | Явная отдельная приёмка GEO EF-1.14 / Spatial §14.14; не реализация/cutover. [GEO](./geo-1-designed-water.md) / [Spatial](./spatial-distribution-domain.md) |
 | GEO-ACCEPTED | Внешние условия / критерии owning-плана | НЕ УТОЧНЁН | BLOCKED | Полная приёмка GEO OPEN; G10-A не равен автоматически завершению GEO. [GEO Task11 / G10-A](./geo-1-designed-water.md) |
-| PACK-ENTRY-CONTRACT | Внешние условия / критерии owning-плана | НЕ УТОЧНЁН | ГОТОВ К АНАЛИЗУ: совместный contract review | Q03: accepted publication/bake entrypoint contract отсутствует; не требуется полный GEN cutover для дизайна. [SPATIAL §8, §11](./spatial-distribution-domain.md) |
+| PACK-ENTRY-CONTRACT | Внешние условия / критерии owning-плана | OPEN | Владелец и линейность публичного входа приняты 2026-11-09 | DAG вызывает World Pack; OpenPipeline строго без ветвления; 4D3 обеспечивает транзакцию. V2 codec, CAS, ledger и holder handoff реализованы. При проигрыше CAS готовым кандидатом результат READY_INACTIVE. SP-P3W ждёт полной приёмки контракта и проверки вызова из DAG. [Контракт и граница готовности](../../docs/tz_world_pack_storage.md#публичная-операция-активации-world-pack-v2) |
 | PH-0 | Внешние условия / критерии owning-плана | ПРИНЯТ: статический scope | Документальный PH-ARCH разрешён | Owning PH-ARCH P1 явно фиксирует приёмку PH-0 пользователем. Runtime guarantees не приняты. [PHYSICS PH-0/P1](./physics-spatial-dynamics.md) |
 | PH-AGG | PH-ARCH | OPEN | ПРИЁМКА BLOCKED; дизайн по локальным constraints | Exact contracts и applicable legacy evidence OPEN; production-код не разрешён. [PHYSICS §6](./physics-spatial-dynamics.md) |
 | PH-AGG-RUNTIME | PH-AGG, PH-ORCH, PH-PUBLISH, SN-RUNTIME, SP-3S | OPEN | ПРИЁМКА BLOCKED; дизайн по локальным constraints | Будущий acceptance gate, не code step; runtime и concrete bindings OPEN. [PHYSICS §6](./physics-spatial-dynamics.md) |

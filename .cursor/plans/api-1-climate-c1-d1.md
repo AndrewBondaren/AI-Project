@@ -103,7 +103,50 @@
 | Weather | Полный результат Climate, тот же сезон, правила и типизированная секция Weather → WeatherSnapshot | Определяет схему своих эффектов и правила выбора погоды. |
 | DAG | Типизированные результаты публичных операций → входы следующих операций | Ноды напрямую вызывают владельцев. DAG выбирает ветви preview/save, полного/частичного расчёта и реакцию на неполную выборку. До gameplay ведёт результат материализации к активации Pack; после старта собирает PatchSet для Snapshot.apply. |
 
-**Чтение сцены.** Ноды получают сезон у Time, выборку у владельца поверхности, правила у Weather, таблицу сезонных эффектов у World.read_season_effects(world_uid, At(R)). Все входы привязаны к одной публикации. Нода передаёт сезон и климатическую секцию в Climate. При полном результате другая нода передаёт его, тот же сезон и погодную секцию в Weather. Каждый pipeline возвращает результат DAG. [Граф вызовов](#пример-оркестрации-погоды-сцены-через-dag).
+#### Четыре направления контракта сцены
+
+**Проверка по AGENTS.md и протоколу междоменного CRUD (2026-11-09): ОТКАЗ В ПРИЁМКЕ плана к реализации.** Таблица направлений ниже фиксирует требования. По [пункту об обязательной проверке](../rules/dag-generator-interface.mdc#обязательная-приёмка-плана-любого-домена) проверены также [порядок проверки каждой зависимости](../rules/dag-generator-interface.mdc#протокол-междоменного-crud-контракта) и [конкретность CRUD](../rules/dag-generator-interface.mdc#конкретность-публичного-crud-контракта).
+
+**Конкретные точки входа сцены, TARGET для согласования.** Пути относительно backend/app. Имена request/error здесь предложены, существование класса в коде и freeze полей ими не удостоверяются.
+
+| Вызывающий → конкретный класс и публичный метод | Предлагаемый POJO-контракт и модуль | Причина OPEN |
+|---|---|---|
+| Нода DAG → ClimateSceneSampler.sample_scene_climate(self, request: SceneClimateRequest) → SceneClimateSample либо IncompleteSceneClimate либо SceneClimateError; application/worldData/climate/scene.py | dataModel/climate/sampling/scene.py: SceneClimateRequest объединяет SampleRef, nullable температуру и дофазовую влажность, ключ сезона, климатическую секцию и региональную базу. Полный результат содержит региональный MaterialKey; неполный — доступные значения и missing_fields. | Нет принятого SampleRef, типа региональной базы и источника региональной привязки материала; отсутствует закрытая схема SceneClimateError и wire-совместимость. |
+| Нода DAG → WeatherResolveOpenPipeline.resolve_weather(self, request: ResolveWeatherRequest) → WeatherSnapshot либо ResolveWeatherError; application/worldData/weather/resolveWeatherOpenPipeline.py | dataModel/weather/scene.py: ResolveWeatherRequest объединяет полный SceneClimateSample, ключ сезона, WeatherRulesView, WeatherSeasonEffects, снимок Materials и локальные эффекты. WeatherSnapshot несёт выбранный материал и его версию, локальную температуру и current_liquid_rainfall. | Нет принятых POJO локальных эффектов, фазовой ссылки и ResolveWeatherError. [Существующий WeatherSnapshot](../../backend/app/application/worldData/generators/assemblers/climateAssembler/climateRuntimeAssembler.py#L8) объявлен в application и этих полей не предоставляет. |
+
+**1–2. Потребитель → владелец, требуемая операция, сверка метода и полей.**
+
+| Зависимая операция | Владелец и результат проверки |
+|---|---|
+| Climate.sample_scene_climate / Weather.resolve_weather ← время и сезон | READ Time: [TimeReader.read_pinned(publication: WorldPublicationRef) → TimeCapture либо TimeStateUnavailable](../../backend/app/application/time/reads/reader.py#L12). [CalendarProjector.project](../../backend/app/application/time/calendar/projection.py#L41) принимает [CalendarProjectionInput](../../backend/app/dataModel/world/calendar/projection/request.py): point, capture, calendar, resolved, budget. Возвращает CalendarProjection либо CalendarSourceMismatch, CalendarScopeMismatch, CalendarInvalid, CalendarBudgetExceeded, CalendarTimeOverflow. [season](../../backend/app/dataModel/world/calendar/projection/result.py#L19) соответствует входу обоих доменов. Сама цепочка требует также World calendar settings на той же базе и построения ResolvedCalendarAt; одного TimeCapture для project недостаточно. |
+| Climate.sample_scene_climate ← выборка поверхности и ключ материала региона | READ Pack/Climate: [WorldPackReader.read_climate_coarse / read_climate_tile](../../backend/app/application/worldData/pack/io/worldPackReader.py#L133) — storage API. Существующий ClimateFieldWire не подтверждает pinned SampleRef с zone_moisture. Колонка мира precipitation_liquid не определяет публичный POJO выбора материала каждого региона. Оба входа OPEN. |
+| Обе операции ← сезонные секции; Weather.resolve_weather ← погодные правила | READ World.read_season_effects и WeatherRulesReader.read_weather_rules описаны как TARGET. Требуются конкретные публичные request/result/error в dataModel, версии и доказанная проекция effects[season].climate / .weather на R. [worldRow.weather_types](../../backend/app/application/jsonValidation/worldRow.py#L285) читает строку, а не историческую публикацию. |
+| Weather.resolve_weather и Climate.prepare_change ← фазовые свойства / проверка ссылки | READ Materials. Нужны key, cool_temp/cool_into, heat_temp/heat_into, версия и R. [worldRow.materials(world: Any)](../../backend/app/application/jsonValidation/worldRow.py#L97) возвращает реестр без такого контракта. Предложенное имя Materials.read_material_registry в C1 не является подтверждением владельца. OPEN. |
+| Weather.resolve_weather ← активные локальные эффекты | READ владельца эффекта: нужны scope, интервал, R, изменённые погодные поля и ключ замены материала. Публичный класс, метод и input/result/error владельца не подтверждены. Композиция перекрывающихся эффектов OPEN. |
+| Изменение реестров и принятие результатов | READ владельцев Need/Glossary и обратных ссылок; подготовка записи/удаления → World/Pack/Snapshot acceptance. Запрошенные RegistryUsageView, binding черновика и применение конкретного Climate/Weather patch не доказывают наличие принятых CRUD у владельцев. Материализация также требует planning inputs, staging и handler соответствующего lifecycle. Конкретные связи, POJO и bindings OPEN. |
+| Чтение C1-EXT и проекция единиц | READ декларации World, фактов и динамической опоры у соответствующих владельцев. До появления двух проверенных owner-specific классов с typed схемами IIndicatorReader[T] остаётся только портом. |
+
+**3–4. Маршрут и привязка.** Требуемый порядок: нода чтения вызывает метод владельца → результат возвращается в DAG → нода передаёт поля из одной базы в SceneClimateRequest → полный результат через DAG входит в ResolveWeatherRequest вместе с материалами и локальными эффектами → WeatherSnapshot возвращается в DAG. Неполнота и ошибки возвращаются вызывающей ноде. Для сезонного read сначала доступны capture и календарные настройки, затем выполняется проекция. Проверка [реестра нод](./gen-dag-node-dependency.md) не подтвердила утверждённые bindings всей этой цепочки; роли в Mermaid — предложение. Три запрета DAG соблюдены как ограничение целевой схемы; проверка фактического маршрута и согласованного порядка по имеющимся доказательствам не пройдена.
+
+**Статус остальных обязательных критериев.** У основных классов есть карта ответственности и FAIL-критерии в §1.1–1.2, но у внешних участников и новых request/error нет полной принятой карты. Линейная последовательность Weather зафиксирована; для изменившегося входа локальных эффектов проверка всех вложенных стадий остаётся OPEN. Legacy inventory частичный (Pack/debug/worker). Общий CRUD по доменам проверяется отдельно:
+
+| Владелец / предмет | Чтение | Создание/запись | Обновление | Удаление |
+|---|---|---|---|---|
+| Climate / данные поля | Pinned reader OPEN | prepare_materialization — подготовка; writer/handler OPEN | prepare_recalculation — подготовка; handler OPEN | Публичный контракт отсутствует |
+| Climate / настройки | read_settings — TARGET | prepare_initial / upsert — без полного принятого POJO и persistence binding | prepare_change / replace — TARGET, типы и отказ до freeze | prepare_remove_zone — только запись зоны; полный контракт настроек OPEN |
+| Weather / данные сцены или локации | resolve_weather вычисляет сцену; persisted read OPEN | Владелец и writer сохранённой погоды OPEN | Контракт обновления сохранённой погоды OPEN | Контракт удаления сохранённой погоды отсутствует |
+| Weather / настройки | read_weather_rules — TARGET | prepare_upsert_weather_type — подготовка | prepare_replace_weather_rules — подготовка | prepare_remove_weather_type — подготовка; принятие и типы OPEN |
+
+**Следующий запрос владельцу:** подтвердить публичный Pack reader точной выборки сцены: класс, сигнатуру и файлы POJO запроса, результата и ошибки для (world_uid, R, scope) → базовая температура, дофазовая влажность и provenance. До подтверждения этой части принимать SceneClimateRequest и зависимый маршрут Weather нельзя. Указанный отказ не является разрешением кода, миграции или переключения маршрутов.
+
+| Направление | Вызов / ответ | Содержимое на одном world_uid, R, области и моменте |
+|---|---|---|
+| DAG → Climate | Нода вызывает sample_scene_climate | Закреплённая выборка региона (SampleRef, temperature_base, zone_moisture до фазового расчёта), климатические входы региона, ключ сезона от Time и ClimateSeasonEffects из World. |
+| Climate → DAG | SceneClimateSample | Базовая и сезонная температуры, zone_moisture и weather_moisture, regional_precipitation_material:MaterialKey и provenance выборки. Это фон региона. Неполная выборка или типизированный отказ возвращается ноде; Weather вызывается только с полным результатом. |
+| DAG → Weather | Нода вызывает resolve_weather | Полный SceneClimateSample, тот же сезон, WeatherRulesView, WeatherSeasonEffects, активные локальные эффекты и полученные от Materials свойства всех применимых материалов на R. Ключ регионального материала приходит из результата Climate. |
+| Weather → DAG | WeatherSnapshot либо типизированный отказ | Фактическая погода сцены: system_weather, локальная температура, current_liquid_rainfall, ссылка на применённый материал и версию его свойств, ссылка на исходную выборку. При несовместимых источниках — SourceMismatch. Результат получает нода DAG. |
+
+**Приёмка границы.** При одинаковых климатических входах включение локального погодного эффекта сохраняет результат Climate. Измениться может WeatherSnapshot. FAIL, если Climate получает заклинание для расчёта местной погоды, Weather сам читает Climate/Materials или нода вычисляет фазу вместо Weather. Таблица определяет публичный обмен. Внутренняя модель локальных эффектов и правила их композиции остаются за их владельцами. [Граф вызовов](#пример-оркестрации-погоды-сцены-через-dag).
 
 **Редактирование.** API передаёт намерение в DAG. Ноды запрашивают версии и сведения по ссылкам у владельцев, затем вызывают публичную подготовку изменения. Для preview DAG возвращает кандидат; для сохранения передаёт его владельцу commit. Чтение и сохранение настроек отделены от явного запроса материализации.
 
@@ -124,9 +167,9 @@
 | Владелец и операция | Input | Output | Отказы и эффекты |
 |---|---|---|---|
 | Climate · подготовить материализацию / пересчёт | Закреплённый план, область, варианты LOD и входы запроса; для пересчёта — область и назначение пересчёта из события. Имена generate_climate/recalculate_climate обозначают сценарии legacy | Подготовленный результат Climate с областью, provenance и ссылками на staged artifacts; пустое изменение — явный успешный исход | Домен проверяет пригодность входов, вычисляет результат и при необходимости передаёт его в staging. DAG ведёт материализацию вплоть до передачи результата владельцу публикации. Форматы результата и патча требуют freeze. |
-| Climate · sample_scene_climate | SampleRef, temperature_base:int или null и zone_moisture:int или null из закреплённой выборки до фазового расчёта, season:Key[CalendarSeasonRegistry] или null от Time через DAG, ClimateSeasonEffects той же базы | SceneClimateSample(ref, season, temperature_base:int, effective_temperature:int, zone_moisture:int, weather_moisture:int). При заданном сезоне effective = base + соответствующий offset, при null — base | Сезон без поправки — ошибка контракта SeasonContractMismatch; несовместимый источник — SourceMismatch; отсутствующая публикация — PublicationUnavailable. При отсутствии хотя бы одного поля возвращается неполная выборка по контракту ниже. Чистый расчёт. |
+| Climate · sample_scene_climate | SampleRef, temperature_base:int или null и zone_moisture:int или null из закреплённой выборки до фазового расчёта, season:Key[CalendarSeasonRegistry] или null от Time через DAG, ClimateSeasonEffects и закреплённые климатические входы региона | SceneClimateSample(ref, season, temperature_base:int, effective_temperature:int, zone_moisture:int, weather_moisture:int, regional_precipitation_material:MaterialKey). При заданном сезоне effective = base + соответствующий offset, при null — base | Сезон без поправки — ошибка контракта SeasonContractMismatch; несовместимый источник — SourceMismatch; отсутствующая публикация — PublicationUnavailable. При отсутствии хотя бы одного поля возвращается неполная выборка по контракту ниже. Чистый расчёт. |
 | Weather · read_weather_rules | world_uid, At(R) | WeatherRulesView(world_uid, R, registry:WorldWeatherTypeRegistry). DAG разрешает Current один раз у World; для сцены использует At(sample.ref.R) | WorldNotFound, PublicationUnavailable, InvalidStoredSettings. Чтение без записи или repair. |
-| Weather · resolve_weather | полный SceneClimateSample, тот же календарный ключ, WeatherRulesView и WeatherSeasonEffects того же мира и R | WeatherSnapshot со ссылкой на sample, сезоном, базовой и эффективной температурой, rainfall, выбранным system_weather. Для совместимости существующего выхода intensity=0 до отдельной формулы | SourceMismatch при несовместимых входах. При отсутствии совпадения применяется fallback из ТЗ. Результат передаётся потребителю сцены без записи в map_cells. |
+| Weather · resolve_weather | полный SceneClimateSample, тот же календарный ключ, WeatherRulesView, WeatherSeasonEffects, фазовые свойства материалов и активные локальные погодные эффекты того же мира, области, времени и R | WeatherSnapshot со ссылкой на sample, сезоном, базовой и эффективной температурой, текущим жидким индексом, phase_ref и выбранным system_weather. Для совместимости существующего выхода intensity=0 до отдельной формулы | SourceMismatch при несовместимых входах. При отсутствии совпадения применяется fallback из ТЗ. Результат передаётся потребителю сцены без записи в map_cells. |
 
 **Закрытые свойства осадков (целевой контракт).** Смысл показателя и стадию вычисления определяет движок. Мир задаёт значения и пороги, состав жидкости и N+1 типы погоды. Предлагаемые имена ниже уточняют I/O.
 
@@ -134,9 +177,9 @@
 |---|---|---|
 | zone_moisture | Climate: profile.base_rainfall разрешённой зоны в данной точке на закреплённой базе, до liquid_mult. Исходная шкала 0–100. | Базовый потенциал для сезонного расчёта сцены. |
 | weather_moisture | Climate.sample_scene_climate применяет rainfall_percent один раз к zone_moisture. Без модификатора значение равно исходному. | Weather сравнивает rainfall_min с этим показателем и температурные пороги с effective_temperature. Диапазон согласуется с rainfall_percent и rainfall_min по таблице ниже. |
-| liquid_rainfall | Существующий фазовый расчёт effective_rainfall(moisture, temp, world) даёт clamp(round(moisture × liquid_mult), 0, 100). Его wire-имя в текущем Pack — rainfall. | Pack/map сохраняют и выдают значение. Liquid overlay переносит rainfall в выходную клетку; при выборе liquid_body проверяет hydrology candidate и liquid_precipitation_mult > 0. Ноль означает отсутствие жидкой фазы в этом расчёте; влажность для снега по нулю восстановить невозможно. | 
+| liquid_rainfall | Существующий фазовый расчёт effective_rainfall(moisture, temp, world) даёт clamp(round(moisture × liquid_mult), 0, 100). Его wire-имя в текущем Pack — rainfall. | Pack/map сохраняют и выдают значение. Liquid overlay переносит rainfall в выходную клетку; при выборе liquid_body проверяет hydrology candidate и liquid_precipitation_mult > 0. Ноль означает нулевое расчётное количество жидких осадков (в том числе при нулевой влажности); влажность для снега по нулю восстановить невозможно. | 
 
-**Границы закрытых показателей осадков (проект для согласования).** Все границы включительные. Верхний предел множителя 200 % предлагается как двукратное усиление: он сохраняет сценарий 80 × 150 % = 120 и задаёт достижимый предел сезонного индекса. Это проектное значение; текущая модель погодного реестра его ещё не проверяет.
+**Границы закрытых показателей осадков согласованы.** Все границы включительные. Верхний предел множителя 200 % допускает сценарий 80 × 150 % = 120 и задаёт достижимый предел сезонного индекса. Проверку согласованного предела в модели погодного реестра предстоит реализовать.
 
 | Поле | Min | Max | Правило |
 |---|---:|---:|---|
@@ -147,6 +190,15 @@
 | rainfall_min | 0 | 200 | Включительный порог по weather_moisture; одинаковые пределы у записи Weather и сезонной замены порога. В основной записи null означает отсутствие порога. |
 
 **Критерии.** 100 × 200 % = 200 и правило с порогом 200 совпадает при выполненных температурных условиях; 99 × 200 % = 198 и это правило пропускается. 80 × 150 % = 120, поэтому порог 110 достижим. 0 × 200 % и 100 × 0 % дают 0; missing не превращается в ноль. Дробь, bool и значение вне диапазона в авторском целом поле дают ошибку с путём при preview, save и import до записи; legacy-значение вне диапазона требует явной диагностики. Clamp фазового результата не применяется для исправления введённых данных. Общий диапазон этих движковых полей не меняет min/max авторских N+1 величин Environment.
+
+#### Временная локальная погода (TARGET)
+
+Climate сообщает базовые условия и material key региона. Владелец игрового эффекта (например, магии) готовит типизированное локальное воздействие с identity, областью, интервалом [начало, конец) и явно изменяемыми свойствами. В runtime принятое воздействие фиксируется через Snapshot/PatchSet. Нода DAG получает активные эффекты на момент/публикацию и записи нужных материалов от Materials, затем передаёт их в Weather.resolve_weather. Weather вычисляет итоговые условия сцены и жидкую фазу по итоговой локальной температуре и выбранному материалу. Внутри фиксированной стадии вычисления пустой набор поправок даёт базовые значения. Никаких дополнительных вызовов доменов из Weather.
+
+* Снежный регион: заклинание «тепло и солнечно» задаёт локальную температуру и ясную сухую погоду. В области во время действия Weather выдаёт эти значения и нулевые текущие осадки. Одной температурной поправки недостаточно для гарантированного солнца: при сохранении влаги снег может смениться дождём. Снаружи и после окончания расчёт использует актуальные региональные условия и оставшиеся активные эффекты. Накопленный снег не исчезает от одного изменения типа погоды; таяние определяет потребитель Physics/Hydrology.
+* Подмена материала **выпадающих осадков**: локальный эффект указывает другой MaterialKey. Weather проверяет наличие переданных свойств именно этого материала на R и вычисляет фазу по его cool/heat данным. Пустая ссылка/неизвестный ключ не подменяются водой. По истечении интервала действует обычный выбор материала региона. Если маг преобразовал **уже существующую воду** в луже или реке, это изменение физического состояния объекта через его владельца и Snapshot; чтение погоды такого изменения не создаёт.
+
+Климатические настройки и baked Pack не перезаписываются. Точный owner-port чтения активного эффекта, форма локальной поправки и композиция конфликтующих заклинаний требуют отдельного freeze.
 
 #### Осадки: источники, места записи и потребители
 
@@ -161,6 +213,14 @@
 Проверенные пути: [авторские колонки World](../../backend/app/db/models/world.py#L80), [разрешение профиля](../../backend/app/application/worldData/generators/climate/registry.py#L26), [расчёт фазы](../../backend/app/application/worldData/generators/climate/climateGeneratorService.py#L167), [формирование wire](../../backend/app/application/worldData/pack/climate/climatePackSample.py#L184), [файлы Pack](../../backend/app/application/worldData/pack/io/worldPackPaths.py#L67), [writer](../../backend/app/application/worldData/pack/io/worldPackWriter.py#L339), [Pack read](../../backend/app/application/worldData/pack/climate/climatePackApply.py#L44), [SQL upsert](../../backend/app/db/repositories/sqlite/mapCellRepository.py#L137).
 
 **Граница публикации.** Для нового поля Climate подготавливает версионированный артефакт; DAG передаёт refs владельцу активации Pack до gameplay либо Snapshot.apply в runtime. Для старого артефакта без канала влажности — IncompleteSceneClimate(zone_moisture) при доступном остальном входе. Подстановка жидких осадков, чтение latest и неявный rebake на read дают FAIL. Формат нового поля и миграция остаются до freeze. [ТЗ двух величин](../../docs/tz_climate.md#L439).
+
+**Фаза при смене сезона (целевой контракт к согласованию).** В Pack существующий wire rainfall обозначает baked_liquid_rainfall: clamp(round(zone_moisture × f(temperature_base, material_at_bake)), 0, 100). Для текущей сцены Weather.resolve_weather после сезонных и локальных поправок вычисляет current_liquid_rainfall = clamp(round(local_weather_moisture × f(local_temperature, local_material_at_R)), 0, 100). При отсутствии локальных поправок эти входы равны weather_moisture, effective_temperature и материалу региона. Пороговые правила Weather также получают локально скорректированные входы. Функция f — один чистый фазовый расчёт для bake и runtime. В выходе phase_ref идентифицирует материал и версию свойств. Оба индекса жидких осадков имеют диапазон 0–100; потенциал weather_moisture остаётся в 0–200. Текущее значение рассчитывается заново из дофазовой влажности, поэтому после оттепели может стать положительным при нуле в старом Pack.
+
+**Источник и границы.** Climate передаёт DAG ключ базового материала региона в SceneClimateSample. Сейчас есть мировой precipitation_liquid; контракт регионального выбора — TARGET. DAG получает MaterialRegistryView через публичный reader Materials на R и передаёт Weather запись для регионального ключа и записей локальных эффектов с cool_temp/cool_into и heat_temp/heat_into. По текущей функции граница активна, только когда заданы температура и цель перехода: при T ≤ активной холодной или T ≥ активной горячей границе f=0; внутри действует существующее сглаживание, при отсутствии обеих границ f=1. При конфликте баз — SourceMismatch; отсутствующая запись или некорректная ссылка в целевом pinned-контракте — ошибка входных данных. Сегодня legacy-расчёт при инверсии границ предупреждает и возвращает f=1; политику обработки уже сохранённых невалидных bands нужно согласовать при freeze. [Фактическая фазовая функция](../../backend/app/application/worldData/generators/climate/precipitation.py#L84).
+
+**Потребители и запись.** Нода вызывает Climate для выбранного момента/области на R (также при сезонном пересчёте по запросу DAG). На read результат находится в памяти вызова. DAG передаёт Weather effective_temperature и weather_moisture для его собственных порогов. Ноды Hydrology/Physics получают от DAG результат Weather с текущим жидким индексом, временем, пространственным охватом и phase_ref. Они применяют собственные правила стока, таяния и состояния вещества; индекс 0–100 сам по себе не задаёт массу, поток или запас снега. Для физики по клеткам требуется расчёт на соответствующем покрытии: среднее температуры сцены не восстанавливает фазу отдельных клеток. Если simulation меняет принятый мир, владелец готовит свой patch на ожидаемой базе, DAG собирает PatchSet, Snapshot применяет атомарно. Сезонное чтение не перезаписывает Pack и не вызывает изменения мира.
+
+**Переход через нестандартную границу.** На R материал имеет cool_temp=−20 с заданным cool_into и heat_temp=60 с заданным heat_into. Для одной клетки с zone_moisture=80, temperature_base=−10 и множителем осадков 100 % базовый f=1, Pack хранит 80. При сезонном offset=−12 температура становится −22, weather_moisture остаётся 80, current_liquid_rainfall=0. При возврате к −10 текущее значение снова 80. При эффективной температуре ровно 60 оно равно 0 по горячей границе. В каждом случае Pack хранит исходные 80. Переход материала не выбирает system_weather.
 
 **Проверка на морозе.** Для zone_moisture=80, liquid_mult=0 и без сезонной поправки → liquid_rainfall=0, weather_moisture=80. При effective_temperature=−6 канонический реестр выберет blizzard (порог 60, приоритет 1), при −2 — snow (порог 20), если прочие условия прежние. Количество твёрдых осадков, толщина снега и накопление льда требуют собственных контрактов; текущая формула их не выдаёт.
 
@@ -180,7 +240,7 @@
 | Запись настроек | Climate.prepare_change(base, PatchClimateScalars, MaterialRegistryView) → validated candidate, версии проверенных зависимостей, consequences либо ошибка поля/ссылки. Будущие upsert/replace записей зоны принадлежат Climate, типа погоды — Weather | Для preview DAG возвращает результат подготовки. Для save он передаёт результат владельцу acceptance: черновик — World; runtime — Snapshot с доменным handler. Квитанция выдаётся после commit. |
 | Удаление авторской записи | Climate.prepare_remove_zone(base, system_climate, usage_views); Weather.prepare_remove_weather_type(base, system_weather, usage_views) → подготовленное удаление либо EntryNotFound / InvalidReference с затронутой ссылкой. Кандидаты из C1; первый scalar patch их не открывает | DAG передаёт проверенный результат в тот же lifecycle записи. Удаление всего мира принадлежит World; очистка/удержание файлов принадлежит lifecycle Pack. Для вычисленного WeatherSnapshot сцены самостоятельное хранимое тело и delete в данном срезе отсутствуют. |
 | Материализация | Climate получает уже подготовленную планировку, версию входов и область запроса; вычисляет климат своей области и подготавливает ref результата. Кандидаты для reuse: [SurfacePlanBundle](../../backend/app/application/worldData/planning/contracts/surfacePlanBundle.py), [ArtifactRef](../../backend/app/dataModel/artifacts/references.py). Сам по себе ArtifactRef не подтверждает включение в публикацию | DAG запрашивает актуальный план по GEN-SURFACE-PLAN, связывает требуемые генераторные операции, собирает результаты. До gameplay DAG ведёт staging → активация Pack; после старта собирает PatchSet → Snapshot.apply. L0/L2 сохраняют общую базу планировки. |
-| Линейный расчёт сцены | Climate.sample_scene_climate(sample, season, offsets) → SceneClimateSample либо IncompleteSceneClimate; только полный sample поступает в Weather.resolve_weather(sample, season, rules, weather_effects) → WeatherSnapshot. Пример самостоятельного OpenPipeline — Weather: проверить согласованность входа → вычислить погодный результат → собрать WeatherSnapshot | DAG предоставляет сезон, sample и правила из соответствующих owners. Между сравнением порогов и выбором fallback DAG не вызывается. Owner получает один вход и возвращает один исход; прямое чтение реестра или вызов соседнего домена внутри resolve исключены. |
+| Линейный расчёт сцены | Climate.sample_scene_climate(sample, season, offsets) → SceneClimateSample либо IncompleteSceneClimate; только полный sample поступает в Weather.resolve_weather(sample, season, rules, weather_effects, materials, local_effects) → WeatherSnapshot. Пример самостоятельного OpenPipeline — Weather: проверить согласованность входа → вычислить погодный результат → собрать WeatherSnapshot | DAG предоставляет сезон, sample и правила из соответствующих owners. Между сравнением порогов и выбором fallback DAG не вызывается. Owner получает один вход и возвращает один исход; прямое чтение реестра или вызов соседнего домена внутри resolve исключены. |
 
 Пути файлов и владельцы публичных классов определены в [карте пакетов и классов](#11-карта-пакетов-классов-и-вызовов). Существующие модели и legacy-вызовы перечислены отдельно от предлагаемых классов.
 
@@ -211,8 +271,8 @@
 | Владелец | Пример поля payload | Семантика |
 |---|---|---|
 | Climate | temperature_offset_c: int | Прибавить к базовой температуре; 0 сохраняет температуру. |
-| Climate | rainfall_percent: int, 0–200 (предложение) | Множитель исходной zone_moisture в процентах: 100 сохраняет значение, 0 обнуляет измеренные осадки. Для неотрицательных целых предлагается округление вниз. Отсутствующий замер остаётся отсутствующим. |
-| Weather | rules_by_type: map[ключ WeatherTypeEntry.system_weather, SeasonalWeatherRule] | Пример типизированного изменения существующего правила: rainfall_min: int в диапазоне 0–200 (предложение) заменяет его порог перед выбором погоды. Ссылка разрешается в WeatherRulesView той же R. Порог влияет на выбор погоды; исходное количество осадков остаётся выходом Climate. |
+| Climate | rainfall_percent: int, 0–200 включительно | Множитель исходной zone_moisture в процентах: 100 сохраняет значение, 0 обнуляет измеренные осадки. Для неотрицательных целых предлагается округление вниз. Отсутствующий замер остаётся отсутствующим. |
+| Weather | rules_by_type: map[ключ WeatherTypeEntry.system_weather, SeasonalWeatherRule] | Пример типизированного изменения существующего правила: rainfall_min: int в диапазоне 0–200 включительно заменяет его порог перед выбором погоды. Ссылка разрешается в WeatherRulesView той же R. Порог влияет на выбор погоды; исходное количество осадков остаётся выходом Climate. |
 
 Пример для календаря с двумя ключами:
 
@@ -347,6 +407,8 @@ flowchart TD
         P["Чтение выборки сцены"]
         W["Чтение правил Weather"]
         E["Чтение сезонных эффектов World"]
+        K["Чтение активных локальных эффектов"]
+        A["Чтение свойств Materials"]
         S["Расчёт климата сцены"]
         B{"Исход Climate"}
         R["Расчёт погоды"]
@@ -358,21 +420,27 @@ flowchart TD
     W <-->|"read_weather_rules(world_uid, R)"| Weather["Weather"]
     T -->|"system_season или null"| S
     P -->|"выборка"| S
+    K <-->|"эффекты в области и интервале на R"| Owner["Владелец эффекта"]
+    A <-->|"read_material_registry(world_uid, At(R))"| Materials["Materials"]
+    K -->|"локальные погодные поправки"| R
+    A -->|"свойства материалов на R"| R
     E <-->|"read_season_effects(world_uid, At(R))"| World["World"]
     E -->|"climate-секция по system_season"| S
     E -->|"weather-секция по тому же ключу"| R
     T -->|"тот же system_season или null"| R
-    S <-->|"sample_scene_climate → полный или неполный результат"| Climate["Climate"]
+    S -->|"sample_scene_climate: входы региона и сезона"| Climate["Climate"]
+    Climate -->|"фон региона с MaterialKey / неполнота / отказ"| S
     S --> B
     B -->|"IncompleteSceneClimate"| M
     B -->|"SeasonContractMismatch"| X["Ошибка контракта календаря и Climate"]
     B -->|"SceneClimateSample"| R
     W -->|"WeatherRulesView той же R"| R
-    R <-->|"resolve_weather → WeatherSnapshot"| Weather
+    R -->|"resolve_weather: фон, правила, материалы, локальные эффекты"| Weather
+    Weather -->|"WeatherSnapshot / отказ"| R
     R --> O
 ```
 
-Четыре исходных чтения могут исполняться независимо после выбора R. В ветке полной выборки Climate применяет сезонную поправку один раз, а Weather выбирает тип погоды по переданным значениям. Измеренный ноль осадков допускает расчёт; отсутствие измерения возвращает missing_fields. При несовместимости календаря и настроек Climate DAG возвращает диагностику с ключом сезона.
+После выбора R ноды читают данные на одной базе. Материал региона приходит через DAG в составе климатической выборки. В ветке полной выборки Climate применяет сезонную поправку один раз, а Weather выбирает тип погоды по переданным значениям. Измеренный ноль осадков допускает расчёт; отсутствие измерения возвращает missing_fields. При несовместимости календаря и настроек Climate DAG возвращает диагностику с ключом сезона.
 
 ### Проверка плана и legacy inventory
 
@@ -385,7 +453,7 @@ flowchart TD
 | Climate.read_settings, Weather.read_weather_rules | DAG получает R у World → DAG отдельно вызывает каждый reader → результаты возвращаются DAG → DAG собирает ответ по одной R. |
 | Climate.prepare_change | DAG получает базу от World и сведения о материале от Materials; DAG непосредственно вызывает ClimateSettingsPrepareOpenPipeline.prepare_change → кандидат или ошибка возвращаются DAG. DAG выбирает preview либо передачу владельцу записи. Общий resolver — внутренняя чистая функция. |
 | Climate.prepare_upsert_zone, prepare_remove_zone, prepare_replace_zones; Weather.prepare_upsert_weather_type, prepare_remove_weather_type, prepare_replace_weather_rules | DAG выбирает одну операцию по intent. Данные ссылок и их версии от владельцев → DAG → выбранный домен → DAG (кандидат / ошибка) → World либо Snapshot по lifecycle. Данные использования ключей приходят через DAG из read_registry_referrers, описанного ниже. Проверку правила внутри владельца можно выполнять над переданными данными. |
-| Climate.sample_scene_climate, Weather.resolve_weather | Pack/владелец выборки и Time возвращают входы DAG. DAG → Climate.sample_scene_climate → DAG; при полном sample DAG → Weather.resolve_weather(sample, season, rules, weather_effects) → DAG. Выбор строки реестра при сравнении порогов вычисляет значение; все исходы возвращаются одному caller. Отдельную операцию или callback fallback не запускает. |
+| Climate.sample_scene_climate, Weather.resolve_weather | Pack/владелец выборки и Time возвращают входы DAG. DAG → Climate.sample_scene_climate → DAG; при полном sample DAG → Weather.resolve_weather(sample, season, rules, weather_effects, materials, local_effects) → DAG. Выбор строки реестра при сравнении порогов вычисляет значение; все исходы возвращаются одному caller. Отдельную операцию или callback fallback не запускает. |
 | Climate.prepare_materialization, Climate.prepare_recalculation | Planning и Pack → DAG (план, покрытие, parent/base) → выбранная DAG операция Climate → DAG (результат) → Pack activation либо Snapshot.apply. Выбор полного/частичного расчёта, запуск по coarse/fine scope, реакция на отсутствие parent и необходимость самостоятельного overlay принадлежат DAG. Разрешён staging через доменный staging port в рамках одной подготовки, как прямо оговорено правилом. |
 
 **Исправленные контракты маршрутов (TARGET).**

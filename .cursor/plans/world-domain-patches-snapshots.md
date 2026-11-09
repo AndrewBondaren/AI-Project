@@ -1539,7 +1539,7 @@ handlers и единый commit. RequestValidator проверяет общую 
 lineage, не собирает PatchSet и не считает domain outcomes.
 PublicationGuard сверяет publication transition/ожидаемые heads; он
 не второй runtime apply entry. PreparedPackActivation/GameplayStart — только
-pregame core CAS operations по внешнему вызову DAG, без planning/bake.
+pregame core CAS operations. Для активации V2 пользователь 2026-11-09 закрепил единственный публичный вход за World Pack: DAG вызывает линейный OpenPipeline Pack, 4D3 обеспечивает транзакционную часть той же операции. Публичный pipeline передаёт исход в DAG без ветвления. GameplayStart сохраняет собственный внешний вызов. [Контракт World Pack](../../docs/tz_world_pack_storage.md#публичная-операция-активации-world-pack-v2)
 OperationLedger — bookkeeping/claims/recovery по явному вызову,
 не scheduler/retry engine и не владелец business state.
 
