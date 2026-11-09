@@ -2754,7 +2754,7 @@ binding подаёт свой manifest, копий формул в домена�
   `evict[T](key: CacheKey[T]) -> None` остаются protocol backend.
 - `CacheService.get[T](binding: CacheBinding[T], key: CacheKey[T])
   -> CacheLookup[T]`; `put[T](binding, entry) -> CacheAdmission`,
-  `evict[T](binding, key) -> None`. `CacheAdmission` enum:
+  `evict[T](binding, key) -> None`. Целевой публичный метод удаления данных — `CacheService.evict[T](key: CacheKey[T]) -> CacheEvictResult`; его outcome равен EVICTED или NOT_FOUND. [Семантика и приёмка evict](../.cursor/plans/cache-public-contracts.md#публичное-удаление-записи-cache). `CacheAdmission` enum:
   для V1 put — STORED / SKIPPED_OVERSIZE. Целевой create для занятого ключа возвращает ALREADY_PRESENT при полном равенстве либо типизированный конфликт, для свободного — STORED / SKIPPED_OVERSIZE по текущему бюджету. [Контракт Cache](../.cursor/plans/cache-public-contracts.md#публичная-запись-cache-после-переноса). Oversize — штатное решение resource policy,
   не повреждение payload и не потеря вычисленного результата.
 - `PlanProvider[I,T].build(request: PlanRequest[I],
@@ -2821,6 +2821,8 @@ container. Состояния одного build: ABSENT → BUILDING → READY 
 admission новых builds, будит waiters и отменяет shared work через
 PlanBuildControl. Recursive dependency request из worker запрещён;
 assembler передаёт готовые dependencies и не создаёт executor deadlock.
+
+Одна эффективная CachePolicy управляет одним экземпляром RAM-кэша. Общий лимит и LRU охватывают все его namespace. [Область действия CRUD настроек](../.cursor/plans/cache-public-contracts.md#область-действия-настроек-cache).
 
 `CachePolicy` в `dataModel/cache/policy/cachePolicy.py`:
 `max_retained_bytes: strict positive int`,
