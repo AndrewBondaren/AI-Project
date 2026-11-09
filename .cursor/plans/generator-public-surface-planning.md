@@ -4,7 +4,7 @@
 
 **Статус:** REQUIREMENTS / OPEN, 2026-11-02. По поручению пользователя фиксируются target interface/method names и отдельное требование реализации. Это не разрешение реализации или cutover, не расширение поведения существующих DAG-нод.
 
-**Owning domain:** surface planning (`application/worldData/planning`). Интерфейс принадлежит этому домену, а не engine и не общему facade всех генераторов. Реализация использует существующие domain providers и PlanningService.
+**Owning domain:** surface planning (`application/worldData/planning`). Интерфейс принадлежит этому домену, а не engine и не общему facade всех генераторов. Текущий путь использует PlanningService; целевая граница и владельцы приведены в §5.
 
 ## 1. Фиксируемое имя и потребители
 
@@ -34,7 +34,7 @@ Reuse candidates: `SurfacePlanningView` / `ReadySurfacePlanningView`, `GeoSurfac
 2. Планы относятся к одному world и согласованным extent/grid/topology; bundle привязан к captured revision.
 3. Schema/algorithm versions и точные upstream dependency refs согласованы; изменение зависимости исключает reuse старого несовместимого результата.
 4. Результат immutable и пригоден downstream; diagnostics не потеряны. Cache hit и compute дают одинаковые контрактные гарантии.
-5. Операция не производит L0 tiles, climate pack artifacts, C23, L2 или C11 и не активирует публикацию мира. Запись planning cache допустима как внутренняя инфраструктура и не является world publication.
+5. Операция не производит L0 tiles, climate pack artifacts, C23, L2 или C11 и не активирует публикацию мира. Запись результата в Cache выполняет DAG после успешной доменной операции.
 
 Reuse candidates: `SurfacePlanBundle`, `GeoSurfacePlanBundle`, `PlanEnvelope`, `PlanRef`, `PlanDiagnostic`. Выбор baseline/GEO target принадлежит owning GEO activation contract; pipeline не переключает их по усмотрению caller. Exact output/error types и files OPEN. `SurfaceWorkingMaps` — внутренняя вычислительная проекция; публичная выдача mutable working maps автоматически не разрешается.
 
@@ -48,7 +48,7 @@ Reuse candidates: `SurfacePlanBundle`, `GeoSurfacePlanBundle`, `PlanEnvelope`, `
 
 ## 5. Разрешённый внутренний pipeline
 
-Подготовка climate/terrain/water/relief/hydrology/local-climate plans остаётся внутри одной публичной операции с единым результатом. Providers, их внутренняя последовательность, fingerprinting, cache и single-flight не переносятся в отдельные DAG-ноды только из-за числа стадий. GEO extension применяется только по принятому owning контракту.
+Planning отвечает за проверку captured inputs и dependency refs, fingerprinting, расчёт и проверку immutable результата. Межоперационную последовательность исполняет DAG: identify → Cache.get; HIT → admit; MISS → evaluate → Cache.create после успешной проверки результата. Cache владеет хранением, проверкой записи и admission по бюджету. Runtime DAG обеспечивает single-flight, лимиты и ожидание. Подготовка и сборка bundle получают нужные результаты явно; внутри доменного pipeline запрещены вызовы Cache, get_or_build, скрытый запуск соседней операции и собственный executor. Это распределение обязанностей; состав нод согласует пользователь. [Контракт Cache](./cache-public-contracts.md) · [Гарантии runtime](../../docs/tz_world_generation_dag.md#single-flight-при-переносе-planningservice)
 
 Pipeline не принимает решений о выборе старта, missing light → full, запуске L0/L2/C23/C11, подготовке соседних публичных операций или world publication. Этим межоперационным flow управляет DAG по отдельно принятой карте.
 
@@ -81,7 +81,7 @@ Pipeline не принимает решений о выборе старта, mi
 | `PackMaterializationOrchestrator` | Разделить surface planning, climate, L0, фоновые jobs и publication; линейные domain pipeline должны иметь отдельные принятые результаты | Управление самостоятельными операциями переносится в DAG; старый composite pipeline не оборачивается целиком новым интерфейсом |
 | `PackDetailedBakeOrchestrator` | Выделить линейные вычислительные pipeline для принятых detail-операций; отделить самостоятельные climate/grade effects. Exact decomposition OPEN | Оркестрация отдельных операций принадлежит DAG; кандидат внутреннего refine pipeline не считается принятым без I/O/Error/DoD |
 | `WorldMapBakeOrchestrator` | Кандидат декомпозиции в линейный L0 compose/preparation Pipeline; отделить effects и получить staged result. Exact interface/method name OPEN | Внутренние contributors/растеризация могут остаться стадиями одной операции; межоперационные решения не остаются в генераторе |
-| `SurfacePlanningAssembler` / `SurfacePlanningEntry` | Согласованная внутренняя подготовка единого bundle оформляется как `SurfacePlanningPipeline` за `ISurfacePlanningPipeline.prepare_surface_plan`; capture boundary остаётся OPEN | Providers/cache/внутренние зависимости обслуживают одну операцию; управление этим pipeline вместе с соседними публичными операциями находится в DAG |
+| `SurfacePlanningAssembler` / `SurfacePlanningEntry` | Согласованная внутренняя подготовка единого bundle оформляется как `SurfacePlanningPipeline` за `ISurfacePlanningPipeline.prepare_surface_plan`; capture boundary остаётся OPEN | Домен собирает и проверяет bundle из переданных результатов; публичные вызовы Cache и порядок самостоятельных операций принадлежат DAG, ожидание общего вычисления — runtime DAG |
 
 Карта отмечает направление декомпозиции, а не принимает exact срезы всех перечисленных классов. Для ещё не разобранных pipeline имена/методы/I/O/Error/DoD фиксируются отдельно. «Сохранить оркестратор» не является исходом; сохраняться могут вычисления внутри принятого линейного pipeline. Никакие DAG-ноды, родство или production callers этой картой не меняются.
 
@@ -95,7 +95,7 @@ Pipeline не принимает решений о выборе старта, mi
 
 Владелец общих planning-контрактов проверяет идентичность запроса и обязанности классов. Каждый конкретный генератор предъявляет свой публичный метод и типы результата. Обязанность GEN-DAG — вызвать принятый метод из согласованной с пользователем ноды.
 
-**Проверяемая передача планов.** До lookup владелец planning-контракта валидирует `PlanRequest[I]`, зарегистрированные schema/algorithm, exact slots/refs и fingerprint входов. Ключ строится имеющейся формулой `cache_item_key(checked.key, contract.manifest)`. На hit необходимо сверить точный envelope.ref.key и зависимости с тем же запросом. При build интерфейс провайдера принимает `PlanRequest[I], PlanDependencyReader, PlanBuildControl` и возвращает `PlanBuildResult[T]`. Подготовка `PlanEnvelope[T]` сохраняет payload, diagnostics, dependencies и output fingerprint из действующей формулы. Только успешно проверенный envelope передаётся в DAG для put. Нужны идентичные результат и диагностика на cold/warm путях. Методы `PlanningService._request/_envelope/_build` — источники существующих гарантий. Публичные методы конкретных владельцев планов для переноса подлежат отдельной сверке по каждому binding. [Правила ключей и ошибок](../../docs/tz_terrain_generation.md) · [Исходный порядок проверок](../../backend/app/application/planning/service/planningService.py) · [Формулы](../../backend/app/application/planning/service/planFingerprints.py) · [PlanEnvelope](../../backend/app/dataModel/planning/contracts/planEnvelope.py)
+**Проверяемая передача планов.** До lookup владелец planning-контракта валидирует `PlanRequest[I]`, зарегистрированные schema/algorithm, exact slots/refs и fingerprint входов. Ключ строится имеющейся формулой `cache_item_key(checked.key, contract.manifest)`. На hit необходимо сверить точный envelope.ref.key и зависимости с тем же запросом. При build интерфейс провайдера принимает `PlanRequest[I], PlanDependencyReader, PlanBuildControl` и возвращает `PlanBuildResult[T]`. Подготовка `PlanEnvelope[T]` сохраняет payload, diagnostics, dependencies и output fingerprint из действующей формулы. Только успешно проверенный envelope передаётся в DAG для create. Нужны идентичные результат и диагностика на cold/warm путях. Методы `PlanningService._request/_envelope/_build` — источники существующих гарантий. Публичные методы конкретных владельцев планов для переноса подлежат отдельной сверке по каждому binding. [Правила ключей и ошибок](../../docs/tz_terrain_generation.md) · [Исходный порядок проверок](../../backend/app/application/planning/service/planningService.py) · [Формулы](../../backend/app/application/planning/service/planFingerprints.py) · [PlanEnvelope](../../backend/app/dataModel/planning/contracts/planEnvelope.py)
 
 | Ответственный за поведение | Допустимые зависимости и эффекты | Проверка / основание отклонить перенос |
 |---|---|---|

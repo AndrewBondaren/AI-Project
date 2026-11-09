@@ -2748,14 +2748,14 @@ codec'ами. Fingerprint формулы — единая реализация
 binding подаёт свой manifest, копий формул в доменах нет.
 Реализация — шаг PC-3E плана geo-1-designed-water до PC-4.
 
-**Общий sync API и ошибки.** Ниже для Cache приведены действующие сигнатуры V1 с явным binding. Целевой caller передаёт ключ или запись; кодек разрешает Cache. [Решение и критерии удаления V1](../.cursor/plans/cache-public-contracts.md#обязательная-приёмка-удаления-cache-v1). В application:
+**Общий sync API и ошибки.** Ниже для Cache приведены действующие сигнатуры V1 с явным binding. После MISS целевой caller вызывает CacheService.create(entry); публичный put удаляется после переноса всех callers. При чтении caller передаёт ключ; кодек разрешает Cache. [Решение и критерии удаления V1](../.cursor/plans/cache-public-contracts.md#обязательная-приёмка-удаления-cache-v1). В application:
 - `CacheBackend.get[T](key: CacheKey[T]) -> CacheLookup[T]`,
   `put[T](entry: CacheEntry[T]) -> None`,
   `evict[T](key: CacheKey[T]) -> None` остаются protocol backend.
 - `CacheService.get[T](binding: CacheBinding[T], key: CacheKey[T])
   -> CacheLookup[T]`; `put[T](binding, entry) -> CacheAdmission`,
   `evict[T](binding, key) -> None`. `CacheAdmission` enum:
-  STORED / SKIPPED_OVERSIZE. Oversize — штатное решение resource policy,
+  для V1 put — STORED / SKIPPED_OVERSIZE. Целевой create для занятого ключа возвращает ALREADY_PRESENT при полном равенстве либо типизированный конфликт, для свободного — STORED / SKIPPED_OVERSIZE по текущему бюджету. [Контракт Cache](../.cursor/plans/cache-public-contracts.md#публичная-запись-cache-после-переноса). Oversize — штатное решение resource policy,
   не повреждение payload и не потеря вычисленного результата.
 - `PlanProvider[I,T].build(request: PlanRequest[I],
   dependencies: PlanDependencyReader, control: PlanBuildControl)
@@ -2790,8 +2790,11 @@ binding подаёт свой manifest, копий формул в домена�
 
 Failure classes принадлежат тому же service module, что соответствующий
 API: CacheFailure — cacheService.py, остальные — planningService.py.
-CacheFailure fields: `reason: CacheFailureReason` (перечисленные выше
-три enum values), `issues: tuple[FieldPathError,...]`; PlanContractFailure:
+Целевой транспорт Cache для DAG — исключение `CacheFailure(error: CacheError)`.
+POJO имеет поля reason, operation, message и issues. Успешный get возвращает
+HIT или MISS. Для BACKEND_FAILURE список полевых issues пуст. Поля V1 на
+самом исключении (reason и issues) учесть при переносе callers.
+[Полная схема, инварианты и проверки](../.cursor/plans/cache-public-contracts.md#публичная-ошибка-cache-для-dag). PlanContractFailure:
 `reason: PlanContractFailureReason` enum UNKNOWN_CONTRACT / INVALID_INPUT /
 DEPENDENCY_MISMATCH / KEY_MISMATCH, `issues: tuple[FieldPathError,...]`.
 PlanBuildFailure issues nonempty; остальные terminal exception types
