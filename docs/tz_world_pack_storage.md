@@ -225,6 +225,30 @@ refine), правки локаций — уходит в snapshot, pack игры
 
 #### Внутренняя реализация одной атомарной активации
 
+**Источник кандидата — обязательная зависимость от World Source Versioning.** При capture-finalize владелец source проверяет ревизии объектов и состав коллекций, атомарно закрепляет тела и регистрирует holder под общей защитой с мутациями и prune. После commit все чтения подготовки, включая ленивые, идут по этому capture. При активации Pack должен проверить связь конкретного кандидата, его частей и preparation с удерживаемым capture и в общем commit обеспечить передачу source pins опубликованному или сохранённому кандидату. Передача и проверка владения сериализуются с освобождением. Изменение latest после capture допустимо. CAS по публикации защищает смену head. Fingerprint подготовки сам по себе не удостоверяет ни состав capture, ни живое удержание. До freeze требуется typed binding владельца source: выход capture, его связь с кандидатом и per-artifact stamps, scoped-проверка и передача pins. Форму поля запроса закрепить при приёмке binding. Legacy require_fresh сохраняет свои гарантии до полного перехода. [Решение о freeze in-flight](../.cursor/plans/world-source-versioning.md#freeze-in-flight--snapshot-isolation-решение-мастера-2026-10-24) · [Legacy guard](../backend/app/application/worldData/planning/guards/sourcePublication.py) · [Сценарий Snapshot §7.2](../.cursor/plans/world-domain-patches-snapshots.md#72-первичная-materialization-обязательная-сверка-light_bakefull_bake)
+
+**Удержания одинакового manifest — предложение владельцам Pack и Artifacts (P1, OPEN).** Для кандидата предлагается durable ключ владельца `(world_uid, activation_operation_id)` с неизменяемой привязкой к полному manifest ref. При первом READY_INACTIVE точный новый holder должен войти в live-set Artifacts в том же физическом CommitScope, что и terminal. Порядок: подтвердить seal и исходные holds → приобрести удержание manifest данным владельцем и обеспечить дочерние связи → снять передаваемые operation holds → записать terminal. Ошибка откатывает все эффекты. Предлагается scoped-операция Artifacts для установки и снятия такого holder с проверкой identity и журналом для replay. Текущий `ArtifactRetentionHolder(artifact=manifest)` годится для связи manifest с ребёнком; два кандидата с одним manifest имеют одинаковую такую связь. Действующий handoff ожидает уже установленного владельца. При release снимается ровно связь данного operation с manifest; связи версии с детьми снимаются только после ухода последнего владельца. До принятия представления, scoped-порта и проверки двух независимых release гарантия остаётся открытой. [Варианты holders](../backend/app/dataModel/artifacts/lifecycle/holders.py) · [Ключ и handoff SQLite](../backend/app/db/repositories/sqlite/artifacts/holderStore.py)
+
+**Очистка после REJECTED (P1, предлагаемый контракт).** Publication сохраняет durable refusal; Artifacts отвечает за очистку оставшихся staging holds по идентичности отвергнутой операции и её fence. После подтверждённого terminal и закрытия допуска writers повторяемый cleanup сверяет kind/world/terminal, отсутствие живых writer claims и снимает только точные OperationHolder этой попытки. Для восстановления нужен durable перечень кандидатов на cleanup, например выборка REJECTED с незакрытыми operation holds. Удаление последнего такого hold и отметка завершения (если она хранится отдельно) должны переживать повторный запуск без пропуска очистки. При неизвестном commit сначала recovery. Для READY_INACTIVE действует собственный lifecycle. Повтор cancel после terminal возвращает record; вызова cancel для этой очистки недостаточно. Владельцам Artifacts/publication требуется согласовать порт и способ возобновления, включая очистку source pins после остановки workers. [Terminal и cancel](../backend/app/db/repositories/sqlite/artifacts/leaseStore.py) · [Refusal](../backend/app/db/repositories/sqlite/snapshotCore/operations/operationStore.py)
+
+#### Состав immutable Pack для приёмки storage V2
+
+Для каждого присутствующего компонента подготовка должна выдать точный immutable descriptor в составе manifest или в достижимом из него версионированном индексе. Из pinned publication после рестарта читатель разрешает manifest, адрес компонента и сохранённые bytes; GC учитывает всю достижимую версию. Запись следующего bake создаёт новую версию. Ниже инвентарь действующих источников; конкретная схема дескрипторов и регистрация форматов требуют согласования. [Поля manifest](../backend/app/dataModel/worldPack/meta/worldPackManifest.py) · [Вычисляемые пути](../backend/app/application/worldData/pack/io/worldPackPaths.py)
+
+| Компонент | Что включить в карту версии и проверить при холодном чтении |
+|---|---|
+| Manifest и встроенные индексы | Точный ref manifest; встроенные wilderness entries, статусы и счётчики защищены его digest. Отдельный locations_index требует собственного descriptor. |
+| Карта L0 | Координаты тайла → точный ref world map tile. Сверить содержимое одной координаты в двух закреплённых версиях. |
+| Wilderness L2 и location terrain | Ключ tile/chunk и location_uid → refs соответствующих payload. Учитывать отсутствующие по bake scope чанки и их статусы. |
+| Climate | Отдельные coarse field и climate tile по координатам; часть путей сегодня вычисляется вне manifest. |
+| Settlement | location_uid → ref опубликованной структуры со всеми кадрами; временные файлы подготовки имеют staging lifecycle. |
+| Spatial | Домен → root ref → полное множество shard refs; общий shard защищён до освобождения последней использующей его версии. |
+| Grade sidecars | Для tile и location точно установить потребителей. Для сохраняемого чтения закрепить ref, для debug-only данных оформить исключение из версии с проверкой отсутствия зависимого V2 API. |
+
+Приёмка полного Pack требует сравнить этот инвентарь со всеми фактическими writer/reader/import/export путями, включая производные имена файлов. Для каждой строки проверить две версии после restart и GC; тест только с Hydrology не закрывает остальные строки. Заморозка полной схемы хранения и cutover остаются OPEN.
+
+#### Последовательность исполнения активации
+
 1. Pack проверяет вход и получает claim у `OperationLedger.claim_publication(PACK_ACTIVATION, ...)`. Для совпавшего terminal возвращается сохранённый исход, даже если head уже продвинулся. Replay не требует повторной подготовки или ещё одного CAS. Busy возвращается caller; владелец claim продолжает под своим fence. Для исторического READY_INACTIVE возвращаются первоначальные manifest и observed publication. Replay не открывает B, не создаёт hold и не продлевает доступ после release. Доступность байтов определяется текущим владением.
 2. Pack проверяет подготовку, формат и байты защищённого кандидата до короткой транзакции. На этапе commit повторно проверяются условия, зависящие от владения и актуальности. Решение о сборке другой версии, повторном bake и выборе нового expected принадлежит DAG. При доменном отказе под OWNER до открытия транзакции публикации можно записать REJECTED через record_refusal в отдельной bookkeeping-транзакции: доменные записи ещё не начинались. Если транзакция публикации началась, записать доменный отказ можно только после подтверждённого rollback. При неизвестном исходе commit сначала выполнить recovery; инфраструктурная ошибка сама по себе не является REJECTED. [Publication store](../backend/app/db/repositories/sqlite/snapshotCore/operations/operationStore.py)
 3. Внутренняя реализация входит в `IPublicationCommitStore.transaction(operation_id)`. Координатор выдаёт scope одной физической транзакции. В нём выполняется один `compare_append(scope, expected, next_publication)`. Новая запись указывает на digest B, сохраняет pregame-состояние и lineage мира. Сравнивается полный expected. Конкурирующий старт игры участвует в том же CAS.
@@ -234,6 +258,10 @@ refine), правки локаций — уходит в snapshot, pack игры
 World Pack отвечает за смысл кандидата, его проверку и состав удерживаемой версии. Publication coordinator отвечает за транзакцию; publication store сравнивает и добавляет head; holders переносят удержания в выданном scope; ledger владеет claim, terminal и recovery. `WorldPackWriter` остаётся учтённым V1 caller до переноса и удаления по V1-01…07. [Реальный CAS](../backend/app/db/repositories/sqlite/snapshotCore/publications/worldPublicationStore.py) · [Порядок 4D3/4E2](../.cursor/plans/world-domain-patches-snapshots.md)
 
 #### Приёмка реализации
+
+**Статус публичного контракта — OPEN.** Владельцу Pack требуется предъявить метод подготовки PreparedPackCandidate и полную сигнатуру активации. Владелец encoding подтверждает canonical fingerprint контрольным вектором; publication подтверждает round-trip конкретной доменной ошибки через terminal codec; Artifacts и Pack фиксируют production binding manifest и измеренный byte cap; Snapshot 4D3 предъявляет scoped-интерфейс и сквозной вызов на одной физической транзакции. Отдельно проверяются source binding, независимые holds, cleanup REJECTED и состав версии. Наличие CAS, ledger и handoff подтверждает только реализацию этих примитивов.
+
+**Приёмка всего домена — OPEN отдельно от активации.** Требуется карта чтения, записи, обновления и удаления отдельно для данных Pack и для настроек Pack: конкретный публичный класс и модуль, метод и полная сигнатура, POJO входа/результата/ошибки, для настроек также POJO настроек, владельцы и callers. Владение настройками конкретных смежных доменов надо сверить до назначения методов. [Критерий конкретности CRUD](../.cursor/rules/dag-generator-interface.mdc#конкретность-публичного-crud-контракта)
 
 **legacyRoute V1 — OPEN (V1-03/V1-04).** В [HTTP-роутере карты](../backend/app/api/routes/map.py) четыре POST-обработчика под `/worlds/{world_uid}/map` напрямую получают `world_pack_writer_for(world)`. При cutover проверить каждый вход:
 
@@ -248,6 +276,9 @@ World Pack отвечает за смысл кандидата, его пров�
 
 | Проверка через публичный метод | Наблюдаемое после вызова |
 |---|---|
+| Две независимые активации удерживают идентичный manifest; release первой с потерей ответа, reopen и GC | После повторного release первой вторая сохраняет доступ ко всей версии. После release второй GC учитывает другие heads/pins. Ошибка между acquire и handoff на другом соединении оставляет прежнее владение. |
+| Изменение terrain settings и добавление локации после capture, head тот же | Часть B, вычисленная позже, видит прежние значения и прежний состав. Проверены stamps и удержания capture после commit и рестарта. Смешанные ревизии или отсутствующий pin блокируют публикацию. |
+| prepare → claim → admission REJECTED → restart → cleanup → GC | Уникальные staging refs собираются; чужие holds и общие bytes сохранены. Прерывание и повтор cleanup оставляют тот же terminal и результат очистки. |
 | Линейность OpenPipeline | Для ACTIVE, READY_INACTIVE, replay, отказа, busy и ошибки проверяется одна и та же цепочка: один вызов внутренней активации и передача исхода caller. При ревью проверить тело метода и вложенные вызовы: выбор иной операции, callback, скрытый повтор или запуск bake отклоняет реализацию. |
 | Bootstrap → B; затем B → C | Для каждой операции один ACTIVE и одна публикация. После перезапуска открывается точный manifest по сохранённой публикации; ранее закреплённый B читает прежние root и shard после GC. |
 | Два кандидата с одним expected; отдельно активация одновременно со стартом gameplay | Один победитель CAS. Для проигравшего подтверждены согласованный исход, наблюдённый head и полный набор обещанных удержаний. Повторного CAS внутри вызова нет. |
@@ -1145,6 +1176,8 @@ flowchart TB
 
 #### L2 refine module layout (утверждено)
 
+**Маршрут записи через WorldPackWriter на схеме — V1 / AS-IS.** Для V2 после старта gameplay применяются доменные patches и commit Snapshot.
+
 Разрез application-слоя L2 (не меняет wire/контракты parent light / WP-13 entry-first):
 
 ```mermaid
@@ -1851,6 +1884,8 @@ rollback SQL не откатывает опубликованный manifest. Su
 
 ### Manifest cache (reader)
 
+**V1 / AS-IS.** Ниже описан кэш изменяемого manifest.json. В V2 идентичность версии при чтении задаёт закреплённая публикация и digest immutable manifest.
+
 `WorldPackReader` держит process-local кэш `manifest.json`. **Инвариант:** кэш валиден iff stamp диска `(mtime_ns, size)` совпадает со stamp при последнем load.
 
 | Событие | Поведение |
@@ -1870,6 +1905,7 @@ sequenceDiagram
   participant Session as SessionOrDAG
   participant Entry as EntryRefineOrchestrator
   participant Pack as WorldPackWriter
+  Note over Entry,Pack: V1 / AS-IS. После старта gameplay в V2 запись проходит через PatchSet и Snapshot.
   participant Q as MapCellQueryFacade
   participant L2 as TileReader
   participant L0 as WorldMapReader
