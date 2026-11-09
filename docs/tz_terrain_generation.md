@@ -2822,7 +2822,7 @@ admission новых builds, будит waiters и отменяет shared work 
 PlanBuildControl. Recursive dependency request из worker запрещён;
 assembler передаёт готовые dependencies и не создаёт executor deadlock.
 
-Одна эффективная CachePolicy управляет одним экземпляром RAM-кэша. Общий лимит и LRU охватывают все его namespace. [Область действия CRUD настроек](../.cursor/plans/cache-public-contracts.md#область-действия-настроек-cache).
+Одна эффективная CachePolicy задаётся при создании экземпляра RAM-кэша и действует до его пересоздания. Общий лимит и LRU охватывают все его namespace. [Конфигурация экземпляра Cache](../.cursor/plans/cache-public-contracts.md#конфигурация-экземпляра-cache).
 
 `CachePolicy` в `dataModel/cache/policy/cachePolicy.py`:
 `max_retained_bytes: strict positive int`,
