@@ -6,6 +6,38 @@
 
 ## Действующая граница Time и публичного управления записями (2026-11-09)
 
+### Общие публичные контракты Time и пример потребления через DAG (2026-11-09)
+
+**Статус.** Реализованы значения и операции Time из §§10–11. Приняты владельцы: DAG выбирает одну из четырёх операций Physics; Time владеет точной арифметикой; Physics вычисляет результат модели; Snapshot принимает общую группу изменений. Ниже предложение владельца Time в ответ на [Physics P3.24–25](physics-spatial-dynamics.md). Поля Physics и представление provenance требуют совместной приёмки. Прежние упоминания обязательного TimeCapture для Physics в §§12, 14, 16 читать с этим уточнением.
+
+**Контракт Time для любого потребителя.** Операции add, interval и elapsed работают с общими TimePoint, TimeInterval и TimeDuration. prepare_advance — отдельная операция подготовки изменения часов мира. Состав входа потребителя, имена его полей, выбор режима вычисления и continuation определяет его владелец.
+
+**Пример потребления (предложение для Physics P3.25).** Поля header.interval, header.duration и header.sources.temporal в таблицах ниже относятся исключительно к проекту входа Physics. DAG может передать в них общий интервал, длительность из elapsed именно этого интервала и свидетельство источника начальной точки. Для этого хватает существующих арифметических операций Time.
+
+| Реализованная публичная операция Time | Input → Output / Error | Передача через DAG |
+|---|---|---|
+| TimeArithmetic.interval | MakeIntervalInput(start:TimePoint, end:TimePoint) → IntervalResult(interval) либо TimeScopeMismatch, TimeIntervalReversed | interval из success → header.interval. Для zero обе точки равны исходной observation. Для positive с заданными endpoints требуется end > start. |
+| TimeArithmetic.add | AddDurationInput(point:TimePoint, duration:TimeDuration) → PointResult(point) либо TimeRangeOverflow | Для вычислительного positive без запроса продвижения мира DAG может получить end из известной длительности и затем вызвать interval(start,end). |
+| TimeAdvancePipelineOpenPipeline.prepare_advance | PrepareAdvance(operation_id:EntityUid, base:TimeCapture, duration:TimeDuration) → TimeAdvanceProposal(operation_id,base,interval) либо TimeAdvanceMustBePositive, TimeRangeOverflow | Только когда DAG также готовит positive advance мира: proposal.interval → header.interval; proposal остаётся в группе подготовки действия. |
+| TimeArithmetic.elapsed | TimeInterval → DurationResult(duration) либо TimeRangeOverflow | duration из success → header.duration. При отказе DAG завершает подготовку данного Physics-входа. Равные точки дают (0,0); даже корректный интервал между крайними точками может переполнить диапазон duration. |
+
+| Операция, уже выбранная DAG | Временные входы | Проверки на границе Physics |
+|---|---|---|
+| zero initialise | interval(p,p), elapsed=(0,0), источник p; initial conditions модели | Равные endpoints, нулевая длительность, совместимые источник, scope, группа и модель. |
+| zero resume | То же + принятый continuation C | Дополнительно C.at == p и совместимость accepted lineage, basis/revisions и модели по D1–D5. Удерживается тот же C. |
+| positive initialise | interval(start,end), elapsed>0, источник start; initial conditions | Строгий порядок endpoints, положительная согласованная длительность, допустимые входные факты модели. |
+| positive resume | То же + принятый C | Дополнительно C.at == start и совместимость accepted lineage, basis/revisions и модели. При mismatch — отказ выбранной операции. |
+
+**Проверка согласованности.** Time.elapsed производит нормализованную пару секунд/наносекунд. Physics admission проверяет полученные факты без IO: общий world/timeline, observation == start, знак extent для выбранной операции и точное целочисленное равенство `(end.seconds-start.seconds)*10⁹ + end.nanoseconds-start.nanoseconds == duration.seconds*10⁹ + duration.nanoseconds`. Сравнение выдерживает полный диапазон endpoints; численные подшаги модели не определяют end.
+
+**Общий факт provenance (предложение для любых потребителей).** Для уже существующих источников форма `TemporalObservation(source: WorldPublicationRef | WorldSnapshotRef, observed: TimePoint)`. Это отдельный immutable факт чтения. Его поля описывают только точку и закреплённый источник. Формирование PhysicsSourceBindings относится к потребителю. DAG переносит пары (capture.publication, capture.point) и (historical.snapshot, historical.point) из доверенного чтения. Для publication сверяются world и подтверждённая timeline наблюдения; при унаследованном snapshot_head timeline head может отличаться. Для snapshot сверяются world и timeline самого ref. Источник должен соответствовать закреплённой версии остальных входных фактов по PhysicsSourceBindings; применимость и ancestry подтверждает владелец источника. Совпадение числовой координаты не удостоверяет её происхождение.
+
+Для вычисления до gameplay либо на внешнем базисе допустима подготовка interval/elapsed из предоставленной source owner точки. Обязательство владельца — предоставить immutable identity/revision базиса, реальный scope и observation на этом базисе. Если его нельзя выразить указанными refs, concrete вариант source и его trusted producer остаются OPEN для этого binding. Фиктивная publication, произвольная timeline и получение latest неприемлемы. Physics проверяет coherence переданных данных; решение о gameplay и разрешение перехода остаются у внешнего владельца.
+
+**Принятие.** Physics получает окно вычисления и provenance его начала. Положительный end может быть будущей точкой. Успешные prepare_advance и Physics compute дают кандидатов. При игровом действии DAG передаёт согласованные секции в общий PatchSet; подтверждением принятия является SnapshotApplyResult категории COMMITTED с назначенными refs. При conflict, отказе или отмене вычисленный end сам по себе не меняет часы и не превращает candidate continuation в accepted.
+
+**Сверка реализации.** Сигнатуры взяты из dataModel/time/{values,reads,operations,changes} и application/time/{pure,changes}. В backend/app найдены определение и диагностика proposal; production-передача этого временного header в четыре Physics compute операции не обнаружена. Карта описывает доменный обмен и не назначает регистрации нод.
+
 По уточнению мастера календарные настройки конкретного мира входят в домен Time. Time предоставляет публичные операции чтения, записи (создания и изменения) и удаления своих записей, включая настройки. Домен выполняет SQL через собственные репозитории. DAG выбирает публичную операцию; доступ к SQL и доменным writers инкапсулирован внутри домена. Для игрового действия сохраняется общая транзакция Snapshot (§§37, 44).
 
 **Поправка к ревью.** Основание P1 о прямом междоменном вызове снято. Выбор origin и вызовы projector/validator внутри одной операции настроек являются шагами её доменного алгоритма. Требование вынести эти шаги в отдельные CALL отозвано. Приёмка по-прежнему требует проверки публичных контрактов, ответственности классов, допустимых эффектов и порядка действий. Следующий результат плана — инвентарь «вид записи × чтение/создание/изменение/удаление» с входами, результатами, отказами, transaction scope и статусом реализации. Наличие prepare_* подтверждает подготовку кандидата; фактическое сохранение и удаление проверяются через публичный контракт и повторное чтение.
