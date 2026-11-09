@@ -10,6 +10,45 @@
 
 **Поправка к ревью.** Основание P1 о прямом междоменном вызове снято. Выбор origin и вызовы projector/validator внутри одной операции настроек являются шагами её доменного алгоритма. Требование вынести эти шаги в отдельные CALL отозвано. Приёмка по-прежнему требует проверки публичных контрактов, ответственности классов, допустимых эффектов и порядка действий. Следующий результат плана — инвентарь «вид записи × чтение/создание/изменение/удаление» с входами, результатами, отказами, transaction scope и статусом реализации. Наличие prepare_* подтверждает подготовку кандидата; фактическое сохранение и удаление проверяются через публичный контракт и повторное чтение.
 
+### Публичные методы Time для записей и настроек
+
+Статус на 2026-11-09: ниже зафиксирован целевой контракт. Методы чтения и prepare существуют в Python. Перечисленные далее классы записи, команды и SQL-адаптеры требуют реализации и интеграционной проверки. Пути в этом разделе заданы от `backend/app/`.
+
+**Чтение, существующие классы.** Все методы таблицы асинхронные.
+
+| Класс и файл | Метод и конкретный результат |
+|---|---|
+| TimeReader, `application/time/reads/reader.py` | `read_current(CurrentTimeRead) → TimeCapture \| TimePublicationConflict \| TimeInactiveTimeline \| TimeStateUnavailable` |
+| тот же | `read_pinned(WorldPublicationRef) → TimeCapture \| TimeStateUnavailable` |
+| тот же | `read_historical(HistoricalTimeRead) → HistoricalTimeCapture \| TimeStateUnavailable` |
+| WorldTimeSettingsReader, `application/worldData/timeSettings/reader.py` | `read_current(TimeSettingsRead) → TimeSettingsCapture \| SettingsConflict \| SettingsNotFound` |
+| тот же | `read_historical(HistoricalTimeSettingsRead) → HistoricalTimeSettingsCapture \| SettingsNotFound \| SettingsSnapshotNotFound` |
+
+Settings capture возвращает полные WorldTimeSettings и versions. Для отдельного календаря вызывающий выбирает ключ из capture.settings.calendars через entry_for, для эпохи — из capture.settings.epochs. Обе операции читают из той же версии. Для календарных месяцев, сезонов, дней недели, частей суток, правил и anchor единица записи — CalendarEntry целиком через update_calendar.
+
+**Подтверждённая запись отдельного изменения настроек.** Публичный класс `TimeSettingsWriteOpenPipeline`, файл `application/worldData/timeSettings/writes/settingsWriteOpenPipeline.py`; интерфейс `ITimeSettingsWriteOpenPipeline` в том же модуле. Все методы ниже async. Для типизированного запроса используется frozen strict `SettingsWrite[C](change: C, publication: SettingsWritePublication)`, файл `dataModel/world/settings/timePublication/writeRequest.py`. Закрытые специализации C по строкам таблицы. Существующие типы change определены в `dataModel/world/settings/timeOperations/changes.py`. У каждого есть base:SettingsPreparationBase с operation_id, capture, clock и budget.
+
+| Метод класса | Тип запроса | Дополнительные поля change | Результат |
+|---|---|---|---|
+| set_hours_per_day | SettingsWrite[HoursChange] | hours_per_day:Pos, anchors:tuple[CalendarAnchorReplacement,...] | W либо SettingsAnchorRequired |
+| create_calendar | SettingsWrite[CalendarCreate] | entry:CalendarEntry | W |
+| update_calendar | SettingsWrite[CalendarUpdate] | entry:CalendarEntry | W либо SettingsAnchorRequired |
+| select_calendar | SettingsWrite[CalendarSelect] | calendar:Key[WorldCalendarRegistry] | W |
+| delete_calendar | SettingsWrite[CalendarRemove] | calendar и replacement:Key[WorldCalendarRegistry] | W либо SettingsInUse |
+| create_epoch | SettingsWrite[EpochCreate] | epoch:WorldCalendarEpoch | W |
+| update_epoch | SettingsWrite[EpochUpdate] | epoch:WorldCalendarEpoch | W |
+| delete_epoch | SettingsWrite[EpochRemove] | epoch:Key[WorldCalendarEpochRegistry] | W |
+
+W — сокращение таблицы для точного union `SnapshotApplyResult | SettingsInvalid | CalendarBudgetExceeded`. SettingsInvalid и SettingsAnchorRequired/SettingsInUse — отказы подготовки до SQL. `SettingsWritePublication(turn_id: positive strict int, expected_players: tuple[PlayerHeadExpectation,...], preparation_fingerprint: RevisionHex, format_version: FormatVersion)` размещается рядом с SettingsWrite. Эти поля приходят от владельца runtime-контекста. operation_id и expected_world берутся из change.base, world_uid/timeline_id из его проверенного capture/clock. Правила версии и ключа секции задаёт зарегистрированный контракт §37.
+
+Публичный метод записи отвечает за один запрос изменения настроек. Домен подготавливает PreparedTimeSettingsChange и предоставляет секцию WorldTimeSettingsSection. Транзакционный binding одиночной записи применяет PatchSet[WorldTimeSettingsSection] через штатный IWorldSnapshotApply.apply. Доменный section handler пишет SQL в полученном CommitScope, Snapshot ведёт ledger и завершает транзакцию. Публичный метод возвращает SnapshotApplyResult после завершения apply. Критерий успешной записи — category=COMMITTED и committed:SnapshotCommitRefs с publication и world_snapshot. CONFLICT/REJECTED содержат diagnostics. При неизвестном исходе действует recovery по прежнему operation_id и fingerprint. Входные POJO не содержат connection, repository, CommitScope или callback.
+
+**Запись в составе игрового действия.** DAG вызывает существующие prepare_advance и prepare_* для настроек, собирает их секции вместе с остальными эффектами и один раз вызывает IWorldSnapshotApply.apply для всей группы. Одиночные методы записи выше предназначены для самостоятельного действия изменения настроек. Фактическая запись времени и настроек в обоих путях выполняется соответствующим доменным обработчиком внутри общей транзакции. Добавлять вызов одиночной записи до принятия группы запрещено.
+
+**Жизненный цикл часов и настроек.** Создание корневых часов и начальных настроек происходит один раз в операции старта мира через initial bindings §§20, 34, 37. Часы активной ветки продвигаются через `TimeAdvancePipelineOpenPipeline.prepare_advance(PrepareAdvance)` в `application/time/changes/advancePipelineOpenPipeline.py` и принятие TimeAdvanceSection. Произвольное удаление часов и всего WorldTimeSettings противоречит инварианту активной ветки (§§10, 30). Удаление календаря/эпохи изменяет следующую версию; удаление последнего календаря отклоняется. Физическая очистка исторических строк принадлежит retention lifecycle §44.
+
+**Приёмка.** Для каждого метода записи проверить success через повторное read_current по committed.publication и read_historical на старом snapshot. Для delete проверить отсутствие ключа в новой версии и его наличие в старой. Для конфликтующего base, повтора operation_id и rollback всей группы проверить SQL и terminal outcome. До этих проверок статус durable CRUD остаётся OPEN.
+
 <details><summary>История ревью и предложений GEN до уточнения границы Time. Статусы и маршруты ниже отражают прежнюю трактовку.</summary>
 
 ## Блокеры архитектурной приёмки (2026-11-09)
