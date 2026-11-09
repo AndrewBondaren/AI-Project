@@ -31,6 +31,15 @@ Capture boundary, exact types/files и baseline/GEO choice требуют domain
 
 ## Climate и Weather — публичные операции для DAG
 
+**Смежные контракты World (TARGET, сверх 13 методов Climate/Weather).**
+
+| Домен | Метод | Функционал | Контракт |
+|---|---|---|---|
+| World | `open_climate_draft` | Загрузить актуальную форму мастера | (world_uid, actor) → ClimateDraftView(state, EditBase). Авторское чтение до и после первого bake; сохранение продолжает ту же рабочую ревизию с проверкой EditBase. При недоступности черновика — DraftUnavailable. |
+| World | `read_season_effects` | Поставить сезонные эффекты сцены для обеих нод | (world_uid, At(R)) → WorldSeasonEffectsView(world_uid, R, effects). Ошибки: WorldNotFound, PublicationUnavailable, InvalidStoredSettings. DAG связывает карту с календарным ключом на R и передаёт ClimateSeasonEffects и WeatherSeasonEffects раздельно. |
+
+Climate.read_settings и Weather.read_weather_rules ниже обслуживают опубликованный источник. Оба reader вызываются с одной R независимо от того, существует ли более свежий черновик.
+
 [Целевая архитектура C1](./api-1-climate-c1-d1.md#1-целевая-архитектура) определяет владельцев, поток данных и границы записи для методов этого раздела.
 
 Для обоих доменов предложен [типизированный сезонный payload](./api-1-climate-c1-d1.md#типизированные-сезонные-эффекты). Для sample_scene_climate см. [контракт календарного сезона и Climate с определениями типов](./api-1-climate-c1-d1.md#контракт-календарного-сезона-и-climate).
