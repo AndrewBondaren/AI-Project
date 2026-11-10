@@ -4,17 +4,21 @@ from app.application.artifacts.contracts.formatBackend import ArtifactFormatCont
 from app.application.worldData.pack.io.packBlobWire import parse_climate_field_payload
 from app.application.worldData.pack.io.tileCodec import PAYLOAD_KIND_CLIMATE, TileCodec
 from app.dataModel.artifacts.references import ArtifactKind
-from app.dataModel.worldPack.wire.climateFieldWire import CLIMATE_FIELD_FORMAT_KEY, CLIMATE_FIELD_FORMAT_VERSION
+from app.dataModel.worldPack.wire.climateFieldWire import CLIMATE_FIELD_FORMAT_KEY, CLIMATE_FIELD_FORMAT_VERSION, ClimateFieldWire
 
 
-def _validated_bytes(payload: bytes) -> bytes:
+def decode_climate_field(payload: bytes) -> ClimateFieldWire:
     if type(payload) is not bytes:
         raise TypeError("climate artifact requires bytes")
     codec = TileCodec(codec_version=CLIMATE_FIELD_FORMAT_VERSION)
     if not payload.startswith(codec.pack_header(PAYLOAD_KIND_CLIMATE)):
         raise ValueError("expected climate field BLOB header")
     _, field = codec.decode(payload)
-    parse_climate_field_payload(field)
+    return parse_climate_field_payload(field)
+
+
+def _validated_bytes(payload: bytes) -> bytes:
+    decode_climate_field(payload)
     return payload
 
 

@@ -2,6 +2,7 @@
 from app.application.artifacts.contracts.stagingPort import IArtifactStaging
 from app.application.artifacts.staging.artifactStaging import TypedArtifactStager
 from app.application.worldData.pack.encoding.packManifestCodec import encode_candidate_manifest
+from app.application.worldData.pack.encoding.stagedClimateFields import StagedClimateFields
 from app.dataModel.artifacts.lifecycle.lease import OperationLeaseRef
 from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind, OperationPhase
 from app.dataModel.artifacts.references import ArtifactRef
@@ -13,6 +14,7 @@ from app.encoding.canonicalCodec import content_digest
 async def finish_pack_preparation(
     lease: OperationLeaseRef, manifest: WorldPackManifest, other_members: tuple[ArtifactRef, ...],
     manifest_stager: TypedArtifactStager[bytes], staging: IArtifactStaging,
+    *, climate_fields: StagedClimateFields | None = None,
 ) -> PreparedPackCandidate:
     """Other members include transitive refs resolved by the preparing writer."""
     if lease.kind is not OperationKind.PACK_ACTIVATION or lease.world_uid != manifest.world_uid:
@@ -23,8 +25,12 @@ async def finish_pack_preparation(
     members = dict.fromkeys(other_members)
     for row in manifest.spatial_roots:
         members[row.root] = None
-    for ref in manifest.climate_artifacts():
-        members[ref] = None
+    climate_refs = manifest.climate_artifacts()
+    if climate_refs:
+        if climate_fields is None:
+            raise ValueError("climate field admission is required for this manifest")
+        members.update(dict.fromkeys(climate_refs))
+        await climate_fields.validate(lease, manifest)
     manifest_ref = await manifest_stager.stage(lease, data)
     PreparedPackCandidate.require_manifest_descriptor(manifest_ref)
     if manifest_ref.nbytes != len(data) or manifest_ref.content_hash != content_digest(data).hex():

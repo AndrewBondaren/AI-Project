@@ -2,15 +2,18 @@ from pathlib import Path
 from dataclasses import asdict, replace
 from tempfile import TemporaryDirectory
 from unittest import IsolatedAsyncioTestCase
+from unittest.mock import patch
 
 from app.application.artifacts.contracts.blobRead import ReadableBlobBackend
 from app.application.artifacts.staging.artifactStaging import TypedArtifactStager
 from app.application.worldData.pack.encoding.climateFieldFormat import CLIMATE_FIELD_FORMAT
 from app.application.worldData.pack.encoding.packManifestCodec import decode_manifest
 from app.application.worldData.pack.encoding.preparedManifest import finish_pack_preparation
+from app.application.worldData.pack.encoding.stagedClimateFields import StagedClimateFields
 from app.application.worldData.pack.io.packBlobWire import climate_field_payload
 from app.application.worldData.pack.io.tileCodec import PAYLOAD_KIND_CLIMATE, PAYLOAD_KIND_WORLD_MAP, TileCodec
 from app.core.container.packs import PacksWiring
+from app.dataModel.worldPack.activation.input import PackActivationInput
 from app.dataModel.artifacts.lifecycle.holders import ArtifactRetentionHolder
 from app.dataModel.worldPack.meta.worldPackManifest import WorldPackManifest, TileManifestEntry
 from app.dataModel.worldPack.read.pinnedManifest import ManifestPinRead, ManifestStorageRead
@@ -65,6 +68,9 @@ class PinnedClimateRetentionTests(ExecutionPinFixture):
         registry = f.service._registry
         PacksWiring.register_climate_field_format(registry, self.path.parent / "artifacts", f.leases)
         stager = TypedArtifactStager(CLIMATE_FIELD_FORMAT, 1, registry, f.service)
+        backend = registry.resolve(CLIMATE_FIELD_FORMAT)
+        assert isinstance(backend, ReadableBlobBackend)
+        admission = StagedClimateFields(backend, f.catalog, f.holders)
         # A sealed fixture anchor represents the publication head in this storage probe.
         head_holder = ArtifactRetentionHolder(artifact=self.manifest)
 
@@ -80,21 +86,33 @@ class PinnedClimateRetentionTests(ExecutionPinFixture):
             manifest = WorldPackManifest(world_uid="w1", pack_version="2.0.0", spatial_roots=(),
                 climate_coarse_ref=coarse, tiles=[TileManifestEntry(gx=0, gy=0, climate_status="fine",
                                                                     climate_fine_ref=fine)])
-            candidate = await finish_pack_preparation(lease, manifest, (), f.stager, f.service)
-            ref = candidate.manifest
-            await f.ledger.claim_publication(lease.kind, operation, lease.world_uid, "a"*64, "b"*64)
-            head = self.head.model_copy(update={"publication_id": operation, "pack_hash": ref.content_hash})
+            if previous is None:
+                tile = manifest.tiles[0]
+                for invalid in (manifest.model_copy(update={"climate_coarse_ref": fine}),
+                                manifest.model_copy(update={"tiles": [tile.model_copy(update={"climate_fine_ref": coarse})]}),
+                                manifest.model_copy(update={"tiles": [tile.model_copy(update={"gx": -1})]})):
+                    with self.assertRaises(ValueError), patch.object(f.stager, "stage") as stage:
+                        await finish_pack_preparation(lease, invalid, (), f.stager, f.service, climate_fields=admission)
+                    stage.assert_not_awaited()
+                await f.leases.assert_writable(lease)
+            candidate = await finish_pack_preparation(lease, manifest, (), f.stager, f.service, climate_fields=admission)
+            request = PackActivationInput.from_candidate(candidate, self.head)
+            self.assertEqual(PackActivationInput.model_validate_json(request.model_dump_json()), request)
+            ref = request.manifest
+            await f.ledger.claim_publication(lease.kind, request.operation_id, request.expected.world_uid,
+                                             request.preparation_fingerprint, "b"*64)
+            head = request.expected.model_copy(update={"publication_id": request.operation_id, "pack_hash": ref.content_hash})
             if previous is not None:
                 with self.assertRaisesRegex(RuntimeError, "abort publication"):
                     async with self.bundle[1].transaction(operation) as scope:
-                        self.assertIs(await self.bundle[2].compare_append(scope, self.head, head), CasDecision.APPLIED)
+                        self.assertIs(await self.bundle[2].compare_append(scope, request.expected, head), CasDecision.APPLIED)
                         await retain_climate_members(scope, f.holders, lease, ref, manifest)
                         raise RuntimeError("abort publication")
                 self.assertEqual(await self.bundle[2].read("w1"), self.head)
                 for member in manifest.climate_artifacts():
                     self.assertFalse(await f.holders.is_held(member, ArtifactRetentionHolder(artifact=ref)))
             async with self.bundle[1].transaction(operation) as scope:
-                self.assertIs(await self.bundle[2].compare_append(scope, self.head, head), CasDecision.APPLIED)
+                self.assertIs(await self.bundle[2].compare_append(scope, request.expected, head), CasDecision.APPLIED)
                 await retain_climate_members(scope, f.holders, lease, ref, manifest)
                 async with f.catalog._scopes.bind(scope):
                     await f.holders.acquire(ref, head_holder)
