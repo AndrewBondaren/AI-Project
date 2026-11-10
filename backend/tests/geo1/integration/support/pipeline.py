@@ -137,8 +137,8 @@ class ReliefSeam:
     """PC-computed evidence and exact GEO handles share one terrain implementation."""
 
     def __init__(self, pc):
-        from app.application.cache.backends.memoryCache import MemoryCache
-        from app.application.cache.service.cacheService import CacheService
+        from app.application.cache.backends.memoryCache import LegacyMemoryCache as MemoryCache
+        from app.application.cache.service.legacyCacheService import CacheService
         from app.application.planning.providers.planRegistry import PlanRegistry
         from app.application.planning.service.planningService import PlanningService
         from app.application.worldData.generators.terrain.relief.planning.reliefPlanProvider import GeoReliefPlanProvider, GeoRiverReliefPlanProvider

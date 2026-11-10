@@ -32,7 +32,7 @@ def invalid_collection_context(collector: MaskSourceCollector[int, int], policy:
 from app.application.worldData.planning.contracts.surfaceWorkingMaps import SurfaceWorkingMaps
 from app.dataModel.cache.contracts.cacheContract import CacheContract
 from app.application.cache.contracts.cacheBackend import CacheBinding
-from app.application.cache.service.cacheService import CacheService
+from app.application.cache.service.legacyCacheService import CacheService
 from app.application.planning.providers.planProvider import PlanProvider, RegisteredPlanContract
 from app.application.planning.providers.planRegistry import PlanDependencyReader, PlanRegistry
 from app.application.planning.service.planningService import PlanningService, PlanWaitControl

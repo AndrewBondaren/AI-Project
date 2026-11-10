@@ -7,9 +7,10 @@ import unittest
 
 from pydantic import TypeAdapter
 
-from app.application.cache.backends.memoryCache import MemoryCache
-from app.application.cache.contracts.cacheBackend import CacheBackend, CacheBinding
-from app.application.cache.service.cacheService import CacheService, retained_entry_bytes
+from app.application.cache.backends.memoryCache import LegacyMemoryCache as MemoryCache
+from app.application.cache.contracts.cacheBackend import LegacyCacheBackend, CacheBinding
+from app.application.cache.service.legacyCacheService import CacheService
+from app.application.cache.service.cacheService import retained_entry_bytes
 from app.dataModel.cache.contracts.cacheContract import CacheContract
 from app.dataModel.cache.contracts.cacheEntry import CacheAdmission, CacheEntry
 from app.dataModel.cache.contracts.cacheLookup import CacheHit, CacheMiss
@@ -156,7 +157,7 @@ class MemoryCacheTests(unittest.TestCase):
         self.assertEqual(service.get(model_binding, model_key).entry.value.points[0].x, 1)
 
 
-def protocol_acceptance(backend: MemoryCache) -> CacheBackend:
+def protocol_acceptance(backend: MemoryCache) -> LegacyCacheBackend:
     return backend
 
 

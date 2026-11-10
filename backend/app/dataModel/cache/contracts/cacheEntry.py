@@ -13,6 +13,7 @@ T = TypeVar("T")
 
 class CacheAdmission(StrEnum):
     STORED = "stored"
+    ALREADY_PRESENT = "already_present"
     SKIPPED_OVERSIZE = "skipped_oversize"
 
 

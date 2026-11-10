@@ -4,7 +4,9 @@ from dataclasses import dataclass
 from typing import Generic, Protocol, TypeVar
 
 from app.dataModel.cache.contracts.cacheContract import CacheContract
-from app.dataModel.cache.contracts.cacheEntry import CacheEntry
+from app.dataModel.cache.contracts.cacheEntry import CacheAdmission, CacheEntry
+from app.dataModel.cache.contracts.cacheEvictResult import CacheEvictOutcome
+from app.dataModel.cache.contracts.cacheUpdateResult import CacheUpdateOutcome
 from app.dataModel.cache.contracts.cacheLookup import CacheLookup
 from app.dataModel.cache.identity.cacheKey import CacheKey
 
@@ -32,9 +34,26 @@ class CacheBinding(Generic[T]):
     codec: CachePayloadCodec[T]
 
 
-class CacheBackend(Protocol):
-    """Store immutable entries under exact keys; failures must raise."""
+class LegacyCacheBackend(Protocol):
+    """LEGACY REMOVE(CACHE-V1-BINDING): port used by V1 CacheService."""
 
     def get[T](self, key: CacheKey[T]) -> CacheLookup[T]: ...
     def put[T](self, entry: CacheEntry[T]) -> None: ...
     def evict[T](self, key: CacheKey[T]) -> None: ...
+
+
+class CacheValueConflict(ValueError):
+    """An occupied key contains a different validated value."""
+
+
+class CacheEncodingFailure(ValueError):
+    """A codec could not provide canonical bytes for comparison."""
+
+
+class CacheBackend(Protocol):
+    """Atomic V2 operations on one bounded RAM cache."""
+
+    def get[T](self, key: CacheKey[T]) -> CacheLookup[T]: ...
+    def create[T](self, entry: CacheEntry[T], codec: CachePayloadCodec[T], cost: int) -> CacheAdmission: ...
+    def update[T](self, entry: CacheEntry[T], codec: CachePayloadCodec[T]) -> CacheUpdateOutcome: ...
+    def evict[T](self, key: CacheKey[T]) -> CacheEvictOutcome: ...

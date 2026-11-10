@@ -4,7 +4,7 @@ from app.core.logging.contracts import LogConsumer
 import unittest
 from unittest.mock import patch
 
-from app.application.cache.service.cacheService import CacheFailure
+from app.application.cache.service.legacyCacheService import CacheFailure
 from app.application.planning.service.planningService import PlanProviderFault
 from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult
 from app.dataModel.planning.diagnostics.planDiagnostic import PlanDiagnostic, PlanDiagnosticDisposition

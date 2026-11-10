@@ -1,7 +1,7 @@
 """Shared frozen upstream evidence for the final→local→support→coating seam."""
 
-from app.application.cache.backends.memoryCache import MemoryCache
-from app.application.cache.service.cacheService import CacheService
+from app.application.cache.backends.memoryCache import LegacyMemoryCache as MemoryCache
+from app.application.cache.service.legacyCacheService import CacheService
 from app.encoding.canonicalCodec import digest
 from app.application.planning.providers.planRegistry import PlanRegistry, PlanDependencyReader
 from app.application.planning.service.planFingerprints import output_fingerprint

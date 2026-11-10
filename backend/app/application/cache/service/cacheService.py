@@ -1,40 +1,29 @@
 """Typed storage boundary; world currency and domain planning belong to callers."""
 
+from contextlib import contextmanager
 from dataclasses import fields, is_dataclass
-from enum import Enum, StrEnum
+from enum import Enum
 from sys import getsizeof
 
 from pydantic import BaseModel
 
-from app.application.cache.contracts.cacheBackend import CacheBackend, CacheBinding
+from app.application.cache.contracts.cacheBackend import CacheBackend, CacheBinding, CacheValueConflict, CacheEncodingFailure
+from app.application.cache.service.cacheBindingRegistry import CacheBindingRegistry, CacheBindingResolutionError
 from app.dataModel.cache.contracts.cacheContract import CacheContractMetadata
-from app.dataModel.cache.contracts.cacheEntry import CacheAdmission, CacheEntry
+from app.dataModel.cache.contracts.cacheCreateResult import CacheCreateResult
+from app.dataModel.cache.contracts.cacheUpdateResult import CacheUpdateResult
+from app.dataModel.cache.contracts.cacheEvictResult import CacheEvictResult
+from app.dataModel.cache.contracts.cacheEntry import CacheEntry
+from app.dataModel.cache.contracts.cacheError import CacheError, CacheIssueCode, CacheContractIssue, CacheFailureReason, CacheFieldIssue, CacheOperation
+from app.dataModel.fields.checkedPath import CheckedPath
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.cache.contracts.cacheLookup import CacheHit, CacheLookup, CacheMiss
 from app.dataModel.cache.identity.cacheKey import CacheKey
-from app.dataModel.cache.policy.cachePolicy import CachePolicy
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.validation.immutableValue import (
     _complete_record as _complete_record,
     _immutable as _immutable,
     validate_immutable as validate_immutable,
 )
-
-
-class CacheFailureReason(StrEnum):
-    CONTRACT_MISMATCH = "contract_mismatch"
-    INVALID_PAYLOAD = "invalid_payload"
-    BACKEND_FAILURE = "backend_failure"
-
-
-class CacheFailure(Exception):
-    def __init__(self, reason: CacheFailureReason, issues: tuple[FieldPathError, ...]):
-        self.reason = reason
-        self.issues = issues
-        super().__init__(reason.value)
-
-
-def _failure(reason: CacheFailureReason, message: str) -> CacheFailure:
-    return CacheFailure(reason, (FieldPathError(("cache",), message),))
 
 
 def retained_entry_bytes(value: object) -> int:
@@ -70,88 +59,117 @@ def retained_entry_bytes(value: object) -> int:
     return size(value)
 
 
-class CacheService:
-    # LEGACY REMOVE(CACHE-V1-BINDING): migrate get/put/evict from caller-supplied
-    # bindings to Cache-owned resolution. See .cursor/plans/cache-public-contracts.md.
-    def __init__(self, backend: CacheBackend, policy: CachePolicy):
-        self._backend = backend
-        self._policy = CachePolicy.model_validate(policy)
+_CONTRACT_PATH = CheckedPath.root(CacheContractMetadata)
+_RESOLUTION_PATHS = {
+    CacheIssueCode.UNKNOWN_NAMESPACE: _CONTRACT_PATH.field(
+        FieldRef(lambda: CacheContractMetadata, lambda metadata: metadata.id)).freeze(),
+    CacheIssueCode.SCHEMA_VERSION_MISMATCH: _CONTRACT_PATH.field(
+        FieldRef(lambda: CacheContractMetadata, lambda metadata: metadata.schema_version)).freeze(),
+}
 
-    def _key[T](self, binding: CacheBinding[T], key: CacheKey[T]) -> CacheKey[T]:
+
+class CacheFailure(Exception):
+    def __init__(self, error: CacheError):
+        self.error = error
+        super().__init__(error.message)
+
+
+def _failure(operation: CacheOperation, reason: CacheFailureReason, message: str,
+             code: CacheIssueCode | None = None) -> CacheFailure:
+    issues = () if code is None else (CacheContractIssue(code=code, message=message),)
+    return CacheFailure(CacheError(operation=operation, reason=reason, message=message, issues=issues))
+
+
+@contextmanager
+def _backend_call(operation: CacheOperation):
+    try:
+        yield
+    except CacheEncodingFailure as exc:
+        raise _failure(operation, CacheFailureReason.INVALID_PAYLOAD,
+                       "Canonical encoding failed", CacheIssueCode.INVALID_VALUE) from exc
+    except CacheValueConflict as exc:
+        raise _failure(operation, CacheFailureReason.CONTRACT_MISMATCH,
+                       "Key holds a different value", CacheIssueCode.KEY_OCCUPIED_DIFFERENT_VALUE) from exc
+    except Exception as exc:
+        raise _failure(operation, CacheFailureReason.BACKEND_FAILURE, "Cache backend failed") from exc
+
+
+class CacheService:
+    def __init__(self, backend: CacheBackend, registry: CacheBindingRegistry):
+        self._backend = backend
+        self._registry = registry
+
+    def _binding[T](self, operation: CacheOperation, key: CacheKey[T]) -> CacheBinding[T]:
         try:
-            _complete_record(binding.contract)
             _complete_record(key)
             _complete_record(key.contract)
-            CacheContractMetadata.model_validate(binding.contract)
-            validated = type(key).model_validate(key)
-            if validated.contract != binding.contract:
-                raise ValueError("key does not match the supplied cache binding")
-            return validated
+            type(key).model_validate(key, strict=True)
+            return self._registry.resolve(key.contract)
+        except CacheBindingResolutionError as exc:
+            issue = CacheFieldIssue(code=exc.code, path=_RESOLUTION_PATHS[exc.code],
+                                    message="Unregistered cache namespace or version")
+            raise CacheFailure(CacheError(operation=operation, reason=CacheFailureReason.CONTRACT_MISMATCH,
+                                          message=issue.message, issues=(issue,))) from exc
         except Exception as exc:
-            raise _failure(CacheFailureReason.CONTRACT_MISMATCH, str(exc)) from exc
+            raise _failure(operation, CacheFailureReason.CONTRACT_MISMATCH,
+                           "Invalid cache key", CacheIssueCode.CONTRACT_VIOLATION) from exc
 
-    def _entry[T](self, binding: CacheBinding[T], entry: CacheEntry[T],
-                  expected: CacheKey[T]) -> CacheEntry[T]:
+    def _admit[T](self, op: CacheOperation, entry: CacheEntry[T]) -> tuple[CacheEntry[T], CacheBinding[T]]:
         try:
             _complete_record(entry)
+            key = entry.key
         except Exception as exc:
-            raise _failure(CacheFailureReason.INVALID_PAYLOAD, str(exc)) from exc
-        key = self._key(binding, entry.key)
-        if key != expected:
-            raise _failure(CacheFailureReason.CONTRACT_MISMATCH, "backend returned a different cache key")
+            raise _failure(op, CacheFailureReason.INVALID_PAYLOAD, "Invalid entry", CacheIssueCode.INVALID_VALUE) from exc
+        binding = self._binding(op, key)
         try:
-            # The codec checks concrete schema invariants, even on already-typed
-            # values. The service independently enforces immutable admission.
             _immutable(entry.value, set())
             value = binding.codec.validate(entry.value)
             _immutable(value, set())
-            return CacheEntry[T](key=key, value=value)
+            return CacheEntry[T](key=key, value=value), binding
         except Exception as exc:
-            raise _failure(CacheFailureReason.INVALID_PAYLOAD, str(exc)) from exc
+            raise _failure(op, CacheFailureReason.INVALID_PAYLOAD, "Invalid value", CacheIssueCode.INVALID_VALUE) from exc
 
-    def get[T](self, binding: CacheBinding[T], key: CacheKey[T]) -> CacheLookup[T]:
-        expected = self._key(binding, key)
-        try:
-            lookup = self._backend.get(expected)
-        except Exception as exc:
-            raise _failure(CacheFailureReason.BACKEND_FAILURE, str(exc)) from exc
+    def get[T](self, key: CacheKey[T]) -> CacheLookup[T]:
+        op = CacheOperation.GET
+        self._binding(op, key)
+        with _backend_call(op):
+            lookup = self._backend.get(key)
         try:
             _complete_record(lookup)
-            # Revalidate the discriminator as well as the actual record shape.
-            type(lookup).model_validate(lookup)
+            checked = type(lookup).model_validate(lookup, strict=True)
+            if isinstance(checked, CacheMiss):
+                return checked
+            if not isinstance(lookup, CacheHit) or not isinstance(checked, CacheHit):
+                raise ValueError("unknown lookup status")
+            _complete_record(lookup.entry)
+            _complete_record(lookup.entry.key)
+            _complete_record(lookup.entry.key.contract)
         except Exception as exc:
-            raise _failure(CacheFailureReason.INVALID_PAYLOAD, str(exc)) from exc
-        if isinstance(lookup, CacheMiss):
-            return CacheMiss()
-        if isinstance(lookup, CacheHit):
-            return CacheHit[T](entry=self._entry(binding, lookup.entry, expected))
-        raise _failure(CacheFailureReason.INVALID_PAYLOAD, "invalid backend lookup")
+            raise _failure(op, CacheFailureReason.INVALID_PAYLOAD, "Invalid lookup", CacheIssueCode.INVALID_VALUE) from exc
+        if lookup.entry.key != key:
+            raise _failure(op, CacheFailureReason.CONTRACT_MISMATCH, "Wrong lookup key", CacheIssueCode.CONTRACT_VIOLATION)
+        validated, _ = self._admit(op, lookup.entry)
+        return CacheHit[T](entry=validated)
 
-    def put[T](self, binding: CacheBinding[T], entry: CacheEntry[T]) -> CacheAdmission:
-        try:
-            _complete_record(entry)
-        except Exception as exc:
-            raise _failure(CacheFailureReason.INVALID_PAYLOAD, str(exc)) from exc
-        expected = self._key(binding, entry.key)
-        validated = self._entry(binding, entry, expected)
+    def create[T](self, entry: CacheEntry[T]) -> CacheCreateResult:
+        op = CacheOperation.CREATE
+        validated, binding = self._admit(op, entry)
         try:
             cost = binding.codec.retained_bytes(validated.value)
             if type(cost) is not int or cost < 0:
-                raise ValueError("retained byte cost must be a nonnegative integer")
+                raise ValueError("invalid retention cost")
             cost = max(cost, retained_entry_bytes(validated))
         except Exception as exc:
-            raise _failure(CacheFailureReason.INVALID_PAYLOAD, str(exc)) from exc
-        if cost > self._policy.max_entry_bytes:
-            return CacheAdmission.SKIPPED_OVERSIZE
-        try:
-            self._backend.put(validated)
-        except Exception as exc:
-            raise _failure(CacheFailureReason.BACKEND_FAILURE, str(exc)) from exc
-        return CacheAdmission.STORED
+            raise _failure(op, CacheFailureReason.INVALID_PAYLOAD, "Invalid retention cost", CacheIssueCode.INVALID_VALUE) from exc
+        with _backend_call(op):
+            return CacheCreateResult(outcome=self._backend.create(validated, binding.codec, cost))
 
-    def evict[T](self, binding: CacheBinding[T], key: CacheKey[T]) -> None:
-        expected = self._key(binding, key)
-        try:
-            self._backend.evict(expected)
-        except Exception as exc:
-            raise _failure(CacheFailureReason.BACKEND_FAILURE, str(exc)) from exc
+    def update[T](self, entry: CacheEntry[T]) -> CacheUpdateResult:
+        validated, binding = self._admit(CacheOperation.UPDATE, entry)
+        with _backend_call(CacheOperation.UPDATE):
+            return CacheUpdateResult(outcome=self._backend.update(validated, binding.codec))
+
+    def evict[T](self, key: CacheKey[T]) -> CacheEvictResult:
+        self._binding(CacheOperation.EVICT, key)
+        with _backend_call(CacheOperation.EVICT):
+            return CacheEvictResult(outcome=self._backend.evict(key))

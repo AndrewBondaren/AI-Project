@@ -8,8 +8,8 @@ from unittest.mock import patch
 from pydantic import ValidationError
 
 from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
-from app.application.cache.backends.memoryCache import MemoryCache
-from app.application.cache.service.cacheService import CacheService
+from app.application.cache.backends.memoryCache import LegacyMemoryCache as MemoryCache
+from app.application.cache.service.legacyCacheService import CacheService
 from app.application.jsonValidation.resolve import ResolveContext
 from app.application.planning.providers.planRegistry import PlanRegistry
 from app.application.planning.service.planningService import PlanningService

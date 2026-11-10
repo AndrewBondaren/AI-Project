@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import assert_type
 
-from app.application.cache.backends.memoryCache import MemoryCache
-from app.application.cache.contracts.cacheBackend import CacheBackend, CacheBinding
-from app.application.cache.service.cacheService import CacheService
+from app.application.cache.backends.memoryCache import LegacyMemoryCache as MemoryCache
+from app.application.cache.contracts.cacheBackend import LegacyCacheBackend, CacheBinding
+from app.application.cache.service.legacyCacheService import CacheService
 from app.encoding.canonicalCodec import decode
 from app.application.planning.providers.planProvider import PlanProvider, RegisteredPlanContract
 from app.application.planning.providers.planRegistry import PlanDependencyReader, PlanRegistry
@@ -42,7 +42,7 @@ class HydroPayload:
     depths: tuple[int, ...]
 
 
-def cache_service_types(service: CacheService, backend: CacheBackend,
+def cache_service_types(service: CacheService, backend: LegacyCacheBackend,
                         binding: CacheBinding[ClimatePayload],
                         key: CacheKey[ClimatePayload], entry: CacheEntry[ClimatePayload]) -> None:
     assert_type(service.get(binding, key), CacheLookup[ClimatePayload])
@@ -52,7 +52,7 @@ def cache_service_types(service: CacheService, backend: CacheBackend,
     assert_type(backend.put(entry), None)
 
 
-def memory_backend_protocol(backend: MemoryCache) -> CacheBackend:
+def memory_backend_protocol(backend: MemoryCache) -> LegacyCacheBackend:
     return backend
 
 

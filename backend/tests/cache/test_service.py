@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 from pydantic.dataclasses import dataclass as validated_dataclass
 
 from app.application.cache.contracts.cacheBackend import CacheBinding
-from app.application.cache.service.cacheService import CacheFailure, CacheFailureReason, CacheService
+from app.application.cache.service.legacyCacheService import CacheFailure, CacheFailureReason, CacheService
 from app.dataModel.cache.contracts.cacheContract import CacheContract
 from app.dataModel.cache.contracts.cacheEntry import CacheAdmission, CacheEntry
 from app.dataModel.cache.contracts.cacheLookup import CacheHit, CacheMiss

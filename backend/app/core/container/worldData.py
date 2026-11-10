@@ -9,8 +9,8 @@ from app.application.worldData.planning.composition.surfacePlanningEntry import 
 from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
 from app.application.worldData.planning.guards.sourcePublication import SourcePublicationGuard
 
-from app.application.cache.backends.memoryCache import MemoryCache
-from app.application.cache.service.cacheService import CacheService
+from app.application.cache.backends.memoryCache import LegacyMemoryCache as MemoryCache
+from app.application.cache.service.legacyCacheService import CacheService
 from app.application.planning.providers.planRegistry import PlanRegistry
 from app.application.planning.service.planningService import PlanningService
 from app.core.appSettings import app_settings

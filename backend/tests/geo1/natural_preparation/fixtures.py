@@ -1,7 +1,7 @@
 from copy import replace
 
-from app.application.cache.backends.memoryCache import MemoryCache
-from app.application.cache.service.cacheService import CacheService
+from app.application.cache.backends.memoryCache import LegacyMemoryCache as MemoryCache
+from app.application.cache.service.legacyCacheService import CacheService
 from app.application.planning.providers.planRegistry import PlanRegistry, PlanDependencyReader
 from app.application.planning.service.planFingerprints import output_fingerprint
 from app.application.planning.service.planningService import PlanningService

@@ -7,8 +7,8 @@ from types import SimpleNamespace
 from tests.geo1.integration.support.fixtures import Seam
 
 from app.application.worldData.planning.composition.hydrologyDiagnosticCollector import HydrologyDiagnosticCollector
-from app.application.cache.backends.memoryCache import MemoryCache
-from app.application.cache.service.cacheService import CacheService
+from app.application.cache.backends.memoryCache import LegacyMemoryCache as MemoryCache
+from app.application.cache.service.legacyCacheService import CacheService
 from app.application.planning.providers.planRegistry import PlanRegistry, PlanDependencyReader
 from app.application.planning.service.planningService import PlanningService, PlanBuildFailure
 from app.application.worldData.generators.hydrology.planning.assembly.hydrologyFactsAssembler import HydrologyFactsAssembler

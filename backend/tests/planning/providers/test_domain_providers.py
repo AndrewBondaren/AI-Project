@@ -8,12 +8,13 @@ import unittest
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
-from app.application.cache.backends.memoryCache import MemoryCache
+from app.application.cache.backends.memoryCache import LegacyMemoryCache as MemoryCache
 from app.encoding.canonicalCodec import CanonicalCodec
 from app.application.planning.service.planFingerprints import input_fingerprint
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest, RegisteredTypeEntry, CanonicalTypeKind
 from app.application.cache.contracts.cacheBackend import CacheBinding
-from app.application.cache.service.cacheService import CacheService, retained_entry_bytes
+from app.application.cache.service.legacyCacheService import CacheService
+from app.application.cache.service.cacheService import retained_entry_bytes
 from app.application.planning.providers.planProvider import RegisteredPlanContract
 from app.application.planning.providers.planRegistry import PlanDependencyReader, PlanRegistry
 from app.application.planning.service.planningService import PlanningService, PlanWaitCancelled
