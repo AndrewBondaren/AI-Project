@@ -15,7 +15,7 @@ from app.application.worldData.pack.read.pinnedManifestReader import PinnedManif
 from app.application.worldData.pack.spatial.openWaterBlobReader import OpenWaterBlobReader
 from app.db.repositories.sqlite.worldPack.pinnedManifestGuard import PinnedManifestGuard
 from app.db.repositories.sqlite.worldPack.pinnedSpatialReader import PinnedSpatialReader
-from app.application.worldData.pack.encoding.packManifestCodec import encode_candidate_manifest
+from app.application.worldData.pack.encoding.preparedManifest import finish_pack_preparation
 from app.dataModel.artifacts.lifecycle.holders import ArtifactRetentionHolder, PinHolder
 from app.dataModel.engine.dag.invocations.record import FailedOutcome
 from app.dataModel.worldPack.meta.spatial.domainRoot import SpatialDatasetKind, SpatialDomainRootRef
@@ -72,8 +72,7 @@ class ExecutionPinFixture(IsolatedAsyncioTestCase):
         self.shard = await stage(SHARD_FORMAT, "retention-shard.tlv")
         manifest = WorldPackManifest(world_uid="w1", pack_version="2.0.0", world_map_cells=cells,
             spatial_roots=(SpatialDomainRootRef(domain=SpatialDatasetKind.HYDROLOGY_OPEN_WATER, root=self.root),))
-        ref = await f.stager.stage(lease, encode_candidate_manifest(manifest))
-        await f.service.finish_preparation(lease, (self.root, self.shard, ref))
+        ref = await finish_pack_preparation(lease, manifest, (self.shard,), f.stager, f.service)
         await f.ledger.claim_publication(lease.kind, name, "w1", "a"*64, "b"*64)
         async with self.bundle[1].transaction(name) as scope, f.catalog._scopes.bind(scope):
             head = self.head.model_copy(update={"publication_id": name, "pack_hash": ref.content_hash})

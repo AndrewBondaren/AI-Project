@@ -1,6 +1,12 @@
 """World-map pack wiring: paths/io factories and read facades."""
 
 from threading import RLock
+from pathlib import Path
+
+from app.application.artifacts.registry.artifactRegistry import ArtifactFormatRegistryBinding
+from app.application.artifacts.storage.artifactLeases import IArtifactLeases
+from app.application.worldData.pack.encoding.climateFieldFormat import CLIMATE_FIELD_FORMAT
+from app.storage.artifacts.blobBackend import ContentAddressedBlobBackend
 
 from app.application.cache.backends.memoryCache import MemoryCache
 from app.application.cache.contracts.cacheBackend import CacheBinding
@@ -23,6 +29,11 @@ from app.db.repositories.sqlite.regionStateRepository import SqliteRegionStateRe
 
 class PacksWiring:
     """Per-world pack I/O and read-service factories (``world_uid`` scoped)."""
+
+    @staticmethod
+    def register_climate_field_format(registry: ArtifactFormatRegistryBinding, artifact_root: Path,
+                                      leases: IArtifactLeases) -> None:
+        registry.register(CLIMATE_FIELD_FORMAT, ContentAddressedBlobBackend(artifact_root, CLIMATE_FIELD_FORMAT, leases))
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

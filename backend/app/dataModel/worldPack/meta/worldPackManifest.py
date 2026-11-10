@@ -8,7 +8,9 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validat
 
 from app.core.constants import FINE_CELL_SIZE
 from app.dataModel.artifacts.references import ArtifactKind, ArtifactRef
-from app.dataModel.worldPack.wire.climateFieldWire import ClimateBakeStatusMixin
+from app.dataModel.worldPack.wire.climateFieldWire import (
+    CLIMATE_FIELD_FORMAT_KEY, CLIMATE_FIELD_FORMAT_VERSION, ClimateBakeStatusMixin,
+)
 from app.dataModel.worldPack.wire.mapCellSize import FINE_CELLS_PER_MAP_CELL_DEFAULT
 from app.dataModel.worldPack.bake.packBakeDefaults import PACK_CODEC_VERSION
 from app.dataModel.worldPack.bake.packBakeMode import PackBakeMode
@@ -38,8 +40,9 @@ class ChunkRef(BaseModel):
 
 
 def _require_climate_blob(ref: ArtifactRef | None) -> ArtifactRef | None:
-    if ref is not None and ref.kind is not ArtifactKind.BLOB:
-        raise ValueError("climate field requires a BLOB descriptor")
+    if ref is not None and (ref.kind is not ArtifactKind.BLOB or ref.format_key != CLIMATE_FIELD_FORMAT_KEY
+                            or ref.format_version != CLIMATE_FIELD_FORMAT_VERSION):
+        raise ValueError("unsupported climate field artifact descriptor")
     return ref
 
 
@@ -150,6 +153,13 @@ class _ManifestFields(BaseModel):
             if tile.gx == gx and tile.gy == gy:
                 return tile
         return None
+
+    def climate_artifacts(self) -> tuple[ArtifactRef, ...]:
+        """Distinct children retained by this version, including shared tile content."""
+        refs = [tile.climate_fine_ref for tile in self.tiles if tile.climate_fine_ref is not None]
+        if self.climate_coarse_ref is not None:
+            refs.insert(0, self.climate_coarse_ref)
+        return tuple(dict.fromkeys(refs))
 
     def chunk_ref(self, gx: int, gy: int, cx: int, cy: int) -> ChunkRef | None:
         tile = self.tile_entry(gx, gy)

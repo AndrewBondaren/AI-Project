@@ -6,6 +6,12 @@ from typing import Any, ClassVar, Literal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.dataModel.artifacts.references import ArtifactFormatRegistry
+from app.dataModel.registryKey import RegistryKey
+
+CLIMATE_FIELD_FORMAT_KEY = RegistryKey[ArtifactFormatRegistry]("world_pack.climate_field.zstd")
+CLIMATE_FIELD_FORMAT_VERSION = 1
+
 ClimateBakeStatus = Literal["coarse", "fine"]
 
 

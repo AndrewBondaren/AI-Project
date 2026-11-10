@@ -18,6 +18,7 @@ from app.dataModel.worldPack.meta.spatial.domainRoot import SpatialDatasetKind, 
 from app.dataModel.registryKey import RegistryKey
 from app.dataModel.worldPack.meta.wildernessRegionEntry import RegionIndexBounds, WildernessRegionEntry, WildernessRegionStatus
 from app.dataModel.worldPack.meta.worldPackManifest import TileManifestEntry, WorldPackManifest
+from app.dataModel.worldPack.wire.climateFieldWire import CLIMATE_FIELD_FORMAT_KEY
 
 
 def payload(**fields):
@@ -31,7 +32,7 @@ def descriptor():
 
 class ManifestVersionsTests(TestCase):
     def test_climate_refs_round_trip_at_their_versioned_addresses(self):
-        coarse = dict(kind="blob", format_key="fixture.climate", format_version=1,
+        coarse = dict(kind="blob", format_key=CLIMATE_FIELD_FORMAT_KEY, format_version=1,
                       content_hash="a"*64, nbytes=128)
         fine = dict(coarse, content_hash="b"*64)
         tile = dict(gx=-3, gy=2, climate_status="fine", climate_fine_ref=fine)
@@ -42,6 +43,8 @@ class ManifestVersionsTests(TestCase):
         self.assertEqual(restored.tile_entry(-3, 2).climate_fine_ref, ArtifactRef.model_validate_json(json.dumps(fine)))
         for changes in (dict(tiles=[dict(gx=-3, gy=2), tile]),
                         dict(tiles=[dict(tile, climate_status="coarse")]),
+                        dict(climate_coarse_ref=dict(coarse, format_version=2)),
+                        dict(climate_coarse_ref=dict(coarse, format_key="other.blob")),
                         dict(climate_coarse_ref=dict(coarse, kind="sql_rows", row_count=1))):
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 decode_manifest(payload(**(fields | changes)))
