@@ -1,7 +1,11 @@
 from dataclasses import asdict
 from unittest.mock import patch
 
-from app.dataModel.cache.contracts.cacheEntry import CacheEntry
+from app.core.appSettings import app_settings
+from app.core.container import Container
+from app.dataModel.cache.contracts.cacheEntry import CacheAdmission, CacheEntry
+from app.dataModel.cache.contracts.cacheLookup import CacheHit, CacheMiss
+from app.dataModel.worldPack.bake.worldPackCacheSettings import WorldPackCacheSettings
 from app.dataModel.worldPack.read.pinnedManifest import (
     ManifestCachedRead, ManifestPinRead, ManifestReadReason, ManifestStorageRead,
 )
@@ -14,12 +18,22 @@ class PinnedManifestTests(ExecutionPinFixture):
         pin = ManifestPinRead(**asdict(self.intent), max_bytes=self.manifest.nbytes)
         address = await reader.resolve(pin)
         self.assertEqual(address.ref, self.manifest)
+        settings = WorldPackCacheSettings.model_validate({
+            "manifest_cache": {"max_entry_bytes": 100_000, "max_retained_bytes": 100_000},
+        })
+        with patch.object(app_settings, "world_pack", settings):
+            cache = Container(None, None).pack_manifest_cache_service()
+        self.assertIsInstance(cache.get(address.key), CacheMiss)
         request = ManifestStorageRead(pin=pin, address=address)
         cold = await reader.read_verified(request)
-        hit = ManifestCachedRead(pin=pin, address=address, entry=CacheEntry(key=address.key, value=cold.payload))
+        stored = cache.create(CacheEntry[bytes](key=address.key, value=cold.payload))
+        self.assertEqual(stored.outcome, CacheAdmission.STORED)
         await self.publish("b", 2)
         self.assertEqual(await reader.resolve(pin), address)
         with patch.object(self.fixture.backend, "read_verified", side_effect=AssertionError("unexpected IO")):
+            lookup = cache.get(address.key)
+            self.assertIsInstance(lookup, CacheHit)
+            hit = ManifestCachedRead(pin=pin, address=address, entry=lookup.entry)
             self.assertEqual(await reader.admit_cached(hit), cold)
             damaged = hit.entry.model_copy(update={"value": b"x" * self.manifest.nbytes})
             self.assertEqual((await reader.admit_cached(hit.model_copy(update={"entry": damaged}))).reason,

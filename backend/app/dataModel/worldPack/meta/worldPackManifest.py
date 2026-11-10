@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Literal
+from typing import Annotated, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
 from app.core.constants import FINE_CELL_SIZE
+from app.dataModel.artifacts.references import ArtifactKind, ArtifactRef
 from app.dataModel.worldPack.wire.climateFieldWire import ClimateBakeStatusMixin
 from app.dataModel.worldPack.wire.mapCellSize import FINE_CELLS_PER_MAP_CELL_DEFAULT
 from app.dataModel.worldPack.bake.packBakeDefaults import PACK_CODEC_VERSION
@@ -36,13 +37,29 @@ class ChunkRef(BaseModel):
     bytes: int | None = None
 
 
+def _require_climate_blob(ref: ArtifactRef | None) -> ArtifactRef | None:
+    if ref is not None and ref.kind is not ArtifactKind.BLOB:
+        raise ValueError("climate field requires a BLOB descriptor")
+    return ref
+
+
+ClimateBlobRef = Annotated[ArtifactRef | None, AfterValidator(_require_climate_blob)]
+
+
 class TileManifestEntry(ClimateBakeStatusMixin):
     gx: int
     gy: int
+    climate_fine_ref: ClimateBlobRef = Field(default=None, exclude_if=lambda ref: ref is None)
     world_map_path: str | None = None
     world_map_hash: str | None = None
     wilderness_refine_status: WildernessRefineStatus = "absent"
     chunks: list[ChunkRef] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_climate_status(self):
+        if self.climate_fine_ref is not None and self.climate_status != "fine":
+            raise ValueError("a tile with a fine climate ref requires fine status")
+        return self
 
 
 class SettlementStructureEntry(BaseModel):
@@ -76,6 +93,7 @@ class _ManifestFields(BaseModel):
     pack_version: str
     spatial_roots: tuple[SpatialDomainRootRef, ...]
     world_uid: str
+    climate_coarse_ref: ClimateBlobRef = Field(default=None, exclude_if=lambda ref: ref is None)
     content_hash: str | None = None
     codec_version: int = PACK_CODEC_VERSION
     payload_format: str = "json"
@@ -100,6 +118,15 @@ class _ManifestFields(BaseModel):
         if self.pack_version == PACK_WIRE_VERSION and self.spatial_roots == ():
             data.pop("spatial_roots", None)
         return data
+
+    @model_validator(mode="after")
+    def validate_climate_addresses(self):
+        fine_tiles = {(tile.gx, tile.gy) for tile in self.tiles if tile.climate_fine_ref is not None}
+        if self.pack_version == PACK_WIRE_VERSION and (self.climate_coarse_ref is not None or fine_tiles):
+            raise ValueError("climate artifact refs require V2")
+        if fine_tiles and sum((tile.gx, tile.gy) in fine_tiles for tile in self.tiles) != len(fine_tiles):
+            raise ValueError("ambiguous climate tile address")
+        return self
 
     @field_validator("spatial_roots")
     @classmethod

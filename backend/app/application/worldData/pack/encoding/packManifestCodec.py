@@ -1,5 +1,6 @@
 """Versioned World Pack JSON boundary. Disk publication belongs to the store."""
 import json
+from types import UnionType
 from typing import get_args, get_origin
 
 from pydantic import BaseModel
@@ -49,6 +50,7 @@ def require_legacy_manifest(manifest: WorldPackManifest, *, world_uid: str | Non
         raise ValueError("legacy World Pack writer requires V1 without spatial roots")
     if world_uid is not None and manifest.world_uid != world_uid:
         raise ValueError("foreign World Pack manifest")
+    manifest.validate_climate_addresses()
 
 
 # LEGACY REMOVE(SP-P-V1-REMOVE/V1-02) Remove the V1 JSON encoder after writer cutover.
@@ -76,7 +78,8 @@ def _require_pojo_tree(value: object, annotation: object) -> None:
     if isinstance(value, dict):
         raise ValueError("unexpected dictionary in typed V2 manifest")
     if isinstance(value, BaseModel):
-        if type(value) is not annotation:
+        if type(value) is not annotation and not (
+                get_origin(annotation) is UnionType and type(value) in get_args(annotation)):
             raise ValueError("unexpected V2 record type")
         fields = vars(value)
         if fields.keys() != type(value).model_fields.keys():

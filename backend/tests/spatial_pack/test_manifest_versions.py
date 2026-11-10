@@ -30,6 +30,33 @@ def descriptor():
 
 
 class ManifestVersionsTests(TestCase):
+    def test_climate_refs_round_trip_at_their_versioned_addresses(self):
+        coarse = dict(kind="blob", format_key="fixture.climate", format_version=1,
+                      content_hash="a"*64, nbytes=128)
+        fine = dict(coarse, content_hash="b"*64)
+        tile = dict(gx=-3, gy=2, climate_status="fine", climate_fine_ref=fine)
+        fields = dict(pack_version="2.0.0", spatial_roots=[], tiles=[tile], climate_coarse_ref=coarse)
+        manifest = decode_manifest(payload(**fields))
+        restored = decode_manifest(encode_candidate_manifest(manifest))
+        self.assertEqual(restored.climate_coarse_ref, ArtifactRef.model_validate_json(json.dumps(coarse)))
+        self.assertEqual(restored.tile_entry(-3, 2).climate_fine_ref, ArtifactRef.model_validate_json(json.dumps(fine)))
+        for changes in (dict(tiles=[dict(gx=-3, gy=2), tile]),
+                        dict(tiles=[dict(tile, climate_status="coarse")]),
+                        dict(climate_coarse_ref=dict(coarse, kind="sql_rows", row_count=1))):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                decode_manifest(payload(**(fields | changes)))
+        for legacy in (dict(climate_coarse_ref=coarse), dict(tiles=[tile])):
+            with self.subTest(legacy=legacy), self.assertRaises(ValueError):
+                decode_manifest(payload(**legacy))
+
+    def test_absent_climate_refs_preserve_existing_wire_shape(self):
+        for fields, encode in (({}, encode_legacy_manifest),
+                               (dict(pack_version="2.0.0", spatial_roots=[]), encode_candidate_manifest)):
+            manifest = decode_manifest(payload(tiles=[dict(gx=0, gy=0)], **fields))
+            raw = json.loads(encode(manifest))
+            self.assertNotIn("climate_coarse_ref", raw)
+            self.assertNotIn("climate_fine_ref", raw["tiles"][0])
+
     def test_registry_key_preserves_region_identity(self):
         class Terrain(RegistryKey, Enum):
             FOREST = "forest"
