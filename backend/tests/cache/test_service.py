@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 from pydantic.dataclasses import dataclass as validated_dataclass
 
 from app.application.cache.contracts.cacheBackend import CacheBinding
+# LEGACY REMOVE(CACHE-V1-BINDING): retire caller-bound service cases after V2 coverage and cutover.
 from app.application.cache.service.legacyCacheService import CacheFailure, CacheFailureReason, CacheService
 from app.dataModel.cache.contracts.cacheContract import CacheContract
 from app.dataModel.cache.contracts.cacheEntry import CacheAdmission, CacheEntry

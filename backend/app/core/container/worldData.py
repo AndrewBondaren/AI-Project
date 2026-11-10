@@ -123,7 +123,9 @@ class WorldDataWiring:
     def plan_registry(self) -> PlanRegistry:
         with self._planning_cache_lock:
             if self._plan_registry is None:
-                self._plan_registry = PlanRegistry()
+                registry = PlanRegistry()
+                register_world_plan_providers(registry, self._planning_contracts())
+                self._plan_registry = registry
             return self._plan_registry
 
     def _planning_contracts(self) -> WorldPlanProviders:
@@ -156,9 +158,8 @@ class WorldDataWiring:
     def surface_planning(self) -> SurfacePlanningAssembler:
         with self._planning_cache_lock:
             if self._surface_planning is None:
-                providers = register_world_plan_providers(self.plan_registry(), self._planning_contracts())
                 self._surface_planning = SurfacePlanningAssembler(self.planning_service(),
-                    self.plan_registry(), providers)
+                    self.plan_registry(), self._planning_contracts())
             return self._surface_planning
 
     def surface_planning_capture(self) -> SurfacePlanningCapture:

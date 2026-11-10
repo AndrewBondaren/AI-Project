@@ -11,6 +11,10 @@ from uuid import uuid4
 
 from app.application.artifacts.staging.artifactStaging import TypedArtifactStager
 from app.application.worldData.generators.hydrology.encoding.packFormats import ROOT_FORMAT, SHARD_FORMAT
+from app.application.worldData.pack.read.pinnedManifestReader import PinnedManifestReader
+from app.application.worldData.pack.spatial.openWaterBlobReader import OpenWaterBlobReader
+from app.db.repositories.sqlite.worldPack.pinnedManifestGuard import PinnedManifestGuard
+from app.db.repositories.sqlite.worldPack.pinnedSpatialReader import PinnedSpatialReader
 from app.application.worldData.pack.encoding.packManifestCodec import encode_candidate_manifest
 from app.dataModel.artifacts.lifecycle.holders import ArtifactRetentionHolder, PinHolder
 from app.dataModel.engine.dag.invocations.record import FailedOutcome
@@ -31,6 +35,11 @@ class ExecutionPinFixture(IsolatedAsyncioTestCase):
         self.fixture = SqliteBlobFixture(bundle)
         register_read_formats(self.fixture, self.path)
         self.pins = await self.adapter(bundle, self.fixture)
+        f = self.fixture
+        self.manifest_reader = PinnedManifestReader(
+            PinnedManifestGuard(self.pins, f.backend.contract, 1, 100000), f.backend)
+        self.spatial_reader = PinnedSpatialReader(self.pins, f.backend, 100000,
+            OpenWaterBlobReader(f.service._registry, f.catalog, f.holders))
 
     async def adapter(self, bundle, fixture):
         return await ExecutionPins.bind(self.dag, bundle[2], fixture.holders, fixture.service._registry,
@@ -146,7 +155,7 @@ class ExecutionPinTests(ExecutionPinFixture):
     async def test_stale_worker(self):
         gate = asyncio.Event()
         ready = asyncio.Event()
-        catalog = self.pins._catalog
+        catalog = self.fixture.catalog
         guard = catalog.guard
 
         @asynccontextmanager
@@ -158,7 +167,7 @@ class ExecutionPinTests(ExecutionPinFixture):
                 yield
 
         with patch.object(catalog, "guard", before_guard):
-            worker = asyncio.create_task(self.pins.read_shard(self.intent, self.shard))
+            worker = asyncio.create_task(self.spatial_reader.read_shard(self.intent, self.shard))
             await asyncio.wait_for(ready.wait(), 10)
             await self.pins.close(await self.stop())
             with patch.object(Path, "open", autospec=True) as opened:
@@ -198,7 +207,7 @@ class ExecutionPinTests(ExecutionPinFixture):
             closed.set()
         cmd = await self.stop()
         with patch.object(Path, "open", instrument):
-            read = asyncio.create_task(self.pins.read_root(self.intent, self.root))
+            read = asyncio.create_task(self.spatial_reader.read_root(self.intent, self.root))
             self.assertTrue(await asyncio.to_thread(started.wait, 5))
             close = asyncio.create_task(other.close(cmd))
             try:
@@ -219,7 +228,7 @@ class ExecutionPinTests(ExecutionPinFixture):
             else:
                 await read
         with self.assertRaises(PackClosed):
-            await self.pins.read_shard(self.intent, self.shard)
+            await self.spatial_reader.read_shard(self.intent, self.shard)
         await self.assert_holds()
 
     async def test_crash_and_shared_shard(self):
@@ -228,8 +237,8 @@ class ExecutionPinTests(ExecutionPinFixture):
         intent_b = replace(self.intent, invocation_id="other", pin_id="pin-b")
         self.assertEqual(await self.pins.acquire(intent_b), second)
         shard_bytes = Path(__file__).with_name("fixtures").joinpath("retention-shard.tlv").read_bytes()
-        self.assertEqual(await self.pins.read_shard(self.intent, self.shard), shard_bytes)
-        self.assertEqual(await self.pins.read_shard(intent_b, self.shard), shard_bytes)
+        self.assertEqual(await self.spatial_reader.read_shard(self.intent, self.shard), shard_bytes)
+        self.assertEqual(await self.spatial_reader.read_shard(intent_b, self.shard), shard_bytes)
         cmd = await self.stop()
         receipt = await self.pins.close(cmd)
         with (patch.object(self.dag, "get_store_id", side_effect=OSError("offline")),
@@ -250,7 +259,7 @@ class ExecutionPinTests(ExecutionPinFixture):
                 with self.assertRaises(PackClosed):
                     await self.pins.acquire(intent)
                 with self.assertRaises(PackClosed):
-                    await self.pins.read_shard(intent, self.shard)
+                    await self.spatial_reader.read_shard(intent, self.shard)
             load.assert_not_awaited()
         await self.assert_holds()
         self.assertTrue(await self.fixture.holders.is_held(second, PinHolder(pin_id="pin-b")))
@@ -274,9 +283,9 @@ class ExecutionPinTests(ExecutionPinFixture):
         await self.pins.close(await self.stop())
         with patch.object(Path, "open", autospec=True) as opened:
             with self.assertRaises(PackIdentityConflict):
-                await self.pins.read_root(foreign, self.root)
+                await self.spatial_reader.read_root(foreign, self.root)
             with self.assertRaises(PackClosed):
-                await self.pins.read_root(self.intent, self.root)
+                await self.spatial_reader.read_root(self.intent, self.root)
             opened.assert_not_called()
 
     async def test_cold_replay_after_dag_connection_closed(self):
@@ -290,7 +299,7 @@ class ExecutionPinTests(ExecutionPinFixture):
             await self.reopen()
             self.assertEqual(await self.pins.close(command), receipt)
             with self.assertRaises(PackClosed):
-                await self.pins.read_root(self.intent, self.root)
+                await self.spatial_reader.read_root(self.intent, self.root)
             load.assert_not_awaited()
         await self.assert_holds()
 

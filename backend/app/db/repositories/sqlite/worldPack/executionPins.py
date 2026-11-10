@@ -1,17 +1,16 @@
-"""Pack-side execution lifetime. Every physical read holds the publication writer until drain."""
+"""Manage the durable lifetime of Pack publication pins owned by an execution."""
 from dataclasses import dataclass
-from functools import partial
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from sqlite3 import OperationalError, ProgrammingError
 from uuid import UUID
 
 from app.application.artifacts.contracts.blobRead import ReadableBlobBackend
 from app.application.artifacts.contracts.formatBackend import ArtifactFormatContract
 from app.application.artifacts.registry.artifactRegistry import ArtifactFormatRegistryBinding
-from app.application.worldData.generators.hydrology.encoding.packCodec import decode_root
 from app.application.engine.contracts.invocation.executionStore import CloseReceipt as CloseReceipt, ExecutionStore
 from app.application.worldData.pack.encoding.packManifestCodec import decode_manifest
-from app.application.worldData.pack.spatial.openWaterBlobReader import OpenWaterBlobReader
-from app.dataModel.artifacts.lifecycle.holders import ArtifactRetentionHolder, PinHolder
+from app.dataModel.artifacts.lifecycle.holders import PinHolder
 from app.dataModel.artifacts.references import ArtifactRef
 from app.dataModel.engine.dag.identity import ExecutionId
 from app.dataModel.engine.dag.invocations.record import ExecutionStopIntent
@@ -28,6 +27,18 @@ class PackIdentityConflict(ValueError):
 
 class PackClosed(PackIdentityConflict):
     pass
+
+
+class PackMissingHold(PackIdentityConflict):
+    def __init__(self, ref: ArtifactRef):
+        super().__init__("missing manifest hold")
+        self.ref = ref
+
+
+class PackUnsealed(PackIdentityConflict):
+    def __init__(self, ref: ArtifactRef):
+        super().__init__("unsealed manifest")
+        self.ref = ref
 
 
 class PackIntentUnavailable(RuntimeError):
@@ -63,7 +74,6 @@ class ExecutionPins:
         self._contract = manifest_contract
         self._version = manifest_version
         self._budget = manifest_budget
-        self._reader = OpenWaterBlobReader(registry, self._catalog, holders)
 
     @classmethod
     async def bind(cls, store: ExecutionStore, publications: SqliteWorldPublicationStore,
@@ -220,37 +230,21 @@ class ExecutionPins:
             await self._holders.acquire(ref, holder)
             return ref
 
-    async def _pinned_manifest(self, intent):
+    async def held_manifest(self, intent: PinIntent) -> ArtifactRef:
         async with self._scopes.read_scope() as scope:
             row = await self._binding(scope, intent)
             if row is None:
                 raise PackIdentityConflict("unknown pin")
             ref = await self._catalog._by_id(scope, row["manifest_artifact_id"])
             if not await self._holders.is_held(ref, PinHolder(pin_id=intent.pin_id)):
-                raise PackIdentityConflict("missing manifest hold")
+                raise PackMissingHold(ref)
             return ref
 
-    async def _roots(self, intent):
+    @asynccontextmanager
+    async def hold_open(self, intent: PinIntent) -> AsyncIterator[ArtifactRef]:
+        """Serialize pin admission and use with close/cleanup for this execution."""
         async with self._scopes.commits.transaction(runtime_uid()) as scope, self._scopes.bind(scope):
-            ref = await self._pinned_manifest(intent)
+            ref = await self.held_manifest(intent)
             if not await self._catalog.is_sealed(ref):
-                raise PackIdentityConflict("unsealed manifest")
-            manifest = decode_manifest(await self._backend.read_verified(ref, max_bytes=self._budget))
-            return tuple(entry.root for entry in manifest.spatial_roots)
-
-    async def _child_owner(self, intent):
-        # Called inside the reader's physical-open guard, including after resolving closure.
-        return ArtifactRetentionHolder(artifact=await self._pinned_manifest(intent))
-
-    async def read_root(self, intent: PinIntent, ref: ArtifactRef, *, max_bytes: int | None = None) -> bytes:
-        if ref not in await self._roots(intent):
-            raise PackIdentityConflict("root outside pinned manifest")
-        return await self._reader.read_bound_root(ref, partial(self._child_owner, intent), max_bytes=max_bytes)
-
-    async def read_shard(self, intent: PinIntent, ref: ArtifactRef, *, max_bytes: int | None = None) -> bytes:
-        owner = partial(self._child_owner, intent)
-        for root in await self._roots(intent):
-            payload = await self._reader.read_bound_root(root, owner)
-            if any(entry.artifact == ref for entry in decode_root(payload, root.format_version).shards):
-                return await self._reader.read_bound_shard(ref, owner, max_bytes=max_bytes)
-        raise PackIdentityConflict("shard outside pinned manifest")
+                raise PackUnsealed(ref)
+            yield ref

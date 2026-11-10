@@ -7,6 +7,7 @@ import unittest
 
 from pydantic import TypeAdapter
 
+# LEGACY REMOVE(CACHE-V1-BINDING): migrate V1 service/backend cases; retain helpers used by V2 tests.
 from app.application.cache.backends.memoryCache import LegacyMemoryCache as MemoryCache
 from app.application.cache.contracts.cacheBackend import LegacyCacheBackend, CacheBinding
 from app.application.cache.service.legacyCacheService import CacheService

@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from hashlib import sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from threading import Barrier
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -11,7 +12,7 @@ from pydantic import ValidationError
 from app.dataModel.worldPack.meta.manifestCacheContract import MANIFEST_BYTES_CONTRACT
 from app.application.cache.service.cacheService import CacheFailure
 from app.application.worldData.pack.encoding.manifestCacheKey import manifest_cache_key
-from app.application.worldData.planning.composition.planProviders import world_plan_contracts
+from app.application.worldData.planning.composition.planProviders import register_world_plan_providers, world_plan_contracts
 from app.dataModel.artifacts.references import ArtifactKind, ArtifactRef
 from app.core.appSettings import AppSettings, app_settings
 from app.core.configManager import ConfigManager
@@ -96,6 +97,45 @@ class ContainerCacheTests(TestCase):
             with self.assertRaises(CacheFailure) as caught:
                 plans.get(manifest_entry(0).key)
             self.assertEqual(caught.exception.error.issues[0].code, CacheIssueCode.UNKNOWN_NAMESPACE)
+
+    def test_first_registry_or_facade_access_registers_once(self):
+        target = "app.core.container.worldData.register_world_plan_providers"
+        for first in ("registry", "facade", "concurrent"):
+            with self.subTest(first=first), patch.object(app_settings, "planning", configured()), patch(
+                    target, wraps=register_world_plan_providers) as register:
+                container = Container(None, None)
+                self.addCleanup(container.shutdown_planning)
+                if first == "registry":
+                    container.plan_registry().check(container._planning_contracts().climate_base)
+                elif first == "facade":
+                    container.surface_planning()
+                barrier = Barrier(2)
+
+                def access_registry():
+                    barrier.wait(timeout=5)
+                    return container.plan_registry()
+
+                with ThreadPoolExecutor(2) as pool:
+                    registry_job = pool.submit(access_registry)
+                    barrier.wait(timeout=5)
+                    facade = container.surface_planning()
+                    registry = registry_job.result(timeout=5)
+                register.assert_called_once()
+                self.assertIs(registry, container.plan_registry())
+                self.assertIs(facade, container.surface_planning())
+                registry.check(container._planning_contracts().climate_local)
+
+    def test_partial_provider_registration_can_retry(self):
+        container = Container(None, None)
+
+        def fail_after_registration(registry, contracts):
+            register_world_plan_providers(registry, contracts)
+            raise RuntimeError("registration interrupted")
+
+        with patch("app.core.container.worldData.register_world_plan_providers", fail_after_registration):
+            with self.assertRaisesRegex(RuntimeError, "registration interrupted"):
+                container.plan_registry()
+        container.plan_registry().check(container._planning_contracts().climate_base)
 
     def test_cache_composition_does_not_register_or_invoke_domain_providers(self):
         with (patch.object(app_settings, "world_pack", self.pack),

@@ -59,7 +59,7 @@ class ExecutionFinalityReopenTests(ExecutionPinFixture):
             async def execute(child, input):
                 if input.value == "ok":
                     await pins.acquire(second)
-                    self.assertEqual(await pins.read_shard(second, shard), expected_bytes)
+                    self.assertEqual(await self.spatial_reader.read_shard(second, shard), expected_bytes)
                 if failed and input.value == "failed":
                     self.assertTrue(await asyncio.to_thread(opened.wait, 10))
                     try:
@@ -125,7 +125,7 @@ class ExecutionFinalityReopenTests(ExecutionPinFixture):
             for pin in (first, second):
                 self.assertTrue(await self.fixture.holders.is_held(self.manifest, PinHolder(pin_id=pin.pin_id)))
             with patch.object(Path, "open", autospec=True) as physical, self.assertRaises(PackClosed):
-                await self.pins.read_shard(second, shard)
+                await self.spatial_reader.read_shard(second, shard)
             self.assertEqual(physical.call_count, 0)
             finalize = self.dag.finalize
 

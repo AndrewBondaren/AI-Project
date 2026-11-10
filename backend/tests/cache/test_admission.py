@@ -81,6 +81,7 @@ class PlanningResourceTests(unittest.TestCase):
                 self.assertEqual(path.read_text(encoding="utf-8"), fragment)
 
     def test_container_requires_policies_and_owns_one_cache_even_under_concurrent_access(self):
+        # LEGACY REMOVE(CACHE-V1-BINDING): migrate these V1 factory checks at caller cutover.
         with patch.object(app_settings, "planning", None):
             container = Container(None, None)
             with self.assertRaisesRegex(ValueError, "explicit.*planning.cache"):
