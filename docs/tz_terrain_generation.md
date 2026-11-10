@@ -3334,7 +3334,8 @@ cache envelope codec=1. Старые six-binding schemas никогда не а�
 Phase — registered contract id/slot, не свободное строковое поле payload.
 Wire values новых enums: PlanScopeKind WORLD=world/REGION=region;
 CacheLookupStatus HIT=hit/MISS=miss; CacheEvictionPolicy LRU=lru;
-CacheAdmission STORED=stored/SKIPPED_OVERSIZE=skipped_oversize;
+CacheAdmission в V1 put: STORED=stored, SKIPPED_OVERSIZE=skipped_oversize.
+Для публичного create V2 wire результата — JSON-объект CacheCreateResult с обязательным полем outcome: STORED="stored", ALREADY_PRESENT="already_present", SKIPPED_OVERSIZE="skipped_oversize". Все три значения проверяются round-trip. [Контракт Cache](../.cursor/plans/cache-public-contracts.md#публичная-запись-cache-после-переноса).
 PlanDiagnosticDisposition ERROR=error/FALLBACK=fallback/NOTICE=notice;
 ResolutionMode RUNTIME=runtime/VALIDATE_ONLY=validate_only;
 SurfacePlanningViewKind READY=ready/NO_EXTENT=no_extent.
