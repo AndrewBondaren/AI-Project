@@ -16,6 +16,8 @@ from app.application.worldData.pack.spatial.openWaterBlobReader import OpenWater
 from app.db.repositories.sqlite.worldPack.pinnedManifestGuard import PinnedManifestGuard
 from app.db.repositories.sqlite.worldPack.pinnedSpatialReader import PinnedSpatialReader
 from app.application.worldData.pack.encoding.preparedManifest import finish_pack_preparation
+from app.application.worldData.pack.encoding.manifestFormat import MANIFEST_STORAGE_VERSION
+from app.core.container.packs import PacksWiring
 from app.dataModel.artifacts.lifecycle.holders import ArtifactRetentionHolder, PinHolder
 from app.dataModel.engine.dag.invocations.record import FailedOutcome
 from app.dataModel.worldPack.meta.spatial.domainRoot import SpatialDatasetKind, SpatialDomainRootRef
@@ -27,23 +29,32 @@ from tests.snapshotCore.support.fixtures import live_database, operation, STAMP
 from tests.spatial_pack.test_manifest_pin_retention import register_read_formats
 
 
+class PackBlobFixture(SqliteBlobFixture):
+    def __init__(self, bundle):
+        super().__init__(bundle)
+        registry = self.service._registry
+        self.backend = PacksWiring.register_manifest_format(
+            registry, Path(bundle[0].path).parent / "artifacts", self.leases, max_bytes=100000)
+        self.stager = TypedArtifactStager(self.backend.contract, MANIFEST_STORAGE_VERSION, registry, self.service)
+
+
 class ExecutionPinFixture(IsolatedAsyncioTestCase):
     async def connect_pack(self, seed):
         self.stack = await self.enterAsyncContext(AsyncExitStack())
         bundle = await self.stack.enter_async_context(live_database(str(self.path), seed=seed))
         self.bundle = bundle
-        self.fixture = SqliteBlobFixture(bundle)
+        self.fixture = PackBlobFixture(bundle)
         register_read_formats(self.fixture, self.path)
         self.pins = await self.adapter(bundle, self.fixture)
         f = self.fixture
         self.manifest_reader = PinnedManifestReader(
-            PinnedManifestGuard(self.pins, f.backend.contract, 1, 100000), f.backend)
-        self.spatial_reader = PinnedSpatialReader(self.pins, f.backend, 100000,
+            PinnedManifestGuard(self.pins, f.backend.contract, MANIFEST_STORAGE_VERSION, f.backend.max_bytes), f.backend)
+        self.spatial_reader = PinnedSpatialReader(self.pins, f.backend, f.backend.max_bytes,
             OpenWaterBlobReader(f.service._registry, f.catalog, f.holders))
 
     async def adapter(self, bundle, fixture):
         return await ExecutionPins.bind(self.dag, bundle[2], fixture.holders, fixture.service._registry,
-                                        fixture.backend.contract, 1, 100000)
+                                        fixture.backend.contract, MANIFEST_STORAGE_VERSION, fixture.backend.max_bytes)
 
     async def asyncSetUp(self):
         self.path = Path(self.enterContext(TemporaryDirectory())) / "pack.db"
@@ -72,7 +83,10 @@ class ExecutionPinFixture(IsolatedAsyncioTestCase):
         self.shard = await stage(SHARD_FORMAT, "retention-shard.tlv")
         manifest = WorldPackManifest(world_uid="w1", pack_version="2.0.0", world_map_cells=cells,
             spatial_roots=(SpatialDomainRootRef(domain=SpatialDatasetKind.HYDROLOGY_OPEN_WATER, root=self.root),))
-        ref = await finish_pack_preparation(lease, manifest, (self.shard,), f.stager, f.service)
+        candidate = await finish_pack_preparation(lease, manifest, (self.shard,), f.stager, f.service)
+        self.assertEqual(candidate.operation_id, lease.operation_id)
+        self.assertEqual(candidate.preparation_fingerprint, lease.preparation_fingerprint)
+        ref = candidate.manifest
         await f.ledger.claim_publication(lease.kind, name, "w1", "a"*64, "b"*64)
         async with self.bundle[1].transaction(name) as scope, f.catalog._scopes.bind(scope):
             head = self.head.model_copy(update={"publication_id": name, "pack_hash": ref.content_hash})
@@ -183,7 +197,7 @@ class ExecutionPinTests(ExecutionPinFixture):
 
     async def stream_first(self, cancel):
         observer = await self.stack.enter_async_context(live_database(str(self.path), seed=False))
-        other = await self.adapter(observer, SqliteBlobFixture(observer))
+        other = await self.adapter(observer, PackBlobFixture(observer))
         started, attempted, release, closed = (threading.Event() for _ in range(4))
         closed_at_insert = []
         def trace(sql):

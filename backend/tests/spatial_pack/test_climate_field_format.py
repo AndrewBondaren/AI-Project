@@ -80,7 +80,8 @@ class PinnedClimateRetentionTests(ExecutionPinFixture):
             manifest = WorldPackManifest(world_uid="w1", pack_version="2.0.0", spatial_roots=(),
                 climate_coarse_ref=coarse, tiles=[TileManifestEntry(gx=0, gy=0, climate_status="fine",
                                                                     climate_fine_ref=fine)])
-            ref = await finish_pack_preparation(lease, manifest, (), f.stager, f.service)
+            candidate = await finish_pack_preparation(lease, manifest, (), f.stager, f.service)
+            ref = candidate.manifest
             await f.ledger.claim_publication(lease.kind, operation, lease.world_uid, "a"*64, "b"*64)
             head = self.head.model_copy(update={"publication_id": operation, "pack_hash": ref.content_hash})
             if previous is not None:

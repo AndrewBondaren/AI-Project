@@ -57,6 +57,7 @@ def make_lifespan(db: Database):
         await db.connect()
         await db.apply_migrations()
         await db.validate_schema(_models)
+        container.initialize_pack_storage()
         from app.dataModel.climate.worldClimateScalars import validate_world_row_climate_columns
         from app.dataModel.terrain.relief.worldReliefGradeObstacle import (
             validate_world_row_relief_obstacle_columns,

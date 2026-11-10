@@ -7,6 +7,7 @@ from app.application.artifacts.registry.artifactRegistry import ArtifactFormatRe
 from app.application.artifacts.storage.artifactLeases import IArtifactLeases
 from app.application.worldData.pack.encoding.climateFieldFormat import CLIMATE_FIELD_FORMAT
 from app.storage.artifacts.blobBackend import ContentAddressedBlobBackend
+from app.storage.artifacts.manifestBlobBackend import ManifestBlobBackend
 
 from app.application.cache.backends.memoryCache import MemoryCache
 from app.application.cache.contracts.cacheBackend import CacheBinding
@@ -25,10 +26,29 @@ from app.db.models.world import World
 from app.dataModel.worldPack.meta.manifestCacheContract import MANIFEST_BYTES_CONTRACT
 from app.core.appSettings import app_settings
 from app.db.repositories.sqlite.regionStateRepository import SqliteRegionStateRepository
+from app.db.repositories.sqlite.artifacts.access.artifactScope import SqliteArtifactScope
+from app.db.repositories.sqlite.artifacts.leaseStore import SqliteArtifactLeases
+from app.db.repositories.sqlite.artifacts.operationArtifacts import SqliteOperationArtifacts
+from app.db.repositories.sqlite.shared.access.scopedAccess import ScopedSqliteAccess
+from app.db.repositories.sqlite.shared.capabilities.scopeRegistry import SqliteScopeRegistry
+from app.db.repositories.sqlite.shared.transactions.transactionDriver import SqliteTransactionDriver
+from app.db.repositories.sqlite.snapshotCore.commitScope import SqlitePublicationCommitStore
+from app.db.repositories.sqlite.snapshotCore.operations.operationStore import SqliteOperationStore
+from app.db.repositories.sqlite.snapshotCore.operations.publicationEvidence import SqlitePublicationEvidence
+from app.db.repositories.sqlite.snapshotCore.operations.terminalCodec import StoredTerminalCodec
+from app.db.repositories.sqlite.snapshotCore.publications.playerPublicationStore import SqlitePlayerPublicationStore
+from app.db.repositories.sqlite.snapshotCore.publications.worldPublicationStore import SqliteWorldPublicationStore
 
 
 class PacksWiring:
     """Per-world pack I/O and read-service factories (``world_uid`` scoped)."""
+
+    @staticmethod
+    def register_manifest_format(registry: ArtifactFormatRegistryBinding, artifact_root: Path,
+                                 leases: IArtifactLeases, *, max_bytes: int) -> ManifestBlobBackend:
+        backend = ManifestBlobBackend(artifact_root, leases, max_bytes=max_bytes)
+        registry.register(backend.contract, backend)
+        return backend
 
     @staticmethod
     def register_climate_field_format(registry: ArtifactFormatRegistryBinding, artifact_root: Path,
@@ -41,6 +61,28 @@ class PacksWiring:
         self._parent_light_caches: dict[str, ParentLightCache] = {}
         self._manifest_cache_service: CacheService | None = None
         self._manifest_cache_lock = RLock()
+        self._pack_formats: ArtifactFormatRegistryBinding | None = None
+
+    def initialize_pack_storage(self) -> None:
+        settings = app_settings.world_pack
+        if settings is None or settings.manifest_max_bytes is None:
+            return
+        with self._manifest_cache_lock:
+            if self._pack_formats is not None:
+                return
+            scopes = SqliteScopeRegistry(self._db)
+            access = ScopedSqliteAccess(scopes)
+            commits = SqlitePublicationCommitStore(self._db, scopes, SqliteTransactionDriver())
+            artifacts = SqliteOperationArtifacts(access)
+            evidence = SqlitePublicationEvidence(commits, SqliteWorldPublicationStore(commits, access),
+                                                 SqlitePlayerPublicationStore(commits, access), access)
+            operations = SqliteOperationStore(commits, access, StoredTerminalCodec(), evidence, artifacts)
+            leases = SqliteArtifactLeases(SqliteArtifactScope(commits, access), operations, artifacts)
+            registry = ArtifactFormatRegistryBinding()
+            root = Path(self._db.path).resolve().parent / "artifacts"
+            self.register_manifest_format(registry, root, leases, max_bytes=settings.manifest_max_bytes)
+            self.register_climate_field_format(registry, root, leases)
+            self._pack_formats = registry
 
     def pack_manifest_cache_service(self) -> CacheService:
         with self._manifest_cache_lock:
