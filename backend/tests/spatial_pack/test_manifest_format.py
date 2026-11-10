@@ -1,11 +1,13 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import IsolatedAsyncioTestCase
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from app.application.artifacts.staging.artifactStaging import TypedArtifactStager
 from app.application.worldData.pack.encoding.manifestFormat import MANIFEST_STORAGE_VERSION
 from app.application.worldData.pack.encoding.packManifestCodec import encode_candidate_manifest
+from app.application.worldData.pack.encoding.preparedManifest import finish_pack_preparation
+from app.dataModel.worldPack.activation.candidate import PreparedPackCandidate
 from app.core.container.packs import PacksWiring
 from app.core.appSettings import app_settings
 from app.core.container import Container
@@ -18,6 +20,25 @@ from tests.snapshotCore.support.fixtures import live_database
 
 
 class ManifestFormatTests(IsolatedAsyncioTestCase):
+    async def test_wrong_staged_descriptor_cannot_finish_preparation(self):
+        bundle = await self.enterAsyncContext(live_database())
+        f = SqliteBlobFixture(bundle)
+        lease = await f.open("wrong-descriptor")
+        model = WorldPackManifest(world_uid="w1", pack_version="2.0.0", spatial_roots=())
+        foreign = await f.stager.stage(lease, encode_candidate_manifest(model))
+        with self.assertRaises(ValueError):
+            PreparedPackCandidate(operation_id=lease.operation_id, manifest=foreign,
+                                  preparation_fingerprint=lease.preparation_fingerprint)
+        manifest = foreign.model_copy(update={"format_key": MANIFEST_FORMAT_KEY})
+        for ref in (foreign, manifest.model_copy(update={"format_version": 2}),
+                    manifest.model_copy(update={"nbytes": manifest.nbytes + 1}),
+                    manifest.model_copy(update={"content_hash": "0" * 64})):
+            with (self.subTest(ref=ref), patch.object(f.stager, "stage", AsyncMock(return_value=ref)),
+                  patch.object(f.service, "finish_preparation") as finish, self.assertRaises(ValueError)):
+                await finish_pack_preparation(lease, model, (), f.stager, f.service)
+            finish.assert_not_awaited()
+        await f.leases.assert_writable(lease)
+
     async def test_container_initializes_configured_storage_once(self):
         bundle = await self.enterAsyncContext(live_database())
         container = Container(None, bundle[0])

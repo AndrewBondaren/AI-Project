@@ -1,13 +1,11 @@
 """Storage registration for the exact JSON bytes of a World Pack V2 candidate."""
 from app.application.artifacts.contracts.formatBackend import ArtifactFormatContract
 from app.application.worldData.pack.encoding.packManifestCodec import decode_manifest
-from app.dataModel.artifacts.references import ArtifactFormatRegistry, ArtifactKind
-from app.dataModel.registryKey import RegistryKey
+from app.dataModel.artifacts.references import ArtifactKind
+from app.dataModel.worldPack.meta.manifestStorageFormat import (
+    MANIFEST_FORMAT_KEY as MANIFEST_FORMAT_KEY, MANIFEST_STORAGE_VERSION as MANIFEST_STORAGE_VERSION,
+)
 from app.dataModel.worldPack.meta.worldPackManifest import SPATIAL_PACK_WIRE_VERSION
-
-
-MANIFEST_FORMAT_KEY = RegistryKey[ArtifactFormatRegistry]("world_pack.manifest.json")
-MANIFEST_STORAGE_VERSION = 1
 
 
 def manifest_format(max_bytes: int) -> ArtifactFormatContract[bytes]:

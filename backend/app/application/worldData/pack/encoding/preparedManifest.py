@@ -7,6 +7,7 @@ from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind, Ope
 from app.dataModel.artifacts.references import ArtifactRef
 from app.dataModel.worldPack.activation.candidate import PreparedPackCandidate
 from app.dataModel.worldPack.meta.worldPackManifest import WorldPackManifest
+from app.encoding.canonicalCodec import content_digest
 
 
 async def finish_pack_preparation(
@@ -25,6 +26,9 @@ async def finish_pack_preparation(
     for ref in manifest.climate_artifacts():
         members[ref] = None
     manifest_ref = await manifest_stager.stage(lease, data)
+    PreparedPackCandidate.require_manifest_descriptor(manifest_ref)
+    if manifest_ref.nbytes != len(data) or manifest_ref.content_hash != content_digest(data).hex():
+        raise ValueError("staged manifest differs from the encoded candidate")
     members[manifest_ref] = None
     record = await staging.finish_preparation(lease, tuple(members))
     if (record.phase is not OperationPhase.READY or record.kind is not lease.kind
