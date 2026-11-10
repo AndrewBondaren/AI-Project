@@ -30,7 +30,7 @@
 
 **Сравнение и ошибки.** Для занятого адреса в create/update MemoryCache, продолжая удерживать тот же lock, вызывает `codec.encode(existing.value)` и `codec.encode(entry.value)`, сравнивает полученные bytes целиком. Для manifest сравниваются исходные bytes; для Planning — полный канонический PlanEnvelope. Поиск выполняется внутренне без вызова публичного get. Ошибка кодирования прерывает вызов до мутации и должна оставаться различимой от технического сбоя backend. Сервис преобразует её в INVALID_PAYLOAD; внутренний CacheValueConflict — в CONTRACT_MISMATCH с KEY_OCCUPIED_DIFFERENT_VALUE и фактической operation CREATE/UPDATE; технический отказ backend — в BACKEND_FAILURE. Кодек выполняет только локальное детерминированное кодирование. Критерий допуска — изменение каждого смыслового поля меняет представление. При ALREADY_PRESENT и UNCHANGED позиция записи в LRU сохраняется.
 
-**Граница вызова.** DAG передаёт CacheService только key либо entry. Параметры codec, cost и lock остаются внутренними. Сервис возвращает публичный POJO операции; форму результата create см. ниже (OPEN). Backend не вызывает provider, DAG или Pack. [Порт и контракт кодека V1](../../backend/app/application/cache/contracts/cacheBackend.py) · [Расчёт стоимости](../../backend/app/application/cache/service/cacheService.py) · [Владелец блокировки](../../backend/app/application/cache/backends/memoryCache.py)
+**Граница вызова.** DAG передаёт CacheService только key либо entry. Параметры codec, cost и lock остаются внутренними. Сервис возвращает публичный POJO операции; форму результата create см. ниже. Backend не вызывает provider, DAG или Pack. [Порт и контракт кодека V1](../../backend/app/application/cache/contracts/cacheBackend.py) · [Расчёт стоимости](../../backend/app/application/cache/service/cacheService.py) · [Владелец блокировки](../../backend/app/application/cache/backends/memoryCache.py)
 
 **LRU для идемпотентной записи (решение пользователя от 2026-11-10).** ALREADY_PRESENT и UNCHANGED сохраняют значение, стоимость и позицию записи. Конфликт также сохраняет LRU. Успешный get освежает позицию. В двух отдельных прогонах заполнить A, затем B (бюджет на две записи), выполнить create(A, A-value) либо update(A, A-value), затем вставить C: вытесняется A. В контрольном прогоне после get(A) вытесняется B.
 
@@ -68,7 +68,7 @@
 
 Шаг 4 предъявлен к приёмке. Контейнер отдельно собирает `planning_v2_cache_service()` с восемью PC bindings и `pack_manifest_cache_service()` с bytes-binding manifest. Проверены чтение/запись TOML, отказ без обязательной политики, конкурентная сборка, границы реестров и двусторонняя изоляция LRU и retained_bytes. 27 адресных тестов прошли. Текущие вызовы Planning по-прежнему идут через V1 до шага 5. [Проверки композиции](../../backend/tests/cache/test_container_v2.py)
 
-Шаг 3 предъявлен к приёмке: публичный CacheService V2 и атомарный MemoryCache реализованы; Planning всё ещё подключён к LEGACY REMOVE(CACHE-V1-BINDING). Адресный прогон V2 CRUD, моделей и RAM backend — 18 тестов OK, Pyright V2 — 0 ошибок. Общий прогон Cache — 32 теста, 22 ошибки прежнего V1 FieldPathError. Интеграция экземпляров относится к шагу 4. [Конкурентные проверки](../../backend/tests/cache/test_v2_crud.py)
+Шаг 3 предъявлен к приёмке. Реализованы четыре публичных метода Cache V2 и атомарный MemoryCache. Полный прогон `python -B -m unittest discover -s tests/cache -t .` из backend — 39 тестов OK, включая действующий путь V1. [Конкурентные проверки](../../backend/tests/cache/test_v2_crud.py)
 
 | Шаг | Вход и критерий завершения |
 |---|---|
@@ -80,7 +80,7 @@
 
 Пользователь утвердил последовательность поставки 2026-11-10: после архитектурного шага 1 выполнить шаги 2 → 3 → 4 → 5 в указанном порядке. Условия входа и критерии завершения заданы в таблице. Шаг 6 начинается только после переноса всех callers. Конкретные DAG-ноды для шага 5 проектируются совместно с пользователем.
 
-Владелец — домен Cache. Домен передаёт в GEN-DAG принятые контракты. Текущий статус OPEN. [Норматив Cache PC-0](../../docs/tz_terrain_generation.md#surface-planningcache--норматив-pc-0-2026-10-23)
+Владелец — домен Cache. Домен передаёт в GEN-DAG принятые контракты. Интеграция маршрута остаётся открытой на шаге 5. [Норматив Cache PC-0](../../docs/tz_terrain_generation.md#surface-planningcache--норматив-pc-0-2026-10-23)
 
 **Cache V1 / AS-IS — binding передаёт caller.** Конкретный владелец — `app.application.cache.service.legacyCacheService.CacheService`. Действующие синхронные методы: `get[T](binding: CacheBinding[T], key: CacheKey[T]) -> CacheLookup[T]`, `put[T](binding: CacheBinding[T], entry: CacheEntry[T]) -> CacheAdmission`, `evict[T](binding: CacheBinding[T], key: CacheKey[T]) -> None`. У get два результата: CacheHit с точными key/value и CacheMiss. Put добавляет либо заменяет запись по тому же ключу; STORED и SKIPPED_OVERSIZE штатны. Evict удаляет точный ключ. Для пути чтения/заполнения нужны get/put. CacheFailure имеет причины CONTRACT_MISMATCH, INVALID_PAYLOAD, BACKEND_FAILURE; конвертация ошибки в miss нарушает контракт. Источники: [норматив общего sync API](../../docs/tz_terrain_generation.md), [ключ](../../backend/app/dataModel/cache/identity/cacheKey.py), [entry и admission](../../backend/app/dataModel/cache/contracts/cacheEntry.py), [lookup](../../backend/app/dataModel/cache/contracts/cacheLookup.py), [реализация CacheService](../../backend/app/application/cache/service/legacyCacheService.py).
 
@@ -98,12 +98,12 @@
 
 | Объект | Операция | Текущее свидетельство и пробел для приёмки |
 |---|---|---|
-| Данные | Запись | В V1 CacheService.put принимает CacheEntry и возвращает CacheAdmission; проверить создание новой записи, исход oversize и полный набор POJO. |
-| Данные | Чтение | Целевая сигнатура, модели HIT/MISS и CacheFailure(error: CacheError) описаны ниже. Перенос с V1 и проверка открыты. |
-| Данные | Обновление | Для целевых контрактов с запретом замены семантика update согласована по правилу CRUD. До приёмки предъявить реализацию отдельного публичного метода и проверки всех трёх исходов. |
-| Данные | Удаление | V1 возвращает None. Целевой контракт evict с типизированными исходами EVICTED и NOT_FOUND согласован ниже. Реализация и проверки открыты. |
+| Данные | Запись | create проверен для STORED, ALREADY_PRESENT, SKIPPED_OVERSIZE и конфликта занятого ключа. |
+| Данные | Чтение | get проверен для HIT, MISS, неверного ключа, повреждённого payload и отказа backend. |
+| Данные | Обновление | update проверен для NOT_FOUND, UNCHANGED и конфликта. После конфликта сохранено исходное значение. |
+| Данные | Удаление | evict проверен для EVICTED и NOT_FOUND, включая гонку двух удалений. |
 
-**Статус доменной приёмки Cache — OPEN.** Целевой срез get/create и проверка ответственности отдельных классов не закрывают полный CRUD. Источники текущего поведения: [CacheService](../../backend/app/application/cache/service/cacheService.py), [MemoryCache](../../backend/app/application/cache/backends/memoryCache.py), [CachePolicy](../../backend/app/dataModel/cache/policy/cachePolicy.py), [сборка в контейнере](../../backend/app/core/container/worldData.py).
+**Доменный CRUD Cache V2 реализован и проверен.** [Контракты и round-trip](../../backend/tests/cache/test_v2_contracts.py) · [Публичные методы и конкурентные проверки](../../backend/tests/cache/test_v2_crud.py) · [Изоляция экземпляров](../../backend/tests/cache/test_container_v2.py). Итоговая приёмка всего плана остаётся открытой до переноса production-вызовов и удаления V1.
 
 ### Конфигурация экземпляра Cache
 
@@ -184,15 +184,15 @@ V1 здесь означает API Cache с явным binding и прежний
 
 | Статус | Замечание | Условие закрытия |
 |---|---|---|
-| Контракт CacheBindingRegistry принят; реализация и проверка OPEN | Владелец выбора кодека — Cache. DAG передаёт CacheKey при чтении/удалении и CacheEntry при записи. | Cache разрешает зарегистрированный binding по contract.id и проверяет точное совпадение schema_version. Неизвестный id или версия дают типизированный CONTRACT_MISMATCH до обращения к backend. Реестр метаданных сегодня обеспечивает уникальность id и не хранит кодеки. [Ключ](../../backend/app/dataModel/cache/identity/cacheKey.py) · [Реестр метаданных](../../backend/app/dataModel/cache/contracts/cacheContract.py) |
-| Транспорт принят; схема описана; реализация OPEN | CacheFailure передаёт CacheError. V1 _failure всё ещё создаёт базовый FieldPathError и даёт TypeError. | Пройти критерии раздела «Публичная ошибка Cache для DAG» через публичный API. [Текущее место ошибки](../../backend/app/application/cache/service/cacheService.py) |
+| CacheBindingRegistry реализован и проверен | Владелец выбора кодека — Cache. DAG передаёт CacheKey при чтении/удалении и CacheEntry при записи. | Cache разрешает зарегистрированный binding по contract.id и проверяет точное совпадение schema_version. Неизвестный id или версия дают типизированный CONTRACT_MISMATCH до обращения к backend. Реестр метаданных сегодня обеспечивает уникальность id и не хранит кодеки. [Ключ](../../backend/app/dataModel/cache/identity/cacheKey.py) · [Реестр метаданных](../../backend/app/dataModel/cache/contracts/cacheContract.py) |
+| Транспорт V2 реализован и проверен | CacheFailure переносит CacheError с operation, reason и типизированными issues. | Проверены ошибки публичного API, сохранение cause и восстановление POJO. [Тесты контракта](../../backend/tests/cache/test_v2_contracts.py) · [Тесты сервиса](../../backend/tests/cache/test_v2_crud.py) |
 | Ответственность уточнена по ТЗ и коду | В V1 SKIPPED_OVERSIZE возвращает CacheService.put, после переноса — CacheService.create только для отсутствующего ключа. MemoryCache защищает собственный инвариант; CachePolicy задаёт допустимые лимиты. | При приёмке проверить границы cost == max_entry_bytes и cost > max_entry_bytes, приоритет сравнения занятого значения перед лимитом и прямой отказ backend до мутации. [Норматив Cache](../../docs/tz_terrain_generation.md#surface-planningcache--норматив-pc-0-2026-10-23) |
 
 **CRUD — четыре операции над записями.** Для каждой строки действуют требования к классу, модулю, полной сигнатуре и POJO из матрицы выше.
 
 | Статус | Объект и операция | Что предъявить |
 |---|---|---|
-| Контракт принят; реализация и проверка OPEN | Данные — запись | Проверить публичный create, типизированные ошибки и round-trip всех трёх исходов CacheCreateResult. |
-| Контракт описан; реализация и проверка OPEN | Данные — чтение | Проверить целевой get через публичный вход по разделу «Публичное чтение записи Cache». |
-| Семантика принята; реализация и проверка OPEN | Данные — обновление | Через публичный update проверить NOT_FOUND без вставки, UNCHANGED при эквивалентности и типизированный конфликт при другом значении с сохранением исходной записи. После этих проверок пункт обновления для данного контракта может быть закрыт. [Правило приёмки](../rules/dag-generator-interface.mdc#конкретность-публичного-crud-контракта) |
-| Контракт принят; реализация и проверка OPEN | Данные — удаление | Реализовать и проверить evict по разделу «Публичное удаление записи Cache», включая конкурентное и повторное удаление. |
+| Реализовано и проверено | Данные — запись | Проверить публичный create, типизированные ошибки и round-trip всех трёх исходов CacheCreateResult. |
+| Реализовано и проверено | Данные — чтение | Проверить целевой get через публичный вход по разделу «Публичное чтение записи Cache». |
+| Реализовано и проверено | Данные — обновление | Через публичный update проверить NOT_FOUND без вставки, UNCHANGED при эквивалентности и типизированный конфликт при другом значении с сохранением исходной записи. После этих проверок пункт обновления для данного контракта может быть закрыт. [Правило приёмки](../rules/dag-generator-interface.mdc#конкретность-публичного-crud-контракта) |
+| Реализовано и проверено | Данные — удаление | Реализовать и проверить evict по разделу «Публичное удаление записи Cache», включая конкурентное и повторное удаление. |

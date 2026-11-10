@@ -1,4 +1,6 @@
 """LEGACY REMOVE(CACHE-V1-BINDING): caller-bound cache used until Planning cutover."""
+from dataclasses import dataclass
+
 from app.application.cache.contracts.cacheBackend import CacheBinding, LegacyCacheBackend
 from app.application.cache.service.cacheService import retained_entry_bytes
 from app.dataModel.cache.contracts.cacheContract import CacheContractMetadata
@@ -7,19 +9,24 @@ from app.dataModel.cache.contracts.cacheError import CacheFailureReason
 from app.dataModel.cache.contracts.cacheLookup import CacheHit, CacheLookup, CacheMiss
 from app.dataModel.cache.identity.cacheKey import CacheKey
 from app.dataModel.cache.policy.cachePolicy import CachePolicy
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.validation.immutableValue import _complete_record, _immutable
 
 
+@dataclass(frozen=True)
+class LegacyCacheIssue:
+    code: CacheFailureReason
+    message: str
+
+
 class CacheFailure(Exception):
-    def __init__(self, reason: CacheFailureReason, issues: tuple[FieldPathError, ...]):
+    def __init__(self, reason: CacheFailureReason, issues: tuple[LegacyCacheIssue, ...]):
         self.reason = reason
         self.issues = issues
         super().__init__(reason.value)
 
 
 def _failure(reason: CacheFailureReason, message: str) -> CacheFailure:
-    return CacheFailure(reason, (FieldPathError(("cache",), message),))
+    return CacheFailure(reason, (LegacyCacheIssue(reason, message),))
 
 
 class CacheService:

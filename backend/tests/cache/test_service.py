@@ -99,7 +99,9 @@ class CacheServiceTests(unittest.TestCase):
         with self.assertRaises(CacheFailure) as caught:
             action()
         self.assertEqual(caught.exception.reason, reason)
-        self.assertTrue(caught.exception.issues)
+        issue, = caught.exception.issues
+        self.assertEqual(issue.code, reason)
+        self.assertIsInstance(issue.message, str)
         return caught.exception
 
     def test_backend_substitution_hit_miss_and_evict(self):
