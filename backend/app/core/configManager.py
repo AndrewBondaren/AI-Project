@@ -103,6 +103,10 @@ class ConfigManager:
             from app.dataModel.planning.policy.planningRuntimeSettings import PlanningRuntimeSettings
             result["planning"] = PlanningRuntimeSettings.model_validate(data["planning"])
 
+        if "world_pack" in data:
+            from app.dataModel.worldPack.bake.worldPackCacheSettings import WorldPackCacheSettings
+            result["world_pack"] = WorldPackCacheSettings.model_validate(data["world_pack"])
+
         return result
 
     def _to_nested(self, s) -> dict:
@@ -148,6 +152,8 @@ class ConfigManager:
             from app.dataModel.planning.policy.planningRuntimeSettings import PlanningRuntimeSettings
             result["planning"] = PlanningRuntimeSettings.model_validate(s.planning).model_dump(
                 mode="json", exclude_none=True)
+        if s.world_pack is not None:
+            result["world_pack"] = s.world_pack.model_dump(mode="json", exclude_none=True)
         return result
 
 

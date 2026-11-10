@@ -6,7 +6,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Generic, Protocol, TYPE_CHECKING, TypeVar
 
-from app.application.planning.service.planFingerprints import output_fingerprint
+from app.application.planning.service.planFingerprints import cache_item_key, output_fingerprint
+from app.dataModel.cache.identity.cacheKey import CacheKey
 from app.application.cache.contracts.cacheBackend import CacheBinding
 from app.application.cache.service.cacheService import _immutable
 from app.dataModel.identity.uid import EntityUid
@@ -15,7 +16,7 @@ from app.dataModel.planning.contracts.planContract import PlanContractMetadata
 from app.dataModel.planning.contracts.planDependency import PlanDependency, PlanDependencyContract
 from app.dataModel.planning.contracts.planEnvelope import PlanBuildResult, PlanEnvelope
 from app.dataModel.planning.contracts.planRequest import PlanRequest
-from app.dataModel.planning.identity.planKey import InputFingerprint, PlanScope
+from app.dataModel.planning.identity.planKey import InputFingerprint, PlanKey, PlanScope
 
 if TYPE_CHECKING:
     from app.application.planning.providers.planRegistry import PlanDependencyReader
@@ -33,6 +34,13 @@ class RegisteredPlanContract(Generic[I, T]):
     dependency_contracts: tuple[PlanDependencyContract, ...]
     cache_binding: CacheBinding[PlanEnvelope[T]]
     manifest: CanonicalSchemaManifest
+
+    def cache_key(self, key: PlanKey) -> CacheKey[PlanEnvelope[T]]:
+        if (key.contract_id != self.metadata.id or key.schema_version != self.metadata.schema_version
+                or key.algorithm_version != self.metadata.algorithm_version):
+            raise ValueError("plan key does not belong to the registered contract")
+        return CacheKey[PlanEnvelope[T]](contract=self.cache_binding.contract,
+                                         item_key=cache_item_key(key, self.manifest))
 
     def validate_envelope(self, value: object) -> PlanEnvelope[T]:
         _immutable(value, set())

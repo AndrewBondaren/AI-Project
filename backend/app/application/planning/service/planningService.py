@@ -13,7 +13,7 @@ from app.application.cache.service.legacyCacheService import CacheService
 from app.dataModel.validation.immutableValue import _complete_record, _immutable
 from app.application.planning.providers.planProvider import RegisteredPlanContract
 from app.application.planning.providers.planRegistry import PlanDependencyReader, PlanRegistry
-from app.application.planning.service.planFingerprints import cache_item_key, input_fingerprint, output_fingerprint
+from app.application.planning.service.planFingerprints import input_fingerprint, output_fingerprint
 from app.dataModel.cache.contracts.cacheEntry import CacheEntry
 from app.dataModel.cache.contracts.cacheLookup import CacheHit
 from app.dataModel.cache.identity.cacheKey import CacheKey
@@ -216,8 +216,7 @@ class PlanningService:
             raise PlanContractFailure(PlanContractFailureReason.DEPENDENCY_MISMATCH, "recursive provider planning is forbidden")
         self._check_wait(wait)
         checked = self._request(contract, request, dependencies)
-        key = CacheKey[PlanEnvelope[T]](contract=contract.cache_binding.contract,
-            item_key=cache_item_key(checked.key, contract.manifest))
+        key = contract.cache_key(checked.key)
         address = (key.contract.id, key.contract.schema_version, key.item_key)
         with self._lock:
             self._check_wait(wait)

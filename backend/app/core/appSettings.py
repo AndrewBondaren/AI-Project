@@ -6,6 +6,7 @@ from app.application.engine.repair.repairMode import RepairMode
 from app.core.logLevel import LogLevel
 from app.core.distanceUnit import DistanceUnit
 from app.dataModel.planning.policy.planningRuntimeSettings import PlanningRuntimeSettings
+from app.dataModel.worldPack.bake.worldPackCacheSettings import WorldPackCacheSettings
 
 
 @dataclass
@@ -37,6 +38,7 @@ class AppSettings:
     # --- World loading (terrain pack prefetch) ---
     path_ahead_depth:           int        = 2  # macro-tiles ahead on movement heading; config [world_loading]
     planning: PlanningRuntimeSettings | None = None
+    world_pack: WorldPackCacheSettings | None = None
 
     # --- Anthropic ---
     anthropic_thinking_budget:  int        = 10000
@@ -55,6 +57,8 @@ class AppSettings:
     log_level:                  LogLevel   = LogLevel.DEBUG
 
     def update(self, **kwargs) -> None:
+        if "world_pack" in kwargs and kwargs["world_pack"] is not None:
+            kwargs["world_pack"] = WorldPackCacheSettings.model_validate(kwargs["world_pack"])
         if "planning" in kwargs and kwargs["planning"] is not None:
             kwargs["planning"] = PlanningRuntimeSettings.model_validate(kwargs["planning"])
         if "language" in kwargs:

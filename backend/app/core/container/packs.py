@@ -1,5 +1,13 @@
 """World-map pack wiring: paths/io factories and read facades."""
 
+from threading import RLock
+
+from app.application.cache.backends.memoryCache import MemoryCache
+from app.application.cache.contracts.cacheBackend import CacheBinding
+from app.application.cache.contracts.manifestBytesCodec import ManifestBytesCodec
+from app.application.cache.service.cacheBindingRegistry import CacheBindingRegistry
+from app.application.cache.service.cacheService import CacheService
+
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
 from app.application.worldData.pack.io.worldPackReader import WorldPackReader
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
@@ -8,6 +16,7 @@ from app.application.worldData.pack.read.packReadServices import PackReadService
 from app.application.worldData.mapCells.mapCellQueryFacade import MapCellQueryFacade
 from app.application.worldData.mapCells.mapCellReadService import MapCellReadService
 from app.db.models.world import World
+from app.dataModel.worldPack.meta.manifestCacheContract import MANIFEST_BYTES_CONTRACT
 from app.core.appSettings import app_settings
 from app.db.repositories.sqlite.regionStateRepository import SqliteRegionStateRepository
 
@@ -19,6 +28,19 @@ class PacksWiring:
         super().__init__(*args, **kwargs)
         self._pack_read_services: dict[str, PackReadServices] = {}
         self._parent_light_caches: dict[str, ParentLightCache] = {}
+        self._manifest_cache_service: CacheService | None = None
+        self._manifest_cache_lock = RLock()
+
+    def pack_manifest_cache_service(self) -> CacheService:
+        with self._manifest_cache_lock:
+            if self._manifest_cache_service is None:
+                settings = app_settings.world_pack
+                if settings is None:
+                    raise ValueError("World Pack V2 requires explicit [world_pack.manifest_cache] configuration")
+                binding = CacheBinding(MANIFEST_BYTES_CONTRACT, ManifestBytesCodec())
+                self._manifest_cache_service = CacheService(
+                    MemoryCache(settings.manifest_cache), CacheBindingRegistry((binding,)))
+            return self._manifest_cache_service
 
     def pack_read_services(self, world_uid: str) -> PackReadServices:
         services = self._pack_read_services.get(world_uid)

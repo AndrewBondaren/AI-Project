@@ -108,7 +108,7 @@ class GeoWorldPlanProviders:
 
 
 # GEO-LEGACY-33: Retire the PC handle set and registry path.
-def register_world_plan_providers(registry: PlanRegistry) -> WorldPlanProviders:
+def world_plan_contracts() -> WorldPlanProviders:
     S = SurfacePlanSlot
     base = _binding(S.CLIMATE_BASE, ClimateBaseInput, ClimateBasePlan)
     terrain = _binding(S.TERRAIN_BASE, TerrainBaseInput, TerrainPlan)
@@ -118,6 +118,14 @@ def register_world_plan_providers(registry: PlanRegistry) -> WorldPlanProviders:
     river = _binding(S.RIVER_RELIEF, RiverReliefInput, RiverReliefPlan)
     final = _binding(S.HYDROLOGY, HydrologyFinalInput, HydrologyPlan)
     local = _binding(S.CLIMATE_LOCAL, ClimateLocalInput, ClimateLocalPlan)
+    return WorldPlanProviders(base, terrain, water, relief, routes, river, final, local)
+
+
+def register_world_plan_providers(registry: PlanRegistry, contracts: WorldPlanProviders | None = None) -> WorldPlanProviders:
+    handles = contracts if contracts is not None else world_plan_contracts()
+    base, terrain, water = handles.climate_base, handles.terrain_base, handles.water_placement
+    relief, routes, river = handles.relief, handles.hydrology_routes, handles.river_relief
+    final, local = handles.hydrology, handles.climate_local
     registry.register(base, ClimateBasePlanProvider())
     registry.register(terrain, TerrainPlanProvider(base))
     registry.register(water, WaterPlacementPlanProvider(terrain))
@@ -127,4 +135,4 @@ def register_world_plan_providers(registry: PlanRegistry) -> WorldPlanProviders:
     registry.register(river, RiverReliefPlanProvider(relief, routes))
     registry.register(final, HydrologyFinalPlanProvider(relief, routes, river, HydrologyFactsAssembler()))
     registry.register(local, ClimateLocalPlanProvider(base, final))
-    return WorldPlanProviders(base, terrain, water, relief, routes, river, final, local)
+    return handles

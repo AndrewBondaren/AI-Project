@@ -3,13 +3,17 @@
 from collections.abc import Mapping, Sequence
 from threading import RLock
 
-from app.application.worldData.planning.composition.planProviders import WorldPlanProviders, register_world_plan_providers
+from app.application.worldData.planning.composition.planProviders import (
+    WorldPlanProviders, register_world_plan_providers, world_plan_contracts,
+)
 from app.application.worldData.planning.composition.surfacePlanningAssembler import SurfacePlanningAssembler
 from app.application.worldData.planning.composition.surfacePlanningEntry import SurfacePlanningEntry
 from app.application.worldData.planning.composition.surfacePlanningCapture import SurfacePlanningCapture
 from app.application.worldData.planning.guards.sourcePublication import SourcePublicationGuard
 
-from app.application.cache.backends.memoryCache import LegacyMemoryCache as MemoryCache
+from app.application.cache.backends.memoryCache import LegacyMemoryCache, MemoryCache
+from app.application.cache.service.cacheBindingRegistry import CacheBindingRegistry
+from app.application.cache.service.cacheService import CacheService as TypedCacheService
 from app.application.cache.service.legacyCacheService import CacheService
 from app.application.planning.providers.planRegistry import PlanRegistry
 from app.application.planning.service.planningService import PlanningService
@@ -85,8 +89,9 @@ class WorldDataWiring:
         self._pack_bake_publisher: PackBakePublisher | None = None
         self._entry_refine_orchestrator = None
         self._planning_resources: PlanningRuntimeSettings | None = None
-        self._planning_memory_cache: MemoryCache | None = None
+        self._planning_memory_cache: LegacyMemoryCache | None = None
         self._planning_cache_service: CacheService | None = None
+        self._planning_v2_cache: TypedCacheService | None = None
         self._planning_cache_lock = RLock()
         self._plan_registry: PlanRegistry | None = None
         self._planning_service: PlanningService | None = None
@@ -103,10 +108,10 @@ class WorldDataWiring:
                 self._planning_resources = PlanningRuntimeSettings.model_validate(app_settings.planning)
             return self._planning_resources
 
-    def planning_memory_cache(self) -> MemoryCache:
+    def planning_memory_cache(self) -> LegacyMemoryCache:
         with self._planning_cache_lock:
             if self._planning_memory_cache is None:
-                self._planning_memory_cache = MemoryCache(self.planning_resources().cache)
+                self._planning_memory_cache = LegacyMemoryCache(self.planning_resources().cache)
             return self._planning_memory_cache
 
     def planning_cache_service(self) -> CacheService:
@@ -121,6 +126,26 @@ class WorldDataWiring:
                 self._plan_registry = PlanRegistry()
             return self._plan_registry
 
+    def _planning_contracts(self) -> WorldPlanProviders:
+        with self._planning_cache_lock:
+            if self._world_plan_providers is None:
+                self._world_plan_providers = world_plan_contracts()
+            return self._world_plan_providers
+
+    def planning_v2_cache_service(self) -> TypedCacheService:
+        with self._planning_cache_lock:
+            if self._planning_v2_cache is None:
+                backend = MemoryCache(self.planning_resources().cache)
+                providers = self._planning_contracts()
+                bindings = CacheBindingRegistry((
+                    providers.climate_base.cache_binding, providers.terrain_base.cache_binding,
+                    providers.water_placement.cache_binding, providers.relief.cache_binding,
+                    providers.hydrology_routes.cache_binding, providers.river_relief.cache_binding,
+                    providers.hydrology.cache_binding, providers.climate_local.cache_binding,
+                ))
+                self._planning_v2_cache = TypedCacheService(backend, bindings)
+            return self._planning_v2_cache
+
     def planning_service(self) -> PlanningService:
         with self._planning_cache_lock:
             if self._planning_service is None:
@@ -131,10 +156,9 @@ class WorldDataWiring:
     def surface_planning(self) -> SurfacePlanningAssembler:
         with self._planning_cache_lock:
             if self._surface_planning is None:
-                if self._world_plan_providers is None:
-                    self._world_plan_providers = register_world_plan_providers(self.plan_registry())
+                providers = register_world_plan_providers(self.plan_registry(), self._planning_contracts())
                 self._surface_planning = SurfacePlanningAssembler(self.planning_service(),
-                    self.plan_registry(), self._world_plan_providers)
+                    self.plan_registry(), providers)
             return self._surface_planning
 
     def surface_planning_capture(self) -> SurfacePlanningCapture:
