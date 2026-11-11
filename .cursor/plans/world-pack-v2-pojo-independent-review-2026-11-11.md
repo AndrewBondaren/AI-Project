@@ -97,7 +97,7 @@ Capture, входной и durable proof остаются незакрытыми
 | PackPartReadContractRegistry | Перечень read schemas | Cache registry | Публичный metadata registry пока не обязателен: consumer не предъявлен | Предъявлен конкретный потребитель |
 | PackPartReadBinding | Format/version/payload/decoder | Artifact/cache bindings | Внутренняя реализация | Нет executable объектов в публичном POJO |
 | PackPartReadBudget | IO-лимиты запроса | PackReadPolicy | Новый: LRU retention не IO budget | Ограничение bytes до декодирования |
-| PackVersionContents | Единственный authoritative состав | WorldPackManifest | Новая схема, не второй manifest | Все readers используют один состав |
+| PackVersionContents | Единственный authoritative состав | WorldPackManifestV2 | Предпочтительна эволюция существующего manifest; отдельный объект хранения не обоснован | Все readers используют один состав |
 | Assembly provenance/address records | Происхождение metadata | Подтверждённого аналога нет | Новые; chunk proof отдельно от tile | Обновление A сохраняет proof B |
 | PackStoredProvenance | Durable source/dependency identity | Внешний Source proof | Pack-оболочка допустима, proof принадлежит Source | Closure удерживается новой версией |
 | Preparation errors/issues | Типизированный отказ admission | FieldPathError | Специализация carrier без копии path/message machinery | Стабильные codes/paths и порядок issues |
@@ -115,6 +115,20 @@ PackPartInput и PackStoredPart имеют действительно разны
 CacheContract владеет namespace/schema кэша; ArtifactFormatContract — storage format и executable codec/backend binding; PackPartReadContract — typed read schema. Универсальный registry не требуется. Необходимость отдельного публичного списка read metadata ещё не доказана.
 
 ## Явные решения
+
+### Уточнение: полный состав внутри WorldPackManifestV2
+
+Повторно проверены worldPackManifest.py, packManifestCodec.py, manifestFormat.py и pinnedManifestReader.py. Ответственность существующего manifest уже охватывает состав версии: world_uid, параметры сетки, индексы terrain/settlement/tiles, spatial roots и climate refs. Поэтому полный состав (адреса частей, ArtifactRef, durable provenance частей и метаданных) семантически можно разместить непосредственно в эволюционирующем WorldPackManifestV2. Новой самостоятельной ответственности хранения для PackVersionContents не установлено. Ранее приведённая возможность отдельного contents не означает необходимости нового POJO или отдельного артефакта.
+
+Предпочтительный вариант для дальнейшего проектирования — один authoritative WorldPackManifestV2 с полным составом. Вложенные records допустимы для отдельных ответственностей, но отдельный агрегат PackVersionContents, отдельный ref, holder и дополнительное чтение не вводить без доказанной необходимости. Конкретная раскладка полей ещё не утверждена. Нельзя просто добавить parts рядом с независимо изменяемыми climate/spatial refs и path/hash индексами: факты должны иметь одну декларацию и одно authoritative представление; оставшиеся проекции вычисляются или проверяются.
+
+Это не готовность текущего класса к такому использованию. Сейчас WorldPackManifestV2 — strict admission поверх общих _ManifestFields. decode_manifest после admission преобразует его в WorldPackManifest; encode_candidate_manifest требует exact WorldPackManifest. Добавленные только в V2 поля рискуют потеряться при таком преобразовании из-за extra="ignore" общего класса. Следовательно, до реализации требуется согласованная эволюция модели и всего encode/decode/read пути, без потери полного состава и provenance. Списки и отсутствие глубокой неизменности также остаются предметом доработки существующей модели.
+
+Manifest format сейчас принимает bounded bytes и проверяет их через decode_manifest; pinned reader уже читает один manifest ArtifactRef. В проверенном пути не найдено требования к отдельному contents artifact. Возможность уложиться в byte budget не доказана: объём durable proofs ещё неизвестен, нужны измерения репрезентативного полного состава. Превышение бюджета потребует отдельного решения, а не автоматического введения второго объекта хранения.
+
+Критерии проверки варианта: полный состав переживает encode→storage→restart→decode без потери полей; ref и provenance незатронутого chunk сохраняются при partial refine; все readers и retention closure используют тот же состав; противоречивые дубли отвергаются; размер проверен против явно заданного бюджета.
+
+**Выбор формата, storage/schema version и политика прежних bytes остаются OPEN.** Эта проверка не выбирает JSON/TLV, не разрешает молчаливую смену зарегистрированного формата и не устанавливает миграцию, перекодирование, удаление или обязательную поддержку прежних bytes. Находка P1-4 остаётся открытой как вопрос binding и consumers, но не является аргументом за второй объект хранения.
 
 - **Удалить из проекта:** отдельный PackTileAddress; независимую копию декларации PackPreparationIdentity; request_mode из сохраняемой assembly. Это рекомендации, не выполненные изменения.
 - **Переиспользовать:** ArtifactRef, WorldPublicationRef, PackTileRef, TerritoryVolume, WildernessRegionEntry, существующие enums и owning payload schemas.
