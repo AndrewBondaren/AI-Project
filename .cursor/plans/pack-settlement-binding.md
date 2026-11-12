@@ -1,0 +1,35 @@
+# Pack settlement — framed payload и историческое чтение
+
+Статическая сверка 2026-11-12. Срез роли settlement из [инвентаря Pack](pack-v2-domain-contract-spec.md#6-роли-payload-сверка-writer--reader--retention-2026-11-12). Только документация: runtime/SQL/shared validators не менялись, тесты не запускались. Write-операции другого агента этим срезом не перепроектируются.
+
+## Существующая цепочка и формат
+
+`WorldPackWriter.encode_settlement_structure_tmp` → `packBlobWire.write_settlement_structure_blob` → tmp bytes; `publish_settlement_structure` переносит готовый blob и обновляет manifest metadata. Новый write-path получает подготовленный ref, а не tmp path или инструкцию дописать district. Подготовка/append готового результата остаются у владельца producer; Pack final prepare не исполняет их заново.
+
+Existing encoder нового blob использует `(codec_version, PAYLOAD_KIND_SETTLEMENT_STRUCTURE)` + magic SSF1 + последовательность records. Каждый record — uint32 network-order длина compressed bytes и отдельный Zstd JSON frame. Первый record содержит settlement_uid/barrier_cells, последующие — DistrictStructureWire. Existing append сохраняет bytes prefix и добавляет районы в конце. Если existing blob framed, его прежний header не заменяется incoming header. Эти правила не подменять generic merge по UID.
+
+Existing parser после проверки version/kind принимает framed либо прежний single-Zstd JSON. `tests/test_c24_district_packing.py` содержит проверки append без recompress prefix и чтения прежнего представления; `tests/test_transition_pack_wire.py` проверяет обе формы с custom transition registry. Это найденные тесты, а не результат нового запуска. Поддержка прежнего представления в текущем parser не разрешает автоматически включать legacy fallback в целевой единственный decoder. Целевой registered descriptor должен явно закрепить одно согласованное представление; framed соответствует текущему encoder, а перенос поддерживаемых прежних bytes остаётся отдельным migration gate.
+
+## Общие POJO и порядок наложения
+
+Typed read T — existing SettlementStructureWire с DistrictStructureWire, AreaStructureWire/AreaSlotWire, BuildingShellWire, ShellCellWire и BuildingInteriorTransitionsWire. Их зеркальные PackSettlementPayload/Transition POJO не вводятся. ShellCellWire хранит world x/y/z, не chunk-local lx/ly; payload.settlement_uid связывается с settlement address.location_uid. TerritoryVolume находится в metadata, не в blob.
+
+`settlementStructureIndex.index_shell_cells` использует last-write-wins: root barriers → каждый district и его barriers → каждая area (yard, barriers, small_layouts, buildings/shell_cells). Порядок districts, areas и вложенных cells имеет смысл при совпадении координат. Codec сохраняет этот порядок; сортировка/дедупликация по UID или координатам при decode не допускается как «канонизация». Manifest packed_district_uids описывает учтённый набор отдельно; механически заменять payload sequence этим набором нельзя. Растеризация/построение coordinate index — производная операция чтения, не сохранённый второй источник истины и не обязанность decoder.
+
+## Подтверждённая зависимость от Transition registry
+
+`parse_settlement_structure_payload/_parse_frames` передают transition_type_registry в model_validate. `Transition._type_contract` разрешает system_transition_type через registry и выбирает/проверяет type_params и направления; `BuildingInteriorTransitionsWire._scope` дополнительно проверяет registry entry, directional/runtime запреты и building level scope. Без context оба пути используют canonical_engine registry. Следовательно, существующий decoder может отклонить исторический custom key без registry либо оценить его по изменённой текущей декларации.
+
+Это реальная зависимость owning validation, а не повод Pack запрашивать latest Source/Transitions при read_part. Нельзя молча убрать проверки, заменять custom key встроенным типом или встраивать самодельный registry snapshot в Pack payload. Требование к владельцу Transitions при его миграции: предъявить способ строгого восстановления сохранённого Transition с сохранением type_params/semantics без live registry lookup и без зеркального POJO. Если контракт потребует pinned dependency, её concrete descriptor/closure и mapping согласуются отдельно; текущий Pack срез их не придумывает. Эта зависимость блокирует полный typed settlement read с custom transitions, но не остальные payload bindings.
+
+Отсутствующий `BuildingShellWire.interior_transitions` означает legacy shell-only данные, а не пустой список переходов. Existing `building_with_interior_transitions` в таком случае выдаёт InteriorTransitionsRebuildRequired; отсутствие building — KeyError. Не превращать первый случай в успешный пустой transitions result и не объявлять весь settlement отсутствующим. Специализированный query не запускает rebuild. Маркер building-interior-transitions-v1 является реальным persisted discriminator: он входит в обязательный финальный аудит версионных обозначений, но не меняется слепой заменой и не даёт разрешения удалить historical semantics.
+
+## Bounded admission и storage closure
+
+Storage остаётся BLOB bytes binding. Предлагаемый Pack-owned модуль `encoding/settlementStructureFormat.py` переиспользует owning POJO и согласованную framing схему. Codec — pure, без filesystem/SQL/registry resolver/public calls. Проверяет byte budget до parse, version/kind, обязательный header, каждую record length и границы. Ограничение decompressed output действует как на frame, так и на их суммарный decoded объём: множество маленьких compressed frames не обходят общий лимит. Existing _parse_frames хранит все records и не задаёт такой лимит, поэтому готовым bounded decoder не является.
+
+Текущий framed parser также берёт только известные header поля, использует str(header[settlement_uid]) и default [] для barriers; это не strict admission. Owning nested модели содержат lists/extra=ignore и normalization validators, Transition тоже имеет вложенные lists. Их immutable/strict адаптация требует согласованной миграции общей модели, без попутной правки интегрированных методов других доменов. Field/logic error mapping и конкретные format/read IDs/budgets ещё требуют реализации и приёмки.
+
+В просмотренном дереве settlement/Transition нет ArtifactRef: endpoints, location/level/node UID, glossary_ref/tag_refs — доменные ссылки, не storage refs. У текущего payload нет дочернего artifact closure. Это не доказательство достаточности будущего исторического registry contract; если он добавит pinned dependency, closure roster должен быть обновлён явно. Source provenance учитывается отдельно.
+
+Проверки: truncated record length/body; неверный header/kind; missing header; cumulative decompression overflow; сохранение district/cell порядка и last-write-wins; settlement UID/address mismatch; shell-only отличается от empty interior block; custom transition round-trip после изменения latest registry по принятому owning контракту; immutable result после guard close; отсутствие IO/producer calls из decoder. Полный binding остаётся OPEN по явно перечисленным пробелам, а не по ожиданию миграции всех доменов.

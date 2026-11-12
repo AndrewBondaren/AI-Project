@@ -1,0 +1,34 @@
+# Pack climate — общий формат и ролевой admission
+
+Статическая сверка 2026-11-12 для climate_coarse и climate_fine из [инвентаря Pack](pack-v2-domain-contract-spec.md#6-роли-payload-сверка-writer--reader--retention-2026-11-12). Runtime/SQL не изменялись; найденные тесты не запускались. Это уточнение binding, не приёмка всей реализации.
+
+## Подтверждённая реализация
+
+Обе роли уже используют один [CLIMATE_FIELD_FORMAT](../../backend/app/application/worldData/pack/encoding/climateFieldFormat.py): BLOB, key `world_pack.climate_field.zstd`, версия payload 1, content_model=bytes. `decode_climate_field` проверяет bytes и header TileCodec с PAYLOAD_KIND_CLIMATE, затем вызывает общий parser. Format encode/decode валидируют и возвращают исходные bytes, а не повторно сериализованный payload. Версия этого descriptor не равна версии manifest; её нельзя автоматически заменить значением wire/storage manifest.
+
+[PacksWiring.register_climate_field_format и initialize_pack_storage](../../backend/app/core/container/packs.py) регистрируют этот format с ContentAddressedBlobBackend. Поэтому новый climate format/backend или два отдельных coarse/fine codec не требуются. Typed результат чтения — существующий [ClimateFieldWire с ClimateSampleWire](../../backend/app/dataModel/worldPack/wire/climateFieldWire.py), без зеркального Pack POJO.
+
+[StagedClimateFields.validate](../../backend/app/application/worldData/pack/encoding/stagedClimateFields.py) уже выполняет под catalog.guard проверку seal и OperationHolder точного lease, затем read_verified с max_bytes=ref.nbytes. После чтения проверяет coarse-роль либо fine-роль и origin из tile gx/gy и manifest.fine_cells_per_map_cell. Это внутренний helper с I/O-зависимостями backend/catalog/holders, не чистый validator. Его ValueError и ошибки чтения ещё должны быть сопоставлены с принятым публичным результатом Pack; сам helper не объявляется публичным pipeline.
+
+При переходе на parts выбор ref/address идёт из единственного списка частей: отдельные climate_coarse_ref и tile.climate_fine_ref не остаются вторым authoritative источником. Существующие проверки seal/hold/role/origin переиспользуются. Наличие helper и тестового вызова не доказывает завершённую production-проводку публичного prepare.
+
+## Геометрия и значения
+
+[build_climate_coarse_wire](../../backend/app/application/worldData/pack/climate/climateCoarseBake.py) строит coarse grid в macro-координатах bbox с шагом 1. `build_climate_tile_wire` строит fine grid в fine-координатах: origin=(gx*span, gy*span), width=height=side, шаг берётся из [LightGridScale.from_tile / light_span_for](../../backend/app/dataModel/spatial/grid/lightGridScale.py): max(1, span // max(1, side)). Например, span=1000 и side=32 дают шаг 31; равенство width*step=span не является существующим инвариантом. Не добавлять такую проверку или пересэмплирование в Pack под видом переноса binding.
+
+`ClimateFieldWire.sample_at` использует индекс ly*width+lx. Порядок samples сохраняется; сортировка или заполнение пропусков decoder не допускаются. temperature_base/rainfall допускают None. Pack не вызывает climate generator для восстановления значений и не обращается к live Source/registry при чтении сохранённого числового поля. Сам просмотренный payload не содержит дочерних ArtifactRef; source/provenance dependencies учитываются отдельно по manifest.
+
+Existing admission не проверяет согласованность fine width/height/step с captured assembly, кроме origin. Геометрические требования и область их применения следует явно закрепить до реализации admission; свойства конкретного producer не выдавать за уже реализованную проверку всех сохранённых payload. Producer geometry не переносит orchestration внутрь Pack: DAG передаёт готовый результат, Pack проверяет свой контракт без генерации и скрытых междоменных вызовов. Порядок источники → evidence → manifest → codec/readers сохраняется.
+
+## Уже известные незакрытые критерии
+
+Не новые вопросы настроек: [WP-C7-1…3, шаг 7](cache-public-contracts.md#шаг-7-адресная-приёмка-packclimate-по-замечаниям-независимого-ревью) уже фиксируют вложенные неизвестные поля, пустую сетку и размер после распаковки.
+
+- ClimateFieldWire и samples используют extra=ignore; frozen-модель содержит изменяемый list samples. Нужны строгая вложенная схема и immutable read contract в owning модели, без дублирующих POJO.
+- width/height не имеют положительной границы; сверка длины пропускается при нулевом произведении. Допустимость пустого coarse/fine остаётся OPEN по WP-C7-2; нельзя считать её молча согласованной. Также требуется проверка отрицательных размеров.
+- max_bytes=ref.nbytes ограничивает compressed bytes, но не decoded allocation. Нужен bounded decode по WP-C7-3, с отказом на превышение лимита/повреждённый frame до выдачи кандидата.
+- Alias sample_step_m, defaults и нормализация status существуют в shared wire. Их целевую политику следует проверить при удалении legacy; автоматический перенос всех permissive правил не согласован. Финальный отдельный аудит версий различает реальные descriptor values и устаревшие имена/комментарии.
+
+[retain_climate_members](../../backend/app/db/repositories/sqlite/worldPack/climateRetention.py) уже выдаёт детям ArtifactRetentionHolder(manifest) в scoped transaction после проверок identity/seal/operation holds. Это основа общего retention, но climate-only множество не заменяет полный closure всех parts/provenance. Новый holder store не требуется.
+
+[test_climate_field_format.py](../../backend/tests/spatial_pack/test_climate_field_format.py) содержит stage/reopen и pinned climate после replacement/restart/GC. Они не закрывают строгую схему, decoded budget, пустые/отрицательные размеры и публичную проводку. Для приёмки дополнительно нужны wrong-role/origin, сохранение row-major порядка, неделимый span/side, неподходящий descriptor и полный retention closure. Результат сверки: существующие format/POJO/role checks подтверждены; полный climate admission остаётся OPEN до перечисленных проверок и решений.
