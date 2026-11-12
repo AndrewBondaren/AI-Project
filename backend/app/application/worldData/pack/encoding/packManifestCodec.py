@@ -38,7 +38,8 @@ def decode_manifest(payload: bytes) -> WorldPackManifest:
             raise ValueError("unexpected V1 spatial_roots")
         return WorldPackManifest.model_validate(raw)
     if version == SPATIAL_PACK_WIRE_VERSION:
-        admitted = WorldPackManifestV2.model_validate_json(payload, strict=True, context=TerritoryVolume.STRICT_BOUNDS)
+        admitted = WorldPackManifestV2.model_validate_json(
+            payload, strict=True, extra="forbid", context=TerritoryVolume.STRICT_BOUNDS)
         return WorldPackManifest.model_validate(vars(admitted), strict=True)
     raise ValueError("unsupported World Pack version")
 

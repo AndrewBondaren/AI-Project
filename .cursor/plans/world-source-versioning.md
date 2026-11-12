@@ -218,6 +218,16 @@ class TerrainRegistryEntry(BaseModel):
 `dataModel/identity/` не расширяется: там `EntityUid` (кем объект является),
 а контракт включает revision-семантику — выходит за identity.
 
+### Принятый носитель тел — уточнение 2026-11-12
+
+Детализация реализации и актуальные границы evidence: [source-proof-v2-contract-spec.md](source-proof-v2-contract-spec.md). Принятие носителя не закрывает указанные там lifecycle staging и durable holder, publication index mapping и типизированные descriptors источников. Этот документ также уточняет переиспользование старых writers и scope-binding без второго generic Source CRUD фасада.
+
+При закрытии Pack REV-02 пользователь принял сохранение immutable source bodies через существующий Artifacts и owning format bindings. Source связывает typed object identity + SourceRevision с body ArtifactRef, отдельно версионирует состав влияющих коллекций. seq назначается при semantic mutation, не при capture. Чтение точной revision не подменяется latest. Используются существующие canonical encoding и artifact retention, второе hash/storage-ядро не вводится. [Порядок поставки и трассировка](world-pack-v2-single-manifest-contract.md#порядок-закрытия-rev-02--поручение-пользователя-2026-11-12).
+
+Это уточнение закрывает выбор носителя тел, но не означает наличия реализации source index и согласованного owner pregame source publication. Конкретный append-only revision index, назначение seq внутри atomic apply, snapshot capture, membership identities, CRUD/error contracts и удержания ещё должны пройти архитектурную приёмку. После gameplay сохраняется исключительное право Snapshot применять подготовленные изменения; отдельный Source commit в обход Snapshot запрещён. Старые формулировки ниже о выборе носителя относятся теперь к детализации индекса/протокола, а не повторному выбору хранения source bodies.
+
+**Уточнение по существующим writers (2026-11-12):** [детальная трассировка V1 до SQL](world-pack-v2-single-manifest-contract.md#детальная-трассировка-v1-mutation-paths-до-sql-2026-11-12) подтвердила WorldService._save + region reconciliation, LibraryWriteService.prepare/apply_prepared + caller-owned LibraryWriteExecutor, общую транзакцию WorldCopyImport и Database.transaction_if_needed. Сначала адаптируются эти механизмы и составляется полный roster обходных writers (locations, persisted defaults repair, pack metadata/dependencies/delete, bulk/import). Они пока изменяют текущие rows и не обеспечивают durable source revisions. WriteRetentionPlanner защищает достижимых members, но не исторические тела. Предложение отдельной pregame source operation было преждевременным: необходимость нового публичного входа/OperationKind не доказана и не является обязательным условием. После gameplay применяется прежний Snapshot-only gate; существование V1 direct writes не отменяет его.
+
 ### Revision = seq + content_hash; удерживаемые тела доступны
 
 - Revision — пара `seq` (монотонный на object id) + `content_hash`

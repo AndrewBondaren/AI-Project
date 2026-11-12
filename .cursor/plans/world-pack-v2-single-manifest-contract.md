@@ -4,6 +4,39 @@
 
 Статус: конкретизация Pack-owned части для последующей приёмки. Пользователь принял переход на новую storage version с единственным целевым decoder (2026-11-11). Это не разрешение реализации незакрытых внешних контрактов. Код не изменяется.
 
+## Граница разработки публичных pipeline — решение пользователя 2026-11-12
+
+Публичный pipeline, его Input/Output/Error POJO и внутренняя логика принадлежат домену выполняемой операции. DAG владеет оркестрацией и передачей результатов. **Source capture/read, Terrain materialization и Settlement topology/materialization — внешние зависимости этого плана, не разработка в рамках Pack.** Их реализация и декомпозиция выполняются по owning планам после приёмки владельцев. Предложенные имена внешних классов не разрешают создавать их в скоупе Pack или скрывать их вызовы за Pack-фасадом.
+
+Pack разрабатывает собственные preparation/read/activation контракты и реализацию, формулирует требования к внешним результатам и проверяет mapping во вход Pack. Producer возвращает собственный доменный POJO; требовать от него PackProducedPartEvidence/PackPartInput запрещено без отдельно принятого междоменного контракта. Прежнее предложение включать PackProducedPartEvidence в producer result отозвано. Ноды и bindings DAG согласуются отдельно, новых нод этот план не назначает. Подробная [карта владельцев и scope](rev-02-r1-public-pipelines.md#владельцы-и-границы-поставки--решение-пользователя-2026-11-12).
+
+Адаптация существующих capture/Planning proofs к целевому manifest зафиксирована в [Source appendix §6.1](source-proof-v2-contract-spec.md#61-адаптация-найденных-механизмов-к-целевому-pack--без-доменной-оркестрации). Переиспользуются данные/канонизация/проверки, не legacy orchestration: самостоятельные публичные операции запускает только DAG. PackStoredProvenance хранит внешний Source proof и existing Planning dependencies; новая proof storage система не вводится. Реализация внешнего Source типа и согласование DAG bindings остаются у владельцев.
+
+Pack-owned конкретизация metadata/provenance и pure validator/IO границы выполнена в [карте pipeline §2.1 и §3.1](rev-02-r1-public-pipelines.md). [Остаток приёмки](rev-02-r1-adaptation-acceptance.md) отделён от выполненных деклараций. По поручению пользователя последующие требования на междоменной границе учитываются при миграции соответствующих доменов; не считать ожидание внешних контрактов запретом завершать собственные схемы Pack. Runtime с неизвестными обязательными типами/ports при этом не объявляется готовым.
+
+## Блокеры Pack и независимость Cache — фиксация 2026-11-12
+
+Не смешивать незавершённую разработку домена, внешний контракт и перенос вызывающих мест.
+
+| Категория | Незакрытая работа | Что блокирует |
+|---|---|---|
+| Pack-owned | Конечные addresses/assembly/provenance schema; wire semver; semantics registry_hash/z_band/wilderness_tiles_total (с уточнением чужой семантики у владельца) | Freeze полного manifest, codec и зависимых read/preparation POJO |
+| Pack-owned | Полный payload format/read binding roster и retention closure | Полноценное чтение/удержание всех частей версии |
+| Pack-owned с внутренними внешними ports | Concrete activate/release и CRUD-disposition настроек; согласованные atomic bindings Publication/Artifacts | Приёмку соответствующих публичных операций и lifecycle |
+| Внешние контракты Source/producer | Concrete source proof, outcome и coverage | Зависимые поля и admission Pack; не превращает их разработку в работу Pack |
+| Внешние контракты Artifacts/Source | Preparing adoption, source/candidate retention | Безопасный lifecycle полного prepare |
+| Интеграция DAG/callers | Согласованные ноды, перенос production-вызовов | Сквозную приёмку маршрута; не является общим запретом разработки самостоятельного публичного Pack API |
+
+Pack может прорабатывать и реализовывать принятые собственные срезы с конкретными контрактами; неизвестные типы/ports не заменяются placeholder. Отсутствие миграции callers и отсутствие обязательного типа входа — разные ограничения. Порядок источники → evidence → manifest → codec/readers сохраняется; эта классификация не разрешает обходить зависимость внутри среза.
+
+**Cache не заблокирован REV-02.** Source proof/materialization/новая схема manifest не являются зависимостями самостоятельного домена Cache: manifest Cache хранит exact bytes, Pack проверяет pin/digest/seal/schema. По [плану Cache](cache-public-contracts.md#последовательность-после-архитектурной-приёмки) CRUD V2 и композиция предъявлены к приёмке; методы CacheService и pack_manifest_cache_service подтверждены кодом, тесты при этой сверке не перезапускались. Остаток: шаг 5 — перенос callers владельцами через согласованный DAG-путь, затем шаг 6 — удаление V1 после подтверждения всех переносов. Незавершённый конкретный Pack read может блокировать соответствующий интеграционный маршрут, но не весь Cache. Шаг 7 плана — отдельные проверки Pack/Climate, не переоткрытие разработки Cache. Доменная готовность Cache не означает завершённую приёмку всего его плана.
+
+## Уточнение схемы — принято пользователем 2026-11-12
+
+Для новой полной схемы единственная разрешённая пара — **wire `pack_version = "3.0.0"` / storage `ArtifactRef.format_version = 2`**, format key `world_pack.manifest.json`, Python-класс `WorldPackManifestV2`. Поля codec_version/payload_format сохраняются. Из новой схемы и assembly **исключаются registry_hash, wilderness_tiles_total и строковый location z_band**. Числовой `ParentLightRefinePolicy.z_band` не меняется. Исключение строкового поля учитывается при cutover наблюдаемой read-проекции; прежние bytes и legacy путь до cutover не переписываются.
+
+Это решение заменяет прежние OPEN формулировки о выборе этих четырёх пунктов во всех нижеследующих исторических разделах и таблице REV-02-R5. Не переносить исключённые поля в extension/opaque metadata. Остаются конечные address/assembly/provenance schemas, bindings и остальные gates. [Основания и приёмка решения](pack-v2-domain-contract-spec.md#63-пункт-1--проверка-решений-перед-freeze-схемы-2026-11-12). Решение не является отметкой реализации или разрешением переименовать старые bytes в новый формат.
+
 ## Принятое решение о формате и переходе
 
 **Последующее решение пользователя (2026-11-11): оставить поля и продолжать реализацию.** `pack_version`, `codec_version` и `payload_format` сохраняются в существующем POJO и wire. Удаление codec_version/payload_format и перенос их ответственности не входят в текущую поставку и не являются её обязательным предварительным шагом. Исследование WP-CODEC-01 остаётся открытой находкой согласованности; оно не разрешает попутно менять значения, defaults или runtime. Ниже предложения об исключении полей и последовательность такого перехода сохранены как отложенный вариант, а не действующее задание на удаление. Действующие требования к реализации полного manifest (Source proof, coverage, adoption, схема и admission) сохраняются.
@@ -13,7 +46,7 @@
 - `pack_version` сохраняется как обязательная wire semver World Pack. Она не дублирует `ArtifactRef.format_version` или `TileCodec.codec_version`. Точное значение для новой схемы и допустимая пара wire/storage versions определяются при окончательной спецификации; прежнее `2.0.0` автоматически не переносится. Storage version 2 не означает автоматически изменение версии кодеков payload или имени класса.
 - До переключения инвентаризировать прежние manifest refs в heads, pins и поддерживаемой snapshot history. Для каждой живой зависимости определить пересборку либо доказуемую отдельную миграцию. Из path/hash нельзя синтезировать недостающие source proofs. Если доказательств нет, требуется новая подготовка по источникам; прежняя историческая версия не подменяется новым bake.
 - После переключения runtime не содержит второго decoder старой схемы. Если нужна миграция данных, её scope и способ выделяются отдельно до переключения; автоматического converter или разрешения удаления данных это решение не создаёт. Неразрешённые живые зависимости блокируют переключение.
-- При обновлении binding одновременно меняются validator PreparedPackCandidate, codec, readers/admission, retention, composition и fixtures. Cache key уже включает полный ArtifactRef, поэтому версия формата участвует в identity; старый cache entry не допускается обходным путём.
+- При обновлении binding согласованно меняются Pack-owned validator PreparedPackCandidate, codec, внутренние readers/admission, retention, composition и fixtures. Внешние домены переводят своих потребителей самостоятельно; DAG bindings принадлежат DAG. Их миграция не является условием реализации и поставки публичного Pack V2. Cache key уже включает полный ArtifactRef, поэтому версия формата участвует в identity; старый cache entry не допускается обходным путём.
 - Сохраняется явный budget одного manifest. Измерение полной схемы с реальными proofs обязательно; второй contents object автоматически не вводится. Отдельный шаг удаления V1 сохраняется.
 
 ## Единственный сохраняемый агрегат
@@ -55,6 +88,18 @@ manifest_format(max_bytes) получает fixed storage version 2 из owning 
 Критерии wire-gate: старый JSON с прежними полями отвергается даже при подмене descriptor version на 2; storage version 1 отвергается до JSON parsing; отсутствующая, неизвестная и несовместимая pack_version отвергается даже при корректном внешнем descriptor; encode отвергает неподдерживаемую pack_version; missing/extra keys, duplicate JSON keys и неверные nested types отвергаются; одинаковый нормализованный manifest выдаёт одинаковые bytes; decoder не меняет bytes identity; новая схема round-trip сохраняет pack_version и все поля/proofs. Сохранение pack_version принято; её точное значение, остальные предложения по envelope и окончательный полный schema roster ещё требуют приёмки. Принятая storage version 2 не закрывает их автоматически.
 
 `PackStoredPart` имеет только `address: PackPartAddress`, `artifact: ArtifactRef`, `provenance: PackStoredProvenance`. `PackStoredAssemblyProvenance` имеет только `address: PackAssemblyAddress`, `provenance: PackStoredProvenance`. `PackStoredProvenance.source_proof` получает конкретный durable тип владельца Source; placeholder запрещено превращать в Any/dict/строку. Новые records размещаются в owning модулях частей/provenance, не создают второй сохраняемый агрегат.
+
+## Обязательный отдельный шаг после удаления legacy: единая реализация и очистка версионных обозначений
+
+**Указание пользователя 2026-11-12.** В итоговом коде должен остаться один код действующего контракта, без параллельных версий реализации. Этот шаг выполняется **после подтверждённого удаления legacy**, до итоговой приёмки. Он обязателен независимо от отложенного WP-CODEC-01 и не переставляет предшествующие этапы: переход callers/данных → удаление legacy → настоящий отдельный аудит и очистка.
+
+1. Проверить комментарии/docstrings, имена модулей, классов, методов, функций, переменных, constants, aliases, DI-фабрик и тестов на обозначения версий контрактов: V1/V2/V3, legacy/new/old, spatial-version, wire `3.0.0`, storage `2` и аналогичные маркеры перехода. Поиск включает определения, импорты, exports, registrations и callers; не ограничиваться файлами codec.
+2. Удалить устаревшие пояснения миграции и переименовать действующие сущности по ответственности. В частности, `WorldPackManifestV2` после удаления прежней модели должен стать единственным `WorldPackManifest`, без compatibility alias; методы/переменные с V2 и временные комментарии не остаются только потому, что использовались в промежуточном плане. Сохранение имени WorldPackManifestV2 выше относится к этапу до этой очистки, не к конечному состоянию.
+3. Проверить, что остались один encoder/decoder, одна модель действующего manifest и один публичный путь каждой операции. Удалить version dispatch, legacy fallback и дубли bindings/validators/fixtures. Отказ на неподдерживаемые входные данные не превращать в поддержку второй реализации.
+4. Отдельно инвентаризировать реальные persisted/wire поля и значения версий, включая согласованную переходную пару wire 3.0.0 / storage 2, pack_version, codec_version, ArtifactRef.format_version. Не исключать их из аудита как «просто metadata». Для каждого показать назначение, owning контракт и callers; различить имя/комментарий реализации и поле сохранённых данных. Изменение/удаление поля выполняется с согласованной синхронизацией owning контракта и переходом данных, а не текстовой заменой старых bytes. Ранее принятое сохранение полей не разрешает оставлять несколько версий кода.
+5. Согласованно обновить imports, DI, tests и актуальные технические описания. Исторические записи решений не выдавать за инструкции к итоговой реализации. Проверить отсутствие сломанных imports и новых обходных путей; выполнить адресные тесты единственного действующего контракта.
+
+**Выход и критерий приёмки:** diff очистки и реестр всех найденных версионных обозначений с судьбой каждого. В именах и комментариях действующей реализации нет рудиментов версий/миграции; параллельных реализаций, aliases и fallback нет. Оставшиеся значимые wire/storage descriptors должны быть явно разобраны, а не молча пропущены. Непроверенные вхождения или оставленный второй путь означают, что шаг не завершён. Статус: TODO; этой записью код не изменяется.
 
 ## Единственная декларация metadata
 
@@ -121,16 +166,16 @@ Assembly использует общий metadata-контракт с сущес
 
 | Metadata | Поля | Адрес provenance |
 |---|---|---|
-| Header | last_l0_mode, effective grid scalars, map_subsurface_depth; registry_hash только после отдельного решения | header |
+| Header | last_l0_mode, effective grid scalars, map_subsurface_depth, terrain_chunk_columns (обязательный captured размер, принят 2026-11-12) | header |
 | Tile | gx, gy, climate_status, wilderness_refine_status; chunks — отдельная коллекция | tile(gx, gy), proof исключает chunks |
 | Chunk | cx, cy, refine_role | chunk(gx, gy, cx, cy) |
-| Location | location_uid, territory_volume, climate_status; z_band только после отдельного решения | location(location_uid) |
+| Location | location_uid, territory_volume, climate_status | location(location_uid) |
 | Settlement | location_uid, territory_volume, structure_status, packed_district_uids | settlement(location_uid) |
 | Region | существующий WildernessRegionEntry | region(region_uid) |
 
 Assembly содержит tiles, locations, settlements, wilderness_regions в immutable коллекциях по ТЗ. Macro gx/gy, локальные cx/cy и inclusive fine-grid XYZ не взаимозаменяемы. Constraints сетки переиспользуются от владельцев; отсутствующие effective значения не заполняются defaults Pack. Последний L0 mode не изменяется detailed-запросом.
 
-registry_hash, location z_band и wilderness_tiles_total требуют решения владельцев: в этом проекте не вводятся новые значения, типы или молчаливое удаление прежних wire-полей. Наличие этих gates не оправдывает добавление второго объекта хранения.
+По решению пользователя 2026-11-12 registry_hash, строковый location z_band и wilderness_tiles_total исключены из новой схемы; этот выбор закрыт. Числовой terrain z_band сохраняется. Второй объект хранения не вводится.
 
 ## Карта устранения второго источника истины
 
@@ -152,7 +197,7 @@ registry_hash, location z_band и wilderness_tiles_total требуют реше
 
 ## Admission и lifecycle
 
-1. Подготовка принимает полный состав, scope и typed evidence через DAG по существующему проекту prepare. Pack не запускает producers, planner или sidecar merge.
+1. По решению пользователя 2026-11-12 подготовка принимает закреплённую базу и готовые результаты доменных операций со scope и typed evidence через DAG. Полный итоговый состав собирает Pack по старым правилам writer; прежнее требование полного состава на входе отменено. Отсутствие нового результата не означает удаление базовой части. Pack не запускает producers, planner или sidecar merge. Конкретный input обновлений и внутренний класс сборки ещё требуют приёмки; [граница и критерии](pack-v2-domain-contract-spec.md#принятая-граница-сборки-состава-2026-11-12).
 2. Pure validation проверяет уникальность до сортировки, соответствие адреса/ref/формата/proof, metadata/status/coverage и разрешённость изменения относительно pinned базы. Проверки, требующие IO, выполняет внутренняя операция через принятые ports; validator не делает IO.
 3. При inherited переносится неизменный durable proof базы. При new принимается proof producer, подтверждённый capture. В storage new/inherited, capture holder, operation_id, lease, fence, receipts и base_publication не сохраняются как необходимые условия чтения.
 4. Pure assembler строит один WorldPackManifestV2. Нормализация адресов и множеств — по ТЗ; proof нормализует его владелец. Никакого независимого PackPreparationIdentity: canonical input — PackPreparationBody.
@@ -187,9 +232,25 @@ DAG только вызывает публичные операции и пер�
 
 ## Проверки перед разрешением реализации
 
+### Ревью текущего admission и незавершённого перехода (2026-11-12)
+
+- **WP-MANIFEST-REV-01 — P1, OPEN: неизвестные вложенные поля.** Пользователь сообщил runtime-воспроизведение: V2 tiles=[{gx:0, gy:0, unknown:123}] принимается, unknown отсутствует в decoded модели. Статическая сверка подтверждает причину: WorldPackManifestV2.extra=forbid действует на верхнюю модель, не делает вложенные V1-модели рекурсивно forbid; ChunkRef/SettlementStructureEntry явно extra=ignore, остальные вложения требуют полного аудита. decode_manifest валидирует V2, затем возвращает WorldPackManifest. manifest_format.admit принимает результат, но возвращает исходные bytes: поле теряется в typed представлении, не физически в возвращённых binding bytes. Это дефект действующего admission, а не только отсутствие будущей схемы. Исправление должно проверять неизвестные поля до их отбрасывания на всех уровнях V2 без копирования дерева POJO и без молчаливой смены семантики V1. Acceptance: unknown в верхнем объекте, tile, chunk, location, settlement и остальных вложенных records отклоняется как decoder, так и storage admission; валидный nested round-trip сохраняется. Полный roster вложений обязателен; одной проверки tiles недостаточно. Повторный runtime-тест агентом в этом ревью не выполнялся.
+- **WP-MANIFEST-REV-02 — P1, OPEN: единый manifest не реализован.** Текущий WorldPackManifestV2 наследует прежний набор полей; parts/assembly/assembly_provenance отсутствуют. decode_manifest возвращает WorldPackManifest после V2 validation. Это текущая адаптация прежней схемы, не завершённый целевой контракт. Реализовать по принятому переходу после закрытия применимых schema/provenance/ownership входов; публичный read готового payload не объявлять зависимым от Source из-за этой находки. Acceptance: единый полный manifest, encode/decode без legacy-проекции, полная сохранность типов/полей/proofs и согласованные readers. Не закрывать находку одним переименованием модели.
+- **WP-MANIFEST-REV-03 — P2, OPEN: storage version ещё 1.** manifestStorageFormat.MANIFEST_STORAGE_VERSION=1, manifest_format принимает эту версию. Целевая storage version 2 остаётся требованием перехода. Реализовать вместе с завершённой схемой REV-02 и Pack-owned candidate validators, codec, внутренними readers/composition и fixtures. Изолированная смена константы не реализует новый формат. Миграция внешних доменов-потребителей и DAG bindings не блокирует поставку Pack V2: это ответственность соответствующих владельцев. Acceptance Pack: согласованный новый binding, публичные методы и restart/pinned reads. Переключение живых сохранённых refs имеет отдельный data-migration gate; его нельзя подменять ожиданием перевода внешних callers.
+
+**Разделение ответственности подтверждено пользователем 2026-11-12.** Pack реализует свой публичный контракт V2 и согласованную внутреннюю цепочку. Внешние потребители переходят на него в своих доменах; Pack не исправляет их код и не ждёт завершения всей миграции для поставки V2. Требование переноса собственных API/входов Pack сохраняется; оно не означает миграцию всех чужих consumers. После отдельного утверждённого шага удаления V1 старый контракт не работает, обходные/compatibility пути ради отстающих потребителей не сохраняются. Сохранённые данные, живые heads/pins/history и holds рассматриваются отдельно: это условия безопасного перехода данных, не зависимость поставки от чужого кода.
+
+Основания: [packManifestCodec](../../backend/app/application/worldData/pack/encoding/packManifestCodec.py), [WorldPackManifestV2 и вложенные модели](../../backend/app/dataModel/worldPack/meta/worldPackManifest.py), [manifestFormat](../../backend/app/application/worldData/pack/encoding/manifestFormat.py), [manifestStorageFormat](../../backend/app/dataModel/worldPack/meta/manifestStorageFormat.py). REV-01 рассматривается как отдельный дефект действующей границы; REV-02/03 — невыполненные этапы целевого перехода. Сохранение pack_version/codec_version/payload_format остаётся решением пользователя. Код этой записью не изменён, приёмка реализации не объявляется.
+
 ### Повторная сверка входов после решения сохранить поля (2026-11-11)
 
 #### WP-SOURCE-01 — freshness, provenance и source retention (OPEN)
+
+**Уточнение границы, 2026-11-12: существующее решение, не новый выбор.** Чтение уже сохранённой горы или другой готовой части Pack выполняется по закреплённой публикации, manifest и payload refs. Для него требуются удержания этих артефактов, проверка целостности/формата и действующего допуска чтения; обращение к Source, старым template bodies или восстановление исходного capture не требуется. Наличие сохранённой provenance в manifest не означает необходимости разыменовывать исходные тела при каждом read. Durable Source proof/retention нельзя объявлять блокером чтения готового payload. Проверка собственных контрактов read и manifest schema при этом сохраняется.
+
+Предыдущие формулировки о необходимости Source для Pack в целом были слишком широкими. WP-SOURCE-01 и связанные находки относятся к подготовке, изменению и повторному расчёту только там, где конкретная операция действительно потребляет source данные. Для каждой такой зависимости назвать операцию/метод и необходимые поля; не переносить её автоматически на чтение опубликованного результата. Требования resolve-as-of из Source-плана не отменены, но не добавляют Source-вызов в путь чтения готового Pack. Повторного согласования с пользователем этого существующего разделения не требуется.
+
+Acceptance границы чтения: закреплённый сохранённый payload читается без исходного capture и без доступного Source/template reader, если manifest/payload удержаны и валидны; изменение latest template не меняет выдаваемые bytes старой публикации. Недоступность/повреждение самого Pack artifact по-прежнему даёт предусмотренный read refusal. Это проверка существующей гарантии, не разрешение удалять source holds, необходимые другим операциям.
 
 Формулировка «Source должен предъявить durable proof» объединяет разные обязанности. Перед новым POJO требуется определить данные и проверки каждой гарантии. Proof означает типизированное свидетельство связи результата с зависимостями, не доказательство правильности алгоритма materialization. Отсутствие универсального proof не означает отсутствия необходимых данных в V1.
 
@@ -216,6 +277,58 @@ DAG только вызывает публичные операции и пер�
 
 ##### WP-SOURCE-01-A — результат первого аудита V1 и GEO-преемника
 
+##### WP-SOURCE-01-B — карта источников capture (2026-11-12)
+
+##### WP-SOURCE-01-C — TemplateSnapshotLoader / ReliefTemplateSnapshot (2026-11-12)
+
+##### WP-SOURCE-01-D — согласованность чтения template catalog (OPEN, 2026-11-12)
+
+**Находка.** Контракт TemplateSnapshotLoader не обеспечивает собственный единый snapshot membership и bodies. [EffectiveCatalogLoader.load](../../backend/app/application/templateLibrary/packs/effectiveCatalog.py) сначала определяет packs через membership_pack_uids, затем загружает members. [list_by_packs](../../backend/app/db/repositories/sqlite/libraryPackMemberRepository.py) выполняет SELECT по batches. TemplateSnapshotLoader._prepare после этого последовательно вызывает catalog.body; [LibraryBodyMixin.read_body_row](../../backend/app/application/templateLibrary/packs/domainAdapters/mixins.py) читает текущее тело через library.find_by_uid. Общий scope/revision token не передаётся и не проверяется loader. Смешение membership одного момента и bodies другого не исключено его контрактом.
+
+**Граница доказательства.** [GuardedConnection._execute](../../backend/app/db/guardedConnection.py) защищает отдельные обращения; без explicit UOW или активной транзакции gate освобождается между ними. [Database.transaction_on](../../backend/app/db/database.py) предоставляет unit_of_work + BEGIN IMMEDIATE, а transaction_if_needed переиспользует UOW текущей задачи. Поэтому механизм согласованного чтения существует, но наличие общей connection не заменяет использование общего scope. В просмотренных loader/непосредственных materialization callers такой scope не найден. Внешний caller может создать его; нельзя утверждать, что каждый фактический вызов обязательно читает несогласованные данные. Race-тест не запускался, нарушения production-данных не установлены.
+
+**Существующие поля не заменяют capture identity/retention.** [LibraryPackMemberRow](../../backend/app/db/models/libraryPackMember.py) не содержит revision. [LibraryPackRow.version](../../backend/app/db/models/libraryPack.py) — поле metadata, не подтверждённая вычисляемая ревизия membership и bodies. source_template_uid/source_pack_uid описывают происхождение копии и допускают dangling после удаления источника; это не удержание тела. ReliefTemplateSnapshot не добавляет собственную revision или durable holder.
+
+**Три самостоятельных требования для согласования у владельца TemplateLibrary/Source:**
+
+1. Согласованное чтение: один короткий scope для membership и всех необходимых bodies, с подтверждённой общей storage boundary. Использовать существующий UOW/transaction mechanism после проверки DI; не держать DB transaction на протяжении bake. Возможные ensure_defaults effects учесть отдельно при выборе read/write scope. Pack не реализует собственный library reader.
+2. Идентичность capture: canonical identity фактически захваченного состава и значимых данных на основе существующих POJO/codec; отдельно определить membership, отсутствующие/исключённые candidates и authored-presence, если они влияют на результат. UID или version label недостаточны. Точный новый тип/поле ещё не утверждены.
+3. Durability: явный контракт сохранения и удержания необходимых captured bodies, восстановления после restart и release/GC. Ни транзакция чтения, ни digest не обеспечивают его автоматически.
+
+**Приёмка находки:** controlled interleaving membership/body mutation во время load возвращает согласованный набор либо согласованный отказ, но не смесь; body и membership edits изменяют identity согласно принятой semantic policy; проверены разные connections и принадлежность repositories/adapters одному scope. Отдельно проверить restart с исходным captured набором и release/GC. Внешняя транзакция конкретного теста не закрывает публичную гарантию loader без её явного контракта. Производящий домен возвращает typed результат в DAG, DAG передаёт его Pack; прямой публичный вызов другого домена из Pack не добавляется. Находка OPEN, код не изменён.
+
+Статический аудит: [TemplateSnapshotLoader](../../backend/app/application/templateLibrary/templateSnapshotLoader.py), [templateContracts](../../backend/app/application/templateLibrary/templateContracts.py), [EffectiveCatalog](../../backend/app/application/templateLibrary/packs/effectiveCatalog.py) и [SurfaceSupportCapture](../../backend/app/application/worldData/planning/composition/support/surfaceSupportCapture.py). Runtime-тесты не запускались.
+
+- ReliefTemplateSnapshot содержит world_uid и readonly mapping template_uid→TemplateEntry(template_uid, pack_uid, body). Это существующая typed модель для переиспользования. У неё нет snapshot ID, membership revision, content digest или holder/ref. Frozen dataclass и MappingProxyType защищают оболочку/индекс, сами по себе не доказывают deep immutability bodies или долговечность.
+- Loader получает membership-scoped catalog, последовательно читает bodies через adapters, валидирует graph и исключает некорректных участников/зависимости, затем строит snapshot. Его контракт прямо указывает: load и load_relief — независимые чтения. В показанной цепочке нет общей transaction/revision token для membership и всех лениво читаемых bodies; атомарность одного load_relief требует отдельной проверки repository/caller scope, не выводится из имени snapshot.
+- EffectiveCatalog кэширует bodies только внутри объекта одного вызова. Это не persisted snapshot store и не retention/GC hold. Специализированного durable codec/binding для ReliefTemplateSnapshot в проверенных canonical bindings/codecs не найдено; сериализация body отдельно не закрывает round-trip snapshot с membership.
+- Путь L0 load_relief_templates_for_world превращает entries в dict uid→body: pack_uid и оболочка world_uid не передаются дальше этой проекцией. mountain_template_inputs затем оставляет только MOUNTAIN subset, template_uid/context/side_recipe. Snapshot revision не «теряется» здесь: в исходной модели такого поля нет. Мировая identity отдельно присутствует в planning view.
+- Найден существующий частичный GEO producer SurfaceSupportCapture.capture: принимает ReliefTemplateSnapshot, сверяет world_uid и передаёт в SurfaceSupportInput полный tuple(uid, body), а не только mountain subset. pack_uid в этой проекции также отсутствует. Это уже существующий механизм capture конкретной группы, его не создавать заново; он не доказывает наличие полного production GeoSurfacePlanningView producer, source freshness или durable retention.
+
+Вывод: основа typed membership/body capture есть; добавлять зеркальный TemplateSnapshot не требуется. Открыты identity/revision захваченного набора, согласованность его чтения и долговечное удержание. Не объявлять pack_uid обязательной semantic зависимостью без потребителя: определить, нужен ли он для provenance/ownership или результат зависит только от uid/body. Следующий шаг — согласовать минимальные гарантии snapshot у владельца TemplateLibrary/Source после проверки repository read scope; Pack не реализует собственный template store и не добавляет прямой междоменный вызов. Существующий SurfaceSupportCapture учитывать в карте GEO inputs. Код этим аудитом не изменён.
+
+Продолжение статического аудита; код не изменён, runtime/concurrency tests не запускались. Для READY `_revision` принимает восемь inputs и world_uid; исключает верхнеуровневые поля с EXECUTION_POLICY. Следующая карта охватывает группы полей capture, но не заявляет завершённую проверку каждого nested field или authored-presence.
+
+| Поле capture | Источник в SurfacePlanningCapture | Revision и повторное чтение |
+|---|---|---|
+| world_uid | World.world_uid | Входит прямо в digest; guard повторно получает World |
+| climate_base | seed/span/bbox; WorldClimateScalars/ZoneRegistry; static poles из locations; CLIMATE_POLE_BLEND | Входит в READY и NO_EXTENT; world/locations перечитываются, engine constant не является persisted source revision |
+| terrain_base | seed, bbox, grid, WorldTerrainScalars z range/topology | В READY; пересобирается из перечитанных world/locations |
+| water_placement | WorldHydrology, liquid membership WorldMaterialRegistry, geographic anchors, terrain/grid/topology | В READY; resolution_mode исключён как execution policy; world/locations перечитываются |
+| relief | WorldTerrainMasks, mountain anchors, WorldReliefPickPolicy, terrain merge ranks, caller mountain_templates | В READY; world/locations перечитываются, templates — нет, передаётся прежний tuple |
+| hydrology | WorldHydrology, все отсортированные anchors, liquid keys, terrain/grid/topology, initial_water_change_uid | В READY; resolution_mode исключён; world/locations перечитываются |
+| river_relief | z/grid/topology и channel depths из routes | В READY; пересобирается через новый routes, отдельного source read нет |
+| hydrology_final | enabled/grid/topology | В READY; пересобирается из нового capture |
+| climate_local | manual/admin anchors из locations; engine terrain keys и feature policy | В READY и NO_EXTENT; locations перечитываются, engine definitions не являются source store |
+| capture_diagnostics | результат разрешения climate profiles | Не передаётся отдельным аргументом `_revision`; не считать частью semantic revision без отдельного решения |
+| kind/revision | ветка bbox и вычисленный digest | NO_EXTENT возвращает world_uid/revision/diagnostics; climate/local участвуют в digest, но их тела в этом результате не сохраняются. Нельзя восстановить входы NO_EXTENT из одного возвращённого view |
+
+**Подтверждённый путь templates.** [PackMaterializationOrchestrator](../../backend/app/application/worldData/pack/bake/l0/packMaterializationOrchestrator.py) загружает relief_templates один раз, строит mountain_template_inputs и передаёт тот же templates в capture и publisher. [load_relief_templates_for_world](../../backend/app/application/templateLibrary/loadReliefTemplatesForWorld.py) получает membership-scoped ReliefTemplateSnapshot через loader.load_relief(world), затем возвращает dict uid→entry.body. mountain_template_inputs сохраняет только MOUNTAIN subset и поля template_uid/context/side_recipe. Guard перечитывает world/locations, но повторно использует полученный tuple. Изменение template body/membership после загрузки само по себе этим повторным capture не проверяется. Это статический пробел freshness; race-тест и гарантии самого loader/snapshot ещё не проверены. Не утверждать потерю durability snapshot до аудита его владельца.
+
+**GEO additions — OPEN по production capture.** region_input, boundary_input, surface_support, coating_input и расширенные GeoWaterPlacementInput/GeoHydrologyPlanInput присутствуют в модели и тестовом builder, но production producer и полный расчёт revision не подтверждены. Fixture собирает их из baseline, defaults и helpers, копируя baseline.revision. Для каждой группы требуются owning read, semantic projection и freshness/retention mapping; использование fixture как production capture запрещено.
+
+**Следующий приоритет:** проверить TemplateSnapshotLoader/ReliefTemplateSnapshot — есть ли уже immutable snapshot identity, membership revision, codec и удержания, которые теряются при проекции в dict/tuple; затем найти согласованный production capture GEO. Только после этого определять недостающие поля provenance. Время жизни текущего captured tuple подтверждено в рамках вызова; долговечное удержание source тел этим аудитом не доказано. Переиспользовать существующие domain inputs и snapshots, не создавать копии до сверки.
+
 Дата: 2026-11-11. Проверены определения capture/view, расчёт revision, publication guard, assembler/bundle, canonical registrations и найденные callers. Это статическое evidence; тесты не запускались. Полный source/retention gate не закрыт.
 
 | Требование V2 | Уже существующий механизм | Предел подтверждённого / оставшийся пробел |
@@ -235,6 +348,156 @@ DAG только вызывает публичные операции и пер�
 **Приёмка:** изменение зависимости во время bake даёт принятый activation outcome; зависимость от membership учитывается даже при неизменных выбранных объектах; partial update B сохраняет provenance A; restart без запроса восстанавливает необходимые связи; release старой версии не ломает новую; latest не подменяет pinned body; ложная связь result/capture отклоняется. Для каждого случая назвать ответственный метод, не ограничиваться общим end-to-end тестом.
 
 **Согласование с ТЗ:** текущий проект подготовки формулирует subject/revision/closure как единый результат Source. Их распределение между Source, producer и Pack остаётся открытым. Этот раздел уточняет вопрос, не отменяет guarantees provenance/retention. Перед freeze согласовать распределение и синхронизировать ТЗ; широкую формулировку нельзя считать готовой сигнатурой внешнего метода. Код и публичные контракты этой записью не изменяются.
+
+### Порядок закрытия REV-02 — поручение пользователя 2026-11-12
+
+#### Cache — статус в рамках REV-02 (2026-11-12)
+
+**Дополнительных работ в домене Cache для REV-02 не выявлено.** Существующий manifest cache хранит immutable bytes; [manifest_cache_key](../../backend/app/application/worldData/pack/encoding/manifestCacheKey.py) строит ключ по полному ArtifactRef. [PinnedManifestReader.admit_cached](../../backend/app/application/worldData/pack/read/pinnedManifestReader.py) повторно проверяет identity/key, длину, digest и семантику manifest; [PinnedManifestGuard](../../backend/app/db/repositories/sqlite/worldPack/pinnedManifestGuard.py) проверяет pin, seal/hold, формат и бюджет. Отдельный экземпляр Cache и bytes binding уже подключены в [PacksWiring](../../backend/app/core/container/packs.py). Выбор hit/miss остаётся у DAG.
+
+Переход к полной схеме manifest V2 и изменение её decoder/storage binding относятся к Pack; сами по себе новые поля manifest не требуют изменения bytes-контракта Cache. Эта отметка **не является приёмкой домена Cache целиком** и не закрывает REV-02: полный аудит Cache CRUD/контрактов не выполнялся. Запуски tests.spatial_pack.test_pinned_manifest_reader, tests.cache.test_container_v2 и tests.spatial_pack.test_manifest_format не дали вывода и были остановлены; успешное прохождение тестов не подтверждено. Runtime-код по этой проверке не менялся.
+
+### Результат ревью REV-02 от 2026-11-12
+
+**Приёмка не пройдена.** Статическая сверка плана, Pack/Source appendix, ТЗ Pack и связанных контрактов кода; runtime/race/restart проверки не выполнялись. Ниже замечания к полноте исполнимого плана, а не утверждение о новых runtime-дефектах.
+
+| ID / приоритет / статус | Замечание и основание | Условие закрытия |
+|---|---|---|
+| REV-02-R1 / P1 / OPEN | Source → producer → Pack не замкнут: ТЗ Pack требует capture/source_proof, Source appendix §6 предлагает состав persisted provenance, но оставляет durable/transient evidence и producer outcome несогласованными | Source и producer предъявляют concrete Input/Output/Error и codecs; mapping каждого поля в Pack, включая address + точный ref/metadata projection, проверку подмены и inherited proof |
+| REV-02-R2 / P1 / OPEN | Preparing adoption и source retention не завершены. IArtifactHolders.acquire(ref, holder) не подтверждает исходного владельца; SqliteArtifactHolders.handoff требует APPLYING. Source appendix §5 оставляет staging lease и durable holder до Pack/Snapshot открытыми | Принятый owning Artifacts binding с атомарной защитой от release/GC, повторами/отказами; Source retention owner и release lifecycle; сценарий наследования B, освобождения базы и restart |
+| REV-02-R3 / P1 / OPEN | Конкретность CRUD не выполнена: Source appendix §4 описывает операции без полного набора concrete классов/сигнатур/модулей POJO; Pack appendix §5 оставляет release и settings CRUD открытыми | Отдельная матрица C/R/U/D данных и настроек с конкретными публичными методами и Input/Output/Error. Семантический запрет операции не заменять отсутствием контракта; исключения — только явно согласованные |
+| REV-02-R4 / P1 / OPEN | Source appendix §7 содержит роли вместо полного roster конкретных классов; §3 оставляет descriptors/identity открытыми; field/logic errors и отсутствие пересечений POJO не доказаны полностью | Для каждого нового и задействованного existing класса: модуль, owner, ответственность, зависимости, эффекты, acceptance/rejection. Для каждого POJO и ошибки: поля и сопоставление с existing/planned типами без неразрешённых дублей |
+| REV-02-R5 / P1 / OPEN | Pack-owned freeze не завершён: metadata semantics, wire version и payload/closure bindings (Pack appendix §6–7). В коде WorldPackManifestV2 использует прежние поля; decode_manifest возвращает WorldPackManifest | Конечная схема parts/assembly/provenance, решения registry_hash/z_band/wilderness_tiles_total, format/closure roster и согласованный codec/readers/storage binding. Не подменять это ожиданием миграции внешних callers |
+
+Обязательные критерии: три запрета DAG соблюдены как заявленные ограничения, но конкретные междоменные bindings и вложенный activation binding остаются OPEN; отсутствие нод само по себе не блокирует отдельную приёмку полностью конкретного доменного контракта. Граница prepare/read_part описана, полный контракт блокируют R1–R5. Утверждённый порядок ниже сохранён: источники → evidence → manifest → codec/readers. Междоменный CRUD-протокол и POJO/class acceptance не закрыты. Любого из этих пробелов достаточно для отказа по dag-generator-interface.mdc.
+
+Команда уточнения: [rev-02-contract-clarification](../commands/rev-02-contract-clarification.md). Принятое хранение через Artifacts повторно не согласовывать. Закрывать замечания только по проверяемым контрактам владельцев; данная запись не разрешает реализацию или новые DAG-ноды.
+
+### Утверждённая последовательность и материалы REV-02
+
+**Граница Pack конкретизирована отдельно:** [pack-v2-domain-contract-spec.md](pack-v2-domain-contract-spec.md) — публичные prepare/activate/read_part, existing candidate/activation/manifest-read POJO, внутренние классы и reuse, ошибки, CRUD/settings disposition и критерии локальной/сквозной поставки. Публичный activate принадлежит Pack; publication предоставляет внутренний commit/CAS/terminal механизм. Предложения Source appendix не переносят source writers в Pack и не заменяют owning ТЗ.
+
+**Сверка состава и удержаний 2026-11-12:** [§6 спецификации Pack](pack-v2-domain-contract-spec.md#6-роли-payload-сверка-writer--reader--retention-2026-11-12) содержит десять payload roles с V1 writer/reader и статусом V2 binding, единый retention set для READY/handoff/read и разбор metadata. Подтверждено: existing retention helper охватывает climate; other_members не доказывает полноту будущего manifest. `z_band` читается facade, поэтому считать его неиспользуемым нельзя. Missing payload bindings — отдельная незавершённая Pack-owned работа, не ожидание миграции чужих callers.
+
+**Техническая конкретизация:** [Source proof V2 — контракты, writers, storage и scope mapping](source-proof-v2-contract-spec.md). Документ содержит расширенный inventory (включая race/perk, member teardown, settlement bulk), проект POJO/CRUD/error contracts, logical relations и acceptance matrix. В нём отдельно отмечены подтверждённые gaps staging lease и durable source holder до Pack/Snapshot, а также несовместимость непосредственного вложения V1 UOW в V2 publication transaction. Он не объявлен принятым исполнимым планом; предыдущие краткие описания не считать завершённой спецификацией.
+
+Пользователь поручил записать и выполнять следующие пункты. Порядок поставки фиксирован; наличие этого поручения не означает, что отсутствующие типы уже реализованы или пройдена архитектурная приёмка. Миграция внешних consumers не является условием поставки Pack.
+
+1. **Сохраняемый набор источников.** Конкретизировать версии использованных объектов и состава влияющих коллекций, canonical representation с authored-presence, восстановление после restart и retention. Переиспользовать текущие typed inputs и canonical encoding. Результат шага: принятые concrete POJO, codec, операции хранения/чтения/удержания и их ошибки; тест membership mutation и restart. Не заменять source revisions общим planning digest.
+2. **Связь результата с источниками.** Определить producer evidence для точного ArtifactRef либо типизированной metadata projection и адреса результата. Переиспользовать PlanRef/PlanDependency. Результат шага: контракт evidence, локальные проверки связи, согласованный путь POJO через DAG; подмена результата/источника отклоняется, независимые ошибки агрегируются.
+3. **Единый manifest.** Реализовать parts, assembly, assembly_provenance в существующем WorldPackManifestV2, включая необходимые source proofs и согласованный retention closure. Pack проверяет соответствие адреса/формата/мира/evidence; producers не вызывает. Наследуемая B сохраняет ref и исходный proof при refine A. Результат шага: полный immutable состав без второго contents object и legacy-дублей authoritative refs.
+4. **Codec и внутренние readers.** Encode/decode работают непосредственно с WorldPackManifestV2 без legacy-проекции; согласованно обновляются Pack-owned validators, binding, readers, retention/composition и fixtures. REV-03 выполняется совместно со сменой схемы, не отдельной заменой числа. Результат шага: полный round-trip типов/полей/proofs, bounded admission, restart/pinned reads. Переключение живых сохранённых refs имеет отдельный data-migration gate.
+
+**Общая приёмка:** подмена результата или sources отклоняется; membership edit учитывается при неизменных выбранных телах; refine A сохраняет B/ref/proof; restart и release старой версии не лишают новую необходимых тел; полный manifest сохраняет все сведения при round-trip. До правок каждого слоя применяются обязательные критерии DAG/CRUD/POJO из dag-generator-interface.mdc; новые ноды и прямые междоменные вызовы не вводятся.
+
+#### Шаг 1 — конкретизация носителя и существующих контрактов
+
+Начато 2026-11-12. Проверены Source-план (карта классов, revision/retention, черновые сигнатуры), ArtifactRef, ArtifactHolderRef, IArtifactHolders и текущий capture. Source-план требует seq + content_hash, но оставляет носитель seq и сохранённых тел открытым; реализации dataModel/sourceVersioning в проверенном дереве не найдено. Это отдельная обязанность Source, не дополнительная ответственность PackManifestCodec.
+
+**Носитель принят пользователем 2026-11-12 («Ок»):** сохранять immutable source bodies через существующий Artifacts с format bindings их владельцев. Source хранит отображение typed object identity + SourceRevision на body ArtifactRef и отдельные revisions состава коллекций. SourceRevision.seq назначается при семантической мутации, а не при capture, чтобы не терять промежуточные изменения. Публичный source read адресуется точной identity/revision, не latest. Нужны согласованная snapshot-граница capture и атомарная связь revision index с существующими механизмами публикации/удержаний. Повторное согласование этого выбора не требуется; факт существования ArtifactRef не доказывает готовность такого индекса.
+
+| Обязанность | Переиспользование / целевой владелец | Критерий отказа |
+|---|---|---|
+| Identity и revision | SourceObjectId/SourceRevision из существующего Source-design; EntityUid и RevisionHex из owning типов | Свободный универсальный строковый id, второй hash-механизм или seq, вычисленный по порядку captures |
+| Сохранённое тело | ArtifactRef и owning format binding; canonical infrastructure с сохранением authored-presence | Потеря значимого отсутствия поля, opaque dict вместо типизированного тела, чтение latest при запросе старой revision |
+| Состав коллекции | Source-owned identity/revision состава, включая зависимости выборки и исключённые candidates, где они влияют на результат | Stamp только выбранных объектов: новый candidate не меняет identity зависимости |
+| Capture | Source-owned согласованное чтение identities/revisions/тел в одном snapshot | Смесь membership одного момента и bodies другого; IO в возвращённом POJO |
+| Удержание | Существующие ArtifactHolderRef/ArtifactRetentionHolder и transactional handoff | Только hash без доступного тела; release базы разрушает унаследованную часть новой версии |
+| Внешняя граница | Source/producer возвращают POJO в DAG; Pack получает подготовленные значения | Pack самостоятельно вызывает Source/producer или registry/codec/lease выдаются как публичные данные |
+
+**Граница готовности шага 1:** выбор носителя принят; остаются конкретные typed identities коллекций, source CRUD/error contracts, атомарный mutation/capture/retention scope и mapping на существующий append-only publication contract. Только после этого фиксируются полные поля capture/durable proof и codec. Остальные шаги не исполняются с placeholder proof. Это не ожидание переноса чужих consumers: неизвестен конкретный сохраняемый тип входа самого manifest.
+
+#### Проверка publication mapping после принятия носителя
+
+Проверены [WorldPublicationRef](../../backend/app/dataModel/worldSnapshot/identity/publication.py), [SectionStateRef](../../backend/app/dataModel/worldSnapshot/sections/refs.py), [OperationKind](../../backend/app/dataModel/artifacts/lifecycle/operation/kinds.py), [TimeSettingsCapture](../../backend/app/dataModel/world/settings/timeOperations/read.py) и [WorldSlice](../../backend/app/application/jsonValidation/worldSlices.py).
+
+- WorldPublicationRef содержит world/publication identity, pack_hash, snapshot_head, active_timeline_id, gameplay_started. Source revision set/ref в нём отсутствует. Нельзя считать publication_id ссылкой на source index без его явного хранения и проверки.
+- OperationKind содержит SNAPSHOT_APPLY, PACK_ACTIVATION, GAMEPLAY_START. Отдельной source mutation publication нет. PACK_ACTIVATION не переименовывается в универсальную source-операцию: это изменило бы ответственность существующего lifecycle.
+- После gameplay source changes должны применяться внутри Snapshot-owned patch application. Самостоятельная запись Source нарушит запрет обхода Snapshot. До gameplay общий source publication entry в проверенных контрактах не установлен; исторический V1 UPDATE нельзя незаметно объявить новым append-only протоколом.
+- TimeSettingsCapture уже связывает конкретные настройки/версии с WorldPublicationRef либо WorldSnapshotRef. Переиспользуется образец точного published read; сам тип не становится универсальным capture.
+- WorldSlice.world_keys допускает несколько ключей для scalar-проекций. Черновой RegistryMemberId из Source-плана покрывает записи реестров, но не является готовым identity для settings-проекций или membership коллекций. Нельзя подменять это новым свободным строковым kind.
+
+**Требуемая атомарность реализации:** owner применения проверяет ожидаемую source revision; для semantic change назначает следующий seq и добавляет immutable mapping на уже staged body; для membership change добавляет revision состава; приобретает необходимые holds; публикует согласованное состояние и terminal outcome одной транзакцией. При конфликте не виден ни новый mapping, ни частично обновлённый capture. Read/capture не назначают seq и не меняют состояние. Label-only mutation не меняет semantic revision по Source SoT. Удаление публикует tombstone, не удаляет held body.
+
+**Коррекция после трассировки V1 (2026-11-12):** предложение отдельной pregame source operation было преждевременным. Проверка только WorldPublicationRef/OperationKind не учитывала существующие mutation writers и их транзакции. Необходимость нового публичного входа или OperationKind не доказана; отдельная pregame-операция не является обязательным шагом этого плана. Сначала адаптировать существующие prepare/apply и UOW, перечисленные ниже. Принятый выбор Artifacts для тел сохраняется. После gameplay применение остаётся Snapshot-owned; наличие старого прямого writer не разрешает обход Snapshot.
+
+#### Детальная трассировка V1 mutation paths до SQL (2026-11-12)
+
+**Область evidence:** статически просмотрены world CRUD/import/region edit, location CRUD/import, world bundle copy/import, library prepared writer, pack metadata/dependency/delete paths, defaults repair, repositories и Database transaction. Это не полный инвентарь всех writers backend и не runtime-проверка конкурентности/rollback/GC. Отсутствие source history подтверждено для перечисленных путей; вывод об отсутствии любого похожего механизма во всём проекте не делается.
+
+##### Мир: create/update/import и region edit
+
+- [HTTP worlds](../../backend/app/api/routes/worlds.py) вызывает WorldService. [WorldService.create](../../backend/app/application/worldData/registries/worldService.py) нормализует вход, выполняет prepare_import и передаёт подготовленный World в `_save(world, repo.create, ctx)`.
+- `update → _update` читает исходный World, исключает immutable поля, объединяет patch, повторно валидирует полный World и вычисляет invalidation. Изменение grid без force возвращает requires_force до сохранения. Принятая запись идёт через `_save(world, repo.update, ctx)`.
+- `import_from_json` использует тот же prepare_import; validate_only останавливается до `_save`, обычный import вызывает `_save(world, repo.upsert, ctx)`.
+- `edit_region` формирует изменение объявлений через apply_region_operation, валидирует merged World и применяет `_update`. Это существующий worldEdit-путь, не отдельный source publication lifecycle.
+- `_save` внутри `_write_scope` читает before, вызывает repository writer и затем `DeclaredRegionEditor.reconcile(before, after)`. В [текущем container wiring](../../backend/app/core/container/worldData.py) region_editor передаётся: [DeclaredRegionEditor.transaction](../../backend/app/application/worldData/regions/declaredRegionEdit.py) использует Database.transaction_if_needed, поэтому запись World и reconciliation объединены. При создании WorldService без region_editor `_write_scope` сам транзакцию не открывает; нельзя приписывать всем экземплярам гарантию DI-пути.
+- [SqliteWorldRepository](../../backend/app/db/repositories/sqlite/worldRepository.py) делегирует create→insert, update→save, upsert→BaseRepository.upsert, delete→BaseRepository.delete. [BaseRepository](../../backend/app/db/repositories/sqlite/base.py) делает INSERT, UPDATE, INSERT OR REPLACE и DELETE соответственно; вне `_in_transaction` выполняет commit. Историческая source revision и старое тело в этом маршруте не добавляются.
+
+**Переиспользовать:** нормализацию/валидацию, merge, проверку immutable полей, admission force/invalidation и существующий scope before/write/reconcile. **Доработать:** связь semantic change с revision/body/membership и атомарными holds; before не должен оставаться лишь временной Python-копией. Это не разрешение перенести region consumer или иной скрытый pipeline в новый DAG-контракт без проверки ответственности.
+
+##### Локации и обходная запись defaults
+
+- [NamedLocationService](../../backend/app/application/worldData/locations/namedLocationService.py) строит typed location и выполняет occupancy-проверки, но create/update/delete вызывают собственный repository, не WorldService._save. Import также сохраняет через location repository.
+- [SqliteNamedLocationRepository.upsert_bulk](../../backend/app/db/repositories/sqlite/namedLocationRepository.py) переиспользует внешнюю транзакцию либо открывает свою для batch. Это существующая гарантия атомарности batch, не source revision history.
+- [WorldService.repair_defaults → ensure_world_climate_defaults](../../backend/app/application/worldData/registries/repairWorldDefaults.py) при фактическом изменении и переданном repo вызывает repo.update напрямую. Без repo repair остаётся только in-memory. Перехват исключительно `_save` не покроет persisted repair.
+
+**Следствие для покрытия:** будущий revision writer должен учитывать location bodies и membership коллекции locations, а также persisted repair. Добавление hook только в WorldService._save оставит пути изменения захваченных inputs без revision accounting. Полный roster прямых repository/bulk/import writers ещё требуется; перечисленные пути — подтверждённый минимум, не заявление полноты.
+
+##### Библиотеки: готовое разделение подготовки и применения
+
+- [write_authored_bodies](../../backend/app/application/templateLibrary/packs/write/authoringWrite.py) проверяет pack/member identity, формирует LibraryWriteRequest и запускает общий writer внутри transaction_if_needed.
+- [LibraryWriteService](../../backend/app/application/templateLibrary/packs/write/writeService.py) уже разделяет `_prepare` и executor.apply. `execute` объединяет inspect→policy→prepare→apply одной UOW; `prepare` требует caller UOW и возвращает подготовленный результат; `apply_prepared` делегирует executor. PolicyRequired/WriteRejected прекращают путь до apply. Существующая V1 orchestration не объявляется автоматически допустимой V2 orchestration: переиспользуются локальные операции, ветвление согласуется с DAG.
+- [PackWritePlanner](../../backend/app/application/templateLibrary/packs/write/packWritePlanner.py) и member planner готовят identities, remap, состав записей и diff без самостоятельного persistence. Это основа для получения before/after и dependency evidence, а не причина создавать второй planner.
+- [LibraryWriteExecutor.apply](../../backend/app/application/templateLibrary/packs/write/writeExecutor.py) требует `_in_transaction`, main_conn.in_transaction и owns_unit_of_work; без caller-owned main UOW отказывает. Сам BEGIN/COMMIT не выполняет. До записи проверяет identity конфликтов, наличие body/member и before-значения изменяемых world columns. Эти проверки не являются полной проверкой неизменности любого старого body: не расширять их гарантию до полноценного revision CAS.
+- Executor вызывает owning adapter.persist_prepared, записывает/обновляет membership, metadata и dependencies, удаляет removed members/bodies, затем применяет подготовленные world columns. [persist_body_row](../../backend/app/application/templateLibrary/packs/write/preparedPersistence.py) требует caller UOW, проверяет наличие/отсутствие identity и делает insert либо save. Старое тело при save не сохраняется как source revision.
+- [_PackOps](../../backend/app/application/templateLibrary/packs/packOps.py) имеет дополнительные metadata/dependency/delete пути. Create, delete и replacement dependencies используют `_PackScope.atomic`; update_metadata вызывает repository напрямую. [_PackScope.atomic](../../backend/app/application/templateLibrary/packs/packScope.py) при наличии db переиспользует transaction_if_needed. Следовательно, даже внутри библиотек одного LibraryWriteExecutor для полного охвата writers недостаточно.
+
+**Переиспользовать:** подготовленные write plans, identity/remap, before/after diff, проверки ссылок, caller-owned executor и adapters. **Доработать:** source semantic revision, сохранение точных старых/новых тел, membership revision и atomic holds. Metadata version библиотеки и source_pack_uid/source_template_uid описывают label/lineage и не подменяют semantic revision тела.
+
+##### Retention библиотек и retention исторических источников — разные гарантии
+
+[WriteRetentionPlanner](../../backend/app/application/templateLibrary/packs/write/writeRetentionPlanner.py) строит итоговый projected catalog, собирает declared/location refs и pin_index, вызывает hold_candidates, исключает ненужных candidates и возвращает retained/removed, dependency/REF diagnostics. Он защищает используемые members от удаления при замене состава. В этом пути не создаются ArtifactRef старых тел, source revision index и holders исторических версий. Его алгоритм достижимости переиспользуется в собственной области, но назвать его готовым durable source retention нельзя. Для Pack требуется сохранить именно ту revision, которая использована частью, даже если тот же member UID уже имеет новое тело.
+
+##### Bundle import: существующий внешний владелец атомарности
+
+[WorldBundleService.import_bundle](../../backend/app/application/worldBundle/worldBundleService.py) выполняет preflight/validate-only и передаёт обычный import в [WorldCopyImport.run](../../backend/app/application/worldBundle/worldCopyImport.py). Последний открывает одну Database.transaction, создаёт/remap World, подготавливает и применяет library batch, remap-ит member refs локаций и импортирует остальные entity sections. Ошибки секций приводят к ImportFailed и rollback; policy-required продолжение также выходит из транзакции исключением. Проверка source_hash continuation здесь удостоверяет импортируемый запрос, а не долговременную source revision результата.
+
+Это реальный V1 пример caller-owned атомарного изменения World + libraries + entities. Будущие source mapping и holds должны участвовать в этой же единице атомарности, а не публиковаться отдельным commit после успешного import. Нельзя сохранить тела/seq отдельной видимой транзакцией, затем допустить rollback доменных данных.
+
+##### Общая транзакционная инфраструктура
+
+[Database.transaction_on](../../backend/app/db/database.py) захватывает connection.unit_of_work, ставит task-owned transaction flag и выполняет BEGIN IMMEDIATE → COMMIT; при BaseException — ROLLBACK. transaction_if_needed переиспользует внешнюю main-connection UOW и проверяет её владельца. BaseRepository подавляет локальный commit при активном transaction flag. Это существующая основа атомарности, которую нужно сопоставить с V2 scoped commit/holds; нельзя считать простой `_in_transaction` автоматически эквивалентным всем capability/fence-проверкам V2.
+
+##### Итог и порядок дальнейшей адаптации
+
+1. Сохранить существующие доменные нормализацию, validation, identity/remap и prepare/apply. Не создавать новый generic CRUD или второй writer только из-за отсутствия Source OperationKind.
+2. Завершить roster writers: для каждой мутации указать caller, prepare, apply/repository, before/after, владельца UOW, commit/rollback и затрагиваемую collection identity. Отдельно включить прямые metadata/dependencies/delete, bulk import и repair.
+3. Для существующих apply-границ определить добавление source revision→body ArtifactRef и membership revision в той же атомарной операции, с сохранением authored-presence и согласованными holds. Capture только читает согласованный набор и не создаёт seq.
+4. Сопоставить эти границы с V2: до gameplay адаптировать существующих владельцев записи; после gameplay применение подготовленных изменений принадлежит Snapshot. V1 прямой repository call не становится разрешённым публичным V2 apply.
+5. Новый публичный вход/OperationKind рассматривать только при конкретно доказанном пробеле после mapping, а не объявлять предварительным условием реализации Pack. Вопрос о необходимости новой pregame-операции сейчас не решён положительно.
+6. Проверить rollback всей bundle-операции без видимых новых revisions/holds, semantic edit и membership edit, label-only change, конкурентный capture/mutation, repair/bulk обходы, повтор операции, restart и release/GC при наследовании части Pack.
+
+**Статус:** найдены реальные точки переиспользования V1, но source versioning и REV-02 этим аудитом не реализованы и не приняты. Никакой новый lifecycle/OperationKind не утверждён. Код не менялся; tests/race/rollback/GC experiments не запускались. Эта запись исправляет прежнюю недостаточно обоснованную рекомендацию новой pregame-операции и уточняет работу шага 1.
+
+### Трассировка source_proof для REV-02 (2026-11-12)
+
+**Результат статической трассировки:** готового durable source proof в проверенном V1-пути нет; он не теряется при передаче уже существующего POJO. Существуют отдельные inputs, идентичность planning-проекции, зависимости планов и artifact retention. Недостающий контракт — сохраняемая связь «адрес результата + точное содержимое → исходные версии и необходимые удержания». Общий capture.revision эту связь не заменяет.
+
+| Этап / код | Что уже существует и переиспользуется | Предел гарантии / недостающая связь |
+|---|---|---|
+| [TemplateSnapshotLoader._prepare/load_relief](../../backend/app/application/templateLibrary/templateSnapshotLoader.py), [TemplateEntry/ReliefTemplateSnapshot](../../backend/app/application/templateLibrary/templateContracts.py) | Membership-scoped набор подготовленных тел; TemplateEntry содержит template_uid, pack_uid, body | В этих records нет revision тела/состава коллекции и durable retention. Loader читает membership, затем bodies; согласованность общего snapshot не подтверждается одним названием класса |
+| [load_relief_templates_for_world](../../backend/app/application/templateLibrary/loadReliefTemplatesForWorld.py) → [mountain_template_inputs](../../backend/app/application/worldData/planning/composition/surfacePlanningCapture.py) | uid→body, затем mountain subset с template_uid/context/side_recipe | Проекция отбрасывает pack_uid; revision не отбрасывается, поскольку её нет уже в TemplateEntry. Это не потеря готового source proof |
+| [SurfacePlanningCapture._revision/capture](../../backend/app/application/worldData/planning/composition/surfacePlanningCapture.py) | Typed inputs и canonical digest их выбранной проекции; execution policy исключается | Это идентичность planning inputs, не набор версий отдельных source objects/коллекций и не способ восстановить удержанные тела после restart |
+| [SurfacePlanningAssembler._build](../../backend/app/application/worldData/planning/composition/surfacePlanningAssembler.py), [PlanRef](../../backend/app/dataModel/planning/identity/planRef.py), [PlanDependency](../../backend/app/dataModel/planning/contracts/planDependency.py) | Fingerprints входов/результата и типизированные зависимости планов | Нет связи с конкретным сохранённым Pack artifact/metadata и доказательства удержания source bodies. Существующие Planning-типы не копировать и не объявлять полным source proof |
+| [PackMaterializationOrchestrator](../../backend/app/application/worldData/pack/bake/l0/packMaterializationOrchestrator.py) → [PackBakePublisher.publish](../../backend/app/application/worldData/pack/bake/finalize/packBakePublisher.py) → [SourcePublicationGuard.require_fresh](../../backend/app/application/worldData/planning/guards/sourcePublication.py) | Повторное чтение world/locations, новый capture и сравнение world_uid/revision перед finalize внутри publication UOW | Mountain templates повторно используются из переданного tuple. Результат freshness-проверки не сохраняется как provenance каждой части manifest; проверка свежести не равна durable происхождению |
+| [IArtifactHolders](../../backend/app/application/artifacts/contracts/holderPort.py), [SqliteArtifactHolders](../../backend/app/db/repositories/sqlite/artifacts/holderStore.py) | Удержания существующих ArtifactRef и транзакционный handoff | Не определяют, какие source bodies требуются результату. Наличие holder-механизма не закрывает source closure или отдельный preparing adoption gate |
+
+**Разделение ответственности для дальнейшей конкретизации, не freeze новых сигнатур:** Source описывает использованные версии объектов и состава коллекций, восстановление и удержание необходимых тел; producer связывает конкретный результат с этими inputs и существующими Planning dependencies; Pack проверяет соответствие evidence адресу и ArtifactRef либо metadata projection и сохраняет исходное свидетельство при наследовании. Междоменные результаты передаются через DAG; прямой вызов producer/Source из Pack этим выводом не вводится. Точное распределение subject/result proof между Source и producer остаётся предметом согласования с ТЗ, как указано выше.
+
+**Контрольный сценарий:** refine меняет A, сохраняет B — адрес, ref и свидетельство B остаются связаны с прежними источниками B, а не переписываются на capture новой подготовки. После restart и release старой версии новая версия должна сохранять доступность всех необходимых ей тел. Digest, PlanRef или UID по отдельности этого не доказывают.
+
+**Следующий контрактный результат:** конкретные типы и проверки связи результата с source revisions/collection membership и retention closure, с переиспользованием существующих inputs, canonical encoding, PlanRef/PlanDependency и artifact retention. Это не требование переписать V1 целиком или ждать миграции внешних потребителей. REV-02 остаётся OPEN; runtime/race/restart-тесты в рамках этой трассировки не выполнялись, код не изменён.
 
 Статическая сверка текущего кода не закрыла следующие gates. Они независимы от отложенного удаления codec_version/payload_format; продолжать реализацию можно только в принятом срезе, не требующем этих незакрытых типов/операций.
 

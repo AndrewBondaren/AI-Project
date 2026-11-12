@@ -8,10 +8,13 @@ from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
 
+from pydantic import ValidationError
+
 from app.application.worldData.pack import WorldPackPaths, WorldPackReader, WorldPackWriter
 from app.application.worldData.pack.encoding.packManifestCodec import (
     decode_manifest, encode_candidate_manifest, encode_legacy_manifest,
 )
+from app.application.worldData.pack.encoding.manifestFormat import manifest_format, MANIFEST_STORAGE_VERSION
 from app.application.worldData.pack.io.packManifestStore import PackManifestStore
 from app.dataModel.artifacts.references import ArtifactKind, ArtifactRef
 from app.dataModel.worldPack.meta.spatial.domainRoot import SpatialDatasetKind, SpatialDomainRootRef
@@ -31,6 +34,61 @@ def descriptor():
 
 
 class ManifestVersionsTests(TestCase):
+    def test_v2_rejects_extra_fields_at_every_nested_wire_object(self):
+        volume = dict(x0=0, y0=0, z0=0, x1=1, y1=1, z1=1)
+        climate = dict(kind="blob", format_key=CLIMATE_FIELD_FORMAT_KEY, format_version=1,
+                       content_hash="b" * 64, nbytes=128)
+        fields = dict(
+            pack_version="2.0.0", spatial_roots=[descriptor()], climate_coarse_ref=climate,
+            tiles=[dict(gx=0, gy=0, climate_status="fine", climate_fine_ref=climate,
+                        chunks=[dict(cx=0, cy=0)])],
+            location_terrain_entries=[dict(location_uid="l", territory_volume=volume)],
+            settlement_structure_entries=[dict(location_uid="s", territory_volume=volume)],
+            wilderness_region_entries=[dict(region_uid="r", entry_type="forest", current_type="forest",
+                                            status="declared", bbox=dict(x_min=0, x_max=1, y_min=0, y_max=1))],
+        )
+        paths = [(), ("spatial_roots", 0), ("spatial_roots", 0, "root"),
+                 ("climate_coarse_ref",), ("tiles", 0), ("tiles", 0, "climate_fine_ref"),
+                 ("tiles", 0, "chunks", 0), ("location_terrain_entries", 0),
+                 ("location_terrain_entries", 0, "territory_volume"),
+                 ("settlement_structure_entries", 0),
+                 ("settlement_structure_entries", 0, "territory_volume"),
+                 ("wilderness_region_entries", 0), ("wilderness_region_entries", 0, "bbox")]
+        wire = payload(**fields)
+        binding = manifest_format(len(wire) * 4)
+        candidate = decode_manifest(wire)
+        self.assertEqual(decode_manifest(encode_candidate_manifest(candidate)), candidate)
+        self.assertEqual(binding.decode(wire, MANIFEST_STORAGE_VERSION), wire)
+        self.assertEqual(binding.encode(wire), wire)
+        for selected in ([path] for path in paths):
+            self._assert_unknown_fields_rejected(fields, selected, binding)
+        # Independent errors must all survive validation, with their full paths.
+        self._assert_unknown_fields_rejected(fields, paths, binding)
+
+    def _assert_unknown_fields_rejected(self, fields, paths, binding):
+        invalid = json.loads(json.dumps(fields))
+        for path in paths:
+            node = invalid
+            for segment in path:
+                node = node[segment]
+            node["unknown"] = 123
+        wire = payload(**invalid)
+        for read in (decode_manifest, binding.encode,
+                     lambda data: binding.decode(data, MANIFEST_STORAGE_VERSION)):
+            with self.subTest(paths=paths, read=read), self.assertRaises(ValidationError) as caught:
+                read(wire)
+            self.assertEqual({(error["type"], error["loc"]) for error in caught.exception.errors()},
+                             {("extra_forbidden", path + ("unknown",)) for path in paths})
+
+    def test_v1_still_ignores_unknown_nested_fields(self):
+        volume = dict(x0=0, y0=0, z0=0, x1=1, y1=1, z1=1)
+        fields = dict(tiles=[dict(gx=0, gy=0, chunks=[dict(cx=0, cy=0, unknown=1)], unknown=1)],
+                      location_terrain_entries=[dict(location_uid="l", territory_volume=volume, unknown=1)],
+                      settlement_structure_entries=[dict(location_uid="s", territory_volume=volume, unknown=1)])
+        legacy = decode_manifest(payload(unknown=1, **fields))
+        self.assertEqual(legacy.pack_version, "1.0.0")
+        self.assertNotIn("unknown", encode_legacy_manifest(legacy).decode())
+
     def test_climate_refs_round_trip_at_their_versioned_addresses(self):
         coarse = dict(kind="blob", format_key=CLIMATE_FIELD_FORMAT_KEY, format_version=1,
                       content_hash="a"*64, nbytes=128)
