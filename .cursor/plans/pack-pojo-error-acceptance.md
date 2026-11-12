@@ -63,7 +63,7 @@ PROJECT `worldPack/read/part.py`: PackPinnedReadIdentity(store_id,execution_id,i
 
 Разные read outcomes имеют разные границы, но первые пять полей двух pin identities семантически пересекаются. Полный checked mapping и единая декларация/валидация общей identity ещё не доказаны; нельзя назвать это автоматически разрешённым дублированием. Новая identity дополнительно несёт publication, старая — world/budget. Нельзя удалить одно поле без trace consumers или молча копировать проверки. Требование: предъявить reuse/адаптацию с exact publication→world, pin lifetime и owner checks, либо явно авторизованное исключение по правилам. Исключение пользователем здесь не запрашивалось и не вводится.
 
-PackPartReadContract[T] наследует id/version от PackPartReadContractMetadata, не повторяет executable registry binding. Однако concrete runtime модели generic read input/result и их ModelIdentity/CheckedPath/serialization ещё должны быть предъявлены, как это уже сделано в проекте part-inputs. Не считать одну generic аннотацию доказательством constructible named diagnostics.
+PackPartReadContract[T] наследует id/version от PackPartReadContractMetadata, не повторяет executable registry binding. [Последующая конкретизация read-моделей](pack-read-concrete-models.md) задаёт семь семейств named Input/Contract/Result для десяти ролей, с concrete nested contract и exact registry mapping. ModelIdentity/CheckedPath/serialization реализация и проверки ещё OPEN; одна generic аннотация их не доказывает.
 
 ## Field-error и logic-error domains
 

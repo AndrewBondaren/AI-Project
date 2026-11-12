@@ -65,6 +65,10 @@ Failure — `PackPreparationFailure(error: PackPreparationError)` по ТЗ; cod
 
 ### read_part
 
+[Concrete read-модели](pack-read-concrete-models.md) уточняют generic проект: семь named семейств Input/Contract/Result без копирования payload-схем, concrete nested contract для CheckedPath и exact registry class mapping. Публичный generic метод сохраняется; canonical IDs/проверки ещё OPEN.
+
+[Mapping отказов part-read](pack-part-read-error-mapping.md) разделяет pin/manifest/index/payload, подтверждённое отсутствие, corruption и infrastructure. Existing Spatial SOURCE_UNAVAILABLE и Manifest IDENTITY_MISMATCH нельзя безусловно переводить в одну новую причину; детали должны сохраняться в owning этапе admission.
+
 Переиспользовать **уже описанный в ТЗ** `PackPartReadPipelineOpenPipeline.read_part[T: BaseModel](request: PackPartReadInput[T]) -> PackPartReadResult[T] | PackPartAbsent | PackPartReadRefusal`. Публичный wrapper в `read/packPartReadPipelineOpenPipeline.py`, единственная делегация `PackPartReadOperation.read_part` в `read/packPartReadOperation.py`.
 
 Input: pin (store/execution/invocation/logical_read_key/pin_id/publication), logical address, typed contract id/version, budget. Caller не подставляет произвольный child ref. Budget: max_manifest_bytes, max_index_bytes, max_payload_bytes, max_total_bytes; положительные strict int, повторный IO тоже расходует total.

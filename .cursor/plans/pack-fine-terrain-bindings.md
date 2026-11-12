@@ -30,6 +30,41 @@ read_part возвращает материализованное дерево r
 
 ## Реализация binding и приёмка
 
+### Конкретный FineTerrainDecoder
+
+Проектный класс `FineTerrainDecoder` в `backend/app/application/worldData/pack/encoding/fineTerrainFormat.py` реализует PackPartPayloadDecoder[FineTerrainChunkWire]. Constructor фиксирует registered codec version и existing DecodeLimits; encoded cap находится в общем binding. Методы: `decode(payload: bytes, format_version: FormatVersion) -> FineTerrainChunkWire`, `validate(value: FineTerrainChunkWire) -> FineTerrainChunkWire`. Один экземпляр/profile используется для wilderness_chunk и location_terrain и при read/final prepare. Новые WildernessPayload/LocationPayload либо копия FineTerrainColumnWire не создаются.
+
+Порядок: формат/версия → точный header TileCodec с PAYLOAD_KIND_FINE_TERRAIN → bounded decompression → bounded strict JSON → owning immutable POJO. Не читать Source/World и не вычислять geometry в decoder. Exact registered storage/read descriptors берутся из [общего roster](pack-payload-binding-roster.md); версии manifest не заменяют codec version.
+
+| Общий элемент | Правило decode/validate |
+|---|---|
+| Корень | Обязательные cx, cy, chunk_columns, columns. Extra/duplicate JSON keys отвергаются до потери данных |
+| cx/cy | Exact int, не bool/float/string. Соответствие logical address проверяется отдельно; глобальный запрет nonzero cx/cy сломал бы wilderness |
+| chunk_columns | Exact int >=1 по существующей модели; не универсальный bound координат location |
+| columns | Обязательный JSON array → tuple[FineTerrainColumnWire, ...]. Порядок и пустой набор сохраняются; missing columns не становится empty |
+| Колонка | Обязательные lx, ly, runs; lx/ly exact int, optional fields/defaults по единственной owning декларации. Новые числовые/UID ограничения по именам полей не вводятся |
+| runs | Обязательный array → tuple[FineTerrainZRun, ...]; порядок и явно пустой набор сохраняются. Не сортировать, не сливать и не расширять в отдельные z-клетки |
+| Run | Обязательные exact integer z0/z1 и owning string system_terrain; system_material nullable/default по модели. Обратные endpoints и пересечения не запрещаются общим decoder |
+| system_facing | Каноническое значение существующего Facing либо null на JSON-границе; missing использует owning default. Не приводить произвольное значение через str и не принимать alias/empty вместо канонического значения |
+
+Для deeply immutable output адаптируются единственные owning FineTerrainChunkWire.columns и FineTerrainColumnWire.runs к tuple со strict nested admission; не создавать параллельное дерево StrictFineTerrain*. Это целевое изменение представления коллекций, а не разрешение слепо изменить shared callers. До cutover проверяются producer constructors/serializers и consumers. `validate` проверяет реальные значения forged instances; frozen верхнего объекта не делает существующие lists неизменяемыми. Python instances уже содержат owning Facing, wire strings допускаются только на decode-границе.
+
+### Контекстная проверка двух ролей
+
+Эти проверки выполняет Pack admission над decoded T, адресом и metadata закреплённой версии. Они не меняют значение и не являются новыми публичными стадиями DAG.
+
+| Роль | Проверка |
+|---|---|
+| Wilderness | payload cx/cy совпадают с PackChunkAddress; chunk_columns согласован с captured terrain_chunk_columns; lx/ly находятся в обрезанном tile/chunk footprint из §6.7 Pack; принятая уникальность columns проверяется до построения lookup map. Sparse/empty не запрещаются без coverage requirement |
+| Location | lx/ly проверяются по inclusive TerritoryVolume, не по C; origin берётся из volume.x0/y0 закреплённой metadata. cx=cy=0 фиксируется как существующая producer convention, но новый универсальный strict запрет других значений не добавляется только ради reuse wilderness validator |
+| Обе | Нет world_uid/location_uid/gx/gy в bytes — этих полей не выдумывать. Address/provenance обеспечивает связь с частью. z-интервалы сохраняются; clipping к territory или переписывание endpoints в decoder запрещены |
+
+Различие проверок уникальности также не скрывать в shared schema: существующий contribution использует первую совпавшую колонку. Принятый unique-columns invariant wilderness нельзя автоматически расширить на location без отдельного основания. Общий decoder не превращает список колонок в dict с last-wins. Если будущий role contract отклоняет дубли, он делает это явно до потери порядка.
+
+Отказы соответствуют общему read mapping: unsupported contract/format — CONTRACT_MISMATCH; malformed envelope/JSON/fields и нарушение принятого role admission — INVALID_PAYLOAD; превышение бюджета — BUDGET_EXCEEDED. Decoder не создаёт pin/publication refusal; read operation добавляет контекст. Infrastructure/cancellation не маскируются payload ошибкой. Root refs и source closure не извлекаются из строк system_grade_uid/region_uid.
+
+Проверки реализации: один payload проходит общий decoder для обеих ролей; location с C=32/lx=50 и подходящим territory не отклоняется; тот же lx за wilderness footprint отклоняется role admission; reverse z0/z1 и intersecting runs сохраняются в исходном порядке; большой z-интервал не выделяет массив клеток; missing array отличается от empty; explicit invalid facing не нормализуется в None; forged mutable nested instance отклоняется; read/prepare используют одинаковый decoder/profile. Это проект классов/правил, не выполненные runtime тесты.
+
 Предлагаемый Pack-owned модуль `application/worldData/pack/encoding/fineTerrainFormat.py`: один pure decoder общего формата → existing FineTerrainChunkWire; storage остаётся ArtifactFormatContract[bytes], BLOB. Внутренний read registry допускает обе address-роли для одного payload contract. Контекстные проверки address/header/territory выполняются Pack admission над уже декодированным значением и pinned metadata, не через IO внутри codec. Точные format/read descriptors, budget и error port пока не зарегистрированы; их наличие не заявляется.
 
 Existing root/column содержат list, все три модели используют extra=ignore, числовые поля допускают coercion, facing before-validator приводит значения. Поэтому existing decoder не закрывает deep immutable/strict read. Адаптация единственных owning моделей и shared validators требует согласованной миграции; этот документ не разрешает менять интегрированные пути других доменов или создавать второе дерево POJO. Действующий TileCodec также не обеспечивает требуемый предел decompressed output; bounded decoder и memory expansion остаются приёмочными проверками, как для map_tile.

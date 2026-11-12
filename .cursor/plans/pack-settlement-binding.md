@@ -26,6 +26,38 @@ Typed read T — existing SettlementStructureWire с DistrictStructureWire, Area
 
 ## Bounded admission и storage closure
 
+### Конкретизация SettlementStructureDecoder
+
+Проектный pure класс `SettlementStructureDecoder` в `backend/app/application/worldData/pack/encoding/settlementStructureFormat.py` получает fixed codec version и DecodeLimits. Результат — единственный owning SettlementStructureWire. Для нового descriptor из [binding roster](pack-payload-binding-roster.md) применяется framed представление SSF1; старый single-Zstd parser не подключается как неявный fallback. Producer append и сохранение старого header/prefix не исполняются decoder или final prepare заново.
+
+**Порядок проверки framing:** encoded cap до decode → минимальный TileCodec header и точные version/kind → SSF1 → последовательный обход records. До каждого чтения проверяется наличие полного uint32 length prefix, затем попадание объявленного compressed span в оставшиеся bytes. Огромная длина не используется для allocation до этой проверки. Frame распаковывается в пределах остатка общего decompressed budget; JSON record должен быть object и пройти структурные limits до чрезмерной материализации. После последнего record не допускается необработанный хвост. Нулевое число records — missing header; один header без districts допустим. Отдельный пустой/повреждённый compressed frame не трактуется как отсутствующий район.
+
+Первый record описывает settlement_uid и barrier_cells. settlement_uid — обязательная owning string, без str(...) coercion; barrier_cells при отсутствии использует existing default SettlementStructureWire, а не новый literal decoder. Остальные records — DistrictStructureWire в исходном порядке. Header не является вторым полным SettlementStructureWire с независимым districts; для временного разбора не создаётся зеркальная публичная модель. Неизвестные/duplicate JSON keys не теряются при извлечении известных полей. Decoded header и districts собираются в единственный owning payload после admission.
+
+| Вложенные данные | Что сохраняется / проверяется |
+|---|---|
+| Root, districts, areas, buildings | Исходный порядок; mandatory fields/defaults — по owning моделям. Наличие списка не даёт права сортировать по UID |
+| ShellCellWire x/y/z | Exact integer world coordinates, не chunk-local. Совпадения координат не удаляются при decode: индекс позднее применяет прежний last-write-wins |
+| ShellCellWire.system_facing | Существующее поле str или None; нельзя механически заменить правилом enum Facing от AreaSlotWire |
+| AreaSlotWire.facing | Canonical owning Facing wire value, без permissive aliases/coercion. Остальные числовые поля/defaults сохраняют owning смысл |
+| small_layouts и вложенные cells | Порядок обоих уровней сохраняется; целевой immutable output использует tuple на обоих уровнях |
+| interior_transitions=None | Сохраняется как отсутствие блока, а не превращается в пустой transitions tuple. Специализированный query сохраняет InteriorTransitionsRebuildRequired; decoder не запускает rebuild |
+| Непустой interior transitions block | Existing discriminator, unique levels/transitions, world/endpoint scope и type_params проверяются owning контрактом с соответствующим историческим registry |
+
+Полное owning дерево постепенно адаптируется к strict/frozen/revalidate и tuple без зеркальных PackSettlementPayload/PackTransition моделей. Одна frozen outer model с mutable lists не считается готовым T. `validate` проверяет фактические значения forged instances, не доверяет наличию класса. Числовые/default-поля берутся из owning declarations; не добавлять глобальный запрет повторных district/building UID без доказанного правила: существующий building query выбирает первое вхождение, а raster index накладывает клетки последовательно.
+
+**Точный порядок наложения, который codec обязан сохранить:** root barriers → для каждого district его barriers → для каждой area yard cells → area barriers → small_layouts → buildings.shell_cells. Последняя клетка координаты выигрывает в index_shell_cells. Эта derived индексация остаётся за reader/consumer; decoder возвращает исходное дерево, не готовый dict координат. Metadata packed_district_uids и payload sequence не заменяют друг друга.
+
+### Граница контекстного декодирования transitions
+
+У общего `PackPartPayloadDecoder.decode(payload, format_version)` пока нет аргумента historical registry. Поэтому нельзя объявить новый SettlementStructureDecoder полностью подключённым к этому port одним переименованием existing parser. Нельзя также хранить mutable current registry в singleton decoder: WorldTransitionTypeRegistry сейчас RootModel[list[...]], а не неизменяемая закреплённая версия.
+
+Для собственной pure проверки settlement требуется явно подготовленный контекст owning registry при наличии transition block; способ его получения/идентификации относится к интеграционному binding. Pure codec не делает lookup/capture и не подменяет отсутствие нужного контекста canonical_engine(). Read/final prepare должны получать один и тот же исторический смысл, а не независимо текущие defaults. Контекстный adapter к общему port конкретизируется отдельно; этот пробел не является поводом менять Planning, блокировать остальные Pack bindings или пропускать validation переходов. Ошибка получения контекста не доказывает повреждение bytes и не должна автоматически становиться INVALID_PAYLOAD.
+
+Локальные malformed envelope/frame/JSON/field отказы сопоставляются с INVALID_PAYLOAD, превышение суммарного byte/structure budget — BUDGET_EXCEEDED, неподдержанный descriptor/version — CONTRACT_MISMATCH. Pure codec не создаёт refusal с pin/publication; его оформляет Pack operation. Wrong settlement_uid относительно address проверяется в contextual admission после decode, не исправляется присваиванием UID caller.
+
+Проверки реализации: header-only payload; truncated prefix/frame; большой declared length; несколько допустимых frames, суммарно превышающих budget; неизвестный header key; одинаковые координаты в разных слоях с прежним конечным результатом; порядок districts после append; shell-only против explicit empty transitions; historical custom type без latest lookup; другой world/address; forged mutable вложение. Проверки описаны, не запускались. Runtime и модели других доменов не изменены.
+
 Storage остаётся BLOB bytes binding. Предлагаемый Pack-owned модуль `encoding/settlementStructureFormat.py` переиспользует owning POJO и согласованную framing схему. Codec — pure, без filesystem/SQL/registry resolver/public calls. Проверяет byte budget до parse, version/kind, обязательный header, каждую record length и границы. Ограничение decompressed output действует как на frame, так и на их суммарный decoded объём: множество маленьких compressed frames не обходят общий лимит. Existing _parse_frames хранит все records и не задаёт такой лимит, поэтому готовым bounded decoder не является.
 
 Текущий framed parser также берёт только известные header поля, использует str(header[settlement_uid]) и default [] для barriers; это не strict admission. Owning nested модели содержат lists/extra=ignore и normalization validators, Transition тоже имеет вложенные lists. Их immutable/strict адаптация требует согласованной миграции общей модели, без попутной правки интегрированных методов других доменов. Field/logic error mapping и конкретные format/read IDs/budgets ещё требуют реализации и приёмки.
