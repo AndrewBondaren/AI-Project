@@ -38,6 +38,29 @@ PackPreparationState содержит metadata, refs и provenance, а не payl
 
 ## Оставшаяся локальная работа bindings
 
+### Конкретный контракт лимитов binding/decoder
+
+Использовать уже предложенный `PackPartReadBinding[T].max_payload_bytes` как **encoded** предел одного payload. Не добавлять рядом max_encoded_bytes с тем же смыслом. Публичный PackPartReadBudget ограничивает IO вызова; decoder/классы/профили в него не передаются. PackReadPolicy LRU capacities и PackBakeDefaults debug max_tiles не являются источником byte limits.
+
+Структурные параметры переиспользуют `dataModel/encoding/decodeLimits.py::DecodeLimits(max_bytes, max_nodes, max_depth, max_items, field_sizes)` и existing RecordLimits/CollectionLimit с owning FieldRef. Это внутренние данные composition, не public POJO: RecordLimits содержит Python owner type. Новый PackDecodeLimits с копией полей не вводится.
+
+Конкретный decoder получает immutable limits через constructor/factory. Existing проектный port сохраняет `decode(payload: bytes, format_version: FormatVersion) -> T` и `validate(value: T) -> T`; caller не меняет decode profile в запросе. Registry immutable после composition. Hydrology использует owning ROOT_V1/SHARD_V1.decode_limits и существующий bounded decoder.
+
+| Семейство | max_payload_bytes binding | DecodeLimits.max_bytes и структурная проверка |
+|---|---|---|
+| map_tile, wilderness_chunk/location_terrain, climate_coarse/fine | Encoded bytes с заголовком и compressed body | Decompressed bytes до JSON parse, затем nodes/depth/items и owning constraints |
+| settlement framed | Полный blob с header, length prefixes и всеми frames | Совокупные decompressed bytes/nodes/items на все records; следующий frame расходует остаток, не получает свежий максимум |
+| locations_index, tile/location grade slots | Полные JSON bytes | JSON input bytes и структурные limits/expansion. Роли одного формата используют один decoder/profile |
+| spatial root/shard | Existing owning max_bytes соответствующего формата | Existing bounded TLV decode_limits без копии schema |
+
+**Предел переиспользования:** DecodeLimits является носителем параметров, не bounded JSON parser. Передача limits в объект рядом с orjson.loads не ограничивает память; проверка после parse не предотвращает уже случившееся выделение. Для JSON/framed требуется применение ограничений во время разбора с определённым способом подсчёта nodes/depth/items. Existing canonical TLV decoder не объявляется decoder другого wire format. Peak-memory проверяется отдельно.
+
+**Admission configuration:** existing DecodeLimits — frozen dataclass без проверки положительности чисел. Composition проверяет exact int, не bool, положительные byte/node/depth/item caps и согласованные collection minimum/maximum до регистрации. Не требовать decoded cap >= encoded cap: заголовки/framing делают такое общее неравенство неверным. Numeric defaults не назначаются; explicit values поступают из owning profile/deployment. Отсутствие profile не трактуется как unlimited.
+
+Read и final prepare используют один зарегистрированный decoder/profile для данного формата. Staging encode validation согласуется с тем же admission; ArtifactFormatContract не превращается в callback публичного read pipeline. Manifest сохраняет отдельный manifest_max_bytes. Регистрация двух расходящихся policies для одного binding недопустима.
+
+Приёмка: invalid limits дают composition error до IO; request budget не меняет fixed decode profile; framed counters не обнуляются между records; shared format не получает разные codecs для разных address roles; hydrology limits сохраняются. Контракт описан, runtime проверки не запускались, числовые значения новых profiles не назначались.
+
 Для map_tile, fine terrain, settlement, climate, locations_index и grade sidecars ещё требуется зафиксировать explicit per-format encoded/decompressed/decoded bounds там, где их нет, и production wiring. Значения должны происходить из owning settings/profile или обоснованной настройки deployment; не назначать общий 16 MiB только потому, что он существует у hydrology root. Существующий PackPartReadBudget задаёт границы вызова, но не закрывает отсутствующие production/decode limits. Ни P2 целиком, ни runtime protection этой инвентаризацией не объявляются выполненными.
 
 Проверки реализации: boundary ровно cap проходит, cap+1 отказывает до parse/reserve; request выше backend не повышает лимит; маленький compressed payload с большим output прерывается в процессе decode; несколько индексов/кадров расходуют совокупный budget; repeated read расходует total; отсутствие manifest настройки не создаёт unbounded storage; peak-memory проверяется отдельно от encoded len. Тесты в этом срезе не запускались, код не менялся.

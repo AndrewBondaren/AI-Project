@@ -75,9 +75,13 @@ Read готового manifest/payload **не ждёт live Source CRUD и не 
 
 ### Существующий низкоуровневый manifest read
 
+[Exact pin mapping](pack-pin-identity-mapping.md): существующий manifest bytes read не сравнивает полную expected publication. Для part-read/start_from_base предложена внутренняя exact-проверка сохранённого pin publication_id и historical WorldPublicationRef в действующем guard; новая таблица/публичный Source вызов не нужны.
+
 [PinnedManifestReader](../../backend/app/application/worldData/pack/read/pinnedManifestReader.py) уже имеет отдельные resolve, read_verified и admit_cached. [ManifestPinRead/ManifestAddress/ManifestStorageRead/ManifestCachedRead](../../backend/app/dataModel/worldPack/read/pinnedManifest.py) — существующие данные. На cold и cached пути pin проверяется заново; cached admission проверяет identity и digest/nbytes. При миграции сохранять эти гарантии. Этот reader возвращает bytes и не заменяет read_part. Выбор cache hit/miss остаётся у DAG; объединение read_part с cache не вводить без отдельного согласования маршрута.
 
 ## 3. Внутренние классы Pack и предел переиспользования
+
+Расширенный [реестр class responsibility/dependencies/effects](pack-class-responsibility-roster.md) разделяет PROJECT, EXISTING, functions и legacy consumers; содержит acceptance/rejection критерии и оставшиеся пробелы транзитивной проверки. StagedClimateFields явно отнесён к I/O helper, а не pure validator.
 
 | Класс / файл | Ответственность, вход → выход | Допустимые эффекты / отказ |
 |---|---|---|
@@ -95,6 +99,8 @@ Read готового manifest/payload **не ждёт live Source CRUD и не 
 На каждый открытый pipeline — одна прямая делегация реализации. Validation branches внутри атомарной операции не превращаются в выбор внешнего workflow. Точный approved DAG binding — отдельная проверка интеграции, новые ноды этим документом не назначаются.
 
 ## 4. Pack-owned ошибки
+
+[POJO/field-error/logic-error аудит](pack-pojo-error-acceptance.md) фиксирует shared declarations, named part-inputs и оставшиеся overlap/mapping gates. Pin identity и generic read ModelIdentity ещё не приняты; структурные и смысловые ошибки не дублируются для одной причины.
 
 Сохраняется проект ТЗ `dataModel/worldPack/preparation/errors.py`: immutable PackPreparationError(reason, непустой issues), concrete PackPreparationIssue наследует FieldPathError с PackPreparationIssueCode. Причины: INVALID_INPUT, IDENTITY_CONFLICT, SOURCE_UNAVAILABLE, DEPENDENCY_MISMATCH, ARTIFACT_UNAVAILABLE, MANIFEST_OVERSIZE, OPERATION_CLOSED.
 
@@ -291,6 +297,34 @@ Storage binding остаётся `ArtifactFormatContract[bytes]`, kind BLOB: exi
 Budget trace: WorldPackCacheSettings содержит manifest_max_bytes и manifest_cache, PackBakeDefaults — zstd_level/codec_version, но готового лимита decompressed map_tile там нет. Не использовать cache capacity, zstd_level либо side² как замену byte budget. Сохранить existing публичный PackPartReadBudget для encoded IO; предел распаковки задаётся явно в конфигурации конкретного decoder/binding согласно owning ТЗ. Численные значения и оценка RAM expansion остаются OPEN до измерений; произвольные defaults здесь не назначаются. Пункт map_tile не закрыт одним добавлением POJO: требуются strict nested admission, bounded decode, descriptors и composition registration.
 
 ## 7. Критерии локальной поставки и сквозной приёмки
+
+### Конкретизация decoder map_tile для реализации
+
+Проектный класс `WorldMapTileDecoder` в `backend/app/application/worldData/pack/encoding/worldMapTileFormat.py` реализует внутренний PackPartPayloadDecoder[WorldMapTileWire]. Constructor получает registered codec version и existing DecodeLimits без defaults; encoded cap принадлежит PackPartReadBinding.max_payload_bytes. Методы: `decode(payload: bytes, format_version: FormatVersion) -> WorldMapTileWire`, `validate(value: WorldMapTileWire) -> WorldMapTileWire`. Pure: ни storage, ни World/Source lookup, ни caller callbacks. Это единственный semantic decoder map_tile для read и final prepare; storage content_model остаётся bytes.
+
+Порядок decode: проверить format_version → проверить минимальный header и точные codec_version/PAYLOAD_KIND_WORLD_MAP → bounded decompression с остановкой на лимите → bounded strict JSON admission → owning POJO admission → локальные координаты/unique checks → deeply immutable WorldMapTileWire. Header не выводится из версии manifest. При malformed envelope следующий этап не запускается. Extra JSON keys и duplicate object keys не должны теряться до диагностики; обычный orjson.loads сам по себе не обеспечивает все эти гарантии. Существующий parse_world_map_tile_payload не используется как strict admission, поскольку делает int(...) и подставляет missing cells=[].
+
+| Элемент | Точное правило текущего проекта |
+|---|---|
+| Корень | JSON object с обязательными cells_per_side и cells; extra/duplicate keys отклоняются. Missing cells отличается от явного пустого массива |
+| cells_per_side | Положительный exact integer, не bool/string/float. Ограничения owning side policy сохраняются; сравнение с captured header выполняется отдельно в Pack admission |
+| cells | JSON array преобразуется в immutable tuple owning WorldMapCellWire; порядок сохраняется. Пустой/sparse tuple допускается без отдельного требования completeness конкретного результата |
+| tx/ty | Обязательные exact int; 0 <= coordinate < side; пара уникальна. Не сортировать/дедуплицировать перед диагностикой |
+| Поля клетки с defaults | Если поле отсутствует, используется существующий owning default из WorldMapCellWire.model_fields; новый список literals/defaults в decoder не вводится. Это сохраняет текущую схему клетки. Missing tx/ty не получает default |
+| Явно переданное значение | Проверяется до permissive before-validator. Default поля не разрешает заменить неверное значение default. Nullable поля сохраняют None по owning annotation |
+| hydrology_role | В JSON допускается exact int из значений существующего WorldMapHydrologyRole; bool, неизвестный integer, строковый alias и explicit null отклоняются. Отсутствие поля использует owning NONE default. Допустимый integer переводится в owning enum, без повторного enum в Pack |
+| system_facing | В JSON — точное значение owning Facing либо null. Пустая строка, compact aliases и произвольное приведение str не используются для persisted admission. Отсутствие поля сохраняет owning default |
+| Остальные поля | Типы/nullability/defaults берутся из единственного WorldMapCellWire. Не добавлять новые ограничения знака/UID, не подтверждённые owning схемой |
+
+Различие strict persisted admission и permissive authoring resolve уже установлено §6.10; таблица фиксирует применение defaults и не меняет алгоритм генерации тайла. `model_dump(mode="json")` текущего producer выдаёт полные канонические значения enum. Рекурсивная проверка выполняется до потери extra/неверного типа; она не должна применять coerce_facing_wire/from_wire к сырому запрещённому значению и потом принимать нормализованный результат за исходный.
+
+`validate(value)` проверяет фактическую структуру экземпляра, в том числе обходы model_construct/model_copy: exact owning root, все обязательные поля, tuple cells, owning cell instances, отсутствие extra, корректные типы/enum и локальные координаты. На Python-границе hydrology/facing уже являются enum instances, wire integer/string здесь не подменяют их. Нельзя ограничиться model_validate(existing_instance), пока shared модель не имеет нужного revalidation. Проверка/адаптация единственных shared POJO не создаёт StrictWorldMapCellWire и не меняет authoring callers без их отдельной сверки.
+
+World/gx/gy отсутствуют в bytes и не «проверяются» выдуманным сравнением с payload. Owning Pack admission сопоставляет side с assembly и проверяет адрес/provenance/coverage. `len(cells)==side²` не является безусловным условием decoder; index location_pin должен проверяться относительно версии locations index отдельно, а не latest списка. Это не дополнительные публичные стадии DAG, а внутренние обязанности операции Pack.
+
+Mapping отказов сохраняет §6.10: unsupported format/read binding — CONTRACT_MISMATCH, malformed header/JSON/field/duplicate coordinate — INVALID_PAYLOAD, достигнутый encoded/decompressed/structural budget — BUDGET_EXCEEDED. Pure decoder не создаёт pin/publication refusal; read operation добавляет свой контекст. Исключения программной ошибки и infrastructure не ловятся общим except как пользовательский INVALID_PAYLOAD. Внутренний typed error carrier сверяется с общим error roster; эта таблица не вводит ещё один зеркальный carrier.
+
+Проверки реализации: valid empty/sparse/dense payload; missing cells против empty; missing default-поле против explicit invalid; role unknown/bool/null против canonical enum value; facing canonical/null против empty/alias; extra/duplicate JSON keys; повтор tx/ty; forged instance; oversized decompression до полного выделения; одинаковый отказ read/prepare через один decoder. Статус PROJECT: класс/сигнатуры и admission rules конкретизированы, runtime не написан и тесты не запускались.
 
 ### Принятое основание типов обновлений (2026-11-12)
 

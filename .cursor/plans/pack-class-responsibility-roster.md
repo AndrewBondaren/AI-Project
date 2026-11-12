@@ -1,0 +1,79 @@
+# Pack — классы, зависимости, эффекты и отказ в приёмке
+
+2026-11-12. Статическая сверка для [обязательных критериев](../rules/dag-generator-interface.mdc#обязательная-приёмка-плана-любого-домена), [CRUD roster](pack-data-crud-roster.md) и [write-плана](pack-v2-public-write-operations.md). Только документация; runtime/SQL/DAG не менялись, тесты не запускались. PROJECT — проект, EXISTING — найденный код, а не автоматическая приёмка целевого контракта.
+
+## Публичная граница и внутренняя реализация — PROJECT
+
+Пути в таблице относительно `backend/app/application/worldData/pack/`. Публичные Input/Output/Error и их dataModel-модули перечислены в CRUD roster; executable bindings, backend, lease и CommitScope не передаются через публичные POJO.
+
+| Класс / модуль | Обязанность и разрешённые зависимости | Эффекты | Проверяемая приёмка / признак отказа |
+|---|---|---|---|
+| PackPreparationService / preparation/packPreparationService.py | Один explicit start/write/delete/recalculate/bind по своему Input. Shared Pack records, pure policy helpers и validator; только start_from_base использует внутренний pinned read | Pure новые state; start_from_base — bounded verified I/O | A изменяется, B/proof сохраняются, input не мутирует. Вызов другого публичного write, producer/Source/Cache, список команд с dispatcher или выбор следующей стадии — отказ |
+| PackPreparationPipelineOpenPipeline / packPreparationPipelineOpenPipeline.py | Один прямой DAG entry → PackPreparationOperation.prepare | Только делегация | Нет retry loop, activate или генерации после prepare. Wrapper не содержит алгоритм сборки |
+| PackPreparationValidator / preparation/validator.py | Pure local checks конкретных inputs; отдельно final cross-part/scope/provenance checks над предоставленными проверенными данными. Shared validators, FieldRef/CheckedPath, ValidatorAggregationHelper | Без I/O | Структурные ошибки агрегируются, зависимые проверки не выполняются на invalid parent. Seal/hold/read в validator, invented proof или приёмка по counts — отказ |
+| PackManifestAssembler / preparation/assembler.py | Проверенный конечный state → один полный manifest; общие Pack модели и derived counters | Pure | Нет потери parts/proofs. Исполнение write-команд, обращения к pinned base/storage, генерация geometry или второй contents store — отказ |
+| PackPreparationIdentityCodec / preparation/identityCodec.py | Полный semantic body → fingerprint, existing canonical Encoding/schema registration | Pure | Изменение значимого поля учитывается, self fingerprint не входит в digest. Новое hash-ядро, неполная ручная проекция или latest lookup — отказ |
+| PackPreparationOperation / preparation/operation.py | Одна final preparation: verified base/artifacts, принятый adoption/hold admission, полная валидация, manifest assembly/encoding, stage/READY | Внутренние storage ports, без head publication | Exact closure и READY record; отказ не выдаёт candidate. Вызов write_* / capture / materialize / activate, свой holder store или принятие произвольного other_members — отказ |
+| PackPartReadPipelineOpenPipeline / read/packPartReadPipelineOpenPipeline.py | Прямой DAG entry → PackPartReadOperation.read_part | Только делегация | Нет Cache hit/miss workflow, fallback генерации или чтения другой роли вместо requested address |
+| PackPartReadOperation / read/packPartReadOperation.py | Pin/address/contract/budget → value/absent/refusal; guard, registry, verified backend и pure decoder | Bounded I/O под действующим правом | Весь value материализован и immutable. Latest publication, lazy value после guard, missing BLOB как absent или live Source CRUD — отказ |
+| PackPartReadBindingRegistry / read/partReadBindings.py | Composition регистрация exact descriptor → address roles/format versions/конкретный T/decoder | Регистрация при composition; read lookup без генерации | Unknown/duplicate/type mismatch отклоняются. Callback/type/backend в публичном descriptor или выбор binding по имени consumer — отказ |
+| PackActivationPipelineOpenPipeline / packActivationPipelineOpenPipeline.py | Pack public activate с existing candidate/input/result и проектным refusal | Одна делегация внутреннему scoped activation binding | Полный expected, CAS/handoff/terminal/replay в принятой границе. Имя/полная сигнатура внутренней реализации ещё OPEN; не придумывать класс как доказательство binding. Generator call, отдельный частичный COMMIT, повтор CAS вместо terminal replay — отказ |
+| PackActivationIdentityCodec / encoding/activationIdentityCodec.py | Existing PackActivationInput → canonical request fingerprint; existing Encoding | Pure | Полные manifest/expected, отдельность preparation fingerprint. Encoding IDs/revision/vector ещё OPEN; hash только pack_hash или ручная копия полей — отказ |
+| PackCandidateReleasePipelineOpenPipeline / release/packCandidateReleasePipelineOpenPipeline.py | Прямой DAG release → PackCandidateReleaseOperation.release | Только делегация | Не выбирает cancel/activate/history purge и не создаёт новый OperationKind |
+| PackCandidateReleaseOperation / release/operation.py | Проверить full candidate identity и durable READY_INACTIVE, использовать принятый atomic release binding, вернуть durable result/refusal | Внутренний release/transaction port | Повтор подтверждён durable evidence, shared children сохранены. Head mutation, отдельный journal, отсутствие hold как доказательство успеха или цикл child release — отказ |
+
+Конкретные metadata subject/output/bind DTO ещё не завершены. Роль PackPreparationService не делает прежний input(state, entries) достаточным; эта строка сохраняет общий gate из write-плана. PACK-METADATA-PLANNING не возвращается как блокер текущего Pack.
+
+## Существующие механизмы и предел переиспользования
+
+| EXISTING класс / файл | Ответственность, зависимости и эффекты | Приёмка при адаптации / нарушение |
+|---|---|---|
+| [StagedClimateFields](../../backend/app/application/worldData/pack/encoding/stagedClimateFields.py) | backend/catalog/holders, guard + seal/hold/read_verified, затем role/origin | Это I/O helper внутри preparation, **не pure validator**. Новый выбор refs идёт из parts. Объявить его полным prepare либо скрыть I/O внутри pure validation — отказ |
+| [PinnedManifestReader](../../backend/app/application/worldData/pack/read/pinnedManifestReader.py) | ManifestGuard + ReadableBlobBackend, exact resolve/cold read/cached admission | Сохранить проверку pin/key/digest/schema и при cache hit. Считать cached bytes правом чтения без guard или готовым read_part — отказ |
+| ManifestGuard, тот же модуль | Внутренний Protocol context-manager допуска pin | Не concrete public CRUD-класс. Публичный DTO с guard capability или отсутствие concrete binding — отказ |
+| [PinnedManifestGuard](../../backend/app/db/repositories/sqlite/worldPack/pinnedManifestGuard.py) | ExecutionPins + format/version/budget; держит hold_open, сопоставляет typed refusals | Open остаётся внутри lifetime guard, cap=min(request,profile). Проверка до guard с последующим незащищённым open — отказ |
+| [ExecutionPins](../../backend/app/db/repositories/sqlite/worldPack/executionPins.py) | ExecutionStore/publication/holders/registry, pin identity и durable lifetime, guarded reads | Сохранить связь namespace/execution/invocation/manifest и защиту close/open. Не превращать его в Pack preparation service или второй publication owner; точные race/recovery evidence относятся к owning lifecycle |
+| PinIntent, тот же модуль | Внутренний dataclass store/execution/invocation/read-key/pin/world | Не подменяет public PackPinnedReadIdentity с publication. Непроверенный dict либо утечка внутреннего pin transport в новый публичный input — отказ |
+| PackIdentityConflict, PackClosed, PackMissingHold, PackUnsealed, PackIntentUnavailable, тот же модуль | Существующие ошибки pin boundary; hold/seal ошибки несут точный ref, namespace failure отдельно | Сохранять различия при mapping. Объявить missing hold обычным absent или скопировать классы в новый набор Pack pin-errors — отказ |
+| [OpenWaterBlobReader](../../backend/app/application/worldData/pack/spatial/openWaterBlobReader.py) | Registry/catalog/holders, descriptor/profile/caller budget, guarded verified root/shard bytes | Admission callback внутренний и выполняется внутри guard. Bytes-read не доказывает semantic decode. Public callback или отсутствие exact holder check — отказ |
+| SpatialBlobReadError, тот же модуль | Existing carrier SpatialReadFailureReason | Переиспользовать причины; не выдавать corruption/unavailable за отсутствие logical part |
+| [PinnedSpatialReader](../../backend/app/db/repositories/sqlite/worldPack/pinnedSpatialReader.py) | Pins/manifest backend/OpenWaterBlobReader; root membership и shard reachability | Membership идёт из parts, child open повторно проверяет pin. Наличие root не доказывает полный prepare closure; свободный child ref вне pinned root — отказ |
+| [ManifestBlobBackend](../../backend/app/storage/artifacts/manifestBlobBackend.py) | Pack format поверх ContentAddressedBlobBackend; configured max_bytes и leases | Применять меньший configured/request budget. Не считать backend владельцем semantic coverage или допускать отсутствие лимита |
+| [PacksWiring](../../backend/app/core/container/packs.py) | Composition registry/backends и отдельный manifest Cache instance | Зависимости/лимиты задаются явно, methods не становятся domain workflow. Registered manifest/climate не доказывают регистрацию всех payload formats |
+
+Внешний ContentAddressedBlobBackend (`storage/artifacts/blobBackend.py`), staging/holder/ledger/commit implementations остаются у Artifacts/Publication. Их точные atomic contracts принимаются в соответствующих lifecycle traces; Pack не копирует stores и не получает право вызывать чужие публичные операции через DI. Полный транзитивный roster этих внешних реализаций пока не считается закрытым этой таблицей.
+
+## Functions/модули — не выдуманные классы
+
+[finish_pack_preparation](../../backend/app/application/worldData/pack/encoding/preparedManifest.py) — существующая async функция, не класс и не public pipeline. Её доказанная часть: stage, exact ref/digest, finish_preparation, проверка READY. Приёмка адаптации требует полного calculated closure; переданный other_members сам по себе не доказывает полноту.
+
+[packManifestCodec](../../backend/app/application/worldData/pack/encoding/packManifestCodec.py), [manifest_format](../../backend/app/application/worldData/pack/encoding/manifestFormat.py), [climateFieldFormat](../../backend/app/application/worldData/pack/encoding/climateFieldFormat.py) — pure codecs/factories/contracts, не domain services. Decode не делает I/O, producer calls или latest lookup; строгие schema/budgets проверяются до потери информации. Существующая обратная проекция manifest в legacy модель не объявляется целевой реализацией.
+
+Hydrology ROOT_FORMAT/SHARD_FORMAT и bounded codecs остаются owning форматами. Bytes contracts сами не выполняют semantic root/shard decode; включение нужной проверки — явная обязанность admission. Grade format/read descriptors уже заданы ТЗ, их registry implementation не создаётся повторно под другим именем.
+
+## Legacy readers: найденные классы не становятся целевым public API
+
+Пути относительно `backend/app/application/worldData/pack/read/`. Эти строки фиксируют disposition и условия миграции, **не подтверждают отсутствие нарушений в legacy вложенных вызовах**.
+
+| Класс | Текущая обязанность / зависимости | Допустимая граница после переноса / критерий отказа |
+|---|---|---|
+| PackReadContext / packReadContext.py | Path-based readers и caches climate | Не использовать current path/cache как доказательство pinned identity; чтение новой версии не берёт stale value |
+| WorldMapPackReader / worldMapPackReader.py | L0 samples/contributions через context | Consumer typed pinned payload; отсутствие не заполняется producer defaults |
+| PackRenderReadFacade / packRenderReadFacade.py | Render projections terrain/L0/settlement через context | Render view не подменяет persisted POJO; live overlay не включается в immutable read_part |
+| PackLoadingProgressFacade / packLoadingProgressFacade.py | Loading projections; принимает также planning/capture зависимости | Нужен trace вложенных effects перед cutover. Скрытый запуск Planning из целевого Pack read или вычисление готовности только по старым paths — отказ |
+| PackFineTerrainReadFacade / packFineTerrainReadFacade.py | Fine read projection с context/gameplay | Public typed part boundary отделён от gameplay overlay; callback в DTO — отказ |
+| PackDebugReadFacade / packDebugReadFacade.py | Debug чтение с context/gameplay binding | Debug не становится обходным API после переноса production на DAG |
+| PackReadServices / packReadServices.py | Dataclass bundle context/gameplay/debug/loading/fine/render; factory связывает реализации | Не публичный payload и не новый orchestration facade. Передача bundle через DAG вместо typed результата — отказ |
+| ParentLightCache / parentLightCache.py | Legacy contextual cache для producer inputs | Cache не заменяет pinned L0 admission; producer/Cache migration отдельно |
+| FineTerrainDecodeCache / fineTerrainDecodeCache.py | Legacy decode caching | Не считать manifest CachePolicy автоматически политикой этого cache; strict admission не обходится hit |
+| SettlementStructureRaster / settlementStructureRaster.py | Index/cache shell cells и contribution из settlement payload | Порядок наложения сохраняется; missing declared bytes не превращаются в target absent |
+| RegionStateOverlay / regionStateOverlay.py | Repository read + gameplay merge региональных состояний | Overlay отделён от immutable Pack payload; live state не меняет сохранённую версию |
+| WildernessRegionReadService / wildernessRegionReadService.py | Snapshot по manifest, outline с planning entry и region state repo | Самостоятельный consumer workflow требует отдельной миграции. Нельзя включить planning вызов в новый read_part под видом decoder |
+
+PackTileLightView, PackWorldMapRenderSource, LocationTerrainRenderSource и WildernessTileRenderSource из packRenderReadFacade.py — существующие render DTO, не замена shared storage POJO. MissingParentLightError и RegionOutlineStaleError остаются ошибками соответствующих consumer paths. Поля/ошибки этих legacy типов требуют owning POJO/caller disposition при миграции; отсутствие этой проверки не маскируется общим «reuse».
+
+## Итог обязательной проверки
+
+Реестр делает явными public/internal/pure/I/O границы и критерии отказа для перечисленных классов. Три запрета DAG сохраняются: wrapper не выбирает следующую операцию, вызов не скрывается за worker/callback, публичные междоменные операции не вызываются напрямую. Internal admission callback — инфраструктурный механизм guard, не разрешение executable callback в public Input.
+
+Общая class acceptance ещё OPEN: concrete activation binding, metadata output/bind, транзитивные external atomic реализации и полный legacy caller cutover не доказаны этим статическим реестром. Нужны фактические вложенные вызовы и эффекты при реализации. Отсутствие новых DAG-нод не мешает конкретизации самостоятельных Pack-контрактов; ноды не придумываются. Порядок источники → evidence → manifest → codec/readers, перенос callers до удаления legacy и отдельный последующий version-name audit не меняются.
