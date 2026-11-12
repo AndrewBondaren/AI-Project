@@ -23,6 +23,24 @@
 | P5. Консолидация приёмки и cutover | Порядок источники → evidence → manifest → codec/readers; отдельный этап после удаления legacy уже обязателен | Полный class/POJO/error roster, CRUD-disposition и доказательства критериев ниже. В реализации — профильные проверки, затем перенос/удаление в утверждённом порядке и отдельный аудит comments/methods/variables/version markers. Не объявлять единственный runtime завершённым при наличии aliases/fallback |
 
 ## Payload: результат инвентаризации
+ 
+### Сводная проверка после write/order/lifecycle срезов
+
+Учитывает [порядок старых вызовов](pack-write-order-trace.md), локальные describe/bind, coverage и lifecycle разделы [write-плана](pack-v2-public-write-operations.md). Вердикт текущей документальной сверки: **направление и локальные обязанности конкретизированы; единый контракт ещё не принят из-за перечисленных ниже собственных несогласованностей**. PACK-METADATA-PLANNING и перенос внешних callers не используются как причина этого вывода. Реализация и runtime тесты не выполнялись.
+
+| Приоритет / находка | Доказательство | Исправление в текущем Pack |
+|---|---|---|
+| P1 — параметризованный part несовместим с путями диагностик | **Исправлено в проекте:** public fields используют named concrete subclasses общей _PackPartInput; roster всех 10 ролей и spatial appendix синхронизированы. Поля наследуются, ModelIdentity не ослабляется | При реализации проверить nested paths, canonical registration и strict revalidation; runtime-приёмка не заявляется |
+| P1 — одновременно описаны две несовместимые формы write inputs | **Исправлено в проекте:** start_empty без initial_provenance; вычисляющие writes без metadata proof; present proofs валидны, изменённые снимаются; отдельный bind и полный final admission. Основная таблица, domain appendix и ТЗ синхронизированы | Реализационные тесты invalidation/preserve/bind остаются обязательными. Planning mapping остаётся отложенным и не блокирует текущий Pack |
+| P2 — требования ограничений объёма не сведены в конкретный Pack binding | Transport bound state/start и бюджеты части payload упомянуты как требования, но единая привязка к существующим настройкам/форматам не предъявлена | Инвентаризировать existing limits и их enforcement до allocation/decode; не придумывать лимиты по числу locations/tiles. Зафиксировать конкретный источник каждого локального bound |
+
+Направления, которые не нужно проектировать заново: отдельные public writes и state chaining; shared metadata; describe/bind вместо расчёта metadata в DAG; coverage отдельно от wilderness status; READY replay без повторного finish; полный retention set; spatial root add/replace; сохранение различий batch/single L0 и detailed. Для порядка теперь есть конкретный trace, включая parent-light barrier и callback-order; его нельзя заменять общей фразой «всё по списку».
+
+Остаток P2–P4 в таблице групп выше сохраняется как собственная работа bindings/codec/errors и интеграционные подключения, а не повторный выбор архитектуры. Подтверждение exact READY replay и atomic lifecycle должно соответствовать реальному binding, но не требует от Pack создавать второй store. Полная реализационная приёмка позднее требует профильных проверок; статический trace не отмечается как пройденный тест.
+
+Источники budgets и точки enforcement теперь сведены в [отдельную проверку](pack-budget-enforcement.md): existing manifest/spatial caps отделены от отсутствующих decompression/decoded limits и state transport. Числовые defaults не придуманы. Остаток P2 — конкретные per-format limits/composition и проверка памяти; inventory не считается реализацией защиты. Две P1-несогласованности выше исправлены на уровне документов; это не закрывает остальные группы реализации и не является приёмкой runtime.
+
+### Существующие payload traces
 
 | Роли | Источник | Существенный оставшийся критерий |
 |---|---|---|
@@ -48,4 +66,4 @@
 | Междоменный CRUD-протокол | Карта владельцев и Source appendix разделяют ответственность. Неподтверждённые exact bindings помечаются внешними; они ограничивают зависимый маршрут, не всю работу Pack. PACK-METADATA-PLANNING сохраняет явную отсрочку |
 | POJO и field/logic errors без дублей | Shared payload POJO и существующие errors переиспользуются; write-plan содержит mapping диагностик. Полный реестр всех полей/ошибок/owners и проверка отсутствия пересечений ещё **OPEN**; новый зеркальный DTO не является решением |
 
-**Итог проверки:** полный план Pack пока не проходит общую приёмку: есть конкретные незавершённые локальные сведения и bindings. Пройденный trace всех payload не закрывает эти критерии. [write_spatial_root](pack-spatial-root-write-contract.md), [delete_part](pack-delete-part-contract.md), [delete_wilderness_chunk](pack-delete-wilderness-chunk-contract.md) и [delete_fine_climate](pack-delete-fine-climate-contract.md) конкретизированы как PROJECT, без заявления legacy parity. Для fine сохраняется coarse как существующий статус без обещания наличия coarse BLOB и без генерации; общий metadata-output freeze не закрыт. Delete не заменяет release/GC; полная приёмка D остаётся OPEN по остальным ролевым связям и scope. Следующий отдельный вопрос — location_terrain/settlement: отличить удаление Pack-представления от удаления исходной локации и проверить связанные metadata/locations_index без неявного каскада.
+**Итог проверки:** полный план Pack пока не проходит общую приёмку. [CRUD данных](pack-data-crud-roster.md) и [CRUD-disposition настроек](pack-settings-crud-disposition.md) сведены с разделением PROJECT/EXISTING и владельцев. CachePolicy имеет явное исключение; для Pack storage budget startup binding сам по себе не закрывает формальный settings CRUD, новый runtime API не вводится. [Roster удаления](pack-delete-remaining-roles.md) покрывает 10 ролей. Открыты metadata output/bind, error freeze, scope/coverage, lifecycle/composition и отмеченный формальный settings gate. Grade descriptors повторно не выбираются. Следующая независимая работа — class responsibility/dependencies/effects roster и признаки отказа; metadata-output работу другого агента и внешние settings миграции эта сводка не подменяет.

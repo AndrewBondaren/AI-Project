@@ -30,7 +30,7 @@ GradeSlotIndex.relative_to/restricted_to/without_couple создают прои�
 
 ## Binding, retention и приёмка
 
-В просмотренном Pack encoding/composition registered ArtifactFormatContract для grade sidecar не найден. Нужен один owning bounded JSON artifact binding для обеих ролей, с согласованными key/version, typed decode и error mapping. Имена descriptor и лимиты этим trace не выдумываются. Нужны предел bytes и collection admission до неконтролируемого выделения памяти; не требуется новый глобальный лимит мира.
+В просмотренном Pack encoding/composition registered ArtifactFormatContract для grade sidecar не найден. Уточнение по owning ТЗ при CRUD-сверке: проект descriptor уже задан — `dataModel/worldPack/meta/gradeSlotsStorageFormat.py`, key world_pack.grade_slots.json, storage version 1; `encoding/gradeSlotsFormat.py::grade_slots_format(max_bytes)` и `decode_grade_slots` для обеих ролей. Read descriptor — world_pack.grade_slots/version 1 в `dataModel/worldPack/read/gradeSlotsContract.py`. Повторно выбирать имена не требуется. Открыты реализация strict bounded JSON admission, явный budget, error mapping и composition. ТЗ уже требует unique cells/JSON keys и разрешает явно сохранённый empty cells; это не новые вопросы. Нужны ограничения памяти декодирования, не новый глобальный лимит мира.
 
 Payload не содержит дочерних ArtifactRef. Сам sidecar ref входит в полный manifest retention set; captured base/provenance dependencies учитываются по общему контракту отдельно. Новые holder store, lifecycle или публичная операция merge внутри Pack не требуются. Порядок источники → evidence → manifest → codec/readers не меняется.
 

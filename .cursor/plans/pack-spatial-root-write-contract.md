@@ -21,7 +21,7 @@
 | Поле PackSpatialRootInput | Тип и владелец |
 |---|---|
 | state | PackPreparationState из worldPack/preparation/state.py — существующий проект промежуточного Pack state |
-| part | PackPartInput[PackSpatialRootAddress] из worldPack/preparation/parts.py с адресом из worldPack/preparation/addresses.py — общая декларация address/artifact/provenance, без копирования полей |
+| part | PackSpatialRootPartInput из worldPack/preparation/parts.py — именованный concrete подкласс _PackPartInput[PackSpatialRootAddress]; адрес из worldPack/preparation/addresses.py. Поля наследуются без повторного объявления; прямая generic specialization в публичном поле не используется ради совместимости ModelIdentity/CheckedPath |
 
 Размещение адреса в preparation/addresses.py уже предложено в ТЗ Pack; второй PackSpatialRootAddress не создаётся. Поля domain/root/shards/world_uid поверх part/state не добавляются. Domain — existing SpatialDatasetKind, root — part.artifact. Input frozen/strict/extra=forbid с повторной проверкой экземпляров, включая вложенные records.
 

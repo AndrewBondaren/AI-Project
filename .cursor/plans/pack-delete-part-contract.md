@@ -36,14 +36,16 @@ Caller — DAG, напрямую вызывает метод и передаёт
 
 ## Связанные данные и final admission
 
+Распределение всех 10 ролей по concrete операциям и проверка оставшихся leaf/singleton/index адресов сведены в [итоговый delete roster](pack-delete-remaining-roles.md). Для шести ролей достаточно этого метода; новые role-specific wrappers без metadata-эффекта не добавляются.
+
 | Роли | Что delete_part не имеет права делать автоматически | Оставшееся условие финального состава |
 |---|---|---|
 | spatial_root | Удалять shard bytes, изменять Hydrology или старый manifest | Scope допускает отсутствие доменного root; closure пересчитан по всем оставшимся parts/proofs, shared shards сохранены при других основаниях |
 | tile_grade_slots / location_grade_slots | Генерировать пустой payload либо восстанавливать коды из z | Отсутствие допустимо только по принятому coverage; отсутствие не равно валидному пустому sidecar |
-| map_tile | Удалять весь tile вместе с climate/chunks | Связи tile assembly, grid и coverage проверены; отдельная политика удаления tile metadata ещё не определена этим методом |
+| map_tile | Удалять весь tile вместе с climate/chunks | [Trace L0 удаления](pack-delete-map-tile-trace.md): достаточно delete_part; tile metadata/status/proofs и header сохраняются. Отдельный delete_map_tile не нужен; final scope/dependencies проверяются |
 | wilderness_chunk | Удалять chunk metadata, пересчитывать status по новой неутверждённой policy | Для согласованного изменения предложен отдельный [delete_wilderness_chunk](pack-delete-wilderness-chunk-contract.md), сохраняющий existing provisional policy; общий metadata-output freeze ещё OPEN |
 | climate_fine / climate_coarse | Понижать fine→coarse, пересчитывать климат или выбирать fallback | Для fine предложен отдельный [delete_fine_climate](pack-delete-fine-climate-contract.md); coarse не генерируется. Удаление coarse не сбрасывает все fine tiles; допустимость отсутствия определяется scope/coverage |
-| location_terrain / settlement | Удалять локацию/поселение, TerritoryVolume, district metadata или pins | Связанные metadata/indexes и их provenance согласованы; простое удаление ref этого не доказывает |
+| location_terrain / settlement | Удалять локацию/поселение, TerritoryVolume, district metadata или pins | Предложены [отдельные операции удаления Pack-представления](pack-delete-location-representations.md) с owning metadata/proof; source entities и pins не удаляются. Final scope/dependencies остаются обязательными |
 | locations_index | Подменять отсутствие пустым индексом, перенумеровывать pins в map_tile | Обязательность индекса и ссылки location_pin удовлетворены. Замена на пустой индекс — другая existing write-операция |
 
 Это не маршрутизация по ролям внутри delete: локальный алгоритм един, role-specific invariants проверяются общим final admission. Промежуточная неполнота допускается по write-плану, но не разрешает выдавать READY с разорванной связью. Если в публичном roster нет нужной операции согласования metadata, сценарий удаления этой роли остаётся OPEN; caller не получает mutable assembly и не редактирует её вручную.

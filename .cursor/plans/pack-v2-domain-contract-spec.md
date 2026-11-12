@@ -41,6 +41,8 @@ PackPreparationOperation владеет одной подготовкой и в�
 
 ### prepare
 
+**Консолидация start/write/provenance:** текущий [write-контракт](pack-v2-public-write-operations.md#единый-lifecycle-metadata-provenance-в-промежуточном-state) не принимает initial_provenance в start_empty и metadata proof в вычисляющих write-входах. Промежуточная assembly_provenance может быть неполной, но не содержит stale records; bind отдельно подтверждает точные subjects, final prepare требует полноту. Payload part.provenance остаётся обязательным. Объявления metadata updates ниже описывают значения, а не прежнее требование принести proof итоговой строки до её вычисления. Публичные part inputs используют именованные concrete специализации общей внутренней _PackPartInput, перечисленные в write-плане; общий PackPartInput также named concrete class, не bare generic. Поля не копируются, ModelIdentity не ослабляется. Это синхронизация проекта, не отметка реализации.
+
 `PackPreparationPipelineOpenPipeline.prepare(request: PackPreparationInput) -> PreparedPackCandidate` — async. Публичный файл по ТЗ: `application/worldData/pack/packPreparationPipelineOpenPipeline.py`; один вызов `PackPreparationOperation.prepare` из `preparation/operation.py`. Ни циклов retry, ни вызова activate после prepare.
 
 Input переиспользует проектные имена: operation_id, preparation_fingerprint и единственный body. Актуальная форма из [write-плана](pack-v2-public-write-operations.md): PackPreparationBody(state: PackPreparationState, capture: concrete owning capture, scope: PackPreparationScope). State единожды содержит base_publication, parts, assembly, assembly_provenance; world берётся из state.base_publication. Поля не дублируются наверху body. Concrete coverage mapping уточняется там же; внешний тип не заменяется Any/dict или локальным зеркалом. Эта запись синхронизирует документы, а не объявляет незавершённый freeze выполненным.
@@ -103,6 +105,10 @@ Read готового manifest/payload **не ждёт live Source CRUD и не 
 Независимые ошибки одного validation этапа агрегируются existing ValidatorAggregationHelper из dataModel/validation/diagnostics. Невалидный parent исключает лишь зависимую ветку; независимые адреса продолжают проверяться в стабильном порядке. Typed paths строятся от owning моделей через FieldRef/CheckedPath, не произвольными strings.
 
 ## 5. CRUD и настройки: не подменять семантику
+
+[Единая concrete CRUD-таблица данных](pack-data-crud-roster.md) содержит классы, полные сигнатуры, модули Input/Output/Error и разделение PROJECT/EXISTING. Она включает существующий PinnedManifestReader и явно незавершённый metadata output/bind; общая приёмка CRUD ещё OPEN.
+
+[Сверка CRUD-disposition настроек](pack-settings-crud-disposition.md) отделяет явно исключённую из settings CRUD CachePolicy от Pack storage budget и внешних world/producer settings. Источники и lifetime не пересматриваются; ConfigManager/SettingsService не выдаются за принятый typed Pack CRUD.
 
 Проект публичного удаления владения неактивным кандидатом: [Pack candidate release](pack-candidate-release-contract.md). Вход переиспользует PreparedPackCandidate; release READY_INACTIVE отделён от cancel, удаления logical part и GC. Concrete Pack result/refusal описаны, внешний atomic release binding и полная приёмка остаются OPEN.
 
