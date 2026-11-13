@@ -472,6 +472,30 @@ required_refs и apply_in_scope — internal стадии одного прин�
 
 REC-5 продвинут до named Source classes и nested trace, но остаётся OPEN по перечисленным точкам. Это не permission реализовать каркасы в обход полного среза. REC-1, mutation/refusal canonical vectors и обязательная совместная приёмка также остаются prerequisites.
 
+### P3.4. Closure preflight до takeover: порядок и отказ (2026-11-14)
+
+Получена сверка publication «Ответ на Source P3.1–P3.3: runner и required closure». required_refs вызывается через read facet **той же CONTROL BEGIN IMMEDIATE**, после повторных terminal/binding/phase/expected-attempt checks и до первого transfer/fence append. Внешнее preflight-чтение не является доказательством: concurrent cancel мог завершить operation и снять holds. require_domain_attempt здесь не применяется, поскольку DOMAIN attempt ещё не выдана.
+
+Candidate closure не равен полному transfer set: IOperationHoldTransfer перечисляет все live operation holds, включая leftover. Проверка защиты candidates и полного переносимого набора выполняется в той же serialized границе. Replay existing terminal возвращается до required_refs и executor lookup. Runner вызывается только после confirmed takeover и durable start CAS/grant. claim_recovery не запускает body скрыто.
+
+Source предлагает единственный internal exception carrier `SourceMutationPreflightRejected` в `app.application.worldData.sourceVersioning.mutation.sourceMutationErrors`, поле `failure: SourceFailure`, без нового diagnostic DTO/enum. Он отличается от SourceMutationRollback областью применения: отказ до domain attempt, а не откат частично выполненного body. Конструктор сохраняет исходный strict SourceFailure без смены operation/code/path/context; для required_refs recovery operation=APPLY_MUTATION. Carrier не serialized/persisted и не является terminal outcome.
+
+Когда required_refs вернул SourceFailure, recovery adapter поднимает этот carrier **внутри CONTROL transaction**, до append. Он пересекает transaction boundary; только после confirmed rollback внешний caller получает исходную проверочную причину через этот typed exception. claim_recovery сохраняет успешный union OWNER|TERMINAL. Ни attempt.refuse, ни новый terminal, ни release holds, ни смена fence не выполняются. Unknown rollback остаётся UnknownCommitOutcome, а не подтверждённым preflight rejection. Arbitrary infrastructure exceptions не преобразуются в SourceFailure.
+
+На public boundary этот случай нельзя свести к тому же неразличимому SourceFailure result, который runner возвращает после committed refusal. До принятия public error map P3.3 carrier остаётся internal: consuming boundary обязан сохранить различие «проверка не прошла, durable исход не записан» / «terminal отказ committed» / «исход неизвестен». Дополнительный public envelope автоматически не вводится. Логирование должно сохранять исходный Source diagnostic context и факт preflight, без объявления durable REFUSED; owning event mapping требует подтверждения publication.
+
+Проверки: failure required_refs не вызывает transfer/start/runner/terminal; old operation/attempt/fence/holds идентичны до и после confirmed rollback; cancel между ранним preflight и CONTROL transaction возвращается как terminal без нового closure traversal; missing candidate hold не чинится; failure rollback acknowledgement не маскируется preflight error. Этот transport — Source proposal для owning review; P3.3 public entry и общая приёмка остаются OPEN.
+
+### P3.5. Owning ответ по preflight diagnostics (2026-11-14)
+
+Publication подтвердил P3.4 internal transport в разделе «Ответ на Source P3.4: preflight carrier и logging» owning response. Согласованное направление проектирования: claim_recovery OWNER|TERMINAL не меняется; SourceMutationPreflightRejected выходит после confirmed CONTROL rollback, без grant/domain/terminal/fence/cleanup. Публичный error mapping и полный implementation slice ещё не приняты.
+
+Для recovery после successful phase/CAS checks предлагаются два WARNING PROVISIONAL_REFUSAL наблюдения одного recovery_id: до rollback с durability=PROVISIONAL и после подтверждения с durability=OUTER_ROLLED_BACK/exception_type=SourceMutationPreflightRejected. Второе означает окончание проверки без durable business terminal. Оба сохраняют исходную Source projection и старую реально прочитанную attempt pair; source_operation=APPLY_MUTATION, terminal_kind/cancellation_reason/new pair/hold_count/fault=None. Для OUTER_ROLLED_BACK это явное расширение текущего event invariant; его должен включить единый owning roster до implementation, не только appendix.
+
+Если rollback acknowledgement неизвестен, вместо второго refusal идёт OUTCOME_UNKNOWN/ERROR с diagnostics=(), реальным uncertainty exception и последним подтверждённым context. Caller получает UnknownCommitOutcome. DOMAIN_ROLLED_BACK здесь запрещён: domain savepoint не открывался. FAILED не подменяет ожидаемую Source проверку; durable REFUSED не заявляется.
+
+Source статически не нашёл противоречия P3.4 с этим mapping. Initial preflight без существующей attempt не покрывается данной ветвью, synthetic old pair не допускается. Pending: синхронизация единого logging invariant у владельца, P3.3 public boundary и реальные rollback/sink проверки. Logging ТЗ severity не меняется: оба события WARNING согласно P2.12.
+
 ## Следующие проверяемые проектные результаты
 
 | Порядок | Результат | Владелец и граница |
