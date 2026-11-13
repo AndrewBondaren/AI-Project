@@ -125,7 +125,7 @@ CanonicalCodec не сортирует tuple за caller. Input обязан у�
 
 Приёмка сериализации: fixed byte/hash vectors для CREATE, UPDATE, DELETE и terminal; encode/decode round-trip реальных POJO; отказ на неизвестный type ID, иной порядок/форму, duplicate identity, неверный enum; изменение expected/body/operation_id меняет request digest. Векторы реальных POJO и runtime-тесты пока отсутствуют: сериализация остаётся DESIGN OPEN, не доказанной runtime поставкой.
 
-### P2.2. Запрос владельцу Artifacts/publication — требуется ответ
+### P2.2. Запрос владельцу Artifacts/publication — ответ получен, решения OPEN
 
 Source просит конкретный контракт для атомарной pregame registry mutation без Pack/Snapshot. Source владеет input, semantic revisions, membership, outcome POJO и решением о Source root eligibility. Artifacts/publication владеет lease/fence/terminal ledger, общими holders и storage bindings. Ответ должен содержать точные модули, типы, сигнатуры, ошибки и порядок, а не только согласие с направлением.
 
@@ -134,7 +134,28 @@ Source просит конкретный контракт для атомарн�
 3. **Pregame root.** Предоставить допустимое typed представление holder до первого Pack/Snapshot, его identity/codec, scope-bound acquire/release и проверку владельцем Source. Подтвердить GC-защиту каждого retained ref, atomic latest handoff и сохранение чужих historical holders. Если выбран root artifact, указать кто удерживает сам root и когда снимает hold; self-hold и фиктивный Pin не подходят.
 4. **Зависимости и поставка.** Указать owning implementation slice и его порядок до Source apply. Подтвердить, что это internal storage binding, а не прямой Source→чужой public pipeline вызов. Внешние доменные операции запускает DAG; новый маршрут/ноды этим запросом не назначаются.
 
-До ответа нельзя выбрать root DTO или подписать P2/P3. Source может независимо уточнять собственные POJO/validation/encoding, но не объявляет чужие enums, union, storage checks или signatures принятыми. Запрос подготовлен для передачи пользователем; отправка другому агенту здесь не выполнялась.
+Source может независимо уточнять собственные POJO/validation/encoding, но не объявляет чужие enums, union, storage checks или signatures принятыми. По команде пользователя 2026-11-13 запрос передан в чат «SNAPSHOT» (01a1a0c5-931c-77a0-96a5-cb5b6ca6766f), ранее реализовывавший Artifacts leases и holder handoff. Получен read-only ответ владельца, отражённый ниже; это предложение, не приёмка P2/P3.
+
+### P2.3. Ответ Artifacts/publication и оставшиеся зависимости
+
+Источник — переданный ответ чата «SNAPSHOT», 2026-11-13. Его сообщения о текущем коде являются evidence владельца; новые signatures/holders ниже остаются предложениями, а не существующим API.
+
+- Владелец предлагает SOURCE_MUTATION/source_mutation и SourceMutationApplied с terminal category=None. Дополнительные точки регистрации: application/publication/contracts/operationStore.py, service/operationLedger.py, publicationEvidence.py, terminal-kind SQL trigger. StoredTerminalCodec может объединить Source manifest с SNAPSHOT_CORE_SCHEMA, но exact-class allowlist и binding checks всё равно требуют изменения. Existing schema migration для уже созданных БД — отдельный вопрос владельцу; это не разрешение создавать 0002_*.sql вопреки implement-plan.
+- По trace владельца existing claim_publication(kind, operation_id, world_uid, preparation_fingerprint, request_fingerprint) возвращает OperationClaim и владеет короткой bookkeeping transaction; record_terminal(scope, outcome) заимствует CommitScope. Для Source нужно запретить создание APPLYING при отсутствующей операции: допуск только из READY после закрытия admission и drain writers. Busy сохраняет OperationBusyError; binding mismatch переводится в Source MUTATION_ID_CONFLICT.
+- Предлагаемый порядок: подготовить bytes/refs/fingerprint → open/stage/seal → finish_preparation → claim → одна domain transaction с expected checks, rows, revisions/membership, holds и terminal → подтверждённый commit → outcome. Claim отдельно не подтверждает успешный apply. Replay проверяет все bindings до возврата terminal; unknown commit не разрешает повторное применение к latest.
+- Кандидат владельца: SourceRootHolder(kind=ArtifactHolderKind.SOURCE_ROOT, source: SourceVersionRef | SourceCollectionVersionRef), модуль app.dataModel.artifacts.lifecycle.sourceRootHolder. Representation/codec принадлежат Artifacts, eligibility/lifetime — Source. Предлагаемый internal sourceRootPort имеет acquire(scope: CommitScope, holder: SourceRootHolder) -> None и release(scope: CommitScope, holder: SourceRootHolder) -> None. Scoped Source index определяет полный набор refs; caller не передаёт сокращённый список. Adapter sourceRootStore заимствует scope, проверяет eligibility и записывает каждый hold. SQL/hydration/GC bindings и ошибки ещё не определены полностью.
+
+Обязательные незакрытые условия:
+
+| Условие | Владелец решения | Почему P2/P3 пока не принимаются |
+|---|---|---|
+| Source refusal после claim и подтверждённого rollback | Artifacts/publication + Source error contract | record_refusal принимает только SnapshotApplyResult; Source отказ оставляет APPLYING. Нужен согласованный terminal отказа либо fenced recovery transition с доказанным rollback/quiescence. Успешный outcome и cancel не подменяют отказ |
+| Scoped mapping/eligibility | Source, затем binding Artifacts | Нужны exact signatures, typed errors, tombstone representation и атомарные проверки acquire/release; один holder DTO их не заменяет |
+| Historical root lifetime | Source | Смена latest сама по себе не доказывает допустимость release A. Сначала определить, какие historical exact reads Source гарантирует независимо от capture/publication holds и как разрешается prune |
+
+Предложенный владельцем acquire B → switch latest → release root A допустим только после Source-authorized lifetime/prune проверки A. Он не принимается как безусловная политика удаления исторических тел. Capture/publication holders независимы и сохраняются.
+
+Порядок зависимостей: inventory выбранного registry → owning projector/body codec → приёмка mutation input/outcome/errors → lifecycle/terminal/refusal contract → Source scoped index/eligibility/lifetime → root storage binding → atomic apply и rollback/replay/recovery проверки. Контрактный дизайн этих зависимостей можно уточнять до кода; implementation порядок основного плана не меняется. Следующий Source-owned результат — scoped eligibility и historical retention policy; внешний незакрытый вопрос — refusal/recovery contract.
 
 ## Root retention — требования Source к owning holder binding
 
