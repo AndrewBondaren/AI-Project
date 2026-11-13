@@ -275,6 +275,48 @@ No-op требует сохранённого **полного прежнего 
 
 Обязательные сценарии для будущей реализации: новый revision link; no-op с чужим created_by и своим valid link; подмена operation/identity/seq; missing/extra/partial link batch; tombstone link без root; full unchanged collection link; чужой world; missing старый root; failure после links до holds; failure после части holds; rollback без сохранённых links; restart/replay по terminal без назначения seq. Это проверяемый проект, не выполненные тесты. Приёмка всего P2/P3 по-прежнему OPEN.
 
+### P2.10. Уточнение владельца и решение по crash guarantee (2026-11-14)
+
+В [ответе Artifacts/publication](source-mutation-artifacts-publication-response-2026-11-13.md) предложен outer transaction + domain savepoint: Source failure откатывает весь domain scope (rows/revisions/links/holds), затем refusal и operation-hold cleanup фиксируются одним outer commit. Это новое предложение infrastructure контракта, не уже реализованный coordinator API. Историческое предложение отдельной ConfirmedRollback capability и второго refusal commit заменено этим вариантом для дальнейшего review.
+
+После crash до outer commit durable attempt-start остаётся без terminal; исходный in-memory failure восстановить нельзя. Владелец предложил fail-closed unresolved и отдельный будущий fenced abandon. **Решение пользователя 2026-11-14: «Сначала полный протокол восстановления».** Unresolved допустим как промежуточное безопасное состояние, но не как конечное ограничение принятой первой поставки. До реализации требуется конкретный recovery protocol с доказанными fencing/quiescence, судьбой незавершённой attempt, holds и точным результатом для caller. Нельзя автоматически запускать новую identity, фабриковать исходный отказ или повторять mutation по изменившемуся latest под видом exact replay. Точная семантика восстановленной незавершённой attempt должна быть предъявлена отдельно; это решение не обещает восстановить недолговечные данные из памяти.
+
+Владелец также уточнил eligibility: требуется internal SourceRootAcquisitionMode CREATE | REQUIRE_EXISTING вместо None при успехе. CREATE разрешает первый root только для revision текущей активной attempt; REQUIRE_EXISTING проверяет полный own root без append/repair. contains(operation_id, source) доказывает участие, но не fresh creation. Source должен дополнить exact revision provenance и её связь с единственной domain attempt; enum/изменение signature пока PROPOSED, не принято.
+
+Для CREATE первая поставка предложена с current OperationHolder либо SourceRootHolder другой exact revision, где проверены mapping и membership artifact в полном closure. Произвольный holder lookup не разрешён. Предложенные infrastructure codes и Source MISSING_HOLD mapping описаны владельцем в разделе «Согласование linkage и no-op». Они требуют совместной проверки, не дублирования в Source failure family. P2.7–P2.9 сочтены владельцем совместимыми с domain savepoint; приёмка P2/P3 остаётся OPEN.
+
+### P2.11. Fresh revision provenance и выбор acquisition mode (2026-11-14)
+
+Участие revision в operation (P2.7) и создание revision — разные факты. Предложение Source: immutable revision-index запись получает `created_attempt_id: EntityUid`, ссылающийся на единственный owning publication attempt-start. Идентичность attempt не добавляется в SourceRevision, SourceVersionRef, SourceDurableProof или public mutation input; semantic hash от неё не зависит. Полные operation/fence/request данные остаются в ledger и не копируются в revision row.
+
+created_attempt_id назначает только Source revision writer из **проверенного активного domain scope**, а не caller, не owning body и не provisional outcome. Связь scope→attempt проверяет infrastructure owner по registry/task/database/phase/fence и persisted attempt-start. Current CommitScope имеет только assert_active/read_scope; метода получения attempt identity в нём сейчас нет. Поэтому Source запрашивает отдельный internal infrastructure binding вместо неявного расширения CommitScope:
+
+```python
+# Предложение владельцу publication; не существующий port.
+def require_domain_attempt(
+    self, scope: CommitScope, *, operation_id: EntityUid,
+) -> EntityUid: ...
+```
+
+Возвращённый EntityUid — identity проверенной attempt, не самостоятельная capability. Вся работа продолжается в том же scope; перед каждым доступом действуют guards. Возвращённый uid нельзя сохранить и предъявить позже вместо scope. Owning module/class и необходимость async проверки persisted fence определяет publication; без точного ответа этот dependency не считается принятым. Source writer и root eligibility должны использовать один и тот же binding, не две независимые трактовки свежести.
+
+`SourceRootEligibilityBinding.validate_acquisition` в текущем проектном кандидате возвращает `SourceRootAcquisitionMode | SourceFailure`; enum internal, рядом с binding, wire values CREATE="create", REQUIRE_EXISTING="require_existing". Он не persisted и не получает canonical schema ID. Это уточняет прежнюю None-success signature P2.6; до совместной приёмки все варианты остаются проектными.
+
+| Условие после exact linkage/status checks | Результат |
+|---|---|
+| Revision создана текущей active domain attempt, provenance совпадает с проверенным scope | CREATE |
+| Revision создана ранее, её создание подтверждено committed successful terminal исходной operation; текущая operation имеет touched link | REQUIRE_EXISTING |
+| Revision помечена другой незавершённой/отозванной attempt либо provenance отсутствует/противоречива | Отказ; не fallback в CREATE или REQUIRE_EXISTING |
+| Tombstone либо pruned mapping | Existing P2.5 отказ до выбора mode |
+
+Новая revision, её provenance, body mapping и touched links записываются в domain savepoint и откатываются вместе. No-op не меняет created_attempt_id. CREATE/semantic UPDATE/изменение membership назначают provenance новой revision; DELETE создаёт provenance tombstone, но не body root. Повторный acquire в одной attempt не меняет provenance; adapter проверяет existing full root/idempotency согласно owning контракту. Проверка «создана раньше» не подменяется сравнением seq, hash, времени или operation_id.
+
+При recovery новая attempt не наследует право объявить CREATE для записей старой attempt. Terminal replay не запускает acquisition. Если owning recovery доказывает отсутствие committed domain результата и откат старой попытки, её revision/link rows должны отсутствовать; найденные committed rows без corresponding success terminal — infrastructure consistency failure. Допустимость новой attempt под той же operation identity определяется ещё проектируемым recovery, не Source. Source не создаёт вторую attempt автоматически.
+
+Bootstrap существующих registry rows требует принятого способа provenance/initial root registration до включения writer: nullable created_attempt_id с трактовкой «наверное старое» запрещён. Этот prerequisite относится к inventory/projector/revision storage шагам основного плана; данный проект не мигрирует legacy данные автоматически.
+
+Проверки: no-op сохраняет прежнюю creation attempt; подмена uid caller отвергается; wrong task/DB/phase/fence не выдаёт active attempt; child/stale scope после rollback не действует; rollback удаляет fresh provenance вместе с mapping; восстановление не переименовывает old attempt в current; одинаковый content hash разных seq не смешивает creation; tombstone никогда не даёт CREATE body root. До согласования infrastructure binding, bootstrap и recovery это test obligations, не runtime evidence.
+
 ## Следующие проверяемые проектные результаты
 
 | Порядок | Результат | Владелец и граница |

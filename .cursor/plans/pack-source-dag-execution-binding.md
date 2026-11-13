@@ -18,12 +18,16 @@
 | POJO | Все поля |
 |---|---|
 | PackSourceSelectionCall | key: CallKey; requested: PackMetadataUsageRequest |
-| PackSourceSelectionWait | state: PackPreparationState; calls: tuple[PackSourceSelectionCall, ...] |
+| PackSourceSelectionWait | state: PackPreparationState; calls: tuple[PackSourceSelectionCall, ...]; next_index: StrictInt; completed: tuple[PackMetadataUsageResolution, ...] |
 | PackSourceGroupsWait | state: PackPreparationState; description: PackMetadataDescription; key: CallKey; source_request: SourceProofGroupsInput |
 | PackSourceClosureCall | key: CallKey; request: SourceProofReadInput |
-| PackSourceClosureWait | body: PackPreparationBody; calls: tuple[PackSourceClosureCall, ...] |
+| PackSourceClosureWait | body: PackPreparationBody; calls: tuple[PackSourceClosureCall, ...]; next_index: StrictInt; completed: tuple[PackSourceClosureResolution, ...] |
 
 Target не приходит от внешнего caller: он фиксируется accepted CallTarget в contract.calls. ClosureWait.body содержит source_closures=() до получения ответов и не передаётся final prepare в неполном виде. Body не содержит continuation. Для verify_groups предъявленный result находится в exact typed child input, сохранённом engine; successful output не заменяется исходным недоверенным carrier.
+
+**Последовательный SELECT/READ — уточнение A1:** в сохранённом wait 0 <= next_index < len(calls); len(completed)=next_index; completed[j].requested (для SELECT) либо request (для READ) точно совпадает с calls[j].requested/request. Keys уникальны. До очередного CALL continuation сохраняет prefix completed и current next_index; возвращённый output сопоставляется только с calls[next_index].key и фиксированным target этого шага. Success добавляет ровно одну resolution к prefix и увеличивает next_index на один. Failure/cancel ничего не добавляет и не запускает следующий зависимый вызов. После достижения len(calls) происходит переход к импорту/prepare с полным completed, а не сохранение wait без ожидаемого вызова и не поиск прежних responses в новом CallResults. Пустой список не создаёт запрещённый пустой CallGroup; импорт entries=() допустим только при owning разрешении Pack для данного сценария, иначе owning отказ.
+
+Replay того же parent step использует сохранённую continuation до append; повторная обработка не дописывает duplicate. Это требует проверки existing checkpoint/step commit и не доказывается одним инвариантом len. Между последовательными вызовами completed удерживается в engine continuation, не в отдельном receipt store. Остальные фазы coordinator (requests/import/write/describe/groups/bind) и exact discriminated continuation верхних нод переданы владельцу DAG на review; A1 целиком ещё не закрыт.
 
 Continuation удерживает именно snapshot Pack state, из которого сформированы запросы. После возврата Source importer/bind получает этот snapshot, не latest state по world_uid и не иной state с равным status. При выборе другого state прежние результаты не переносятся автоматически. Это локальная последовательность одного exchange, не глобальная блокировка других workflows.
 
@@ -38,6 +42,8 @@ Continuation удерживает именно snapshot Pack state, из кот�
 В bind subject/group keys/basis берутся из сохранённого description; selections — из output по исходной позиции; общий proof — result.admission.proof. Planning — по отдельному owning binding, не из Source. Pack проверяет exact локальные subject/basis и equality перенесённых данных, но не исполняет Source subset/union алгоритм.
 
 Import принимает полный набор групп каждой запрошенной строки согласно exchange, не частичный Description. Для closure требуется полный набор proofs конечного state; при отсутствии Source dependencies допускается явно пустой набор. Failure одного required вызова не даёт partial success. SourceFailure/Cancelled/RuntimeFailure не превращаются в successful resolution и не запускают скрытый retry.
+
+Для первого partial settlement маршрута subjects содержит ровно одну settlement строку. describe возвращает tuple: перед ADMIT_GROUPS проверяются длина ровно один и совпадение subject с ожидаемым. Только после проверки единственная description переносится в PackSourceGroupsWait. Нельзя молча брать первый элемент, flatten несколько descriptions или добавлять новый batch-маршрут. Это уточнение принятого single-row сценария по [ответу DAG](dag-pack-source-binding-response-2026-11-14.md), не изменение порядка 1–7.
 
 На обоих уровнях read_source → operation leaf сохраняются exact request и owning output; получение результата другого экземпляра по одному NodeId запрещено. Используется engine CALL, не прямой execute другой ноды. Concrete coordinating caller, upper/leaf contracts, keys и deps ещё должны быть приняты. Список calls не означает разрешение параллельного CallGroup.
 

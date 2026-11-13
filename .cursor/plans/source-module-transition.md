@@ -39,7 +39,7 @@ Source не создаёт зеркало PackStoredProvenance, не импор�
 |---|---|---|
 | SourceDurableProof, SourceCaptureRef, SourceCaptureSelection | Existing EntityUid/ArtifactRef, immutable значения; без IO | Точные поля, strict validation и глубокая immutable структура; нет альтернативного Source/Pack DTO |
 | SourceProofVerifyInput, SourceProofClosureInput, SourceProofVerification, SourceProofClosure | Source proof и existing refs; без capabilities | Input/result не дают caller управлять внутренними стадиями; verification POJO не считается hold token |
-| SourceProofFieldIssue, SourceProofLogicIssue, SourceProofFailure и enums | Existing FieldPathError/ValidatedFieldPath; без storage exceptions в wire | Не пересекаются field/logic дефекты; ошибки Artifacts не клонируются; независимые ошибки агрегируются |
+| SourceFailure и единый owning roster sourceErrors из актуального source-proof-v2-contract-spec.md | Existing FieldPathError/ValidatedFieldPath; без storage exceptions в wire | Старые зеркальные proof error types не создаются; ошибки Artifacts не клонируются; независимые ошибки агрегируются |
 | ISourceProofReadPipelineOpenPipeline / SourceProofReadPipelineOpenPipeline | create/verify/collect_refs по точным сигнатурам контракта; внутренние validator/read binding | Прямой вызов из принятой DAG-ноды, read-only операция; ни nested public calls, ни выбор следующей операции |
 | SourceProofValidator | Source POJO, decoded inputs | Чистые проверки; не читает latest, не получает недостающие inputs |
 | SourceProofClosureCollector | Owning decoded graph и внутренний read binding | Полный детерминированный closure либо отказ; не partial success |

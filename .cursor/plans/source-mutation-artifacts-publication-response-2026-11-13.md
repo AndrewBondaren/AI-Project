@@ -1,5 +1,9 @@
 # Ответ Artifacts/publication по Source mutation
 
+Решение пользователя 2026-11-14: сначала полный recovery protocol. Fail-closed unresolved допускается только как промежуточный безопасный статус. Рекомендуемый полный протокол и необходимое решение о semantics повторной незавершённой попытки приведены в последнем разделе.
+
+Последнее уточнение по Source P2.7–P2.9 находится в разделе «Согласование linkage и no-op». Для первой поставки оно фиксирует закрытый перечень допустимых исходных holders и уточняет результат eligibility. Статус предложений DESIGN OPEN.
+
 Актуальное уточнение refusal/recovery и root acquire от 2026-11-14 приведено в конце документа. Оно заменяет предложение отдельной refusal transaction для обычного Source expected/membership отказа. Статус DESIGN OPEN сохраняется.
 
 2026-11-13. Контрактное предложение, DESIGN OPEN. Подготовлено по P2.3–P2.5 source-pregame-revision-staging-design.md. Приёмка SourceDurableProof и R1/R2 является исходной зависимостью. Документ фиксирует обсуждение refusal/recovery и root acquisition; реализация требует отдельной приёмки.
@@ -146,3 +150,141 @@ Savepoint устраняет промежуток между двумя commits 
 Первая рекомендуемая поставка ограничивает reused dependencies доказуемыми current-operation и SourceRootHolder путями. Остальные виды допускаются после подключения их existing scoped eligibility/closure checks и negative tests; до этого их предъявление даёт SourceFailure с MISSING_HOLD через Source-owned mapping результата проверки. Это явное ограничение supported binding, перечень будущих разрешённых owners выше сам по себе его не расширяет.
 
 Все artifact rows, seals, owner eligibility и полный closure проверяются в одном writer scope до первого root append. Source retained_refs задаёт exact closure, validate_acquisition доказывает operation→revision linkage, artifact adapter проверяет существующую защиту каждого ref. Release новых operation holds выполняется после приобретения всех roots. Reused roots иных revisions сохраняются. Historical own root исключается только из usage blockers explicit prune, но учитывается physical GC.
+
+## Согласование linkage и no-op — 2026-11-14
+
+P2.7–P2.9 согласуются с savepoint protocol. Полный link set записывается после revisions до root acquire в domain scope. Любой SourceFailure от link, eligibility либо root adapter пересекает domain boundary через rollback-carrier. Откатываются все domain rows, revisions, links и новые holds попытки, затем внешний owner сохраняет исходный refusal terminal.
+
+Результат validate_acquisition None | SourceFailure не сообщает adapter, разрешено ли создание первого root. Valid link и body-bearing revision возможны для fresh revision и no-op. Предлагается internal enum SourceRootAcquisitionMode со значениями CREATE="create" и REQUIRE_EXISTING="require_existing" в backend/app/application/worldData/sourceVersioning/retention/rootEligibilityBinding.py:
+
+```python
+async def validate_acquisition(
+    self, scope: CommitScope,
+    source: SourceVersionRef | SourceCollectionVersionRef,
+    *, operation_id: EntityUid, operation: SourceOperation,
+) -> SourceRootAcquisitionMode | SourceFailure: ...
+```
+
+CREATE означает revision, созданную данной активной domain attempt. REQUIRE_EXISTING означает прежнюю revision, включая no-op/label-only. Source выводит решение из exact revision provenance и участия в текущей попытке. Способ доказательства свежести в Source storage остаётся OPEN; одного contains(operation_id, source) недостаточно.
+
+Для REQUIRE_EXISTING Artifacts проверяет полный набор собственных SourceRootHolder(source) на всём closure и выполняет ноль holder appends. Missing own root даёт MISSING_HOLD даже при наличии другого holder. Tombstone/pruned mapping отвергается eligibility до выбора mode.
+
+Закрытый список допустимых исходных holds первой поставки для CREATE:
+
+- OperationHolder текущего claim с точным lease/fence/operation, closed admission и drained writers.
+- SourceRootHolder другой exact revision с действующим holder, существующим не-pruned mapping и подтверждённым включением artifact в storage closure этой revision.
+
+Другие holder kinds в этой поставке не дают основания reuse. При нескольких допустимых roots достаточно одного проверенного основания. После acquire новый root защищает каждый ref самостоятельно, прежние roots сохраняются.
+
+Уточнённый proposed enum SourceRootAcquireCode содержит INVALID_SCOPE, OPERATION_MISMATCH, STALE_CLAIM, WRONG_KIND, WRONG_PHASE, ADMISSION_OPEN и INVALID_ATTEMPT. Последний покрывает завершённую domain phase, повторное использование capability и отсутствие связи scope с единственной attempt. Proposed SourceRootAcquireFault содержит code, operation_id, source и artifact: ArtifactRef | None. Fault frozen/strict, SourceRootAcquireError переносит его. Модуль — backend/app/application/artifacts/errors/sourceRootAcquireError.py.
+
+Source status/linkage/closure errors возвращаются исходным SourceFailure. Missing допустимого hold отображается в Source-owned MISSING_HOLD с offending artifact и operation APPLY_MUTATION. Для этого требуется согласованный Source error factory либо точный конструктор в implementation map. Malformed DTO проверяется до IO. Live writer даёт OperationBusyError, corrupt persisted chain — PublicationInfrastructureError, transaction uncertainty — UnknownCommitOutcome внешней границы.
+
+P2.7 решает no-op linkage при чужом created_by. P2.8 верно требует rollback предшествующих writes при отказе adapter. До приёмки acquire остаются доказательство свежести revision, принятие результата eligibility и конкретный Source error mapping. Crash-before-terminal сохраняет fail-closed unresolved семантику без повторного body для той же identity.
+
+## Полный recovery protocol — предложение 2026-11-14
+
+Этот раздел заменяет fail-closed как конечный результат первой поставки. Рекомендуется durable original request + fenced attempt takeover + повтор только незавершённого transaction body под исходными expected refs. Terminal replay всегда читает уже сохранённый outcome и не выполняет Source checks. Recovery attempt может получить новый отказ относительно изменившегося окружения; это новый результат восстановления незавершённой попытки, а не восстановленный in-memory failure.
+
+### Durable записи и состояния
+
+Общий operation ledger сохраняет kind/world/preparation/request fingerprints и единственный terminal. Дополнение общего ledger: immutable request record с canonical SourceRegistryMutationInput bytes, schema version и checksum, записанный до первого claim, и append-only attempt chain. Request record не содержит копии terminal и не образует второй receipt store.
+
+Attempt record содержит operation_id, attempt_id, predecessor_attempt_id, fence, status. Предлагаемые statuses ACTIVE, SUPERSEDED, COMPLETED. Каждому operation соответствует максимум одна latest ACTIVE attempt; latest terminal запрещает новую attempt. PREPARING→READY сохраняет существующую подготовку; READY→APPLYING атомарно создаёт первый ACTIVE attempt; recovery APPLYING/RECOVERY_REQUIRED→APPLYING создаёт следующий fence/attempt и supersedes прежний. Terminal commit атомарно пишет outcome, COMPLETED и operation TERMINAL. Изменения phase/fence chains и SQL guards требуют owning acceptance.
+
+Request digest проверяется при записи, claim и recovery decode. Expected refs, membership, body refs и operation identity берутся из сохранённого запроса. Request bytes/параметры, необходимые для повторения owning deterministic apply, должны быть полны; ambient/latest-derived inputs запрещены. Если projector/config version влияет на execution, она должна входить в принятый request binding или доступный exact immutable dependency. Это обязательный Source prerequisite, не автоматически закрытый текущим input.
+
+### Ownership и fenced takeover
+
+PublicationAttemptOwner — предлагаемый frozen internal DTO (lease: OperationLeaseRef, attempt_id: EntityUid, request_fingerprint: RevisionHex). Он описывает durable ownership, но не является SQL capability. Coordinator выдаёт runtime domain scope только после проверки latest ACTIVE attempt в BEGIN IMMEDIATE.
+
+Scope registry связывает issued scope с operation/attempt/fence и phase DOMAIN либо CONTROL. Все domain reads/writes, Source links, root acquire и terminal calls используют проверенный scope. После domain exit его поколение отзывается. Повтор domain() одной runtime attempt запрещён. Повторное создание runtime attempt с тем же owner требует проверки durable latest и принятого single-start enforcement: в текущем процессе registry помнит issued attempt, после restart возобновление идёт только через recovery с новым fence.
+
+Recovery получает BEGIN IMMEDIATE на том же физическом SQLite database и повторно читает terminal/attempt. Полученный writer lock исключает активную прежнюю write transaction. Пока прежний writer жив и держит transaction, recovery возвращает busy при bounded lock timeout. Когда lock получен, recovery увеличивает fence и supersedes прежний owner внутри той же transaction. Старый процесс может жить, но его последующий вход в transaction обязан отвергнуть stale attempt. Отсутствие lock само по себе не доказывает смерть процесса; безопасность достигается fencing всех доступов, а не предположением о смерти.
+
+В этой publication phase нет внешних side effects и artifact writers: admission закрыт, тела sealed, writer claims drained. Любой обнаруженный live writer блокирует takeover. Crash orphan writer recovery принадлежит staging owner и должен завершиться до publication recovery. Worker без scope не может выполнять domain SQL; physical artifact writers не возобновляются этим протоколом.
+
+Для исключения окна после takeover разрешено commit-ить короткую takeover transaction, затем открыть fenced domain attempt. Конкурирующий recover может supersede ещё не вошедший owner: он получит stale и не выполнит body. Для предотвращения лишнего конкурентного supersede entry проверяет expected_attempt_id из recovery request; CAS mismatch возвращает актуальный recovery state, не создаёт ещё один fence. Это не таймер/автоматический retry loop.
+
+### Holds и смена fence
+
+Операция READY/APPLYING сохраняет все operation holds request bodies и closure dependencies до terminal. Takeover должен атомарно перенести собственные active operation holds со старого fence на новый, сохраняя их непрерывную видимость в одной commit transaction. Старые handles становятся stale. Новые acquisitions и releases валидируют latest fence. Это требует принятого internal lease transfer primitive с закрытым admission и drain; простая смена operation event fence недостаточна.
+
+Source roots, capture/publication и чужие holders не переносятся и не освобождаются. Partial domain writes/roots/links предыдущей попытки отсутствуют после rollback/crash внешней transaction. Сохранившиеся committed Source links без соответствующего terminal при атомарном protocol означают corruption и дают infrastructure error.
+
+После successful terminal root holds защищают published revisions, ненужные operation holds освобождаются согласно exact retained mapping. После refused terminal operation holds освобождаются атомарно с refusal. При failure recovery/unknown outcome они сохраняются до установления результата.
+
+### Typed internal APIs
+
+Предлагаемые ports application/publication/contracts/sourceMutationRecovery.py и implementation application/publication/service/sourceMutationRecovery.py. SQLite storage использует existing operationStore, commit coordinator, lease/holder adapters.
+
+```python
+class SourceMutationRecoveryInput:
+    operation_id: EntityUid
+    request_fingerprint: RevisionHex
+    expected_attempt_id: EntityUid
+
+async def inspect(
+    operation_id: EntityUid, request_fingerprint: RevisionHex,
+) -> SourceMutationRecoveryState: ...
+
+async def claim_recovery(
+    request: SourceMutationRecoveryInput,
+) -> PublicationAttemptOwner | SourceMutationApplied | SourceMutationRefused: ...
+
+def transaction_for_attempt(
+    owner: PublicationAttemptOwner,
+) -> AbstractAsyncContextManager[PublicationAttempt]: ...
+```
+
+SourceMutationRecoveryState — discriminated immutable union Terminal(outcome), Active(attempt_id, fence), PreparationRequired(phase). Это status, не authorization и не второй outcome. claim_recovery возвращает terminal первым после сверки binding. Иначе под writer serialization проверяет expected attempt, closed admission/drain, immutable request и exact required artifacts, затем переводит fence/holds и выдаёт нового owner.
+
+Source internal apply owner загружает сохранённый request через checked ledger reader и выполняет transaction_for_attempt. Domain savepoint и refuse/succeed semantics предыдущего раздела сохраняются. Внешний recovery entry выполняет не более одной recovery attempt за вызов; busy/unknown/stale явно выходят caller. Он не создаёт новую operation identity.
+
+Предлагаемый RecoveryContractError с frozen fault(operation_id, code) и enum BINDING_MISMATCH, ATTEMPT_CHANGED, WRONG_PHASE, INVALID_REQUEST_BINDING, STALE_OWNER. Busy writer/lock — OperationBusyError. Corrupt immutable request/checksum/schema или holders — PublicationInfrastructureError. Неизвестный COMMIT/ROLLBACK — UnknownCommitOutcome. Source expected/membership отказ сохраняется как SourceMutationRefused с исходным для этой attempt failure. Нет конвертации infrastructure faults в SourceFailure.
+
+### Crash matrix
+
+| Момент остановки | Durable состояние | Recovery/caller |
+|---|---|---|
+| До commit claim | READY и исходные holds | Claim обычным протоколом, body ещё не выполнялся |
+| После claim до domain BEGIN | ACTIVE attempt и immutable request | Explicit claim_recovery, новый fence, прежний owner stale |
+| Во время domain writes | Outer transaction откатывается SQLite | Recovery после writer lock восстанавливает из original request |
+| После ROLLBACK TO до refusal COMMIT | Outer transaction откатывается, durable terminal отсутствует | Recovery attempt с original expected, прежний in-memory failure не восстанавливается |
+| После successful/refused COMMIT до acknowledgement | Terminal и соответствующие holds атомарно сохранены | Exact terminal replay, ноль domain calls |
+| Во время takeover COMMIT | Старый либо новый attempt/fence/holds целиком | inspect на fresh connection; CAS по actual attempt; никаких предположений по timeout |
+| Во время release/terminal storage failure | Outer transaction rollback либо unknown | Holds сохраняются при rollback; fresh recovery определяет terminal при unknown |
+
+### Требования к fresh revision provenance
+
+Source revision rows должны позволять проверить создание revision именно current attempt, а не только operation_id. Предлагается internal created_attempt_id, связанный с durable attempt record и записанный в domain scope. Source refs/proof identities от этого не меняются. Eligibility получает проверенную attempt identity из scope binding. CREATE mode разрешён только для revision current domain attempt; no-op на прежнюю revision возвращает REQUIRE_EXISTING. Recovery uncommitted revisions прежней attempt уже откатились; published revisions имеют terminal и идут по replay без нового acquire.
+
+SourceMutationLinkStore сохраняет предложенный operation_id + exact ref состав. Для eligibility freshness используется revision provenance, link не дублирует attempt outcome. Присвоение seq и проверка original expected выполняются заново только в recovery незавершённой attempt, под новым fence, в общей transaction. Ни одна provisional revision не выдаётся наружу до commit.
+
+### Решение, требующее пользователя
+
+Рекомендуемый выбор: разрешить explicit recovery заново исполнить незавершённое transactional body с прежним immutable request/expected и новым fenced attempt, сохранив тот же operation_id. Результат может отличаться от утраченного provisional failure, но ранее durable terminal всегда replay-ится точно. Это явное изменение предыдущего запрета повторного body для той же identity.
+
+Если требуется восстановление именно прежнего отказа даже до terminal commit, предложенный savepoint protocol эту гарантию не даёт. Потребуется отдельно спроектировать durable decision до domain rollback с доказанным сохранением исходного read-set и сериализацией решения; текущий SQLite single-writer не позволяет просто commit-ить второй connection decision при удержанном writer lock. Выдавать такое свойство за реализуемое добавлением одной строки в той же transaction нельзя.
+
+Контракт остаётся DESIGN OPEN до выбора semantics recovery, приёмки attempt/fence/hold-transfer API и Source completeness/versioning immutable request. Общие recovery runtime тесты и fault injection обязательны перед приёмкой реализации.
+
+## Scoped attempt identity для Source P2.11
+
+Предлагается internal port backend/app/application/publication/contracts/domainAttemptBinding.py::IDomainAttemptBinding и SQLite реализация backend/app/db/repositories/sqlite/snapshotCore/operations/domainAttemptBinding.py::SqliteDomainAttemptBinding:
+
+```python
+async def require_domain_attempt(
+    self, scope: CommitScope, *, operation_id: EntityUid,
+) -> EntityUid: ...
+```
+
+Выбран async, поскольку кроме runtime registry требуется прочитать durable latest attempt/start и operation binding в том же scope. Возвращаемый attempt_id — identity для provenance, не новая capability. Source revision writer и SourceRootEligibilityBinding получают один экземпляр port, связанный с их общим coordinator/registry/access.
+
+Порядок guards: registry.check(scope, write=True) → scope.operation_id совпадает с аргументом → scope принадлежит текущему DOMAIN generation active PublicationAttempt → persisted operation APPLYING и SOURCE_MUTATION → persisted latest ACTIVE attempt_id/fence/request fingerprint совпадают с registry binding и текущим record → closed admission/drained assertion, установленный coordinator на входе attempt. Если writer claims могут появиться вопреки закрытому admission, это corruption, не новое разрешение. Query через ScopedSqliteAccess повторно проверяет scope до доступа.
+
+Registry хранит attempt identity/fence/request binding из проверенного BEGIN IMMEDIATE. Durable повторная проверка выполняется под тем же writer lock: recovery не может supersede attempt между проверкой и последующей записью. DOMAIN capability отзывается при выходе savepoint; CONTROL scope отвергается. Read-only, foreign DB, child task, revoked scope и stale domain generation отвергаются до записи. Старый owner, который ещё не открыл transaction после takeover, получает STALE_OWNER на входе coordinator и не получает domain scope.
+
+Ошибки — typed DomainAttemptBindingError с frozen fault(operation_id, code), модуль application/publication/errors.py. Предлагаемые коды INVALID_SCOPE, OPERATION_MISMATCH, WRONG_PHASE, STALE_ATTEMPT. Повреждённый durable start/chain/request binding даёт PublicationInfrastructureError. Binding не открывает UOW, не меняет fence, не выдаёт новую attempt и не читает latest Source revision.
+
+P2.11 совместим с рекомендуемым recovery. Новый attempt_id получает только свежие записи собственной transaction. Старые uncommitted rows откатились; ранее committed creation допустима для REQUIRE_EXISTING только с successful terminal и текущим touched link. Committed revision rows без successful creation terminal — infrastructure inconsistency. Refusal terminal не подтверждает создание revision. Terminal replay acquisition не запускает. Bootstrap требует отдельного контракта provenance.
