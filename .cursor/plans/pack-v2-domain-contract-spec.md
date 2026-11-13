@@ -108,7 +108,7 @@ Read готового manifest/payload **не ждёт live Source CRUD и не 
 
 [POJO/field-error/logic-error аудит](pack-pojo-error-acceptance.md) фиксирует shared declarations, named part-inputs и оставшиеся overlap/mapping gates. Pin identity и generic read ModelIdentity ещё не приняты; структурные и смысловые ошибки не дублируются для одной причины.
 
-Сохраняется проект ТЗ `dataModel/worldPack/preparation/errors.py`: immutable PackPreparationError(reason, непустой issues), concrete PackPreparationIssue наследует FieldPathError с PackPreparationIssueCode. Причины: INVALID_INPUT, IDENTITY_CONFLICT, SOURCE_UNAVAILABLE, DEPENDENCY_MISMATCH, ARTIFACT_UNAVAILABLE, MANIFEST_OVERSIZE, OPERATION_CLOSED.
+Сохраняется проект ТЗ `dataModel/worldPack/preparation/errors.py`: immutable PackPreparationError(reason, issues), где issues обязателен и пустой tuple допускается только при MANIFEST_OVERSIZE, concrete PackPreparationIssue наследует FieldPathError с PackPreparationIssueCode. Причины: INVALID_INPUT, IDENTITY_CONFLICT, SOURCE_UNAVAILABLE, DEPENDENCY_MISMATCH, ARTIFACT_UNAVAILABLE, MANIFEST_OVERSIZE, OPERATION_CLOSED.
 
 Коды по ТЗ: DUPLICATE_ADDRESS, MISSING_PART, UNEXPECTED_PART, FORMAT_MISMATCH, ADDRESS_MISMATCH, SOURCE_PROOF_MISMATCH, BASE_PUBLICATION_MISMATCH, STATUS_MISMATCH, IDENTITY_MISMATCH, HOLD_MISSING, ARTIFACT_UNSEALED, MANIFEST_LIMIT_EXCEEDED, SOURCE_HOLD_MISSING, OPERATION_CLOSED, METADATA_PROOF_MISSING, OUT_OF_SCOPE_CHANGE. Не копировать SourceIssue в Pack под новым именем: Pack формирует свой issue только о нарушении своего входа/операции; инфраструктурная причина сохраняется.
 

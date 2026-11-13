@@ -10,6 +10,22 @@
 
 ## Конкретная операция
 
+### Повторная проверка status и coverage по actual callers
+
+Выполнен in-memory вызов существующих pure функций `wildernessRefineStatus.py` через backend/.venv Python с `-B`, без изменения runtime/fixtures. Результаты `(baked, expected)`: `(0,0)` и `(0,4)` → absent; `(2,-1)`, `(2,0)`, `(2,3)` → partial; `(2,2)` и `(3,2)` → complete. Без expected: 0 → absent, 1/3 → partial. Это проверка policy, не интеграционный тест подготовки Pack.
+
+В [detailedBakeScope](../../backend/app/application/worldData/pack/bake/detailed/detailedBakeScope.py) location route устанавливает `expected_chunks_for_status=None`, wilderness route предоставляет вычисление полного expected для tile. [detailedBakeRefine](../../backend/app/application/worldData/pack/bake/detailed/detailedBakeRefine.py) вызывает writer.recalc_wilderness_status только при наличии этого значения, после обработки соответствующего tile. Callback остаётся деталью legacy orchestration; target Pack input получает уже materialized expected_chunks через DAG, не callback/World/planner.
+
+Следствия для сохранения поведения:
+
+- Даже замена существующего chunk с прежним числом chunks вызывает provisional пересчёт без expected; прежний complete не сохраняется автоматически. Для положительного числа chunks результат partial, пока DAG явно не выполнит согласованный recalculate.
+- Location scope не получает автоматически полный expected tile из геометрии внутри Pack. Отсутствие финального recalculate не исправляется prepare/assembler.
+- complete при baked>expected допускается существующей status policy. Это не разрешение лишнего адреса: scope и принадлежность outputs проверяются независимо. Не менять >= на == ради проверки coverage.
+- Равные counts при разных logical addresses не доказывают корректность expected/completed. [Локальная coverage-проверка](pack-v2-public-write-operations.md) уже различает адресные множества и materialized/without-payload outputs; она не вычисляет видимый status и не требует безусловного completed=expected во всех scopes.
+- Из complete нельзя восстановить прежний expected; delete chunk использует согласованный provisional переход и не придумывает новый census. Новый запрет expected<=0 не вводится.
+
+Нового решения о status policy не требуется. При реализации сохранить порядок write chunk → provisional status → отдельный recalculate только по вызову DAG, а final coverage выполнять без мутации status. Нужны integration проверки этих маршрутов и доказательств metadata; pure probe выше их не заменяет.
+
 Класс: проектный `PackPreparationService`, `backend/app/application/worldData/pack/preparation/packPreparationService.py`.
 
 `def delete_wilderness_chunk(self, request: PackDeleteWildernessChunkInput) -> PackPreparationState`

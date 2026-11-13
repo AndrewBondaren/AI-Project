@@ -36,6 +36,22 @@ Typed read T — existing SettlementStructureWire с DistrictStructureWire, Area
 
 > Для Pack settlement требуется сохранить текущую семантику Transition при историческом чтении. Сейчас parser принимает WorldTransitionTypeRegistry через validation context, а без него использует canonical_engine; `_type_contract` не только проверяет key, но и выбирает type_params/defaults. Предъявите owning контракт восстановления сохранённого Transition: конкретный тип необходимого исторического контекста, способ его привязки к сохранённой версии, допустимые defaults и typed отказ при отсутствии контекста. Pack не выполняет latest lookup, генерацию или публичный вызов вашего pipeline. Если необходима persisted dependency, укажите её существующий descriptor и retention obligations; новый storage/зеркальный Transition не вводить без обоснования. Нужен пример custom key, смысл которого изменился в latest registry, с неизменным результатом чтения старой версии.
 
+## Status, packed districts и конечный payload
+
+Trace [settlement_structure_status_for](../../backend/app/dataModel/worldPack/wire/settlementStructureStatus.py) и [SettlementOutdoorPackingJob](../../backend/app/application/worldData/settlementOutdoor/settlementOutdoorPackingJob.py): после encode tmp и SQL persist producer добавляет текущий district UID в packed, вычисляет status по census и передаёт packed/status в publish. Helper использует `set(packed) == set(census)`, не counts. Пустой packed даёт absent; complete требует непустого census и has_file=True; иначе partial.
+
+In-memory вызов existing pure policy через backend/.venv Python `-B` подтвердил: empty/empty → absent; [A]/[A] с has_file=True → complete, с False → partial; [A]/[B], [A]/[A,B], [A,B]/[A] и [A]/empty → partial. Это проверка policy, не integrated acceptance.
+
+[WorldPackWriter.publish_settlement_structure](../../backend/app/application/worldData/pack/io/worldPackWriter.py) не вычисляет status заново. `packed_district_uids=None` сохраняет прежний список, `structure_status=None` независимо сохраняет прежний status; без предыдущей row это [] и absent. Явный [] очищает packed и сам по себе не изменяет status. Эти локальные эффекты уже приняты [write-планом](pack-v2-public-write-operations.md); final validator не заменяет их скрытым пересчётом. Новая функция статуса внутри Pack не нужна.
+
+Target final admission использует материализованные owning SettlementStructureWire, PackSettlementAssembly и предъявленный PackSettlementCoverage. PackPreparationOperation обеспечивает bounded verified read и holds; pure PackPreparationValidator проверяет settlement UID относительно адреса, уникальность metadata/census UID и связь с coverage. Каждый заявленный packed UID должен присутствовать в конечном payload. Для результата C24, удостоверяющего полный упакованный набор, множество payload districts сопоставляется с этим набором целиком, а не только текущим district или числом frames. Основание — [ТЗ settlement, C14/C24](../../docs/tz_settlement_outdoor.md): packed описывает районы, уже находящиеся в BLOB. Отсутствующее полное evidence не заменяется live C23 SQL read из Pack.
+
+Временное множество district UID для сравнения не разрешает менять порядок или дедуплицировать payload. Existing append сохраняет кадры, last-write-wins reader зависит от порядка. Новый глобальный запрет повторяющегося district frame не выводится из уникальности packed/census metadata; ограничения payload проверяются owning схемой.
+
+Legacy producer передаёт has_file=True до publish — это его аргумент orchestration, не доказательство доступности target artifact. Перед READY нужны точный sealed/held verified payload и соответствующие census/provenance. Для inherited/None-полей сохраняется основание из базы; замена BLOB не разрешает несовместимую metadata только потому, что локальный write принял None.
+
+Критерии: равные counts разных UID не дают complete; packed UID отсутствует в payload — отказ; BLOB отличается от удостоверенного coverage — отказ; None и [] различаются; absent metadata не удаляет header-only BLOB автоматически; final validator не сортирует districts и не запускает layout/SQL/producer. Ошибки передаются общим final-prepare контрактом, без нового SettlementError DTO. Runtime не менялся; порядок legacy encode → SQL → publish не переставлялся.
+
 ## Bounded admission и storage closure
 
 ### Конкретизация SettlementStructureDecoder
