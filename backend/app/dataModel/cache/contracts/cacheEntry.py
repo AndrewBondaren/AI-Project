@@ -18,7 +18,8 @@ class CacheAdmission(StrEnum):
 
 
 class CacheEntry(BaseModel, Generic[T]):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always",
+                              ser_json_bytes="base64", val_json_bytes="base64")
 
     key: CacheKey[T]
     value: T

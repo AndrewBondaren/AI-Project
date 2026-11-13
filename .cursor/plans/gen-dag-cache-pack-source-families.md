@@ -59,7 +59,7 @@ SoT: [domain contract](pack-v2-domain-contract-spec.md), [write operations](pack
 | Pack read | Принятые публичные чтения pinned данных; exact список и binding OPEN | Считать cache hit доказательством pin/coverage; читать latest вместо закреплённой версии |
 | start_pack_from_base | start_from_base → PackPreparationState | Пересобирать базовый manifest внутри DAG |
 | Pack payload writes | Specialized write операции → новый state | Единый Any payload; запуск producer из Pack write; копирование алгоритма merge в ноду |
-| describe_pack_metadata | describe_metadata → subjects | Выводить source usage из fingerprint силами DAG |
+| describe_pack_metadata | describe_metadata → tuple[PackMetadataDescription, ...] по уточнённому проекту (subject + dependencies/basis) | Выводить source usage из fingerprint силами DAG; вызывать Source helper из Pack |
 | bind_pack_metadata_provenance | bind_metadata_provenance → state | Подменять proof inherited полей текущим capture |
 | prepare_pack | PackPreparationPipelineOpenPipeline.prepare → PreparedPackCandidate | Запускать Source/producer внутри Pack; выдавать READY без owning admission и holds |
 | activate_pack | activate(candidate, expected publication) по owning input | Повторять capture/materialization, самостоятельно выбирать retry/latest |
@@ -75,16 +75,16 @@ Read-группа должна быть сопоставлена с уже су�
 
 SoT: [Source module transition](source-module-transition.md), [proof proposal](source-durable-proof-contract.md), [Source integration](source-proof-v2-contract-spec.md), [актуальная Pack boundary](pack-source-admission-boundary.md).
 
-Предложенные публичные методы Source create/verify/collect_refs пока не приняты. create принимает уже собранный proof, поэтому самостоятельная запись не доказана. Source не владеет записью World/location/library и не приобретает её через ноду write_source.
+Актуализация по поручению пользователя: текущая основа — [Source integration §6.0.A–G](source-proof-v2-contract-spec.md), а не старый single-capture проект create/verify/collect_refs. Предъявлены async admit/read/admit_groups/verify_groups/select. Это PROJECT, не готовая реализация и не приёмка новых нод. Source не владеет записью World/location/library и не приобретает её через ноду write_source.
 
 | Вариант Source | Роли | Условие выбора |
 |---|---|---|
-| S1. Раздельные операции | verify_source_proof и collect_source_refs; create только при доказанной отдельной семантике | Owning API принимает независимые операции и точный поток их результатов |
+| S1. Раздельные операции | Текущие owning admit/read/admit_groups/verify_groups/select; exact leaf mapping OPEN | Owning API принимает независимые операции и точный поток их результатов |
 | S2. Одна атомарная read/admission операция | Одна нода вызывает один принятый публичный Source pipeline, возвращающий полный owning результат | Владелец Source принимает единую атомарную операцию; это не wrapper, который внутри запускает другие домены |
 
 S1/S2 остаются вопросом атомарности публичного Source API, а не альтернативой выбранной двухуровневой структуре DAG. Над принятыми отдельными операциями предусмотрены `read_source` и `write_source`. Source read выбирает конкретную операцию либо собирает весь принятый набор чтений. Состав команд/leaf-операций Source write OPEN: наличие верхней роли не разрешает приписать Source запись World или назвать verify операцией записи. Не формировать Source create/update/delete ради симметрии с Cache. Capture creation/finalization и удержания требуют отдельных владельцев и bindings; их нельзя приписать proof verification.
 
-Незакрытые вопросы: зависимости нескольких captures для metadata, точный dependency usage и Pack mapping, capture format/finalization, scope удержания до handoff, typed errors и sync/async IO. Более поздние решения Pack по field-level usage и отказу partial update при неизвестном происхождении сохраняются; exact carriers ещё требуют проверки. Отдельный transient input Pack не назначается без предъявления внешнего binding.
+Multi-capture, typed usage, group selection/exact matching и async IO теперь предъявлены Source как concrete проект (§6.0.A–G). Остаток: принятие owning schema/errors/codec и bindings, точный Pack mapping, capture finalization и удержание до handoff. Более поздние решения Pack по field-level usage и отказу partial update при неизвестном происхождении сохраняются. Прямой Pack → SourceProofValues из §H пользователем не разрешён: запрет междоменных вызовов сохраняется и для предложенного helper. Нельзя превращать его в новую DAG-ноду автоматически либо переносить Source алгоритмы в Pack. Точки дополнительной передачи рассмотрены в §6.7 без назначения порядка и новых NodeId.
 
 ## 6. Карта обсуждения связей
 
@@ -151,7 +151,7 @@ flowchart LR
 | Разрешить manifest / resolve_pack_manifest | PinnedManifestReader.resolve, async | ManifestPinRead → ManifestAddress или ManifestReadRefusal | EXISTING |
 | Прочитать manifest из storage / read_verified_pack_manifest | PinnedManifestReader.read_verified, async | ManifestStorageRead → VerifiedManifestBytes или ManifestReadRefusal | EXISTING |
 | Допустить cached manifest / admit_cached_pack_manifest | PinnedManifestReader.admit_cached, async | ManifestCachedRead → VerifiedManifestBytes или ManifestReadRefusal | EXISTING |
-| Описать metadata текущего state / describe_pack_metadata | PackPreparationService.describe_metadata, sync | PackMetadataSubjectsInput → tuple[PackMetadataSubject, ...]; PackPreparationFailure(error: PackPreparationError) | PROJECT, локальная форма описана; owning уточнение dependency usage/binding ещё требует приёмки |
+| Описать metadata текущего state / describe_pack_metadata | PackPreparationService.describe_metadata, sync | PackMetadataSubjectsInput → tuple[PackMetadataDescription, ...]; PackPreparationFailure(error: PackPreparationError) | PROJECT дополнения metadata usage/basis; старый subject-only output не закрывает новый маршрут, exact binding требует приёмки |
 
 Existing manifest types находятся в dataModel/worldPack/read/pinnedManifest.py; reader — application/worldData/pack/read/pinnedManifestReader.py. Metadata types и уточнения: [CRUD roster](pack-data-crud-roster.md), [актуальная admission boundary](pack-source-admission-boundary.md), [metadata POJO](pack-metadata-dependency-pojo.md).
 
@@ -159,17 +159,19 @@ read_verified и admit_cached — альтернативные операции 
 
 ### Source
 
-Источники: [module transition §3](source-module-transition.md) отсылает к единственному источнику сигнатур — [Source durable proof §4](source-durable-proof-contract.md). Публичные класс/интерфейс: SourceProofReadPipelineOpenPipeline / ISourceProofReadPipelineOpenPipeline; размещение application/sourceVersioning остаётся проектным.
+Актуальный источник сигнатур: [Source integration §6.0.A–G](source-proof-v2-contract-spec.md). Concrete класс/интерфейс: SourceProofPipelineOpenPipeline / ISourceProofPipelineOpenPipeline, проектный модуль app.application.worldData.sourceVersioning.sourceProofPipelineOpenPipeline. Owning POJO — app.dataModel.sourceVersioning. Старые SourceProofReadPipelineOpenPipeline/create/verify/collect_refs ниже не сохраняются как второй действующий API. Это синхронизация проекта, не runtime rename.
 
-| Команда read_source | Leaf-кандидат | Текущая проектная сигнатура |
+| Требуемая операция read_source | Назначение leaf | Текущая проектная сигнатура |
 |---|---|---|
-| Получить проверенное proof-значение из заявленного proof | create_source_proof | create(request: SourceDurableProof) → SourceProofVerification или SourceProofFailure |
-| Проверить proof против expected capture | verify_source_proof | verify(request: SourceProofVerifyInput) → SourceProofVerification или SourceProofFailure |
-| Прочитать полный owning closure | collect_source_refs | collect_refs(request: SourceProofClosureInput) → SourceProofClosure или SourceProofFailure |
+| Допустить заявленный usage | OPEN: метод предъявлен, NodeId не назначен | async admit(SourceProofInput) → SourceProofResult или SourceProofFailure |
+| Проверить сохранённый proof и получить полный closure | OPEN | async read(SourceProofReadInput) → SourceProofResult или SourceProofFailure |
+| Допустить ordered groups и создать общий proof/selections | OPEN | async admit_groups(SourceProofGroupsInput) → SourceProofGroupsResult или SourceProofFailure |
+| Проверить предъявленный grouped result против exact usage | OPEN | async verify_groups(SourceProofGroupsVerifyInput) → SourceProofGroupsResult или SourceProofFailure |
+| Извлечь historical subset с owning проверкой и closure | OPEN | async select(SourceProofSelectInput) → SourceProofResult или SourceProofFailure |
 
-Вход verify содержит expected_capture/proof, closure input — proof; verification содержит proof, closure — proof/refs. Все три метода в текущем проекте sync и read-only, включая create: он не пишет artifact, не создаёт capture/revision. Sync/async IO, самостоятельная семантика create относительно verify и схема нескольких captures ещё не приняты. Следовательно, текущий owning-план предъявляет конкретные кандидаты контрактов, но не готовый accepted binding.
+Все пять операций read-only: не создают captures/revisions и не приобретают holds. SourceProofInput(world_uid, uses) несёт declared usage; SourceProofResult(proof, durable_refs) — owning проверку и полный closure на момент чтения. GroupsResult(admission, selections) сохраняет исходный порядок groups; Selection привязана к fingerprint полного multi-capture proof, не к Pack metadata. Pure helpers §H не включаются как разрешённые прямые вызовы Pack. Exact Source schema/errors/ports и DAG binding ещё требуют приёмки.
 
-write_source остаётся структурно предусмотренной верхней ролью без предъявленной публичной операции записи и без разрешённого leaf binding. Нельзя направить create в write только по имени или дополнить API новым writer без owning решения. Для «прочитать всё» также нельзя механически вызвать create и verify: сначала принимается недублирующий состав read-операций и их inputs. SourceProofFailure сохраняет owning field/logic issues; ошибки Artifacts/infrastructure не переписываются как отсутствие body.
+write_source остаётся структурно предусмотренной верхней ролью без предъявленной публичной операции записи и без разрешённого leaf binding. Нельзя направить admit в write только по имени или дополнить API новым writer без owning решения. «Прочитать всё» не означает выполнить все пять методов: требуются explicit scope, inputs и недублирующий состав результата. SourceProofFailure сохраняет owning field/logic issues; ошибки Artifacts/infrastructure не переписываются как отсутствие body.
 
 ### Что остаётся на стороне DAG
 
@@ -185,7 +187,7 @@ write_source остаётся структурно предусмотренно�
 | write_cache | Закрытый выбор «create»/«update» с CacheEntry[T] либо «evict» с CacheKey[T] | Соответствующий CacheCreateResult / CacheUpdateResult / CacheEvictResult, вариант соответствует команде | Только соответствующая leaf-нода; никакого автоматического update→create |
 | read_pack | «part» с одним из семи concrete inputs; «resolve», «storage», «cached», «metadata» с owning input; «весь состав» с согласованными read requirements | Соответствующий owning result/outcome; для полного состава — именованная композиция результатов одного согласованного pinned scope | Команда → конкретная leaf из §6.1; для всех частей возможно несколько вызовов read_pack_part |
 | write_pack | Закрытая команда каждой операции текущего Pack CRUD roster с её именованным owning Input | Owning результат именно выбранной операции; state/candidate/activation/release не смешиваются | Leaf на соответствующий открытый метод; порядок нескольких команд принадлежит принятому DAG workflow |
-| read_source | «create proof»: SourceDurableProof; «verify»: SourceProofVerifyInput; «closure»: SourceProofClosureInput; «весь состав»: OPEN до устранения overlap create/verify | SourceProofVerification либо SourceProofClosure; полная композиция OPEN | create_source_proof / verify_source_proof / collect_source_refs |
+| read_source | Owning requests admit/read/admit_groups/verify_groups/select из §6.1; точные варианты DAG command и all profile требуют приёмки | SourceProofResult либо SourceProofGroupsResult по выбранной операции; SourceProofFailure сохраняется | Leaf → owning метод; точные новые имена/NodeId не назначены |
 | write_source | OPEN: текущий owning API не предъявляет write operation | OPEN | Нет разрешённой публичной цели; не реализовать пустую успешную заглушку |
 
 Отдельная leaf-нода получает типизированный request своего DAG-контракта и передаёт owning input публичному методу. Её результат сохраняет owning success/absent/refusal; wrapper/correlation берётся из принятого engine-контракта, а не вводится новым универсальным envelope. Поля node context, identity и lifecycle остаются OPEN до сверки engine SoT. Таблица задаёт содержимое границы, не выдаёт доменный Input за уже готовый класс Input ноды.
@@ -252,7 +254,7 @@ flowchart TB
   A["resolve_pack_manifest<br/>ManifestPinRead → ManifestAddress<br/>или ManifestReadRefusal"]
   V["read_verified_pack_manifest<br/>ManifestStorageRead → VerifiedManifestBytes<br/>или ManifestReadRefusal"]
   C["admit_cached_pack_manifest<br/>ManifestCachedRead → VerifiedManifestBytes<br/>или ManifestReadRefusal"]
-  M["describe_pack_metadata<br/>PackMetadataSubjectsInput → subjects<br/>ERROR: PackPreparationError"]
+  M["describe_pack_metadata<br/>PackMetadataSubjectsInput → metadata descriptions<br/>ERROR: PackPreparationError"]
   R --> P
   R --> A
   R --> V
@@ -286,18 +288,14 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-  R["read_source<br/>IN: create proof / verify / closure<br/>OUT: verification / closure; all-read OPEN"]
-  C["create_source_proof<br/>SourceDurableProof → SourceProofVerification<br/>или SourceProofFailure"]
-  V["verify_source_proof<br/>SourceProofVerifyInput → SourceProofVerification<br/>или SourceProofFailure"]
-  L["collect_source_refs<br/>SourceProofClosureInput → SourceProofClosure<br/>или SourceProofFailure"]
+  R["read_source<br/>Owning requests/results §6.1<br/>exact commands и all-read OPEN"]
+  C["Согласуемая leaf на owning операцию<br/>NodeId / parent binding OPEN"]
   W["write_source<br/>IN / OUT: OPEN<br/>Публичная write-цель не предъявлена"]
   R --> C
-  R --> V
-  R --> L
-  C --> PC("PROJECT: SourceProofReadPipelineOpenPipeline.create<br/>read-only")
-  V --> PV("PROJECT: SourceProofReadPipelineOpenPipeline.verify")
-  L --> PL("PROJECT: SourceProofReadPipelineOpenPipeline.collect_refs")
+  C --> PC("PROJECT: SourceProofPipelineOpenPipeline<br/>admit / read / admit_groups / verify_groups / select")
 ```
+
+Source граф показывает соответствие ролей и owning целей, не новую универсальную dispatch leaf и не execution sequence пяти методов. Новые NodeId, замена прежних кандидатов и deps принимаются отдельно.
 
 
 ## 6.4. Семантические readers GEN-BAKE-READ и согласованный нейминг
@@ -390,7 +388,7 @@ ReadCacheEntryOutput.key нужен для связи miss с запросом: 
 | ResolvePackManifestInput / ResolvePackManifestOutput | "resolve_pack_manifest" | ManifestPinRead | ManifestAddress | ManifestReadRefusal | resolve_pack_manifest |
 | ReadVerifiedPackManifestInput / ReadVerifiedPackManifestOutput | "read_verified_pack_manifest" | ManifestStorageRead | VerifiedManifestBytes | ManifestReadRefusal | read_verified_pack_manifest |
 | AdmitCachedPackManifestInput / AdmitCachedPackManifestOutput | "admit_cached_pack_manifest" | ManifestCachedRead | VerifiedManifestBytes | ManifestReadRefusal | admit_cached_pack_manifest |
-| DescribePackMetadataInput / DescribePackMetadataOutput | "describe_pack_metadata" | PackMetadataSubjectsInput | tuple[PackMetadataSubject, ...] | describe_pack_metadata |
+| DescribePackMetadataInput / DescribePackMetadataOutput | "describe_pack_metadata" | PackMetadataSubjectsInput | tuple[PackMetadataDescription, ...] (PROJECT дополнения usage/basis) | describe_pack_metadata |
 
 Input каждой leaf — соответствующий Input из таблицы; Output — соответствующий Output. Например ReadPackPartInput(kind: Literal["read_pack_part"], request: ConcretePackPartReadInput), ReadPackPartOutput(kind: Literal["read_pack_part"], value: ConcretePackPartReadResult | PackPartAbsent | PackPartReadRefusal). Это самостоятельные DAG-композиции поверх domain records, не новые сигнатуры доменных методов.
 
@@ -485,6 +483,10 @@ read_source объявляет ReadSourceInput → ReadSourceOutput, error=Sourc
 
 ## 6.6. Первый implementation-срез: четыре Cache leaf-ноды
 
+**Статус следующего среза 2026-11-13:** после приёмки read_cache_entry реализована create_cache_entry: CreateCacheEntryInput/Output, concrete manifest subclasses, CreateCacheEntryNode/factory и explicit NodeContract engine.cache.manifest.create_entry/version 1. Один вызов CacheService.create, owning STORED/ALREADY_PRESENT/SKIPPED_OVERSIZE и CacheNodeError. Все 61 Cache-тест прошли, включая 8 новых create-тестов и регрессию read; проверены конфликт без overwrite, malformed input до записи, binary transport, engine checkpoint/replay без повторной записи после eviction. Pyright Cache node/POJO модулей: 0 errors. Срез предъявлен к per-node acceptance; update/evict и укрупнённые ноды ещё не реализованы. Production callers и существующие GEN-ноды не менялись.
+
+**Статус 2026-11-13:** первый отдельный срез read_cache_entry реализован и предъявлен к per-node acceptance. Созданы generic lookup/error POJO и concrete manifest Input/Output, ReadCacheEntryNode, factory и explicit registration с contract_id engine.cache.manifest.read_entry/version 1. Проверены 9 tests/cache/test_read_cache_node.py: NodeRunner, реальный DAGExecutor invocation/checkpoint replay, hit/miss/error, invalid input до Cache, binary round-trip и concrete ModelIdentity. Вложенные field diagnostics сохраняют owning CacheContractMetadata paths; нода не создаёт CheckedPath внутри CacheKey[T]. Pyright новых production-файлов: 0 errors. Общий Cache suite до добавления последнего replay-кейса: 52 tests OK; после добавления — все 9 node tests OK. create/update/evict и укрупнённые ноды не реализованы. Production graph/callers и существующие GEN-ноды не менялись. Nested generic owner для произвольных будущих node field paths не объявляется поддержанным.
+
 Подготовлено после согласия пользователя завершить карточки. Статус: **конкретный проект среза; code gate не закрыт по бинарному transport и окончательной приёмке карточек**. Этот раздел уточняет generic §6.5, не запускает все семейства и не меняет существующие GEN-ноды.
 
 ### Scope и проверенная инфраструктура
@@ -557,6 +559,8 @@ Output — наблюдение завершённой операции, а не
 Cancellation и terminal status остаются engine. Sync RAM operation может завершиться до обработки отмены; отмена не обещает rollback Cache. Не добавлять await/to_thread между локальными стадиями Cache и не вводить автоматический retry. Повтор явно запрошенной операции следует owning Cache семантике: outcome может отличаться после eviction. Release execution освобождает ссылки на Outputs, но не evict записи самостоятельно.
 
 ### Найденный transport gate — воспроизводимое свидетельство
+
+**Обновление 2026-11-13, после команды пользователя «Делай»: binary JSON transport исправлен.** В owning CacheKey и CacheEntry заданы ser_json_bytes="base64" / val_json_bytes="base64"; ключи и bytes payload восстанавливаются побайтно, включая вложенный CacheHit. Новые tests/cache/test_binary_transport.py проверяют non-UTF8/zero/all-byte payload, InvocationCoordinator.encode с реальным CacheService, hit/miss, независимые malformed поля и decoded key bounds. Все 44 Cache-теста прошли. Это новый явный JSON-формат binary fields, без эвристического чтения старых UTF-8 строк; Python bytes, Cache namespace/version и canonical content encoding не меняются. Ни concrete Cache-ноды, ни nested ModelIdentity gate этим исправлением не объявляются реализованными. Ниже сохранено исходное воспроизводящее свидетельство.
 
 DAGExecutor._invocation_step читает record.input через contract.input_type.model_validate_json. CacheKey.item_key содержит произвольные 32 bytes; CacheEntry.value для manifest — bytes. На текущих owning моделях нет ser_json_bytes/val_json_bytes. Проверка из backend через .venv/Scripts/python.exe -B: CacheKey[bytes](contract=MANIFEST_BYTES_CONTRACT, item_key=CacheItemKey(bytes([255])*32)).model_dump_json() завершилась:
 
