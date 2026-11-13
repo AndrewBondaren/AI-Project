@@ -1,5 +1,7 @@
 # Ответ Artifacts/publication по Source mutation
 
+Решение пользователя от 2026-11-14: explicit recovery с тем же operation_id, original immutable request/expected и новой fenced attempt согласовано при обязательном production logging от причины до результата. Это принятие semantics; полный runtime design остаётся на приёмке. Logging contract приведён в последнем разделе.
+
 Решение пользователя 2026-11-14: сначала полный recovery protocol. Fail-closed unresolved допускается только как промежуточный безопасный статус. Рекомендуемый полный протокол и необходимое решение о semantics повторной незавершённой попытки приведены в последнем разделе.
 
 Последнее уточнение по Source P2.7–P2.9 находится в разделе «Согласование linkage и no-op». Для первой поставки оно фиксирует закрытый перечень допустимых исходных holders и уточняет результат eligibility. Статус предложений DESIGN OPEN.
@@ -288,3 +290,67 @@ Registry хранит attempt identity/fence/request binding из провере
 Ошибки — typed DomainAttemptBindingError с frozen fault(operation_id, code), модуль application/publication/errors.py. Предлагаемые коды INVALID_SCOPE, OPERATION_MISMATCH, WRONG_PHASE, STALE_ATTEMPT. Повреждённый durable start/chain/request binding даёт PublicationInfrastructureError. Binding не открывает UOW, не меняет fence, не выдаёт новую attempt и не читает latest Source revision.
 
 P2.11 совместим с рекомендуемым recovery. Новый attempt_id получает только свежие записи собственной transaction. Старые uncommitted rows откатились; ранее committed creation допустима для REQUIRE_EXISTING только с successful terminal и текущим touched link. Committed revision rows без successful creation terminal — infrastructure inconsistency. Refusal terminal не подтверждает создание revision. Terminal replay acquisition не запускает. Bootstrap требует отдельного контракта provenance.
+
+## Обязательный logging contract recovery — 2026-11-14
+
+Пользователь принял explicit recovery original request под новым fence и обязал логировать причину и итог на штатном production уровне. Предложение использует get_consumer_logger(LogConsumer.ARTIFACTS), existing routes.py, JsonLogFormatter и artifacts/artifactLifecycle server route. Producer — общий publication recovery owner, управляющий operation lifecycle. Требуется дополнение docs/tz_logging.md о данном producer на app.artifacts; новый logger/handler/file не вводится.
+
+POJO — backend/app/dataModel/artifacts/recoveryEvents.py::OperationRecoveryEvent. Эмиттер — backend/app/application/publication/logging/operationRecoveryLog.py::OperationRecoveryLog. Он использует core LogLevel/facade; dataModel содержит immutable event records и enum.
+
+OperationRecoveryEvent frozen/strict/extra-forbid/revalidate-always содержит activity: RecoveryLogActivity, recovery_id: EntityUid, reason: RecoveryReason, operation_id: EntityUid, world_uid: EntityUid | None, preparation_fingerprint: RevisionHex | None, request_fingerprint: RevisionHex, observed_phase: OperationPhase | None, old_attempt_id/new_attempt_id: EntityUid | None, old_fence/new_fence: PositiveInt | None, durability: RecoveryObservation, terminal_kind: RecoveryTerminalKind | None, source_codes: tuple[SourceFieldCode | SourceLogicCode, ...], source_paths: tuple[ValidatedFieldPath | None, ...], hold_count: NonNegativeInt | None, fault_code: RecoveryContractCode | None. Code/path tuples имеют одинаковую длину и сохраняют исходный порядок; None используется для logic issue без POJO path. Concrete imports Source code enums и accepted path projection необходимо сверить с окончательным Source errors module перед реализацией. Поле message/raw payload/SQL/полный failure/outcome отсутствует.
+
+RecoveryReason — EXPLICIT_RESUME, UNKNOWN_COMMIT_ACK, INTERRUPTED_ATTEMPT. Caller обязан передать typed reason, без inference из текста exception. Existing recovery input дополняется reason; request_id берётся из общего logging context, не участвует в request fingerprint. recovery_id назначает recovery entry один раз на invocation и передаёт всем вложенным emitter calls. Повторный recovery получает новый recovery_id; operation_id и attempt chain связывают invocations через restart. World/fingerprints берутся из validated request/record; до успешного read отсутствующие поля None, без фиктивных UID.
+
+RecoveryObservation — OBSERVED, PROVISIONAL, SAVEPOINT_ROLLED_BACK, OUTER_ROLLED_BACK, COMMITTED, UNKNOWN. RecoveryTerminalKind — APPLIED либо REFUSED, идентифицирует вид существующего terminal, без копии его payload.
+
+Эмиттер имеет methods emit_inspected(event), emit_takeover_committed(event), emit_domain_rolled_back(event), emit_provisional_refusal(event), emit_terminal_committed(event), emit_terminal_replayed(event), emit_busy(event), emit_mismatch(event), emit_unknown(event, cause), emit_failed(event, cause). Каждый метод фиксирует соответствующую activity и severity и валидирует обязательный context; service не выбирает произвольный LogLevel. Internal emit выполняет typed validation до best-effort sink boundary. Поля можно собрать private factory emitter по typed arguments; public arbitrary record severity запрещён.
+
+| Activity | Production уровень | Producer и момент |
+|---|---|---|
+| RECOVERY_REQUESTED | INFO | Recovery entry до inspect, причина/operation/fingerprint/recovery_id |
+| RECOVERY_INSPECTED | INFO | После durable read, observed phase/attempt/fence |
+| RECOVERY_TAKEOVER_COMMITTED | INFO | После confirmed takeover commit, old/new attempts/fences, число перенесённых holds |
+| RECOVERY_DOMAIN_ROLLED_BACK | INFO | После подтверждённого rollback savepoint либо outer transaction, durability различает границы |
+| RECOVERY_PROVISIONAL_REFUSAL | WARNING | Source получил failure; только codes/checked paths, durability PROVISIONAL, terminal_kind=None |
+| RECOVERY_TERMINAL_COMMITTED | INFO для APPLIED, WARNING для REFUSED | После confirmed outer commit, durability COMMITTED |
+| RECOVERY_TERMINAL_REPLAYED | INFO | Прочитан existing terminal, новый commit не утверждается |
+| RECOVERY_BUSY | WARNING | Lock/writers/владелец препятствуют попытке |
+| RECOVERY_MISMATCH | WARNING | Typed binding/expected attempt mismatch; request rejected до body |
+| RECOVERY_OUTCOME_UNKNOWN | ERROR | Commit/rollback acknowledgement неопределён, durability UNKNOWN |
+| RECOVERY_FAILED | ERROR | Infrastructure failure, exception через existing exc_info |
+
+RECOVERY_REQUESTED также требует emit_requested, фиксирующий INFO. Hold transfer логируется только после commit takeover; промежуточный successful SQL append не даёт COMMITTED. Rollback savepoint не объявляется rollback всей операции. Replay refuse содержит REFUSED и owning codes/paths, но не повторяет COMMITTED и не выдаёт новый domain refusal event. При SourceFailure после acquire entry сохраняет исходный failure через domain rollback-carrier, эмиттер получает только projection.
+
+Конкретный конфликт с текущим logging ТЗ: STARTED/BUSY сейчас DEBUG. Для recovery пользователь требует штатную видимость причины и итога. Предлагается узкое дополнение ТЗ: RECOVERY_REQUESTED/INSPECTED — INFO, RECOVERY_BUSY — WARNING; уровни existing Snapshot STARTED/BUSY не меняются. Production router/server transcript allowlist должны разрешить эти записи app.artifacts. Добавление публикационного recovery producer на route также требует owning logging acceptance до кода.
+
+Состояние/результат восстанавливаются из ledger независимо от доступности логов. Ошибки sink после записи durable результата не изменяют outcome, не запускают retry/cleanup и не создают вторичную failure event. UnknownLogConsumerError является composition defect и проверяется startup/preflight до операций; обработка такого неожиданного дефекта после commit также должна сохранить наружный durable результат. Existing emitter pattern re-raise UnknownLogConsumerError нельзя безусловно перенести в postcommit recovery boundary. Invalid typed event — programming error до исполнения по возможности; postcommit reporting failure не подменяет terminal.
+
+Возможно несколько observations одного durable terminal при retries и потеря последней записи при crash. Exactly-once delivery не обещается. Инспекция после crash обязана записать actual observed terminal/attempt и reason нового recovery; отсутствие предыдущего log event не считается доказательством rollback.
+
+Приёмка требует реального emitter→get_consumer_logger→router→JsonLogFormatter→server sink прохода при production INFO, а не только Mock emitter. Проверить JSON-поля request_id/recovery_id/operation/world/fingerprints и old/new attempt/fence, refusal code/path projection, absence raw payload. Fault injection: lost takeover ack, lost outer commit ack, crash до terminal, terminal replay после restart, busy, fingerprint mismatch, savepoint rollback, corrupted chain, sink exception. Сверить ledger/holds на втором соединении и события: новый COMMITTED только после подтверждения; unknown затем replay связаны operation/attempt, имеют разные recovery_id; sink failure не меняет durable/caller outcome.
+
+Logging implementation и route/spec amendment входят в обязательный recovery срез до его runtime приёмки. Эти записи фиксируют контрактное предложение, runtime проверки ещё не выполнялись.
+
+### Поля, producer ownership и проверка итоговой записи
+
+Точный destination — existing route app.artifacts → artifacts/artifactLifecycle → logs/artifacts/artifactLifecycle.log. JsonLogFormatter добавляет request_id из core.logging.context.request_id_var. Входной HTTP/DAG/execution boundary устанавливает реальный request context; вложенные recovery calls наследуют его. После restart используется request_id нового вызова recovery, связь с прежним вызовом восстанавливается по operation_id и durable attempt chain. Отсутствующий request context не заменяется operation_id; отсутствие реального request_id в штатном entry является дефектом composition при приёмке.
+
+RecoveryReason находится в предлагаемом recoveryEvents.py и используется typed recovery input. Это причина конкретного вызова inspect/recovery. Если unknown был получен предыдущим процессом, новый caller вправе передать UNKNOWN_COMMIT_ACK только по доступному evidence этого запроса; иначе EXPLICIT_RESUME либо INTERRUPTED_ATTEMPT. Причина не выводится из отсутствия строки в логах.
+
+Согласованность события проверяет model validator: old/new fence положительны; new fence строго больше old для committed takeover; attempt IDs различаются; terminal_kind обязателен для terminal committed/replayed; APPLIED/REFUSED не ставятся для UNKNOWN; hold_count для takeover описывает подтверждённо перенесённые operation holds. Событие rollback содержит конкретную SAVEPOINT_ROLLED_BACK или OUTER_ROLLED_BACK observation. Для error events unavailable state остаётся None. При mismatch observed operation state берётся из durable read, а предъявленный request_fingerprint помечается именно как request value; для сравнения добавить observed_request_fingerprint: RevisionHex | None, чтобы не смешивать ожидаемое и фактическое.
+
+SourceMutationRecovery producer вызывает emit_requested/emit_inspected и финальные emit_busy/emit_mismatch/emit_unknown/emit_failed/emit_terminal_replayed. Takeover owner вызывает emit_takeover_committed только после commit и подтверждённого переноса holds. Source apply owner вызывает emit_provisional_refusal с проекцией уже полученного SourceFailure. PublicationAttempt coordinator вызывает emit_domain_rolled_back после acknowledgement и emit_terminal_committed после outer COMMIT. Из этих producer calls только один владелец эмитирует один факт одной попытки; повторный caller observation оформляется replay, а не вторым commit event.
+
+Каждый завершившийся recovery invocation получает итог: replay/новый terminal, busy/mismatch, unknown либо infrastructure failure. Для отмены добавить RECOVERY_CANCELLED уровня WARNING и emit_cancelled(event): coordinator указывает подтверждённую rollback/commit observation, если она известна. Cancellation во время IO acknowledgement без установленного исхода требует UNKNOWN; CancelledError сам по себе не доказывает rollback. Committed terminal, установленный до cancellation, не переименовывается в refused/cancelled operation outcome.
+
+Для реальной аварии процесса завершающая log запись может отсутствовать. Следующий вызов inspect всегда пишет наблюдённое durable состояние и завершает собственную цепочку событий. В fault-injection приёмке проверяется именно такое поведение, а не невозможная гарантия последней строки при аварии.
+
+Минимальный обязательный набор production проверок:
+
+1. INFO-фильтр сохраняет REQUESTED с typed reason и correlation, INSPECTED и успешный/replayed итог. WARNING сохраняет busy, mismatch, provisional refusal и committed refusal. ERROR сохраняет unknown/infrastructure failure.
+2. После fresh takeover COMMITTED событие соответствует реально увеличенному fence, attempt_id и перенесённым holds, проверенным вторым соединением. При lost ack сначала UNKNOWN, затем inspect/replay фактического состояния.
+3. При Source refusal после записи links/holds provisional событие содержит owning codes/paths; после savepoint rollback logs фиксируют эту границу; только после terminal COMMIT появляется durable REFUSED. Другой процесс читает прежние domain rows и terminal refusal.
+4. При terminal replay body/acquire/commit не выполняются; logging имеет REPLAYED и тот же terminal kind, operation/fingerprint, но новый recovery_id.
+5. Fault sink не меняет возвращаемый terminal, phase, holds либо исключение recovery. Проверки включают postcommit UnknownLogConsumerError и обычную sink OSError. Ошибочная route composition обнаруживается также до первого runtime вызова.
+
+Подробная запись logging contract завершена как проект. Приняты semantics explicit recovery и обязательность production logging. Конкретные event schema, route/spec amendment и runtime implementation проходят совместную приёмку до поставки.

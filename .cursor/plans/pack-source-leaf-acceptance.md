@@ -50,8 +50,12 @@ NodeContract допускает lifecycle=None, leaf proposal не выбира�
 
 ## 3. Порядок устранения
 
+**Обновление 2026-11-14 после owner review:** историческое описание A1/A3 выше фиксирует исходную находку, а не текущее наличие дефекта. В execution-binding уже добавлены completed/next_index и single-description проверка; полного continuation ещё нет. Bind field divergence устранено в metadata POJO и exchange. [Конкретизация Pack errors/identity](pack-source-error-identity-contract.md) задаёт mapping для рассмотрения; четыре кода и полный freeze ещё требуют приёмки. [Ответ DAG](dag-pack-source-binding-response-2026-11-14.md) подтверждает механизм CALL, не закрывает A1/A2/A4. [Ответ publication](pack-source-adoption-publication-response-2026-11-14.md) остаётся DESIGN OPEN. Общий вердикт не изменён.
+
 1. A3: свести один Pack bind/input/error контракт — без нового Source API.
 2. A1: завершить sequential continuation и mapping каждой resume-фазы по принятому порядку.
 3. A2/A4: связать верхние команды/CallTargets/factories с transport registration и restore; затем повторить только затронутые критерии приёмки.
+
+Полученное [дополнение владельца DAG](dag-pack-source-binding-addendum-2026-11-14.md) предъявляет семь фаз exchange и upper binding candidates без сужения общих unions. Остаток A1 теперь включает внешний continuation coordinating node и producer metadata Planning; A2 — полный union/caller contract и приёмку unsupported policy/identities; A4 — production authorized entry/store composition и lifetime. Само наличие новых таблиц не закрывает замечания без проверки оставшихся входов и всех обязательных критериев.
 
 После закрытия замечаний оформляется конкретный implementation scope через implement-plan. Этот отказ относится к интеграционному маршруту, не отменяет согласованные Pack/Source решения и не блокирует независимые Pack-срезы.

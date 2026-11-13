@@ -317,6 +317,26 @@ Bootstrap существующих registry rows требует принятог
 
 Проверки: no-op сохраняет прежнюю creation attempt; подмена uid caller отвергается; wrong task/DB/phase/fence не выдаёт active attempt; child/stale scope после rollback не действует; rollback удаляет fresh provenance вместе с mapping; восстановление не переименовывает old attempt в current; одинаковый content hash разных seq не смешивает creation; tombstone никогда не даёт CREATE body root. До согласования infrastructure binding, bootstrap и recovery это test obligations, не runtime evidence.
 
+### P2.12. Решение по recovery и обязательное логирование (2026-11-14)
+
+Пользователь согласовал explicit recovery незавершённого transactional body с тем же operation_id, исходным immutable request/expected и новой fenced attempt, с условием: **«такое поведение требует логирования -> от причины и operation_id до результата»**. Durable terminal всегда replay-ится точно без domain body. Recovery незавершённой attempt — новое исполнение исходного запроса, а не восстановление утраченного in-memory refusal; provisional результат может отличаться. Это решение заменяет запрет повторного body для той же operation identity в раннем кандидате. Автоматическая замена operation_id и silent retry не разрешены. Весь P2/P3 этим решением ещё не принят.
+
+Обязательное условие приёмки — единая прослеживаемая цепочка recovery по existing logging facade/JsonLogFormatter/router, согласно docs/tz_logging.md. Owning publication emitter должен получить concrete typed event/error mapping и route в implementation map до кода; новый локальный logger/handler или отдельный журнал состояний не вводится. Source передаёт свои typed diagnostics, не дублирует lifecycle emit.
+
+| Факт | Обязательные данные и момент фиксации |
+|---|---|
+| Recovery запрошен | Типизированная причина восстановления и наблюдаемое durable состояние; operation_id, world_uid, request_id общего фасада, request_fingerprint, ожидаемая attempt identity. Не выдавать отсутствие terminal за доказанный crash: unknown acknowledgement/незавершённая attempt отражаются как наблюдения |
+| Решение после inspect/claim | Terminal replay / busy / binding или CAS mismatch / takeover; прежние и новые attempt_id/fence при наличии. Takeover и перенос operation holds отмечаются подтверждёнными только после их commit |
+| Повторный domain apply | Связь новой attempt со старой и тем же request fingerprint; исходные expected не заменяются latest. Ни body, ни весь request, ни raw SQL в лог не копируются |
+| Domain refusal/rollback | Коды Source diagnostics и типизированные пути/контекст по owning error mapping; подтверждённый rollback отличается от unknown. Промежуточный refusal не объявляется durable terminal |
+| Итог recovery | Applied / Refused / terminal replay либо busy/stale/infrastructure failure/unknown outcome; operation_id, attempt/fence, correlation и typed причина. Success/refusal как durable итог — только после confirmed outer commit; replay не выдаётся за новый APPLY_COMMITTED |
+
+При exception сохраняется исходный exception/trace через существующий formatter и существующая failure correlation, где она определена owning error contract; новый случайный failure_id вместо отсутствующего owning ID не вводится. Типизированный recovery reason не является вторым SourceFailure/outcome enum. Точный roster причин, event POJO, severity и producer methods конкретизирует Artifacts/publication совместно с Source error mapping. Необходимые причина и итог должны быть наблюдаемы при штатном production уровне; цепочка не может целиком исчезнуть при отключённом DEBUG. Если это требует уточнить принятый STARTED/BUSY severity, владелец предъявляет изменение отдельно.
+
+Crash может оборвать лог до итоговой записи; следующая recovery коррелируется по durable operation/attempt и отражает установленный результат. Логи не используются как ledger или доказательство commit, не обещают exactly-once и не восстанавливают утраченные diagnostics. Отказ sink после commit не меняет outcome и не инициирует повторный apply.
+
+Проверки приёмки: terminal replay без повторного apply/commit event; recover до domain start и после rollback-before-terminal; crash после commit до acknowledgement; stale/CAS mismatch; busy и unknown; две последовательные recovery attempts различимы по attempt/fence; исходная причина и конечный результат соединяются по operation_id; реальные emitter→configured sink проверки и failure correlation; ошибка sink не меняет committed outcome. Runtime логирование пока не реализовано. Требование передаётся владельцу publication как обязательная часть полного recovery, не follow-up после поставки.
+
 ## Следующие проверяемые проектные результаты
 
 | Порядок | Результат | Владелец и граница |

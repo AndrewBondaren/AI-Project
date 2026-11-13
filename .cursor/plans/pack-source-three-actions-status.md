@@ -19,3 +19,11 @@ Review передан 2026-11-14 в существующие чаты: DAG — 0
 Принятый Source internal adopt не меняется. Предложенная publication transaction выполняет все adopts, затем scoped finish и COMMIT; ошибка любого adopt откатывает новые holds всех предыдущих, source holds не снимаются, READY возвращается только после подтверждённого COMMIT. Это предложение инфраструктурной границы, не разрешение Pack вызывать Source и не новый порядок DAG. Успешный READ не является live hold.
 
 Дальнейший объём разделён по владельцам: DAG — полный continuation/upper/restore контракт; Pack — semantic errors, final-state proof coverage и immutable preparation identity; publication/Artifacts — authority источников, scoped finish, operation lifecycle и retention handoff совместно с Pack. Независимая работа Pack этим не блокируется. Сужение общих upper unions и новый publication entry нельзя молча считать утверждёнными изменениями контрактов.
+
+## Следующий проход 2026-11-14
+
+[Pack A3 / identity](pack-source-error-identity-contract.md) конкретизирует operation-specific diagnostics без новых carriers и повторной Source проверки. Это proposal для приёмки, не объявление A3 закрытым. Уточнение publication подтвердило уже принятый PACK_ACTIVATION и единый preparation digest из body/lease: эти два вопроса сняты с OPEN. Authority source holders, READY replay и post-READY retention остаются открытыми. Предложение пересобирать manifest на READY противоречит действующему запрету ТЗ и возвращено владельцу как требующее отдельного решения; автоматически не принято.
+
+Владельцу DAG передан запрос на полный continuation, exact upper bindings с сохранением общих unions и конкретный trusted restore. Новые Source methods и изменение принятого порядка 1–7 не запрошены.
+
+Получено [дополнение DAG A1/A2/A4](dag-pack-source-binding-addendum-2026-11-14.md): семь phase POJO, кандидаты upper contracts/factories/registration без сужения unions, явный предложенный отказ unsupported до CALL, трассировка существующих store/restore. Оно не закрывает внешний continuation detailed_initialization, producer metadata Planning, полный Source union и production authorized entry/store/lifetime binding. Unsupported через runtime failure — предложение для приёмки, не уже принятое поведение. Следующая проверка использует это дополнение вместо повторного запроса «описать семь фаз».
