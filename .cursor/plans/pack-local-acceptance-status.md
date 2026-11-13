@@ -4,6 +4,8 @@
 
 ## Актуальный остаток после сверки bindings — 2026-11-13
 
+После исправления консистентности ТЗ и appendix используют единый `PackPreparationBody(state, capture, scope)` с конечным state на входе final prepare. [Единая таблица поставки](world-pack-v2-single-manifest-contract.md#единая-таблица-зависимостей-и-завершения-шагов) фиксирует зависимости и результаты этапов, подключение отдельной сериализации и порядок cutover → удаление legacy → version audit. Старый общий gate write-плана заменён условиями входа конкретного среза; новых согласований уже решённых union/release/settings не требуется.
+
 [Общая приёмка текущего scope](pack-current-scope-acceptance.md) выполнена по всем обязательным критериям. Локальные границы рассмотрены; полная цепочка не принята из-за точечных неподтверждённых atomic/resource/Transition bindings. Preparation union, metadata outputs, release и settings исключения не являются повторно открытыми вопросами. Отсутствие реализации само по себе не использовано как причина отказа в приёмке плана.
 
 Уточнение scope по решению пользователя: encoding identity, canonical registration и exact READY recovery ведутся в [отдельном плане сериализации/десериализации](pack-serialization-deserialization.md). Не перечислять их далее как блокеры независимого текущего Pack scope; они остаются обязательной интеграцией для готовности соответствующего runtime-пути. В отличие от старой сводки ниже, in-memory identity probes уже выполнены и записаны в activation vector; production tests не выполнялись.
