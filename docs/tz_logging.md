@@ -108,6 +108,26 @@ aggregate lifecycle event без повторной эмиссии domain Warnin
 Runtime unresolved domain reason пишет его существующий producer;
 validate_only возвращает diagnostics без runtime WarningError emit.
 
+**Publication recovery (согласовано 2026-11-14):** общий producer
+OperationRecoveryLog использует существующий LogConsumer.ARTIFACTS и маршрут
+`app.artifacts` → `artifacts/artifactLifecycle`. REQUESTED, INSPECTED,
+TAKEOVER_COMMITTED, DOMAIN_ROLLED_BACK и TERMINAL_REPLAYED имеют INFO;
+TERMINAL_COMMITTED — INFO для APPLIED и WARNING для REFUSED;
+PROVISIONAL_REFUSAL, BUSY, MISMATCH и CANCELLED — WARNING;
+OUTCOME_UNKNOWN и FAILED — ERROR. Это уровни recovery activities;
+существующие Snapshot STARTED/BUSY не меняются.
+Обязательна цепочка от typed причины через operation_id, request_id,
+recovery_id, request fingerprint и известные attempt/fence до результата.
+Предъявленный fingerprint и прочитанный durable fingerprint различаются;
+Source diagnostics сохраняют typed code/path и допустимый identity context,
+без body/raw SQL. COMMITTED фиксируется только после подтверждения commit,
+REPLAYED — при чтении существующего terminal без повторного apply.
+Ошибка logging после durable commit не меняет исход для caller.
+Источник конкретного event/producer контракта —
+[проект recovery](../.cursor/plans/source-mutation-artifacts-publication-response-2026-11-13.md).
+Это нормативное требование к поставке; новый emitter и проверки реального
+sink ещё не реализованы и не приняты.
+
 Обязательная корреляция lifecycle: operation_id, world_uid и request_id
 общего фасада; после binding — request_fingerprint; при наличии — timeline_id,
 snapshot_id, section key, target ref, artifact hash и outcome enum value.

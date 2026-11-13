@@ -14,6 +14,8 @@
 
 Предлагаемые модули: `dataModel/worldPack/preparation/metadataDependencies.py` для transient records, `dataModel/worldPack/meta/metadataAttribution.py` для durable mapping. Модели strict/frozen/extra-forbid/revalidate-always; вложения immutable; обязательные поля без скрытых defaults. Нет dict/Any, reader, lease, callback, receipt store или счётчика версии state.
 
+Уточнение размещения: PackMetadataProofBinding объявляется только в `preparation/metadataDependencies.py`; existing PackMetadataSubject остаётся в `preparation/metadataSubject.py`. Прежнее размещение binding в metadataSubject.py отозвано в проекте, alias/re-export не вводится. `preparation/operations.py::PackMetadataProvenanceInput` использует единственное объявление binding. Binding не импортирует state/operations и не содержит workflow state.
+
 | Модель | Все предлагаемые поля | Ответственность |
 |---|---|---|
 | PackMetadataDependencyUse | group: PackMetadataGroup; source_usage: SourceProofInput; basis: PackWildernessStatusBasis либо None | Source-зависимости группы и отдельное Pack-owned основание расчёта. Нет копии значения metadata |

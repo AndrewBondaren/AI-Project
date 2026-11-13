@@ -53,7 +53,7 @@ Record используется один раз как terminal outcome existing
 | SourceRegistryUpdate | kind, expected: SourceVersionRef, body: ArtifactRef |
 | SourceRegistryDelete | kind, expected: SourceVersionRef |
 | SourceCollectionMutation | collection_id: SourceCollectionId, expected_revision: SourceRevision \| None, body: ArtifactRef |
-| SourceRegistryMutationInput | operation_id: EntityUid, world_uid: EntityUid, changes: tuple[SourceRegistryChange, ...], membership: SourceCollectionMutation |
+| SourceRegistryMutationInput | operation_id: EntityUid, world_uid: EntityUid, execution_version: Annotated[StrictInt, Field(ge=1)], changes: tuple[SourceRegistryChange, ...], membership: SourceCollectionMutation; version binding — P2.13 |
 
 `SourceRegistryChange` — discriminated union трёх вариантов по kind. В update/delete expected.object_id должен быть RegistryMemberId; другие принятые SourceObjectId варианты не разрешаются в этом частном mutation срезе. Не создавать отдельный RegistryVersionRef, зеркалирующий SourceVersionRef. SourceCollectionMutation отличается от version ref: expected_revision — **предусловие**, None означает отсутствие зарегистрированной collection identity; body — предлагаемое после-значение, не тело уже назначенной revision. Промежуточная новая seq в запросе запрещена.
 
@@ -110,7 +110,7 @@ Staged candidate body audit-only mutation может отличаться пол
 | 72102 | SourceRegistryUpdate | kind, expected, body |
 | 72103 | SourceRegistryDelete | kind, expected |
 | 72104 | SourceCollectionMutation | collection_id, expected_revision, body |
-| 72105 | SourceRegistryMutationInput | operation_id, world_uid, changes, membership |
+| 72105 | SourceRegistryMutationInput | operation_id, world_uid, execution_version, changes, membership |
 | 72106 | SourceMutationApplied | operation_id, world_uid, request_fingerprint, object_revisions, collection_revisions |
 
 Диапазон 72000–72999 проверен поиском по backend/app и .cursor/plans 2026-11-13: до этого предложения совпадений не найдено. Это локальная проверка отсутствия конфликта, не принятие регистрации владельцем общего terminal manifest. Перед реализацией повторить collision check по совокупному manifest.
@@ -336,6 +336,141 @@ Bootstrap существующих registry rows требует принятог
 Crash может оборвать лог до итоговой записи; следующая recovery коррелируется по durable operation/attempt и отражает установленный результат. Логи не используются как ledger или доказательство commit, не обещают exactly-once и не восстанавливают утраченные diagnostics. Отказ sink после commit не меняет outcome и не инициирует повторный apply.
 
 Проверки приёмки: terminal replay без повторного apply/commit event; recover до domain start и после rollback-before-terminal; crash после commit до acknowledgement; stale/CAS mismatch; busy и unknown; две последовательные recovery attempts различимы по attempt/fence; исходная причина и конечный результат соединяются по operation_id; реальные emitter→configured sink проверки и failure correlation; ошибка sink не меняет committed outcome. Runtime логирование пока не реализовано. Требование передаётся владельцу publication как обязательная часть полного recovery, не follow-up после поставки.
+
+### P2.13. Immutable execution binding — REC-1 (2026-11-14)
+
+Проверенный concrete кандидат первого registry — WorldTerrainRegistry (`SCH-WORLD-TERRAIN`, ключ system_terrain). Это выбор для проектного анализа, не объявление полного writer inventory завершённым. TerrainRegistryEntry содержит mutable eligibility list при frozen модели и semantic authored-presence hills через model_fields_set. Registered durable owning body codec и semantic Source projector для него ещё не предъявлены. WorldService._save/reconcile — существующая запись owning rows, не реализация Source revision boundary.
+
+Для recovery недостаточно SourceRegistryMutationInput bytes и ArtifactRef.format_version. Последняя определяет формат body, но не версию projector/ref-integrity/membership правил. Предлагается добавить в **ещё не принятый** SourceRegistryMutationInput обязательное поле `execution_version: Annotated[StrictInt, Field(ge=1)]` после world_uid. Bool/строки отвергаются, default отсутствует. Отдельного version DTO, зеркального descriptor/header или SourceProof schema change не требуется.
+
+Execution binding key — `(registered member descriptor из request.changes, execution_version)`. P1 уже требует один member descriptor на batch; membership counterpart проверяется тем же exact binding. Номер фиксирует неизменяемый пакет семантических правил **для этого descriptor**, а не build number процесса. Registration включает owning body codec/format version, semantic projector и authored-presence, key adapter, membership SET/SEQUENCE semantics, ref-integrity interpretation, tombstone encoding и audit exclusions. Смена любого влияющего правила требует новой execution_version и отдельной совместимости; переопределять старую регистрацию новым алгоритмом запрещено.
+
+Registry и его entries — internal application composition, не request-supplied callback/config. Runtime mutation не выбирает «последнюю поддержанную» версию вместо заявленной. Existing durable terminal replay не требует запуска прежнего projector: проверяет immutable request binding и возвращает сохранённый outcome. Только незавершённая recovery требует наличия точного исполнителя версии. Если его нет, body не запускается, исходные request/holds сохраняются, caller получает явный отказ исполнения; не фабрикуется SourceMutationRefused с business diagnostics и не снимаются holds как после завершённой mutation. Typed infrastructure error для unsupported execution version должен быть согласован с publication recovery owner.
+
+Для candidate версии 1 предлагается **запрет ambient настроек**, влияющих на преобразование body/назначение semantic hash. Versioned execution определяется request bodies и фиксированной регистрацией правил. Если owning trace выявит изменяемый параметр, его exact immutable input обязан войти в request/dependency binding до приёмки версии 1; этот запрет не является доказательством отсутствия параметров. Проверки expected/latest/ref-integrity в transaction могут видеть изменившееся состояние и законно дать новый отказ: это согласованная recovery semantics, а не silent смена projector. Исходные expected refs не заменяются.
+
+Для terrain body необходимо сохранить hills absent / explicit None / explicit policy и порядок/состав eligibility; нельзя вводить label/glossary exclusions по названию. Default правила SourceObjectContract остаются «всё semantic, кроме доказанно excluded». Конкретное дерево owning immutable body, format binding и тестовые векторы входят в обязательный projector prerequisite. Принятые Source identity/proof refs и их canonical IDs от execution version не меняются.
+
+Это уточнение **supersedes только кандидат** P1.1/P2.1: полный порядок SourceRegistryMutationInput теперь operation_id, world_uid, execution_version, changes, membership. Кандидат ID 72105 ещё не принят/реализован/использован для сохранённых bytes; изменение его проекта не является runtime wire migration. Перед freeze нужны реальные fixed vectors, collision checks и nested round-trip. Если обнаружится persisted use предыдущей формы, её нельзя переопределить: потребуется отдельная schema version. request fingerprint включает execution_version; SourceMutationApplied.request_fingerprint и immutable request record связываются с обновлённым canonical request.
+
+REC-1 пока **PARTIAL, не закрыт**: конкретизирован способ binding, но owning terrain projector/body/tombstone и влияющие inputs ещё не приняты. Для его закрытия нужен execution registration dossier с точными owner classes/modules, immutable fields и consumer traces; scalar version без такого dossier не подтверждает воспроизводимость. Полноценная migration всех Source writers не входит в этот шаг.
+
+### P2.14. Terrain owning contract: установленная граница и запрос (2026-11-14)
+
+Проверены terrainRegistryEntry.py, eligibilityRule.py, hillPolicy.py, hillShape.py, surfaceCoating/surfaceSupportInput.py и landcover/planning/capturedSources.py. Findings до выбора body representation:
+
+| Evidence | Следствие для body/projector |
+|---|---|
+| TerrainRegistryEntry.eligibility — list[EligibilityRule] при frozen outer model | Нужна owning immutable representation либо согласованная правка модели; frozen alone не обеспечивает deep immutability |
+| has_authored_hills читает model_fields_set | Body должен сохранять absent / explicit None / policy; обычный полный dump с defaults не обеспечивает round-trip |
+| TerrainSupportEntry содержит только key/category/default_material/merge_rank/eligibility/hills/hills_authored | Это частичная consumer projection; нет основания использовать как полный Source terrain body или добавлять в неё все Source поля |
+| capture_landcover_policy переносит captured.hills_authored отдельно | Authored bit уже нужен реальному consumer, это не придуманная Source metadata |
+| HillPolicy.resolved_shapes при пустом shapes вызывает HillShape.catalog() | Каталог/его порядок входят в influencing execution semantics; неизменность body bytes не фиксирует изменение каталога автоматически |
+| EligibilityRule имеет ordered tuple/list употребление и numeric bounds validators | Сохранить owning validation и порядок; не сортировать rules как set без consumer доказательства |
+
+По разрешению пользователя создан отдельный owning clarification чат «Terrain registry: контракт body и projector для Source», id 01a1d6e7-7dc4-71c0-a570-5abda0bffe62. Запрошен только новый terrain-source-execution-contract-dossier.md: complete immutable body/nested types, reuse inventory, consumers/semantic fields, canonical format/projector/ambient inputs/ref-integrity/tombstone/bootstrap. Код/Pack/DAG/чужие планы не поручались. Ответ и joint review ожидаются. До них новый Source mirror terrain DTO не создаётся, REC-1 остаётся PARTIAL.
+
+### P2.15. Полученный Terrain dossier: проверка реализуемости (2026-11-14)
+
+Получен [terrain-source-execution-contract-dossier.md](terrain-source-execution-contract-dossier.md). Владелец рекомендует укрепление existing TerrainRegistryEntry/WorldTerrainRegistry, все 18 полей semantic, immutable nested tuples и SEQUENCE membership; эти рекомендации требуют joint review, не приняты автоматически. Mirror DTO и partial TerrainSupportEntry как полный body исключены. Полный caller/writer inventory и owning ref-integrity остаются OPEN.
+
+Проверкой текущего app.encoding.canonicalCodec.CanonicalCodec установлено: BaseModel кодируется ровно по model_fields. RegisteredTypeEntry содержит только type_id/python_type/kind; hooks для добавочной authored-presence metadata нет. Поэтому предложение dossier «после 18 полей» добавить hills presence тем же codec пока не реализуемо через existing manifest. Нужен конкретный owning representation/presence контракт и compatibility trace; расширение generic codec либо зеркало terrain body не разрешены этим замечанием. Уточнение отправлено владельцу Terrain.
+
+Предложенный terrain value adapter также должен быть оформлен как internal registered format/value binding в composition. Название «публичный pure adapter» не разрешает Source→Terrain public helper в обход DAG. Окончательная import/call boundary запрошена вместе с representation. Source tombstone/provenance остаются Source-owned, не передаются Terrain. REC-1 не закрыт до устранения этих пробелов и остальных prerequisites dossier.
+
+### P2.16. Terrain presence: устранение codec blocker (2026-11-14)
+
+Владелец уточнил dossier: вместо невидимой metadata предлагается обычное 19-е поле hills_authored: StrictBool в существующем TerrainRegistryEntry. Public helper отозван в пользу internal registered composition binding. Это устраняет конкретное противоречие P2.15 с возможностями canonical manifest, но ещё не означает принятия изменения owning POJO/callers.
+
+Source проверил _decode_one в app.encoding.canonicalCodec: полный ordered field roster сверяется с owner.model_fields **до** model_validate. Следовательно, после регистрации 19-field модели canonical payload без hills_authored должен отклоняться до legacy before-validator; он не может восстановить marker догадкой. Полный canonical decode с hills=None/hills_authored=False сохраняет false. Encode читает поля непосредственно и не вызывает proposed legacy serializer. Расширение generic codec для этого representation не требуется.
+
+Условия joint acceptance остаются явными: strict/deep immutable модели; preserving legacy export flags/schema; capture_landcover_policy передаёт marker; with_hills/with_eligibility сохраняют принятую семантику; generic model_copy/model_construct/replace и persisted canonical registrations проверены. Legacy JSON, canonical field dict и typed durable reader — разные входы; последний не проходит через legacy authored_hills_key_from_wire. Manifest IDs/format и full round-trip tests ещё отсутствуют. REC-1 остаётся PARTIAL до полного owning dossier acceptance, Source tombstone и остальных recovery gates.
+
+### P2.17. Source tombstone и pruned revision (2026-11-14)
+
+Основание — основной план: tombstone является revision с deleted flag, не отдельной сущностью. Этот срез проектирует registry-member DELETE; удаление самой collection и restore/recreate не добавляются. Новый публичный SourceTombstone DTO, фиктивный пустой ArtifactRef либо body Terrain с null-полями не создаются. Принятый live SourceBodyVersion/proof manifest не меняется.
+
+Предлагаемый storage invariant exact object revision index (не новый публичный POJO): immutable identity + seq + semantic_hash + deleted: strict bool + created_attempt_id. Live revision имеет immutable body ArtifactRef mapping; deleted revision его не имеет. Prune — отдельный факт прекращения доступности ранее live mapping, не изменение deleted/seq/hash и не новая semantic revision. Identity, assigned seq/hash, original body ref и creation provenance не стираются при prune: это позволяет отличить sanctioned prune от storage corruption и не переиспользовать identity/seq. Точные storage rows/events/SQL guards остаются revision-storage implementation slice.
+
+| Exact состояние | Live body read | Root eligibility |
+|---|---|---|
+| Live, mapping retained | Прежнее проверенное body | P2.11 CREATE либо REQUIRE_EXISTING |
+| Deleted revision | SourceFailure/TOMBSTONE, body отсутствует по контракту | Отказ TOMBSTONE, body root не создаётся |
+| Live revision после explicit prune | SourceFailure/REVISION_PRUNED, без latest fallback | Отказ REVISION_PRUNED |
+| Live retained mapping, bytes пропали | MISSING_BODY либо CORRUPT_BODY по реальной проверке | Не трактовать как tombstone/prune, repair не выполняется |
+
+DELETE проверяет expected exact **live** ref в той же transaction, где проверяется итоговый ref-integrity graph. Назначает next seq этой identity и deleted=true, связывает creation attempt и operation→revision link, удаляет identity из нового collection body и сохраняет старые live roots. Outcome содержит tombstone SourceVersionRef и проверенную collection revision. Tombstone ref не включается в live capture dependencies. Replay committed operation возвращает прежний outcome; новый DELETE уже deleted identity — TOMBSTONE, не новая seq. No-op DELETE missing entry не вводится.
+
+**Кандидат semantic hash tombstone v1:** existing CanonicalCodec над `("source.registry-member.tombstone", 1, registry_member_id)`, затем existing content_digest(bytes).hex(). Source-owned internal модуль `application/worldData/sourceVersioning/encoding/tombstoneEncodingV1.py`; identity кодируется принятым RegistryMemberId binding из SOURCE_PROOF_SCHEMA_V1, без нового record/type ID. Первый tuple string — фиксированный доменный tag, не пользовательский *_kind carrier. Root tuple отличает encoding от live body record. Версия 1 — фиксированная версия encoding, не seq. Seq, operation/attempt, время, execution_version и прежние bytes в hash не входят; deleted смысл для одной identity стабилен, а history различается seq. Это кандидат только для registry member, не произвольных SourceObjectId.
+
+Owning execution registration ссылается на этот точный tombstone encoder. Его изменение требует нового согласованного encoding/semantic contract; нельзя переопределить v1. Не вводится второе hash-ядро. Root tuple/identity binding и domain tag должны получить golden bytes/hash vectors с реальными Source identity POJO до freeze. Пока это проект формулы, не вычисленный или проверенный runtime vector. Историческое общее упоминание SourceTombstoneVersion не используется как разрешение зеркального public record.
+
+Условия проверки: DELETE сохраняет historical body/root; TOMBSTONE отличается от REVISION_PRUNED и отсутствующих bytes; digest не зависит от attempt/seq; identity/world/descriptor/key различаются canonical bytes; recovery/rollback не оставляют deleted latest без согласованного membership/terminal; repeated terminal replay не назначает seq; orphan/tombstone body mapping запрещён; prune не меняет revision semantics. Exact inbound ref policy и Terrain SEQUENCE membership всё ещё требуют owning acceptance. P2.17 закрывает предложенную форму Source tombstone, но не объявляет REC-1 или DELETE runtime принятыми.
+
+### P3.1. Конкретная внутренняя карта Source mutation/recovery (2026-11-14)
+
+Следующая карта заменяет абстрактную роль «Source apply implementation» для **internal** проектного среза. Она не объявляет новый public CRUD, не назначает DAG-ноды и не разрешает Source самостоятельно оркестрировать чужие public pipelines. Прежний основной gate pregame publication/append-only writes сохраняется. Public entry, staging caller и первоначальный claim остаются отдельной согласуемой границей P3.3.
+
+Все пути ниже начинаются с app.application.worldData.sourceVersioning. Классы предлагаемые, runtime отсутствует.
+
+| Класс / модуль | Ответственность и зависимости | Effects и критерий отказа |
+|---|---|---|
+| SourceMutationExecutionRegistry / mutation/executionRegistry.py | Exact descriptor+execution_version → неизменяемый на lifetime attempt экземпляр SourceRegistryMutationApplier; registration задаётся composition | Lookup без IO; отказ при fallback на latest version или runtime замене регистрации |
+| SourceRegistryMutationApplier / mutation/registryMutationApplier.py | Одна registry transaction body: validation/expected/ref-integrity → назначение revisions → owning rows/membership → links → full roots; использует фиксированные owning format/value bindings | Borrowed domain scope; отказ при own commit, вызове owning public CRUD или выдаче durable success до commit |
+| SourceMutationAttemptRunner / mutation/attemptRunner.py | Привязывает exact executor к одному PublicationExecutionGrant, вызывает domain body, переводит SourceFailure в rollback-carrier, передаёт Applied/Refused в existing terminal owner | Не stage/claim/takeover и не retry; отказ при повторе domain(), catch-and-commit после SourceFailure или смене request |
+| SourceMutationLinkStore / mutation/linkStore.py | Полный touched set P2.7 | Scoped append/read, без duplicate terminal |
+| SourceRootEligibilityBinding / retention/rootEligibilityBinding.py | Link+status+checked attempt provenance → acquisition mode P2.11 | Read-only; не вычисляет полномочия из caller uid |
+| SourceRootReadBinding / retention/rootReadBinding.py | Exact body mapping → owning storage closure P2.5 | Read-only; не acquire/release, не latest fallback |
+| SourceDiagnosticLogProjector / logging/diagnosticProjection.py | SourceFailure → safe typed log entries | Pure; не дублирует publication emitter |
+
+Source revision-index storage остаётся отдельным конкретизируемым контрактом шага revisions/history: в нём нужно принять append-only rows/events и latest read. Нельзя скрыть этот незакрытый порт внутри applier или использовать WorldService._save как его готовую реализацию. Owning terrain row writer также не назначается Source вместо Terrain.
+
+### P3.2. Execution lookup, body и terminal boundary
+
+Предлагаемые internal signatures (не public payload):
+
+```python
+def resolve(
+    self, descriptor: SourceDescriptorKey, execution_version: StrictInt,
+) -> SourceRegistryMutationApplier | None: ...
+
+# SourceRegistryMutationApplier; immutable configured execution binding
+async def required_refs(
+    self, scope: CommitReadScope, request: SourceRegistryMutationInput,
+) -> tuple[ArtifactRef, ...] | SourceFailure: ...
+
+async def apply_in_scope(
+    self, scope: CommitScope, request: SourceRegistryMutationInput,
+) -> SourceMutationApplied | SourceFailure: ...
+
+# SourceMutationAttemptRunner
+async def run(
+    self, grant: PublicationExecutionGrant,
+    request: SourceRegistryMutationInput,
+    execution: SourceRegistryMutationApplier,
+) -> SourceMutationApplied | SourceFailure: ...
+```
+
+resolve валидирует exact positive version и registered descriptor, возвращает None только при отсутствии поддержанного exact исполнителя. Предъявленный request уже checked immutable ledger value; resolve не декодирует тела, не читает latest и не запускает projector. Ссылка на executor — обычная internal dependency с фиксированной registration, не сериализуемый token. Caller не конструирует executor и не подменяет его callbacks. Publication преобразует None в согласованный EXECUTION_UNAVAILABLE с descriptor/version, сохраняя request/holds. При terminal replay lookup не выполняется.
+
+required_refs вычисляет полный canonical unique closure **candidate request artifacts**: CREATE/UPDATE bodies, after-membership body и format-required dependencies. Не принимает список refs как доказательство полноты и не включает произвольные latest bodies. DELETE не имеет candidate member body. Execution semantics/code версия фиксируется registry, а не фиктивным ArtifactRef. Expected historical revisions читаются под Source root protection в domain scope; их нельзя объявить staged кандидатами. Если owning registration требует внешние immutable execution inputs, они должны быть явно добавлены в request binding до его приёмки (REC-1), а не обнаружены из ambient configuration в required_refs.
+
+run использует owning transaction_for_attempt(grant), открывает domain() один раз и проверяет request operation/world/fingerprint против grant-bound scope через принятые internal guards. execution должен совпасть с registered descriptor/version этого request. Вызов apply_in_scope выполняет локальную атомарную Source операцию; source checks агрегируются до зависимых effects. Предыдущие domain writes всегда откатываются при SourceFailure, независимо от того, успел ли текущий adapter сделать write.
+
+Порядок успешного body: проверить original expected object/membership и итоговый ref-integrity → вычислить owning semantic hashes/назначенные seq → записать owning rows и exact revision/membership/provenance → полный operation linkage → root eligibility/closure/acquire. Эти действия используют один domain scope. На выходе получается provisional SourceMutationApplied. Runner передаёт его attempt.succeed; подтверждённый outer commit precedes наружный Applied. Ни applier, ни stores не пишут terminal отдельно.
+
+На SourceFailure runner поднимает SourceMutationRollback с тем же failure из domain(), дожидается confirmed rollback и только затем формирует SourceMutationRefused с operation/world/request fingerprint и исходным failure. attempt.refuse фиксирует refusal+operation-hold cleanup общим outer commit; после commit run возвращает исходный SourceFailure. Unknown rollback/commit и infrastructure exceptions не превращаются в Refused и не приводят к повторному body. Cancelled invocation сохраняет отдельную owning cancellation/unknown semantics. Терминальный OperationCancelled обрабатывается внешним replay до run; новый Source cancelled DTO не создаётся.
+
+required_refs и apply_in_scope — internal стадии одного принятого execution binding, не самостоятельные DAG операции. SourceMutationRecovery остаётся owning internal infrastructure inspect/takeover service; он не получает право вызывать Terrain public CRUD. Exact разрешённый caller runner и transport ошибок фиксируются в P3.3, не выводятся автоматически из этой карты.
+
+### P3.3. Что ещё требуется для implementation-ready slice
+
+1. Source revision-index append/read port, scoped owning terrain writer и их typed errors; полный storage schema/order без legacy UPDATE bypass.
+2. Конкретная композиция public owning mutation/recovery входа: typed data/result/errors, прямой согласованный DAG caller, путь bytes→staging→READY→claim→grant→runner, логирование; без выставления lease/scope/executor в public DTO. Новую ноду определяет пользователь после контракта, не этот документ.
+3. Terrain immutable representation/caller compatibility, manifest/format/ref-integrity и accepted execution registration dossier; initial bootstrap и full writer inventory в утверждённом порядке.
+4. Public typed representation infrastructure refusals/unknown для caller и cancellation replay; внутренние exception classes сами по себе public error map не закрывают.
+
+REC-5 продвинут до named Source classes и nested trace, но остаётся OPEN по перечисленным точкам. Это не permission реализовать каркасы в обход полного среза. REC-1, mutation/refusal canonical vectors и обязательная совместная приёмка также остаются prerequisites.
 
 ## Следующие проверяемые проектные результаты
 

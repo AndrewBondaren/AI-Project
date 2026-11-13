@@ -6,6 +6,8 @@
 
 **Результат сверки Source:** [ответ владельца 2026-11-13](source-pack-exchange-response-2026-11-13.md) подтверждает четыре формы обмена по принятому Source API (§§6.0, 11–12). Это не приёмка новых Pack signatures или DAG execution binding. Ниже учтены ограничения SELECT, единый SourceFailure и уже принятый внутренний adoption Source.
 
+**Уточнение текущего проекта 2026-11-14:** `fields=()` у describe_metadata_usage_requests и `entries=()` у import_metadata_usage отклоняются: PackPreparationFailure с reason=DEPENDENCY_MISMATCH, issue METADATA_GROUP_MISMATCH и путём fields либо entries относительно named input. Эти операции описывают/импортируют полный набор групп хотя бы одной строки; пустой вызов не является подтверждением готовности строки. Это semantic проверка после structural admission и проверки state, без min_length, дублирующего ту же причину в schema errors. Если state структурно невалиден, действует согласованная агрегация и reason=INVALID_INPUT. Empty Source selection допустим: группа всё равно представлена request/result с пустым usage. Closure без Source proofs — отдельный случай и этим правилом не запрещается.
+
 Предлагаемые Pack records в `dataModel/worldPack/preparation/sourceExchange.py`; strict/frozen/extra-forbid/revalidate-always, обязательные поля, immutable вложения. Это новые кандидаты, не runtime imports.
 
 | POJO | Все поля | Назначение |
@@ -32,6 +34,8 @@ Source подтвердил механическое копирование resu
 SourceProofGroupsInput формируется механически из ordered `PackMetadataDescription.dependencies[].source_usage`. Pack keys/basis остаются в DAG-корреляции. Source admit_groups возвращает общий proof и selections; verify_groups применяется при необходимости проверки предъявленного результата, а не автоматически вторым вызовом всегда.
 
 Кандидат уточнения **существующего** PackMetadataProofBinding, без второго Binding класса:
+
+Единственный owning модуль проекта — `app.dataModel.worldPack.preparation.metadataDependencies`. Он объявляет PackMetadataProofBinding; metadataSubject.py сохраняет PackMetadataSubject и не объявляет второй binding, alias или re-export. PackMetadataProvenanceInput из operations.py импортирует этот binding. Binding содержит данные subject/provenance/Source request/result/groups, не PackPreparationState, сервис или оркестрацию. Это разрешает прежнюю неоднозначность размещения, не создаёт новый тип или runtime import.
 
 | Поле | Тип / источник |
 |---|---|
