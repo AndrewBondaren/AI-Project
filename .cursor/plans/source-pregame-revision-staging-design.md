@@ -221,6 +221,60 @@ Artifacts root acquire использует этот binding внутри соб
 
 Оставшиеся конкретные результаты: Source проектирует scoped operation→revision linkage без копии terminal outcome, diagnostics MUTATION_BINDING_MISMATCH и правила no-op; Artifacts/publication завершает durable refusal recovery, исключение конкурирующих apply attempts и typed acquire infrastructure errors. Допустимые исходные durable holders для reused closure согласуются совместно. Explicit prune/release требует собственного scoped usage-контракта. До этих результатов P2/P3 остаются OPEN.
 
+### P2.7. Operation → exact revision linkage (Source, 2026-11-14)
+
+Кандидат internal класса `SourceMutationLinkStore`, модуль `app.application.worldData.sourceVersioning.mutation.linkStore`. Владелец Source; SQLite implementation располагается в owning Source storage adapter, не в Pack или publication ledger. Это индекс участия revision в mutation, **не receipt/terminal store**. Public dataModel record для link не вводится.
+
+Логическая persisted запись имеет только `operation_id: EntityUid` и `source: SourceVersionRef | SourceCollectionVersionRef`. Для одного operation и full identity допускается ровно одна exact revision; object и collection identities различаются своим типом. Operation identity ссылается на существующий ledger, source — на exact revision index; canonical identity использует принятые Source bindings, не новый digest. Fingerprint/world/terminal/failure/body refs не копируются в link rows. DDL и физическое разложение полей здесь не принимаются.
+
+Предлагаемые internal signatures:
+
+```python
+async def append_application(
+    self, scope: CommitScope,
+    request: SourceRegistryMutationInput,
+    outcome: SourceMutationApplied,
+) -> None | SourceFailure: ...
+
+async def contains(
+    self, scope: CommitReadScope,
+    operation_id: EntityUid,
+    source: SourceVersionRef | SourceCollectionVersionRef,
+) -> bool: ...
+```
+
+Source apply implementation формирует outcome как **provisional value** после назначения revisions; это не внешний success до commit. append_application проверяет request/outcome operation/world/fingerprint, exact набор затронутых identities и существование назначенных revision rows в том же scope. Object identities должны точно совпасть с changes, collection identity — с membership; ни пропуск, ни дополнительный touched ref не разрешён. Семантический projector/назначение seq принадлежат apply implementation; store не пересчитывает чужие тела и не принимает произвольный caller outcome через публичный API. Metadata/audit rows, revisions и полный link set входят в одну domain transaction.
+
+Для CREATE/изменяющего UPDATE link указывает новую revision. Для no-op/label-only link указывает прежнюю exact revision, независимо от её created_by_operation. Для DELETE link указывает назначенную tombstone revision: участие в результате не делает её eligible для body root. Link на проверенную collection записывается и при неизменном membership. Поэтому наличие link само по себе не означает необходимость нового root или допустимость acquire.
+
+Перед первым append проверяется весь batch и все existing links operation. Пустой набор допускает запись полного набора; существующий **точно полный** набор идентичен и не меняется; partial/extra/conflicting набор отклоняется, не дополняется для сокрытия нарушения atomicity. Store не открывает transaction, не пишет terminal и не восстанавливает успех из links. Replay committed операции выполняется через ledger до повторного apply; отсутствие terminal при найденных уже committed links — recovery/infrastructure inconsistency, а не разрешение вернуть успех. Собственные uncommitted links до записи terminal в той же transaction являются нормальным промежуточным состоянием.
+
+### P2.8. Eligibility и no-op roots (Source, 2026-11-14)
+
+`SourceRootEligibilityBinding` в `app.application.worldData.sourceVersioning.retention.rootEligibilityBinding` предоставляет validate_acquisition из P2.6. Внутренние зависимости: SourceMutationLinkStore.contains, scoped exact revision index и descriptor registry. Он проверяет operation→exact ref link, world/descriptor, существующее body-bearing состояние и отсутствие prune/tombstone. Для этого acquire adapter сначала проверяет PublicationOwner, SOURCE_MUTATION/APPLYING, fence, world, scope/task/database и единственность apply attempt, затем передаёт operation_id из **проверенного claim**, не из отдельного caller поля. Класс eligibility не проверяет lease вместо Artifacts и не читает latest для подмены запрошенной revision.
+
+Отсутствующий либо неверный link даёт предлагаемый общий SourceLogicCode.MUTATION_BINDING_MISMATCH с source=offending ref, group_index/use_index=None. Не создаётся новый failure carrier. Missing revision, pruned, tombstone, world/descriptor/mapping defects используют P2.5. Infrastructure corruption и невалидный scope не становятся Source logic failure. Independent checks агрегируются, зависимая проверка exact mapping пропускается только если её input неизвестен.
+
+No-op требует сохранённого **полного прежнего Source root**; он не маскирует потерю holds приобретением заново на основании одной live mapping row. Результат повторного acquire уже существующего root идемпотентен только после full closure/hold проверки. Недостающий старый hold — MISSING_HOLD или infrastructure inconsistency согласно owning проверке, repair в mutation не добавляется. Staged audit-only candidate не подменяет retained body и его closure.
+
+Для новой revision Source не предлагает искать произвольного держателя по artifact hash. Свежие тела должны быть защищены OperationHolder проверенного claim. Reused refs требуют explicit доказанного source hold в общем scope; допустимые holders и передача такого evidence остаются совместным вопросом Artifacts/publication. retained_refs доказывает состав storage closure, но не наличие удержания.
+
+**Важная transaction граница:** даже SourceFailure, возвращённый acquire до его первого holder append, может возникнуть **после** записи domain rows/revisions/links. Apply owner обязан откатить всю domain transaction при таком результате. «До первого write» внутри одного adapter не означает, что caller может commit-ить ранее сделанные изменения. Failure при частичной storage записи пересекает boundary exception; success/outcome наружу — только после confirmed commit.
+
+### P2.9. Ответственности и проверка нового среза
+
+| Класс | Допустимая ответственность / effects | Критерий отказа |
+|---|---|---|
+| SourceMutationLinkStore | Scoped полный append exact links и read membership; FK/uniqueness; без own commit | Второй receipt, частичное дополнение повреждённого batch, принятие caller refs без request/outcome checks |
+| SourceRootEligibilityBinding | Read-only проверка участия exact revision в mutation и body-bearing status | Created-by вместо no-op linkage, управление leases/holders, latest fallback |
+| SourceRootReadBinding | Read-only exact body→full storage closure, P2.5 | Принятие неполного caller closure или выдача разрешения release |
+| Source apply implementation | Expected/ref-integrity/semantic revisions → rows и links → root binding → terminal в общей transaction | Commit после SourceFailure любого adapter; внешняя выдача provisional outcome |
+| Artifacts root adapter | Claim/scope authority, eligibility, closure protection, полный append holds | Поиск случайного holder, repair no-op без контракта, partial commit |
+
+Последние два implementation owner должны получить точные классы/порты при P3 после infrastructure ответа; таблица не закрывает этот пробел общей ролью. Публичный mutation Input/Outcome/Error и DAG маршрут от этих internal signatures не меняются. Source dataModel не импортирует holders/sourceUsage.
+
+Обязательные сценарии для будущей реализации: новый revision link; no-op с чужим created_by и своим valid link; подмена operation/identity/seq; missing/extra/partial link batch; tombstone link без root; full unchanged collection link; чужой world; missing старый root; failure после links до holds; failure после части holds; rollback без сохранённых links; restart/replay по terminal без назначения seq. Это проверяемый проект, не выполненные тесты. Приёмка всего P2/P3 по-прежнему OPEN.
+
 ## Следующие проверяемые проектные результаты
 
 | Порядок | Результат | Владелец и граница |

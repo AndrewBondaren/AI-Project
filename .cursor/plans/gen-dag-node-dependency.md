@@ -1041,6 +1041,8 @@ Output родителя: опубликованные L2/C11 результат�
 
 ### 11.8. detailed_initialization
 
+**Уточнение пользователя 2026-11-13:** для partial settlement update эта нода координирует [согласованный Pack/Source exchange 1–7](pack-source-first-route-review.md) после prepared child output и до publication: Pack requests → Source select → Pack import → partial write → describe → Source admit_groups → Pack bind. Все вызовы проходят через engine и верхние read_pack/read_source/write_pack с отдельными operation leaves. Родство не меняется; concrete leaf/command/registration/restore приёмка остаётся отдельно. Direct Pack→Source, повтор producers и автоматический verify_groups не добавляются.
+
 **Input:** world/operation/publication identities; NamedLocation либо coordinate target/scope, missing detail requirements и accepted base по §16. Exact coordinate contract OPEN. Child остаётся detailed_bake_initialization.
 
 **Работа:** вызвать child для недостающих L2/C11, проверить staged results и опубликовать их через owning publication contract.

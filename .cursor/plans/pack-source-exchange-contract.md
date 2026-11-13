@@ -64,6 +64,8 @@ OPEN — внешний Pack/Artifacts publication entry, передача scope
 
 ## 4. Порядок, ошибки и граница согласования
 
+По следующему поручению пользователя подготовлен [проект engine execution binding](pack-source-dag-execution-binding.md): exact continuation state, request/key/target и successful child result на существующем CALL. Он конкретизирует доверенный маршрут, но требует приёмки coordinating caller/leaf contracts и restore. Новый Source helper/token не требуется.
+
 Таблицы задают data dependencies, не новую последовательность нод. Historical extraction/import должен предшествовать write, которому нужен historical usage; grouped admission относится к вычисленной projection; closure read — к конечным proofs перед prepare. Точное включение новых Pack публичных методов в утверждённые read/write семейства, число вызовов и deps принимает пользователь по DAG-плану. Изменять runtime порядок или вводить повтор describe/write без этой приёмки нельзя.
 
 Pack переиспользует PackPreparationFailure и согласованный diagnostic union: stale base/subject, неизвестная attribution, missing/duplicate groups по metadata-проекту. Единый SourceFailure из app.dataModel.sourceVersioning.sourceErrors сохраняется на Source-операции; отдельный SourceProofFailure не вводится. Failure не импортируется как successful SourceProofResult. Точный error mapping новых методов должен пройти отдельную проверку. Independent errors агрегируются; никакой частичной mutation/READY при отказе.

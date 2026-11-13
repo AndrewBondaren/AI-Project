@@ -590,6 +590,8 @@ CRUD настройки не добавляется. Изоляция namespace 
 
 ## 6.7. Source ↔ DAG ↔ Pack: сопоставление данных после уточнения contracts
 
+Конкретное предложение [execution binding и continuation POJO](pack-source-dag-execution-binding.md) опирается на проверенные CallTarget/CallResults/InvocationCoordinator. Pack inputs описаны в exchange; новые NodeId/родство/порядок здесь не назначаются. Принимается отдельная карточка caller/leaf/restore, а не исключение для прямого Source helper.
+
 По следующему поручению пользователя подготовлен [конкретный проект Pack inputs/outputs обмена](pack-source-exchange-contract.md): historical select request/import, grouped result в bind и полный closure input prepare. Это кандидаты для совместной проверки, не принятые новые ноды, порядок или runtime signatures. Незавершённые места таблицы ниже получили предложение data-контракта; execution trust и owning приёмка остаются OPEN.
 
 По поручению пользователя синхронизированы owning signatures, а не назначена новая sequence нод. Действует read/write → operation leaf → public owning method через engine. Прямой Pack → SourceProofValues/extract_usage/match_groups запрещён; pure характер helper исключения не создаёт. Source internals могут использовать его внутри собственной операции. DAG не вычисляет canonical atoms, union, indices, hash или domain merge.
@@ -609,6 +611,10 @@ CRUD настройки не добавляется. Изоляция namespace 
 **Что закрыто этой синхронизацией:** Source операции и owning POJO вместо старой single-capture схемы; кандидат metadata description output; позиционное соответствие groups/selections и место отдельных Pack/Source проверок. **Что не закрыто:** точные read_source command/leaf identities, Pack request/response для historical extraction и verification, final admission binding, execution trust и согласованный порядок. Это адресные незавершённые связи, не основание блокировать независимый Pack или Cache scope. Source failure сохраняет owning тип; ошибочный Source result не передаётся как успешный bind, infrastructure не переименовывается в proof mismatch.
 
 ## 7. Обязательная карточка перед принятием каждой ноды
+
+Для согласованного первого маршрута предъявлены [семь concrete leaf contracts](pack-source-leaf-contracts.md): имена/модули/POJO/errors/registration. Новые identifiers пока кандидаты для приёмки; существующие верхние unions расширяются только указанными вариантами, без изменения порядка 1–7.
+
+Для первого partial settlement маршрута пользователь согласовал [caller и последовательность 1–7](pack-source-first-route-review.md): coordinator detailed_initialization после prepared child output, до publication. Родство сохранено. Concrete leaf/command contracts, registrations и resume ещё требуют приёмки; согласование порядка не является разрешением кода или полной приёмкой карточки.
 
 Для каждой выбранной роли предъявить NodeId, класс/модуль, caller, parent при наличии, точные Input/Output/Error и field mapping к публичному доменному методу; required/optional reads, provenance, effects и publication owner; runtime CALL, cancellation, retry, idempotency и recovery. Собственные классы нод и задействованные доменные/инфраструктурные классы перечислить без пропусков: ответственность, допустимые зависимости/эффекты, DoD и признак нарушения.
 

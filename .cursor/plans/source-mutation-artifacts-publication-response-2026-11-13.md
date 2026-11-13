@@ -1,5 +1,7 @@
 # Ответ Artifacts/publication по Source mutation
 
+Актуальное уточнение refusal/recovery и root acquire от 2026-11-14 приведено в конце документа. Оно заменяет предложение отдельной refusal transaction для обычного Source expected/membership отказа. Статус DESIGN OPEN сохраняется.
+
 2026-11-13. Контрактное предложение, DESIGN OPEN. Подготовлено по P2.3–P2.5 source-pregame-revision-staging-design.md. Приёмка SourceDurableProof и R1/R2 является исходной зависимостью. Документ фиксирует обсуждение refusal/recovery и root acquisition; реализация требует отдельной приёмки.
 
 ## Refusal после подтверждённого rollback
@@ -91,3 +93,56 @@ Collection root удерживает storage closure collection body. Member bod
 - Отдельный explicit-prune/usage контракт release.
 
 Предложения не назначают новый DAG порядок или публичные междоменные pipelines. Порядок поставки остаётся inventory → projector/body codec → mutation/error contract → lifecycle/terminal/refusal → Source index/eligibility → root binding → atomic apply/recovery tests. P2/P3 остаются OPEN до совместной приёмки перечисленных решений.
+
+## Уточнение 2026-11-14 — рекомендуемый savepoint protocol
+
+Рекомендуется один внешний BEGIN IMMEDIATE и внутренний domain savepoint. При Source refusal coordinator выполняет ROLLBACK TO и RELEASE domain savepoint, затем сохраняет исходный SourceMutationRefused и cleanup operation holds во внешней transaction. Единственный COMMIT делает отказ и cleanup видимыми вместе. Successful branch сохраняет domain writes, roots и SourceMutationApplied тем же внешним COMMIT.
+
+Это изменение принятого infrastructure контракта. Сейчас SqliteTransactionDriver поддерживает begin/commit/rollback, SqlitePublicationCommitStore откатывает всю transaction при исключении, SqliteScopeRegistry отзывает все capabilities task одновременно. Требуются ack-safe savepoint commands, отдельное поколение domain scope и фазовые права control scope. Общий запрет nested/ambient transaction сохраняет силу: SAVEPOINT управляет единственный coordinator внутри собственного UOW.
+
+Предлагаемый internal контракт в application/publication/contracts/attemptStore.py:
+
+```python
+def attempt(
+    self, claim: PublicationOwner, request_fingerprint: RevisionHex,
+) -> AbstractAsyncContextManager[PublicationAttempt]: ...
+
+class PublicationAttempt:
+    def domain(self) -> AbstractAsyncContextManager[CommitScope]: ...
+    async def refuse(self, outcome: SourceMutationRefused) -> None: ...
+    async def succeed(self, outcome: SourceMutationApplied) -> None: ...
+```
+
+PublicationAttempt — runtime capability, не DTO. Source application implementation владеет локальной последовательностью. domain() выдаётся ровно один раз. SourceMutationRollback(failure) выходит из domain(), coordinator подтверждает rollback savepoint и отзывает domain scope и все derived read scopes. Только после этого refuse разрешён. Successful domain exit переводит attempt в состояние, допускающее succeed. Outer exit без установленного terminal откатывает transaction и даёт infrastructure failure. Наружный return допускается после подтверждённого outer commit.
+
+Generic coordinator не импортирует SourceFailure. PublicationAttempt реализация в publication binding получает уже проверенный terminal union, а SourceMutationRollback обрабатывает Source owner после завершения domain context. Callback с доступом к raw connection не вводится. Stored terminal сохраняет failure без преобразования кодов, порядка и полей. Отдельный ConfirmedRollback, переживающий outer transaction, для этого пути больше не нужен.
+
+Ownership: driver выполняет только команды и drain acknowledgement; registry управляет phase/generation capabilities; attempt coordinator управляет единственным UOW/savepoint и допустимыми переходами; operation store проверяет binding и записывает общий terminal; Source вычисляет failure/outcome; artifact binding освобождает только operation holds. Domain scope недействителен после domain exit, включая stale references и child tasks. Control scope не выдаётся Source/domain handlers.
+
+### Единственная apply attempt
+
+Для Source предлагается append-only attempt-start факт в существующем operation ledger с unique(operation_id, fence). Предлагаемая модель db/models/snapshotCore/operationRows.py::PublicationAttemptStartedRow(operation_id, fence, attempt_id, request_fingerprint). Запись start выполняется вместе с READY→APPLYING в claim transaction, до выдачи owner. attempt_id хранится в выданной runtime capability publication binding; сериализуемый PublicationOwner сам по себе не даёт права повторно запускать domain().
+
+Внешний attempt BEGIN IMMEDIATE повторно проверяет полный binding, current fence, start identity и terminal. Runtime registry допускает одну domain() на выданную capability. Другой процесс получает busy через existing claim. Terminal replay возвращается до выдачи domain scope. Запрет повторной выдачи capability существующему APPLYING обязателен, включая restart. Это требует принятия механизма выдачи attempt capability вместе с claim result; точный новый result type согласуется до implementation, existing PublicationOwner DTO не расширяется молча.
+
+### Crash и неизвестный commit
+
+Savepoint устраняет промежуток между двумя commits domain rollback и refusal terminal. При crash до outer COMMIT вся outer transaction откатывается. Durable start остаётся, terminal отсутствует. Исходный failure мог существовать только в памяти; его нельзя обещать восстановить. Такой record имеет unresolved attempt, повторный domain apply с тем же operation_id запрещён.
+
+При unknown acknowledgement fresh connection читает terminal под writer serialization после освобождения предыдущей transaction. Existing terminal возвращается точно. При отсутствии terminal операция остаётся unresolved; никакой latest recheck под видом replay. Наличие свободного SQLite writer lock доказывает завершение прежней DB transaction, но не смерть прежнего процесса, поэтому одного lock для takeover недостаточно.
+
+Рекомендуемая первая поставка использует fail-closed unresolved recovery. Новая mutation допустима с новой operation identity только по явному решению caller и обычным expected checks. Для административного завершения unresolved attempt требуется отдельный fenced abandon contract с доказанной quiescence/отзывом полномочий и drain. SourceFailure при таком abandon не фабрикуется. Exact business refusal гарантирован после durable terminal commit. Commit acknowledgement loss восстанавливается из этого terminal.
+
+Решение пользователя требуется по гарантии crash-before-terminal: принять fail-closed unresolved и запрет повторного body для той же identity либо потребовать дальнейший durable decision protocol. Второй вариант расширяет общий ledger/transaction protocol и требует отдельного дизайна. Сохранение произвольного in-memory failure при crash до его durable записи технически невозможно. Дополнительная запись решения в той же outer SQLite transaction имеет ту же crash границу.
+
+Критические тесты: refusal после partial domain writes; crash после savepoint rollback до outer commit; crash после outer commit до ответа; double domain() на одной capability; два claims; stale domain read/write scope; cancellation во время rollback-to/release/commit; конфликт другого terminal; release refusal при corrupt holder chain. До последнего COMMIT все публичные reads другого соединения видят прежнее domain состояние; после него refusal и cleanup видимы вместе.
+
+## Уточнение 2026-11-14 — root acquisition errors и исходные holds
+
+Предлагается application/artifacts/errors/sourceRootAcquireError.py с frozen strict SourceRootAcquireFault и SourceRootAcquireError, несущим fault. Fault содержит code: SourceRootAcquireCode, operation_id: EntityUid, source: SourceVersionRef | SourceCollectionVersionRef, artifact: ArtifactRef | None. Закрытые коды INVALID_SCOPE, OPERATION_MISMATCH, STALE_CLAIM, WRONG_KIND, WRONG_PHASE, ADMISSION_OPEN. Проверки exact DTO до IO используют стандартные validation errors. Active writers дают OperationBusyError; corrupt persisted chains дают PublicationInfrastructureError; transaction uncertainty остаётся UnknownCommitOutcome. Ошибки Source eligibility/closure возвращают исходный SourceFailure.
+
+Для каждого closure artifact допустимы current OperationHolder того же полного claim lease, SourceRootHolder существующей exact revision, SnapshotHolder, ArtifactRetentionHolder sealed owner или действующий PinHolder принятого lifecycle. Чужой OperationHolder не является durable основанием reuse. SourceRootHolder проверяется по exact не-pruned mapping, PinHolder — по своему действующему owning lifecycle; нельзя создать произвольный Pin для обхода acquire. Snapshot/history и artifact-retention owners проверяются штатными typed adapters. Для artifact-retention требуется доказанная защита owner artifact, а не только seal; циклические/self-retention цепочки без anchored holder отвергаются.
+
+Первая рекомендуемая поставка ограничивает reused dependencies доказуемыми current-operation и SourceRootHolder путями. Остальные виды допускаются после подключения их existing scoped eligibility/closure checks и negative tests; до этого их предъявление даёт SourceFailure с MISSING_HOLD через Source-owned mapping результата проверки. Это явное ограничение supported binding, перечень будущих разрешённых owners выше сам по себе его не расширяет.
+
+Все artifact rows, seals, owner eligibility и полный closure проверяются в одном writer scope до первого root append. Source retained_refs задаёт exact closure, validate_acquisition доказывает operation→revision linkage, artifact adapter проверяет существующую защиту каждого ref. Release новых operation holds выполняется после приобретения всех roots. Reused roots иных revisions сохраняются. Historical own root исключается только из usage blockers explicit prune, но учитывается physical GC.
