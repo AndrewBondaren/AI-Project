@@ -27,6 +27,23 @@ Identity/revision, fingerprint, pinning и retention переиспользую�
 параллельный revision-механизм не вводится. Протокол append-only head/commit
 и представление черновой истории пока не выбраны; реализация не разрешена.
 
+## Ближайшие четыре шага подготовки первого среза (2026-11-14)
+
+Статус всех четырёх шагов: **OPEN**. Это сводный порядок завершения проектирования, а не разрешение реализации. Первый кандидат — одна world-scoped registry mutation batch с membership; Terrain остаётся выбранным кандидатом до приёмки его owning-контракта. Полная миграция Source и внутреннее устройство Pack в этот срез не входят.
+
+| Шаг | Что завершить | Владелец и проверяемый результат |
+|---|---|---|
+| 1. Terrain execution | Окончательные codec/manifest и canonical vectors; совместимость существующих POJO, authored presence и всех callers; правила membership, semantic projection и ref-integrity, неизменная семантика execution_version | Terrain отвечает за свои данные и callers, Source — за привязку execution version. Результат: принятый [owning dossier](terrain-source-execution-contract-dossier.md), полный inventory и отсутствие неразрешённых зависимостей для выбранного исполнения. Предложения dossier не считаются принятыми автоматически |
+| 2. Source storage | Точный revision store и схема append-only записи; owning writer выбранного реестра; initial bootstrap с сохранением достоверного authored state; revision/body/tombstone mapping и retention | Source владеет revision/history, Terrain — записью своих данных, Artifacts/publication — lifecycle инфраструктурой. Результат: конкретные scoped ports/classes, транзакционные границы, ошибки и bootstrap-порядок без обхода owning writer. Зависит от шага 1 |
+| 3. Публичная граница | Единые mutation/recovery Input/Result/Error и публичные пути импорта; initial prepare/stage и recovery entry; различение preflight refusal, committed terminal и unknown outcome; логирование причины, operation_id и результата; точная связь с DAG | Каждый домен утверждает свой контракт; Source сводит карту интеграции. Результат: полный маршрут public input → прямой DAG caller → операция → result/error, включая вложенные вызовы. Scope, grant и executor остаются внутренними. Завершить согласование preflight logging с owning invariant. Зависит от шагов 1–2 |
+| 4. Итоговая приёмка | Свести принятые решения в единый актуальный контракт, явно отметить заменённые предложения; проверить все обязательные правила проекта; подготовить конкретный implementation-план с файлами, зависимостями и проверками | Source сводит результат с подтверждениями владельцев внешних контрактов. Результат: приёмка без OPEN в выбранном срезе и отдельный принятый план для implement-plan. Любое нарушение или отсутствие evidence означает отказ. Зависит от шагов 1–3 |
+
+Детали и evidence остаются в [pregame design](source-pregame-revision-staging-design.md), [ревью среза](source-recovery-slice-review-2026-11-14.md) и [ответе Artifacts/publication](source-mutation-artifacts-publication-response-2026-11-13.md). Для шага 1 начат [статический аудит Terrain callers и bootstrap](source-terrain-execution-audit-2026-11-14.md); owning ответ запрошен, шаг не закрыт. Эта таблица консолидирует остаток; она не переоткрывает принятый SourceDurableProof и закрытые проектные решения recovery/fencing/logging. Закрытие замечания по документам не доказывает готовность runtime.
+
+Шаг 4 обязан покрыть три запрета DAG, ответственность и критерий отказа каждого класса, публичную/внутреннюю границу, утверждённый порядок, отдельные CRUD-проверки данных и настроек, протокол междоменных зависимостей, POJO и типизированные ошибки без дублей — по [обязательным критериям](../rules/dag-generator-interface.mdc#обязательная-приёмка-плана-любого-домена). Порядок реализации основного плана сохраняется: inventory → owning contracts/projector → revisions/history/retention → capture finalize → дальнейшие интеграции. Эта таблица не вводит новые DAG nodes и не меняет порядок вложенных операций.
+
+Другие реестры, library/entity/settings writers, внутренняя миграция Pack и полный переход Source остаются за границей первого кандидата. Explicit prune нельзя молча исключить: его отдельная поставка и режим удержания истории до неё должны быть явно приняты при фиксации среза. Следующее действие — завершить шаг 1, а не начинать runtime storage или расширять scope.
+
 ## Проблема
 
 Мир — связка ссылок на объекты N+1 (реестры, шаблоны, библиотеки) +
