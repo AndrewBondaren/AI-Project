@@ -4,6 +4,8 @@
 
 ## Актуальный остаток после сверки bindings — 2026-11-13
 
+Уточнение scope по решению пользователя: encoding identity, canonical registration и exact READY recovery ведутся в [отдельном плане сериализации/десериализации](pack-serialization-deserialization.md). Не перечислять их далее как блокеры независимого текущего Pack scope; они остаются обязательной интеграцией для готовности соответствующего runtime-пути. В отличие от старой сводки ниже, in-memory identity probes уже выполнены и записаны в activation vector; production tests не выполнялись.
+
 Этот раздел уточняет более ранние OPEN ниже: наличие описанного проекта не равно отсутствующему контракту, а наличие контракта не равно выполненной реализации. Runtime и тесты в текущей последовательности не менялись/не запускались. Полная приёмка плана ещё не объявляется.
 
 | Категория | Остаток / состояние | Следующее действие |
@@ -23,6 +25,8 @@
 Ссылки на актуальные проекты: [bindings](pack-payload-binding-roster.md), [JSON signal](pack-json-budget-signal.md), [владение лимитами](pack-budget-enforcement.md#источники-значений-сверка-2026-11-13), [settlement owner request](pack-settlement-binding.md#уточнение-границы-по-фактическим-callers-2026-11-13), [позиционные связи](pack-locations-index-binding.md#конкретный-final-admission-без-нового-evidence-dto). Следующий самостоятельный Pack-owned пункт — closed preparation issue union и цепочка его формирования/чтения; это ещё проектирование, не разрешение обходить implement-plan при правках кода.
 
 ## Что не открывать повторно
+
+- Решение пользователя 2026-11-13: публичный CRUD `manifest_max_bytes` исключён отдельным пунктом общего правила. Это конфигурация при создании storage binding до его пересоздания, без hot update/сервиса настроек; `None` означает отсутствие регистрации. Формальный CRUD-пробел именно этого поля закрыт. Исключение не распространяется на остальные settings или payload budgets и не означает полной приёмки Pack.
 
 - Wire/storage manifest и исключение registry_hash/wilderness_tiles_total/строкового location z_band уже согласованы в основном плане. Codec_version/payload_format сохраняются. Это решения, а не выполненная миграция кода.
 - [Настройки](pack-v2-domain-contract-spec.md#5-crud-и-настройки-не-подменять-семантику): источник manifest_cache и immutable lifetime CachePolicy приняты. Не предлагать hot settings service из-за общего CRUD-критерия. Остаётся формальная сверка владельца каждой операции, а не повторный выбор политики.

@@ -120,7 +120,7 @@ Read готового manifest/payload **не ждёт live Source CRUD и не 
 
 [Единая concrete CRUD-таблица данных](pack-data-crud-roster.md) содержит классы, полные сигнатуры, модули Input/Output/Error и разделение PROJECT/EXISTING. Она включает существующий PinnedManifestReader и явно незавершённый metadata output/bind; общая приёмка CRUD ещё OPEN.
 
-[Сверка CRUD-disposition настроек](pack-settings-crud-disposition.md) отделяет явно исключённую из settings CRUD CachePolicy от Pack storage budget и внешних world/producer settings. Источники и lifetime не пересматриваются; ConfigManager/SettingsService не выдаются за принятый typed Pack CRUD.
+[Сверка CRUD-disposition настроек](pack-settings-crud-disposition.md) фиксирует отдельные явные исключения из settings CRUD для CachePolicy и Pack manifest_max_bytes (решение пользователя 2026-11-13). manifest_max_bytes задаётся при создании storage binding до его пересоздания, без отдельного сервиса и горячего обновления; None означает отсутствие регистрации, не безлимитный размер. Исключение не охватывает остальные настройки или payload budgets. Источники и lifetime не пересматриваются; ConfigManager/SettingsService не выдаются за принятый typed Pack CRUD.
 
 Проект публичного удаления владения неактивным кандидатом: [Pack candidate release](pack-candidate-release-contract.md). Вход переиспользует PreparedPackCandidate; release READY_INACTIVE отделён от cancel, удаления logical part и GC. Concrete Pack result/refusal описаны, внешний atomic release binding и полная приёмка остаются OPEN.
 
@@ -132,7 +132,7 @@ Read готового manifest/payload **не ждёт live Source CRUD и не 
 | Read | read_part по pinned publication; существующий manifest bytes read сохраняет отдельный контракт |
 | Update | Новый полный candidate на pinned base, затем activation; in-place update manifest/payload отсутствует |
 | Delete | [Проект delete_part](pack-delete-part-contract.md): typed удаление одного адреса из нового state; ролевые metadata/scope сценарии ещё OPEN. [Release кандидата](pack-candidate-release-contract.md) — отдельный контракт. Физический release/GC принадлежит Artifacts; Pack не unlink-ает опубликованные файлы. Наличие проекта primitive не закрывает полную приёмку D |
-| Настройки | Assembly содержит effective captured settings; Pack не читает latest World и не выбирает новые defaults. Existing WorldPackCacheSettings — configuration manifest cache/budget. Публичный mutable CRUD config этим проектом не вводится; отсутствие settings CRUD нельзя молча объявить прошедшей общей CRUD-приёмкой |
+| Настройки | Assembly содержит effective captured settings; Pack не читает latest World и не выбирает новые defaults. Existing WorldPackCacheSettings — configuration manifest cache/budget. Для CachePolicy и manifest_max_bytes публичный CRUD явно исключён пользователем; прочие настройки требуют собственной проверки владения и disposition |
 
 ## 6. Роли payload: сверка writer → reader → retention (2026-11-12)
 

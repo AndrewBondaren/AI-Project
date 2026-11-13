@@ -14,6 +14,10 @@
 - Existing `tests/snapshotCore/storage/publication/test_cas.py` содержит race двух PACK_ACTIVATION claims; проигравший записывает SnapshotApplyResult(CONFLICT) через record_refusal. Это evidence использования общего механизма, не приёмка целевого Pack activate: CAS-конфликт по Pack policy может требовать READY_INACTIVE, а не этот тестовый CONFLICT.
 - `encoding/canonicalCodec.py` выбирает регистрацию по точному type(value). `application/artifacts/encoding/coreManifest.py` регистрирует FieldPathError, но это не регистрация всех его будущих подклассов. StoredTerminalCodec принимает расширенный CanonicalSchemaManifest и объединяет его с базовой схемой — готовая точка composition, новый codec не требуется.
 
+Уточнение 2026-11-13: [конкретный error contract](pack-activation-error-contract.md) описывает поля refusal, предлагаемые issue codes, реальные пути и pure mapping REJECTED/replay. Это проект; pre-claim bindings, canonical IDs и scoped implementation остаются открытыми.
+
+Сверка canonical graph 2026-11-13: [registration audit](pack-canonical-registration-audit.md) включает concrete issue/enum, path records и allowlist моделей-владельцев ModelIdentity. Регистрации одного FieldPathError недостаточно даже при наличии terminal wrapper; numeric IDs и контрольные bytes/hash ещё не зафиксированы.
+
 ## Остаток в ответственности Pack
 
 1. Конкретизировать PackActivationIssue/refusal в предусмотренных ТЗ модулях без копирования FieldPathError и существующих diagnostics; PackActivationRefusal в проверенном backend/app пока не найден.
