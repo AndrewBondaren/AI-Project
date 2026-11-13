@@ -1,6 +1,12 @@
-# SourceDurableProof для Pack: конкретный проект контракта
+# SourceDurableProof для Pack: исторический single-capture проект
 
-Дата: 2026-11-13. Статус: PROPOSED, не принят пользователем, код не разрешён этой записью. Документ конкретизирует отдельный контракт, а не реализацию всей Source migration. Основания: [Source design](world-source-versioning.md), [Source appendix](source-proof-v2-contract-spec.md), [Pack SoT](../../docs/tz_world_pack_storage.md), [обязательная приёмка](../rules/dag-generator-interface.mdc).
+> **Статус: SUPERSEDED / HISTORICAL (2026-11-13).** Single-capture схема этого документа отозвана. Актуальный принятый проект SourceDurableProof — [Source proof V2, §§9–12](source-proof-v2-contract-spec.md) и [акт независимой приёмки](source-durable-proof-contract-acceptance-2026-11-13.md).
+>
+> **Не использовать для реализации:** описанные ниже `SourceDurableProof(capture, selection)`, `SourceCaptureSelection(object_indices, collection_indices)`, операции `create/verify/collect_refs` и порядок их поставки. Действующая проектная схема поддерживает несколько captures: `SourceDurableProof(schema_version, world_uid, uses)`; публичные операции — `admit/read/admit_groups/verify_groups/select`.
+>
+> Принят только **проектный proof-контракт**; runtime durable API и интеграция Pack/DAG остаются OPEN.
+
+Документ сохранён как история проектирования и проверки R1–R6. Все нижеследующие объявления POJO, сигнатуры и этапы описывают отозванный вариант, а не альтернативный актуальный контракт. Основания: [Source design](world-source-versioning.md), [актуальная Source specification](source-proof-v2-contract-spec.md), [Pack SoT](../../docs/tz_world_pack_storage.md), [обязательная приёмка](../rules/dag-generator-interface.mdc).
 
 ## 1. Решение, требующее принятия
 
