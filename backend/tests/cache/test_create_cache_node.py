@@ -121,6 +121,9 @@ class CreateCacheNodeTests(unittest.IsolatedAsyncioTestCase):
         from app.application.engine.nodes.cache.updateCacheEntryNode import make_update_cache_entry_node
         update_node = make_update_cache_entry_node(self.cache)
         bindings.nodes[update_node.id] = update_node
+        from app.application.engine.nodes.cache.evictCacheEntryNode import make_evict_cache_entry_node
+        evict_node = make_evict_cache_entry_node(self.cache)
+        bindings.nodes[evict_node.id] = evict_node
         compiler = GraphCompiler(self.registry, bindings, compile_rules=lambda _: (), evaluate_rules=lambda *_: True)
         compiler.precompile()
         plan = compiler.compile(GraphRuleState(), invocation_root=self.node.id)

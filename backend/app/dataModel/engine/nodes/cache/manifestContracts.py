@@ -3,6 +3,7 @@
 from app.dataModel.engine.nodes.cache.contracts import (
     CreateCacheEntryInput, CreateCacheEntryOutput, ReadCacheEntryInput, ReadCacheEntryOutput,
     UpdateCacheEntryInput, UpdateCacheEntryOutput,
+    EvictCacheEntryInput, EvictCacheEntryOutput,
 )
 
 
@@ -27,4 +28,12 @@ class UpdateManifestCacheEntryInput(UpdateCacheEntryInput[bytes]):
 
 
 class UpdateManifestCacheEntryOutput(UpdateCacheEntryOutput):
+    pass
+
+
+class EvictManifestCacheEntryInput(EvictCacheEntryInput[bytes]):
+    pass
+
+
+class EvictManifestCacheEntryOutput(EvictCacheEntryOutput):
     pass

@@ -449,16 +449,17 @@ write_pack получает/возвращает эти POJO; output.kind обя
 
 ### Source: точные объявления
 
-Планируемый модуль: backend/app/dataModel/engine/nodes/source/contracts.py. Статус underlying API — PROJECT. Правило таблицы то же: Input(kind, request), Output(kind, value), все поля обязательны; kind — Literal имени ноды.
+Планируемый модуль: backend/app/dataModel/engine/nodes/source/contracts.py. Статус underlying API — PROJECT. Прежние CreateSourceProofInput/VerifySourceProofInput/CollectSourceRefsInput и их outputs относились к отозванному API; не использовать их как aliases новых операций. Ниже точное соответствие owning Input/Output/Error без назначения новых имён leaf-нод и Literal keys.
 
-| Классы Input / Output | kind: Literal и нода | Input.request | Output.value |
+| Owning метод | Новый DAG kind / leaf | Input.request | Output.value |
 |---|---|---|---|
-| CreateSourceProofInput / CreateSourceProofOutput | "create_source_proof" | SourceDurableProof | SourceProofVerification |
-| VerifySourceProofInput / VerifySourceProofOutput | "verify_source_proof" | SourceProofVerifyInput | SourceProofVerification |
-| CollectSourceRefsInput / CollectSourceRefsOutput | "collect_source_refs" | SourceProofClosureInput | SourceProofClosure |
+| admit | OPEN | SourceProofInput | SourceProofResult |
+| read | OPEN | SourceProofReadInput | SourceProofResult |
+| admit_groups | OPEN | SourceProofGroupsInput | SourceProofGroupsResult |
+| verify_groups | OPEN | SourceProofGroupsVerifyInput | SourceProofGroupsResult |
+| select | OPEN | SourceProofSelectInput | SourceProofResult |
 
-- SourceReadCommand = CreateSourceProofInput | VerifySourceProofInput | CollectSourceRefsInput, discriminator kind.
-- SourceReadItemOutput = CreateSourceProofOutput | VerifySourceProofOutput | CollectSourceRefsOutput, discriminator kind.
+- SourceReadCommand / SourceReadItemOutput: состав owning типов предъявлен таблицей; точные именованные варианты и discriminator keys требуют совместной приёмки новых leaf contracts. Старый union из трёх команд больше не нормативен; никакой Any replacement не вводится.
 - ReadOneSourceInput(kind: Literal["one"], request: SourceReadCommand).
 - ReadAllSourceInput(kind: Literal["all"], requests: tuple[SourceReadCommand, ...]).
 - ReadSourceInput(command: ReadOneSourceInput | ReadAllSourceInput), discriminator kind.
@@ -467,7 +468,7 @@ write_pack получает/возвращает эти POJO; output.kind обя
 - ReadSourceOutput(result: ReadOneSourceOutput | ReadAllSourceOutput), discriminator kind.
 - SourceNodeError(NodeError, error: SourceProofFailure).
 
-read_source объявляет ReadSourceInput → ReadSourceOutput, error=SourceNodeError. Три leaf-ноды объявляют пары из таблицы, error=SourceNodeError. Доменный failure union переводится в declared typed error, owning failure не копируется по полям. Полное чтение — весь явно переданный состав с соответствием результатов по порядку; допустимый профиль и overlap create/verify ещё на owning приёмке. Этот состав не создаёт новые domain операции.
+ReadSourceInput → ReadSourceOutput с error=SourceNodeError остаётся проектной формой верхней ноды; замкнутый exact union и карточки leaf ещё не приняты. Для каждой строки owning SourceProofFailure сохраняется в SourceNodeError, не копируется по полям; infrastructure/cancellation не превращаются в domain mismatch. Полное чтение — весь явно переданный согласованный состав с соответствием результатов по порядку, не автоматическое выполнение пяти методов. Наличие этой таблицы не разрешает регистрировать ноды.
 
 **write_source:** нельзя объявить содержательный Input/Output без публичной операции записи. Роль остаётся OPEN и не регистрируется; пустые WriteSourceInput/Output, Any request и успех-заглушка запрещены. Это единственное семейство записи без owning предмета контракта, а не повод придумывать Source writer.
 
@@ -482,6 +483,10 @@ read_source объявляет ReadSourceInput → ReadSourceOutput, error=Sourc
 **Остаток приёмки:** exact concrete Cache bindings и registry identities; complete domain error adapters; accepted All profiles/coverage и consistency; Source owning API и write absence; canonical registration и сверка полного графа nested types. Новые поля/классы теперь объявлены в документе, но общий gate НЕ закрыт. Код не изменён, существующие GEN-ноды не затронуты.
 
 ## 6.6. Первый implementation-срез: четыре Cache leaf-ноды
+
+**Срез evict 2026-11-13:** реализована evict_cache_entry: EvictCacheEntryInput/Output, concrete manifest subclasses, EvictCacheEntryNode/factory и explicit NodeContract engine.cache.manifest.evict_entry/version 1. Единственный public call — CacheService.evict(input.request), owning EVICTED/NOT_FOUND и CacheNodeError. Все 77 Cache-тестов прошли, включая 8 новых evict-тестов: точный ключ, malformed input до Cache, foreign version до backend, binary/error round-trip и checkpoint/replay без удаления заново созданной записи. Pyright Cache node/POJO модулей: 0 errors. Четыре leaf-ноды реализованы; evict предъявлена к per-node acceptance. Укрупнённые read_cache/write_cache требуют отдельной конкретизации continuation/All contracts; production callers и существующие GEN-ноды не менялись.
+
+**Текущий статус 2026-11-13:** после команды «Следующий шаг» реализована update_cache_entry: UpdateCacheEntryInput/Output, concrete manifest subclasses, UpdateCacheEntryNode/factory и explicit NodeContract engine.cache.manifest.update_entry/version 1. Единственный public call — CacheService.update(input.request); NOT_FOUND не создаёт запись, UNCHANGED сохраняет значение, конфликт передаётся через CacheNodeError без overwrite. Все 69 Cache-тестов прошли, включая 8 новых update-тестов, malformed input до вызова Cache, binary transport и engine checkpoint/replay без повторного update. Pyright Cache node/POJO модулей: 0 errors. Срез предъявлен к per-node acceptance; далее evict_cache_entry. Укрупнённые ноды, production callers и существующие GEN-ноды не менялись. Ниже сохранены статусы предыдущих срезов.
 
 **Статус следующего среза 2026-11-13:** после приёмки read_cache_entry реализована create_cache_entry: CreateCacheEntryInput/Output, concrete manifest subclasses, CreateCacheEntryNode/factory и explicit NodeContract engine.cache.manifest.create_entry/version 1. Один вызов CacheService.create, owning STORED/ALREADY_PRESENT/SKIPPED_OVERSIZE и CacheNodeError. Все 61 Cache-тест прошли, включая 8 новых create-тестов и регрессию read; проверены конфликт без overwrite, malformed input до записи, binary transport, engine checkpoint/replay без повторной записи после eviction. Pyright Cache node/POJO модулей: 0 errors. Срез предъявлен к per-node acceptance; update/evict и укрупнённые ноды ещё не реализованы. Production callers и существующие GEN-ноды не менялись.
 
@@ -582,6 +587,24 @@ PydanticSerializationError: Error serializing to JSON: invalid utf-8 sequence of
 Class roster: восемь concrete POJO и generic основы — только форма данных; CacheNodeError — owning error adapter; четыре node-класса — один public call; NodeContract/CallTarget — typed binding; NodeRegistry/NodeRegistration — admission; PythonNodeExecutor/NodeRunner/DAGExecutor — execution/lifecycle; CacheService/CacheBindingRegistry/MemoryCache/ManifestBytesCodec — owning Cache validation/storage. Для existing классов новый срез не меняет ответственность. Отказ в приёмке при переносе storage/codec/dispatch в POJO, алгоритмов Cache в ноды, новых public междоменных calls, обходе engine или потере binary identity.
 
 CRUD настройки не добавляется. Изоляция namespace и policy остаётся existing composition; настройки не читаются и не изменяются этими четырьмя нодами. Другие домены не вызываются. Полная приёмка пока НЕ ПРОЙДЕНА из-за transport/nested identity и ещё не принятого exact binding; наличие карточек не объявляет их утверждёнными.
+
+## 6.7. Source ↔ DAG ↔ Pack: сопоставление данных после уточнения contracts
+
+По поручению пользователя синхронизированы owning signatures, а не назначена новая sequence нод. Действует read/write → operation leaf → public owning method через engine. Прямой Pack → SourceProofValues/extract_usage/match_groups запрещён; pure характер helper исключения не создаёт. Source internals могут использовать его внутри собственной операции. DAG не вычисляет canonical atoms, union, indices, hash или domain merge.
+
+| Данные на границе | Owning операция / тип | Возврат к Pack и состояние binding |
+|---|---|---|
+| Готовые usage групп новой/вычисленной projection | Pack describe: PackMetadataSubjectsInput → tuple[PackMetadataDescription, ...]; каждая запись содержит subject и ordered dependencies с basis | DAG сохраняет Pack subject/group/basis; Source их не получает. `source_usage` в Pack-проекте должно использовать SourceProofInput, не локальный SourceDependencyUsage alias. Сам output PROJECT до приёмки |
+| Исторические зависимости поля, заданные общим proof и selection | Source select(SourceProofSelectInput(world_uid, proof, selection)) → SourceProofResult | proof результата содержит exact subset; world_uid/uses могут механически переноситься в SourceProofInput. **OPEN:** конкретный Pack output для запроса extraction и input, принимающий полученный usage до зависимого write/describe. Нельзя исполнить SELECT внутри Pack или восстановить usage в DAG |
+| Ordered готовые usages | Source admit_groups(SourceProofGroupsInput(groups)) → SourceProofGroupsResult(admission, selections) | selection[i] соответствует исходной группе i. DAG механически сопоставляет с сохранённым group key. Кандидат Pack binding: subject из description; groups[].selection из selections; groups[].basis из description; provenance.source_proof из admission.proof; source_admission — owning SourceProofResult. Не дублировать selections внутри второго persisted proof |
+| Expected usages + предъявленный grouped result | Source verify_groups(SourceProofGroupsVerifyInput(expected, result)) → SourceProofGroupsResult либо SourceProofFailure | **OPEN:** exact Pack input/consumer mapping результата owning verification. Текущий bind(subject/provenance/groups) сам не выполняет Source matching. Success POJO не является token, соответствие verified request/result и доверие к execution transport должны быть предъявлены до интеграционной приёмки |
+| Общий сохранённый Source proof конечного состава | Source read(SourceProofReadInput(world_uid, proof)) → SourceProofResult | durable_refs — полный owning closure; не subset из selections. **OPEN:** exact final prepare admission/retention input или принятый scoped binding. Не объявлять body.capture готовым носителем без сверки |
+
+При admit_groups допускается точный новый результат сразу от Source; отдельный verify_groups не объявляется обязательным дополнительным шагом всегда. Его необходимость зависит от принятой границы предъявления чужого результата. Таблица не запускает обе операции автоматически и не добавляет проверки по кругу.
+
+Запросы исторического select потребуют данных до операции, которой нужен extracted usage. Конкретное место получения этих данных (например, отдельный accepted read результата pinned базы), input Pack и порядок должны быть предъявлены в совместной карточке. Нельзя молча вставить select между каждым write, повторно вызвать describe до его предусловий или добавить hidden fallback. Unchanged inheritance целого record не требует раскрывать поля, пока их usage не нужен частичному update; согласованная политика старой базы сохраняется.
+
+**Что закрыто этой синхронизацией:** Source операции и owning POJO вместо старой single-capture схемы; кандидат metadata description output; позиционное соответствие groups/selections и место отдельных Pack/Source проверок. **Что не закрыто:** точные read_source command/leaf identities, Pack request/response для historical extraction и verification, final admission binding, execution trust и согласованный порядок. Это адресные незавершённые связи, не основание блокировать независимый Pack или Cache scope. Source failure сохраняет owning тип; ошибочный Source result не передаётся как успешный bind, infrastructure не переименовывается в proof mismatch.
 
 ## 7. Обязательная карточка перед принятием каждой ноды
 

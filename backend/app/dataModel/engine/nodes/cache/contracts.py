@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict
 from app.dataModel.cache.contracts.cacheCreateResult import CacheCreateResult
 from app.dataModel.cache.contracts.cacheEntry import CacheEntry
 from app.dataModel.cache.contracts.cacheError import CacheError
+from app.dataModel.cache.contracts.cacheEvictResult import CacheEvictResult
 from app.dataModel.cache.contracts.cacheLookup import CacheLookup
 from app.dataModel.cache.contracts.cacheUpdateResult import CacheUpdateResult
 from app.dataModel.cache.identity.cacheKey import CacheKey
@@ -56,3 +57,17 @@ class UpdateCacheEntryOutput(BaseModel):
 
     kind: Literal["update"]
     value: CacheUpdateResult
+
+
+class EvictCacheEntryInput[T](BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
+
+    kind: Literal["evict"]
+    request: CacheKey[T]
+
+
+class EvictCacheEntryOutput(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
+
+    kind: Literal["evict"]
+    value: CacheEvictResult

@@ -105,6 +105,9 @@ class ReadCacheNodeTests(unittest.IsolatedAsyncioTestCase):
         from app.application.engine.nodes.cache.updateCacheEntryNode import make_update_cache_entry_node
         update = make_update_cache_entry_node(self.cache)
         bindings.nodes[update.id] = update
+        from app.application.engine.nodes.cache.evictCacheEntryNode import make_evict_cache_entry_node
+        evict = make_evict_cache_entry_node(self.cache)
+        bindings.nodes[evict.id] = evict
         compiler = GraphCompiler(self.registry, bindings, compile_rules=lambda _: (), evaluate_rules=lambda *_: True)
         compiler.precompile()
         plan = compiler.compile(GraphRuleState(), invocation_root=self.node.id)
