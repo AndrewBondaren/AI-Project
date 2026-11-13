@@ -30,6 +30,25 @@ JSON без сжатия (locations_index и grade sidecars) требует enco
 
 При исчерпании лимита — существующий проектный BUDGET_EXCEEDED для read, без fallback на latest, частичного payload или пропуска проверки. Для oversized итогового manifest — MANIFEST_OVERSIZE/MANIFEST_LIMIT_EXCEEDED по prepare-контракту. Не классифицировать отсутствие нужной конфигурации как повреждение пользовательского payload. Runtime failure/IO сохраняет собственный исход.
 
+## Источники значений: сверка 2026-11-13
+
+| Лимит | Подтверждённый источник | Решение для текущего проекта |
+|---|---|---|
+| Manifest encoded bytes | WorldPackCacheSettings.manifest_max_bytes → AppSettings.world_pack → PacksWiring | Существующий путь сохраняется; None не означает unlimited. Конкретное deployment значение здесь не назначено |
+| Hydrology root/shard | Owning ROOT_V1/SHARD_V1 и DecodeLimits | Сохраняются существующие значения 16/4 MiB, nodes 524288/262144, depth 64, items 65536; не копировать их в настройки остальных payload |
+| Request encoded IO | PackPartReadBudget запроса | Не источник фиксированного decoder profile; caller не увеличивает format cap |
+| JSON/zstd payload profiles | Новых persisted полей в WorldPackCacheSettings не найдено | Источник и численные значения ещё проектируются; наличие параметра constructor не доказывает production configuration |
+
+В просмотренном backend/config.toml секции [world_pack...] не найдены. ConfigManager._to_flat/_to_nested и AppSettings.update умеют читать/сохранять существующий WorldPackCacheSettings; добавление произвольных TOML-ключей сейчас не подключит decoder — модель extra=forbid. PackBakeDefaults.zstd_level/codec_version и debug max_tiles не являются лимитами распаковки. Файлы конфигурации этой сверкой не изменялись.
+
+**Владение лимитами — согласовано пользователем 2026-11-13.** Ограничения одного артефакта и его формата определяет домен-владелец payload; Pack применяет этот контракт без собственного переопределения. Существующие профили Hydrology сохраняются. Новые фиксированные пределы остальных payload сейчас не вводятся. Недостающие ограничения распаковки/структуры согласуются с владельцами форматов и остаются явно незакрытой защитой до такого согласования. Pack владеет своим manifest и бюджетом чтения одной операции PackPartReadBudget, включая суммарный encoded IO; этот бюджет не определяет допустимый размер данных чужого домена. Превышение даёт явный отказ, без обрезания, пересэмплирования или изменения генерации.
+
+Предложение хранить все profiles в world_pack снято. Источник конфигурации определяется после установления владельца конкретного ограничения; существующий manifest_max_bytes и CachePolicy этим не меняются. Наличие механизмов DecodeLimits/JsonDecodeBudget/zstd cap в проекте не разрешает Pack самостоятельно назначать их значения. В публичный запрос не передаются Python owner types или callbacks; не сериализовать RecordLimits/FieldRef как пользовательские имена классов и не создавать зеркальный PackDecodeLimits ради TOML.
+
+**Основания для чисел.** До назначения новых caps нужен набор допустимых producer outputs по каждому формату: encoded bytes; для zstd — decoded bytes и window; для settlement — суммарные frames; для JSON — nodes/depth/максимальная ширина контейнера; отдельно peak memory parse + POJO. Размер текущего sample не является верхней границей поддержанного мира. Обоснование включает поддержанный масштаб, запас и поведение при превышении; если масштаб не ограничен контрактом, конечный cap является эксплуатационной политикой отказа, а не доказанным максимумом данных. Не вводить ограничение мира или менять генерацию для подгонки под выбранное число.
+
+Числа и production fields недостающих owning profiles остаются OPEN у соответствующих владельцев. Это не новая задача Pack по назначению чужих лимитов. Выбор источника не разрешает автоматически менять lifecycle настроек или распространять Cache CRUD-исключение на Pack budgets; [settings disposition](pack-settings-crud-disposition.md) сохраняет этот отдельный критерий. Независимая работа над Pack contracts может продолжаться, но отсутствие ограничений распаковки/структуры нельзя объявить закрытым одним request IO budget.
+
 ## Промежуточный state
 
 PackPreparationState содержит metadata, refs и provenance, а не payload bytes. manifest_max_bytes относится к кодированному итоговому manifest и автоматически не ограничивает живой state, несколько одновременно существующих immutable state или транспорт DAG. В просмотренном публичном OutputRef указан тип результата, но нет byte cap; это не доказательство наличия либо отсутствия лимита всего engine.

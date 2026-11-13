@@ -47,6 +47,8 @@ Final prepare проверяет scope и допустимость отсутс�
 
 Location grade sidecar намеренно не удаляется каскадом: он отдельная роль с world XY и собственным provenance. Это не утверждение, что любой orphan sidecar допустим. Если принятый final контракт требует terrain для его использования, DAG должен явно передать согласованное изменение состава; до такой конкретизации допустимость оставшегося sidecar отмечается OPEN. Не расширять delete_location_terrain неявным обходом всех связанных частей.
 
+[Повторный trace sidecar/terrain](pack-grade-slots-bindings.md) не выявил обязательного storage prerequisite из факта совместного чтения renderer. Producer debug validation тоже не является Pack admission. Поэтому условный gate выше не превращается в новый безусловный запрет хранения sidecar без terrain; нужен конкретный принятый scope/dependency контракт.
+
 read_part возвращает отсутствие соответствующего адреса; не восстанавливает terrain/structure и не читает live source вместо удалённого представления. Legacy проверки filesystem exists/перехват FileNotFoundError не заменяют target read semantics: missing bytes заявленного ref — refusal, а не подтверждённое отсутствие части. Миграция consumers не входит в эти pure методы.
 
 Старые manifests/pins сохраняют доступ к старым представлениям. Новый retention set вычисляется по всему конечному составу и proof dependencies; refs не освобождаются из delete. Shared artifact, сохранённый через другой адрес или версию, не теряет владение. Физический release/GC остаётся отдельным owning lifecycle.

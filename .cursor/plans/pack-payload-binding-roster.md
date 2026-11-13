@@ -20,6 +20,8 @@
 
 Четыре новых storage keys — map_tile, fine_terrain, settlement_structure, locations_index — выделяют уже описанные bytes formats; они не меняют алгоритмы producer. Shared payload POJO требуют ранее выявленной strict/immutable адаптации, поэтому наличие имени T не означает готовность read binding. Для settlement target framing и migration прежних bytes проверяются отдельно; новая версия descriptor не легализует молчаливое чтение всех legacy вариантов.
 
+Согласование 2026-11-13: ограничения одного артефакта задаёт владелец формата; Pack применяет их и отдельно учитывает бюджет чтения операции. Новые фиксированные caps остальных payload сейчас не назначаются, общий перенос profiles в world_pack снят. Недостающие owning ограничения остаются незакрытой защитой, не правом Pack менять допустимые данные. См. [решение о владении](pack-budget-enforcement.md#источники-значений-сверка-2026-11-13). Описанные ниже fixed profiles — механизм подключения принятого owning контракта, не самостоятельная политика Pack.
+
 ## Composition и разрешение
 
 Переиспользуются existing ArtifactFormatRegistryBinding и проектные PackPartReadBindingRegistry/PackPartReadBinding. Storage регистрируется один раз на format key с явным набором supported versions; existing register отклоняет повтор ключа и несовпадение экземпляра backend.contract. Нельзя регистрировать coarse/fine или tile/location дважды как разные backend под одним key.
@@ -31,6 +33,18 @@ Typed read registry связывает (read id, read version) с конкрет
 **Read chain:** pinned manifest → part по logical address → проверка read contract/role/descriptor → bounded guarded read bytes → тот же registered semantic decoder/profile → address/metadata проверки → immutable typed result. Отсутствие part в проверенном manifest даёт ABSENT; отсутствующий codec, неподходящая версия или роль — CONTRACT_MISMATCH, а не ABSENT. Missing blob/hold и malformed payload сохраняют отдельные existing read reasons.
 
 **Prepare chain:** конечные parts → тот же address/format binding → verified bounded bytes → тот же semantic decoder/profile → связь с assembly/coverage и closure → READY. Prepare не вызывает публичный read_part и не читает latest manifest; входная база и удержания определяются его lifecycle. Различие read/prepare в admission контексте не создаёт двух реализаций payload schema.
+
+## Сверка общего порта и профилей (2026-11-13)
+
+Все семь bindings реализуют один внутренний порт `decode(payload: bytes, format_version: FormatVersion) -> T`, `validate(value: T) -> T`, где FormatVersion — существующий owning тип, а не новая декларация int. Decode проверяет wire bytes; validate повторно проверяет typed значение, включая поддельные экземпляры. Validate не доказывает отсутствие duplicate JSON keys или размер исходных bytes: эти сведения доступны только decode. Согласованные defaults и преобразования определяются конкретным payload, общий термин «strict» не отменяет их: climate сохраняет alias/coercion, locations_index — owning defaults, grade при правильном schema_id допускает отсутствующий cells.
+
+**Climate: один codec, один профиль.** [Budget wiring](pack-decoder-budget-wiring.md) задаёт владельца исполнения ClimateFieldCodec и точный экземпляр codec.contract для backend, storage admission и StagedClimateFields. Упомянутый в climate trace ClimateFieldDecoder — адаптер общего typed порта над тем же codec, а не второе тело decode. Output cap и DecodeLimits.max_bytes для распакованных bytes не являются двумя независимо настраиваемыми пределами: это одна величина профиля. Структурные ограничения DecodeLimits дополняют output cap. Constructor/factory codec должен получить весь профиль до регистрации; ранее указанная форма только с max_output_bytes описывает zstd-срез и сама по себе не закрывает nodes/depth/items. В runtime нельзя оставить неограниченный decode_climate_field в обход codec.
+
+**Ошибки: причина и контекст разделены.** [Internal resource signal](pack-read-resource-limit-signal.md) и [zstd binding](pack-zstd-output-binding.md) уже конкретизируют проектные CanonicalDecodeLimitError и ZstdOutputLimitError. Не открывать их выбор повторно и не считать реализацию готовой. Pure decoder не создаёт PackPartReadRefusal с pin/publication; read operation переводит сигнал в собственный отказ. Final prepare использует свой error contract, не возвращает read refusal. Malformed payload и infrastructure/cancellation не маскируются под budget. Для bounded JSON структурный resource signal ещё должен быть конкретизирован; canonical TLV exception не назначается ему по аналогии.
+
+**Остаток приёмки.** Settlement historical registry не помещается в текущий двухаргументный порт без отдельно описанного contextual binding; это явно незакрытая интеграция, не повод подставить latest registry. Spatial root decoder не читает children; полный обход принадлежит final admission. Численные новые JSON/zstd caps, их configuration binding, typed JSON resource signal, shared-model migration и production registration остаются открытыми. Все приведённые цепочки — проект, а не успешные runtime-проверки. PACK-METADATA-PLANNING не добавляется к этим блокерам.
+
+Уточнение 2026-11-13: [JSON structural signal](pack-json-budget-signal.md) конкретизирует JsonDecodeLimitError и per-decode JsonDecodeBudget с preflight до loads. Указанный выше остаток выбора typed JSON signal закрыт на уровне проекта; реализация, совместимость preflight/parser, конфигурация и проверки остаются OPEN.
 
 ## Состав дочерних refs
 

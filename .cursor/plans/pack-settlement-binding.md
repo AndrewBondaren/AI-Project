@@ -24,6 +24,18 @@ Typed read T — existing SettlementStructureWire с DistrictStructureWire, Area
 
 Отсутствующий `BuildingShellWire.interior_transitions` означает legacy shell-only данные, а не пустой список переходов. Existing `building_with_interior_transitions` в таком случае выдаёт InteriorTransitionsRebuildRequired; отсутствие building — KeyError. Не превращать первый случай в успешный пустой transitions result и не объявлять весь settlement отсутствующим. Специализированный query не запускает rebuild. Маркер building-interior-transitions-v1 является реальным persisted discriminator: он входит в обязательный финальный аудит версионных обозначений, но не меняется слепой заменой и не даёт разрешения удалить historical semantics.
 
+## Уточнение границы по фактическим callers (2026-11-13)
+
+`WorldPackReader.read_settlement_structure(..., registry=None)` передаёт registry в parser. Просмотренные `PackRenderReadFacade` и `SettlementStructureRaster` вызывают этот метод без registry, то есть существующий путь пользуется canonical_engine fallback. Это не доказательство корректного исторического custom-registry чтения. Сам факт наличия параметра registry в parser не означает, что нужная версия уже передаётся production caller.
+
+Зависимость сильнее проверки наличия ключа: `Transition._type_contract` выбирает класс type_params, может материализовать StaircaseTransitionParams и defaults discovery/direction; `BuildingInteriorTransitionsWire._scope` проверяет directional/runtime запреты по registry entry. Поэтому нельзя решить вопрос пропуском membership check или подстановкой пустого registry: это способно изменить смысл восстановленного Transition. Pack не должен самостоятельно переписывать эти правила владельца.
+
+**Направление для согласования:** сохранить существующую семантику Transition и передавать явно подготовленный исторический контекст; не создавать registry и не искать latest внутри decoder. Выбор representation исторического контекста и строгого восстановления остаётся у владельца Transition. До предъявления его контракта общий Pack decode port не расширяется произвольным context: dict/Any, callback или registry resolver. Существующий shell-only путь и независимые Pack bindings продолжаются; полнота typed settlement с custom transitions не объявляется закрытой. Это направление не выбирает новый snapshot store и не решает отложенный PACK-METADATA-PLANNING.
+
+Подготовленный текст уточнения владельцу (не отправлен):
+
+> Для Pack settlement требуется сохранить текущую семантику Transition при историческом чтении. Сейчас parser принимает WorldTransitionTypeRegistry через validation context, а без него использует canonical_engine; `_type_contract` не только проверяет key, но и выбирает type_params/defaults. Предъявите owning контракт восстановления сохранённого Transition: конкретный тип необходимого исторического контекста, способ его привязки к сохранённой версии, допустимые defaults и typed отказ при отсутствии контекста. Pack не выполняет latest lookup, генерацию или публичный вызов вашего pipeline. Если необходима persisted dependency, укажите её существующий descriptor и retention obligations; новый storage/зеркальный Transition не вводить без обоснования. Нужен пример custom key, смысл которого изменился в latest registry, с неизменным результатом чтения старой версии.
+
 ## Bounded admission и storage closure
 
 ### Конкретизация SettlementStructureDecoder

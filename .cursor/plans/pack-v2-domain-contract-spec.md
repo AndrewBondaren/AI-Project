@@ -73,6 +73,8 @@ Failure — `PackPreparationFailure(error: PackPreparationError)` по ТЗ; cod
 
 Input: pin (store/execution/invocation/logical_read_key/pin_id/publication), logical address, typed contract id/version, budget. Caller не подставляет произвольный child ref. Budget: max_manifest_bytes, max_index_bytes, max_payload_bytes, max_total_bytes; положительные strict int, повторный IO тоже расходует total.
 
+[Учёт read budgets](pack-read-budget-accounting.md) разделяет cumulative encoded IO, decoded output и память моделей. Existing backend ограничивает один encoded body; TileCodec/settlement frames пока не имеют общего output cap. Численные новые пределы не назначены; resource signal, probe accounting и decoder binding остаются OPEN.
+
 Result: publication, manifest ref, address, contract, artifact ref, materialized immutable value T, persisted provenance. ABSENT допустим только при отсутствии адреса в успешно проверенном полном pinned manifest. Closed pin, corruption, missing hold/blob и unsupported format не превращаются в ABSENT. Чтение после закрытия guard не требует IO; повторное storage чтение требует нового действующего pin.
 
 Read готового manifest/payload **не ждёт live Source CRUD и не перечитывает sources ради доказательства свежести**. Он проверяет сохранённое provenance по схеме и identity версии; удержания проверяются через storage lifecycle. Недостающий конкретный persisted proof type блокирует freeze схемы ответа, но не требует запуска source capture при read.
@@ -156,6 +158,8 @@ Read готового manifest/payload **не ждёт live Source CRUD и не 
 Существующий [finish_pack_preparation](../../backend/app/application/worldData/pack/encoding/preparedManifest.py) собирает other_members, spatial roots, climate refs, затем manifest. Existing [retain_climate_members](../../backend/app/db/repositories/sqlite/worldPack/climateRetention.py) проверяет scope/operation/world, точное соответствие manifest bytes descriptor, APPLYING, seal и OperationHolder, затем выдаёт climate children ArtifactRetentionHolder(manifest). Это реальная основа: общий hold алгоритм не создаётся заново, climate-specific выбор детей расширяется на принятый полный состав.
 
 Целевой Pack-owned расчёт: manifest ref + refs всех parts + transitive refs по owning format closure + durable source refs, требуемые provenance всех частей и assembly. Deduplication storage refs допустима; два разных logical addresses одного ref сохраняют отдельные записи/proofs. Ни отсутствие записи в other_members, ни cache hit не доказывают отсутствие dependency.
+
+[Trace preparation closure](pack-preparation-closure-trace.md): existing finish_preparation уже проверяет точное множество operation holds и seal, но не semantic dependencies. В текущем ArtifactFormatContract/registry нет generic children callback; registered closure остаётся конкретизируемым binding, а не существующей гарантией. Лишние промежуточные holds нельзя скрыть передачей subset или расширением authoritative closure.
 
 Тот же проверенный состав используется для READY, публикационного handoff и проверки read reachability. Closure discovery использует внутренние зарегистрированные format contracts над готовыми данными/verified indexes, не вызывает producers или публичный Source API. Полнота и происхождение source closure подтверждаются owning evidence. Самостоятельный обход неизвестного формата запрещён: unsupported format/ref — отказ, не пропуск.
 

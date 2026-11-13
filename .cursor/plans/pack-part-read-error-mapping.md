@@ -57,6 +57,8 @@ Existing backend `_io` дожидается завершения thread worker �
 
 ## Budgets и schema limits
 
+[Конкретный internal signal](pack-read-resource-limit-signal.md): предложен CanonicalDecodeLimitError как подтип existing CanonicalEncodingError с сохранением в обоих bounded wrappers; request IO overflow определяется до backend. Это проект для canonical decoder, не универсальный сигнал zstd/JSON и не новая публичная ошибка Pack.
+
 max_manifest_bytes/max_index_bytes/max_payload_bytes/max_total_bytes — отдельные пределы из PackPartReadBudget; повторные physical reads расходуют total, intermediate index budget суммируется. Переполнение проверяется до allocation/open, где возможно. Configured decoder output cap также требует явного typed mapping превышения лимита; compressed ref.nbytes его не заменяет.
 
 Existing [boundedCanonicalDecode](../../backend/app/application/encoding/boundedCanonicalDecode.py) выдаёт CanonicalEncodingError как для malformed wire, так и для depth/node/collection limit. Нельзя различать их по message. Owning **schema constraint** (например, недопустимое количество элементов record) относится к INVALID_* объекта; **resource budget** — BUDGET_EXCEEDED, если причина явно известна boundary. Если decoder не сохраняет нужное различие для resource cap, конкретный внутренний adapter/typed signal остаётся OPEN. Общий mapping всех CanonicalEncodingError в budget либо всех в corruption не закрывает этот gate.
