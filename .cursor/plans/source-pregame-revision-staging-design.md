@@ -171,6 +171,44 @@ Source может независимо уточнять собственные P
 
 Это ещё не выбор нового ArtifactHolderRef варианта и не его runtime регистрация. Source формулирует необходимые данные/проверки; точный shared holder contract принимается отдельно с владельцем Artifacts/publication. Отсутствие такого binding — зависимость runtime шага 3, а не дефект уже принятого proof.
 
+### P2.4. Source-owned historical lifetime — предложение по explicit prune
+
+Основание: основной план, «GC ревизий (решение 2026-10-24)»: latest всегда held, sourceUsage учитывает внешних держателей, revisionPrune удаляет только free; v1 предусматривает явный preview/confirm, не background sweeper. Поэтому предлагается **SourceRootHolder на каждую сохранённую body-bearing revision до explicit prune**, а не только на latest. Это уточнение lifetime для совместной приёмки; основной план и его порядок не переписываются.
+
+При A→B acquire root B и публикация новой latest выполняются атомарно; root A сохраняется. Object DELETE создаёт tombstone и новое membership, но не снимает roots исторических live revisions. Label-only не создаёт дополнительного root: прежний exact ref и mapping остаются теми же. Collection revisions имеют такую же политику; retained collection body сам по себе не является capture и не закрепляет автоматически body каждого member — полный capture closure удерживается отдельно принятым proof-контрактом.
+
+До успешного explicit prune exact live revision read должен находить прежнее тело после restart даже без Pack/Snapshot/capture. После prune чтение той же exact revision не переходит к latest. Сохраняются identity/seq/hash и отметка удаления body mapping, достаточные для запрета повторного seq/identity и отличения намеренного prune от corrupt/missing artifact. Tombstone — отрицательное состояние owning revision index, не пустой live ArtifactRef; live body read возвращает TOMBSTONE. Его canonical content_hash и точная storage форма остаются prerequisite deletion-контракта, их нельзя выдумать в holder adapter.
+
+Чтобы собственный archival root не делал prune невозможным, sourceUsage должен различать **защиту от физического GC** и **причину запрета explicit prune**. Собственный SourceRootHolder exact revision обеспечивает первое. Latest и внешние capture/publication/accepted-set holders обеспечивают второе. Нельзя просто игнорировать все Source holders одного artifact: если bytes разделяют несколько revisions, roots других revisions сохраняются. Удаляется только holder выбранного exact ref.
+
+Prune confirm обязан повторить latest и external usage проверки в сериализованной с mutation/capture-finalize границе, затем в той же transaction снять выбранный root и отметить mapping pruned. Preview не является разрешением и не несёт capability. На отказе никаких частичных release; на rollback body mapping/root восстанавливаются вместе. Физическое удаление bytes остаётся у existing Artifacts GC после commit, с проверкой полного live-set. Точный sourceUsage scoped read контракт должен быть принят отдельно; публичный междоменный вызов из root adapter не допускается.
+
+### P2.5. Конкретный кандидат внутреннего Source root read binding
+
+Модуль `app.application.worldData.sourceVersioning.retention.rootReadBinding`, класс `SourceRootReadBinding`, владелец Source. Это внутренний scope-bound адаптер, не публичный OpenPipeline, не новый dataModel POJO и не holder implementation. Предлагаемый метод:
+
+```python
+async def retained_refs(
+    self,
+    scope: CommitScope,
+    source: SourceVersionRef | SourceCollectionVersionRef,
+    *,
+    operation: SourceOperation,
+) -> tuple[ArtifactRef, ...] | SourceFailure: ...
+```
+
+Назначение — прочитать **точный** revision mapping из общей transaction и вычислить полный storage closure его body через existing owning format bindings. Результат canonical/unique, включает primary body и все format dependencies; не proof, не lease, не capability и не обещание hold после выхода из scope. Поиск latest и обход всех members collection вместо storage closure запрещены. CommitScope/SourceOperation остаются internal, в публичный mutation input не попадают.
+
+Проверки: exact identity/revision/world/descriptor; body-bearing, не pruned/tombstone; единственный immutable mapping; поддерживаемый формат; полнота closure; sealed/integrity каждого ref. Binding не назначает seq, не изменяет SQL, не добавляет holds, не открывает transaction и не вызывает public pipeline другого домена. Использует scoped revision-index read и внутренние Artifacts format/catalog readers той же DB/composition. Все независимые diagnostics агрегируются до effects.
+
+Ошибки переиспользуют SourceFailure с operation вызывающей операции, SourceLogicIssue.source=запрошенный exact ref и artifact при наличии. Existing TOMBSTONE, REVISION_CONFLICT, BODY_MAPPING_CONFLICT, UNSUPPORTED_FORMAT, MISSING_BODY, CORRUPT_BODY, UNSEALED_BODY, INCOMPLETE_CLOSURE сохраняют свои значения. Для намеренно pruned mapping предлагается общий SourceLogicCode.REVISION_PRUNED, для неизвестной exact revision — REVISION_NOT_FOUND: это разные условия от missing bytes при существующем mapping. Новые codes остаются предложением в этом OPEN документе; принятый sourceErrors roster не изменяется. Infrastructure errors не превращаются в отрицательный результат.
+
+Artifacts root acquire использует этот binding внутри собственного internal adapter и записывает полный набор holds только после успешных проверок; fresh revision mapping уже записан, но ещё не committed в общей transaction. Должны быть дополнительно проверены operation/fence и полномочия mutation caller, а не только существование ref. Повтор acquire идентичен; mapping иной для того же exact ref — отказ. Как caller передаёт operation/fence контекст при предложенной двухаргументной acquire(scope, holder), владелец Artifacts ещё должен конкретизировать.
+
+**Release не использует retained_refs как разрешение.** Для первого mutation среза release исторических roots не вызывается вообще: explicit prune — отдельная операция основного плана. Общий unrestricted release(scope, holder) пока нельзя открыть. Перед его поставкой нужны concrete Source prune authorization, scoped sourceUsage evidence и атомарная связь проверки с записью pruned; токен, bool от caller и повторный read после выхода из scope не подходят. Это зависимость полноценного retention lifecycle, а не разрешение отложить её приёмку незаметно.
+
+Критерии проверки binding/lifetime: historical A читается после B и restart без внешнего holder; GC не удаляет A до prune; latest prune запрещён; внешний hold блокирует prune; общий artifact двух revisions не теряет root второй; label-only не меняет mapping; rollback acquire/prune не оставляет частичный live-set; tombstone не превращается в live body; pruned и отсутствующие bytes различимы; не вызывается latest fallback. До runtime evidence и joint review P2/P3 остаются OPEN.
+
 ## Следующие проверяемые проектные результаты
 
 | Порядок | Результат | Владелец и граница |
