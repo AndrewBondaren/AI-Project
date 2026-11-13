@@ -1,6 +1,6 @@
 # World source versioning — версионирование объектов N+1 и граница мутации
 
-Текущая техническая проработка ядра для интеграции с Pack — [спецификация §6.0](source-proof-v2-contract-spec.md#60-ядро-source-для-proof--уточнение-2026-11-13). Это кандидат concrete proof/API с точными зависимостями для следующей приёмки; основной план и принятый порядок не заменяет. Отдельные ранее созданные Source contract/transition документы не являются альтернативным основным планом.
+Проектный срез SourceDurableProof и исправления R1/R2 в [спецификации](source-proof-v2-contract-spec.md) **приняты независимым reviewer**: [акт 2026-11-13](source-durable-proof-contract-acceptance-2026-11-13.md). Это не приёмка runtime durable API или всего Source и не изменение порядка основного плана. Внешние capture/DAG и Pack/Snapshot bindings, полный CRUD/disposition, pregame revision staging и runtime проверки остаются OPEN. Следующая локальная проработка — [pregame staging](source-pregame-revision-staging-design.md). Отдельные Source contract/transition документы не являются альтернативным основным планом.
 
 Статус: DESIGN согласовано в чате 2026-10-24; после критического ревью
 согласованы freeze/capture, публикация, GC-защита staging, изоляция
@@ -468,10 +468,18 @@ domain POJO (terrain/materials/locations/libraryPacks)
 dataModel/sourceVersioning        ← НЕ импортирует доменные POJO,
         │                            иначе цикл domain → contract → domain
         ▼
-app.ids (key aliases, state_fingerprint) + pydantic/typing — единственные deps
+shared leaf values (EntityUid, ArtifactRef, RevisionHex, RegistryKey)
+        + app.ids / pydantic / typing; без owning domain registry imports
 ```
 
 Application-слой зависит на dataModel в обычном направлении:
+
+Уточнение proof-среза по ревью 2026-11-13: SourceObjectContract остаётся
+независимым от доменных моделей. Остальные Source value contracts могут
+переиспользовать перечисленные shared leaf values; прежнее «только app.ids»
+superseded этой точной границей. RegistryKey[OwningDomainRegistry] связывается
+application adapter, не импортом owning registry в Source POJO. Импорты
+Pack DTO, holder/usage services и concrete storage в Source POJO запрещены.
 
 - **projector** (`application/worldData/sourceVersioning/`) — импортирует
   `WorldSlice`, контракты, доменные контейнеры; dataModel ничего не знает
@@ -503,10 +511,17 @@ SourceObjectId = Annotated[Union[
 class SourceRevision:
     seq: int            # монотонный на SourceObjectId; носитель — шаг 3
     content_hash: str   # app.ids.state_fingerprint от canonical entry dump
-    label: str | None   # копия author label (version) на момент штампа
 
 RevisionSet = dict[SourceObjectId, SourceRevision]
 ```
+
+Уточнение по ревью Source proof (2026-11-13): SourceRevision содержит только
+seq и content_hash. Прежнее поле label в этой сигнатуре superseded: author
+label хранится в audit metadata мутации и не участвует в semantic equality,
+canonical proof или выборе historical revision. Поля строгого POJO и
+отдельные object/collection refs определены в source-proof-v2-contract-spec.md
+§10.2; canonical binding и удержание capture — §11. Это синхронизация
+проекта, не приёмка реализации и не изменение порядка поставки.
 
 - `key_field`/`exclude_fields` — имена полей (декларация), не payload `*_type`;
   это допустимое `str`-исключение по contract-creation.

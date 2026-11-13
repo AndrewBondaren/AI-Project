@@ -1,6 +1,6 @@
 # Source proof для Pack V2 — техническая спецификация
 
-Дата: 2026-11-12. Основание: поручение завершить техническую проработку REV-02, [основной план](world-pack-v2-single-manifest-contract.md), [Source-design](world-source-versioning.md). Статус: PROJECT / NOT ACCEPTED. Ниже отделены проверенная реализация и проект изменений. Это не отчёт о выполненной реализации и не разрешение обходить обязательную приёмку DAG/CRUD/POJO.
+Дата: 2026-11-12; актуализация статуса 2026-11-13. Основание: поручение REV-02 и основной [Source-design](world-source-versioning.md). **ACCEPTED — проектный срез SourceDurableProof и R1/R2 по независимому reviewer** ([акт приёмки](source-durable-proof-contract-acceptance-2026-11-13.md)). **Runtime durable API — NOT ACCEPTED; весь Source — OPEN.** Статические проверки не заменяют реализацию. Исторические аудиты §3/3.1/3.2/8 и записи предъявления §11/12 читаются с этим последующим вердиктом, не переоткрывают закрытые findings.
 
 ## 1. Подтверждённые границы записи
 
@@ -140,7 +140,7 @@
 
 #### Конфликт импортов, который требуется решить до identity POJO
 
-Основной план запрещает dataModel/sourceVersioning импортировать domain entry/registry POJO, потому что те импортируют SourceObjectContract. Прямое объявление RegistryMemberId с полями RegistryKey[WorldTerrainRegistry] и аналогами внутри Source namespace нарушило бы это направление. Предыдущая фраза «взять owning typed keys» без места binding была недостаточной.
+Основной план запрещает Source импортировать owning domain entry/registry POJO; SourceObjectContract остаётся dependency-free от них. Shared leaf value contracts ArtifactRef/EntityUid/RevisionHex/RegistryKey не являются owning registry models. Прямой RegistryKey[WorldTerrainRegistry] внутри Source ID нарушает выбранное направление; descriptor adapter §10.1 связывает его в application.
 
 Кандидат решения для design review: базовая декларация SourceObjectContract остаётся dependency-free от доменов; descriptor→owning key adapter и codec связываются в application composition поверх WORLD_SLICES. Публичная identity должна ссылаться на зарегистрированную Source-owned descriptor identity, а значение ключа проверяется owning adapter. Однако конкретный carrier значения ключа (типизированный union категорий, без универсальной str/Any дырки), registry identity/версии и его canonical representation **ещё нужно предъявить**. Не выдавать application registry по имени за разрешение untyped публичного ID. Альтернатива с переносом всех ключевых типов/реестров в neutral namespace потребовала бы отдельного междоменного scope и этим планом не назначается.
 
@@ -181,7 +181,7 @@
 - **Capture:** owning read получает явную согласованную publication/read boundary и требуемые descriptors; возвращает готовый SourceCapture и typed values. Выбор следующих producers делает DAG. Capture не создаёт revisions и не запускает генерацию.
 - **Настройки:** semantic settings читаются/изменяются owning domain CRUD с тем же revision механизмом. Технические бюджеты storage не превращаются в mutable settings API Source. Их source/config и admission фиксируются composition отдельно.
 
-**Проект ошибок:** `SourceIssueCode` с INVALID_IDENTITY, DUPLICATE_IDENTITY, WRONG_WORLD, REVISION_CONFLICT, UNKNOWN_CONTRACT, UNSUPPORTED_FORMAT, MISSING_BODY, UNSEALED_BODY, MISSING_HOLD, INCOMPLETE_COLLECTION, TOMBSTONE; конкретный `SourceFieldIssue(FieldPathError[SourceIssueCode])`, отдельный logic issue с expected/actual source refs. Публичный failure содержит operation + immutable tuple issues, infrastructure exceptions не превращаются в not-found. Агрегировать независимые field issues существующим [ValidatorAggregationHelper](../../backend/app/dataModel/validation/diagnostics/validatorAggregationHelper.py); путь в skill `app.core.validatorAggregationHelper` устарел, новый helper не создавать.
+**Единый error-контракт:** все Source операции и внутренние registration/finalize проверки используют `sourceErrors.SourceFieldCode/SourceFieldIssue`, `SourceLogicCode/SourceLogicIssue`, `SourceOperation/SourceFailure` (§11.3). Второй SourceIssueCode и proof-specific зеркала не создаются. Существующие ValidatorAggregationHelper, FieldRef/bind_field и CheckedPath переиспользуются. Условия, пути, phase mapping и infrastructure исключения заданы в §11.3.
 
 ## 5. Проект хранения и атомарности
 
@@ -201,9 +201,9 @@ Collection body хранится через тот же Artifacts, как и bod
 
 ### 6.0. Ядро Source для proof — уточнение 2026-11-13
 
-Статус: конкретный проект для приёмки, не runtime и не утверждённое изменение основного дизайна. Главный план — `world-source-versioning.md`; этот документ владеет технической детализацией интеграции. Source — вспомогательный механизм: не универсальный CRUD мира, не Pack assembler и не владелец artifact GC. Application размещение следует основному плану: `app.application.worldData.sourceVersioning`; POJO — `app.dataModel.sourceVersioning`.
+Статус ядра proof: проект принят независимым reviewer вместе с уточнениями §9–12; runtime не принят. Главный план — world-source-versioning.md, утверждённый порядок не меняется. Source — вспомогательный механизм, не CRUD мира или Pack assembler. Application: app.application.worldData.sourceVersioning; POJO: app.dataModel.sourceVersioning.
 
-**Снятое предложение:** индексы objects/collections внутри одного capture из `source-durable-proof-contract.md` не принимаются как основа реализации. В основном дизайне dependencies — точные SourceVersionRef, а при частичном обновлении исторические основания не переписываются. Ни однократный capture новой операции, ни его полный closure не заменяют provenance всех использованных результатов. Удержание всего capture как обязательная политика также не принято. Отдельные Source документы являются вспомогательными материалами, не вторым основным планом.
+**Снятое предложение:** индексы objects/collections внутри одного capture из `source-durable-proof-contract.md` не принимаются как основа реализации. В основном дизайне dependencies — точные SourceVersionRef, а при частичном обновлении исторические основания не переписываются. Ни однократный capture новой операции, ни его полный closure не заменяют provenance всех использованных результатов. Отказ от полного closure относился к прежнему предложению и superseded проектом v1 (§10.4): для каждого употреблённого capture удерживается весь required storage closure, logical usage остаётся точным subset. Отдельные Source документы являются вспомогательными материалами, не вторым основным планом.
 
 #### A. Состав и смысл POJO
 
@@ -213,7 +213,7 @@ Collection body хранится через тот же Artifacts, как и bod
 |---|---|---|
 | sourceCaptureRef.py | SourceCaptureRef(`world_uid: EntityUid`, `artifact: ArtifactRef`) | Exact ref immutable finalized capture; owning format и финализация должны проверяться. Это не hold и не произвольный BLOB |
 | sourceCaptureUsage.py | SourceCaptureUsage(`capture: SourceCaptureRef`, `dependencies: SourceDependencySet`) | Заявленные использованные object/collection revisions одного capture. Не список всех доступных inputs |
-| sourceDurableProof.py | SourceDurableProof(`world_uid: EntityUid`, `uses: tuple[SourceCaptureUsage, ...]`) | Канонический набор исторических source dependencies одного результата; без Pack address, output artifact, Planning dependencies и capabilities |
+| sourceDurableProof.py | SourceDurableProof(`schema_version: Literal[1]`, `world_uid: EntityUid`, `uses: tuple[SourceCaptureUsage, ...]`) | Канонический набор исторических source dependencies одного результата; без Pack address, output artifact, Planning dependencies и capabilities |
 | sourceProofInput.py | SourceProofInput(`world_uid: EntityUid`, `uses: tuple[SourceCaptureUsage, ...]`) | Заявка admission/нормализации: world ожидание и реально сообщённые producer зависимости; не готовое удостоверение |
 | sourceProofInput.py | SourceProofReadInput(`world_uid: EntityUid`, `proof: SourceDurableProof`) | Проверка уже сохранённого proof без его переписывания |
 | sourceProofResult.py | SourceProofResult(`proof: SourceDurableProof`, `durable_refs: tuple[ArtifactRef, ...]`) | Полностью проверенные source зависимости и вычисленный closure на момент чтения; не retention token |
@@ -245,8 +245,8 @@ Storage refs дедуплицируются по полному ArtifactRef; log
 Concrete класс `SourceProofPipelineOpenPipeline`, модуль `app.application.worldData.sourceVersioning.sourceProofPipelineOpenPipeline`. Интерфейс `ISourceProofPipelineOpenPipeline` в `app.application.worldData.sourceVersioning.interfaces.sourceProofPipelineOpenPipeline` объявляет те же сигнатуры:
 
 ```python
-async def admit(self, request: SourceProofInput) -> SourceProofResult | SourceProofFailure: ...
-async def read(self, request: SourceProofReadInput) -> SourceProofResult | SourceProofFailure: ...
+async def admit(self, request: SourceProofInput) -> SourceProofResult | SourceFailure: ...
+async def read(self, request: SourceProofReadInput) -> SourceProofResult | SourceFailure: ...
 ```
 
 ADMIT: принимает реальный declared usage, проверяет exact captured dependencies, нормализует и возвращает proof + полный durable refs набор. READ: проверяет persisted proof и возвращает тот же proof + refs; не меняет historical identity. Отдельные create/verify/collect_refs, повторяющие один и тот же IO и возвращающие не связанные по времени ответы, не вводятся. Получение refs — обязательная часть обеих операций, не optional flag. Операции read-only; capture-finalize, запись revision и acquiring/releasing holds в них не спрятаны.
@@ -255,15 +255,15 @@ ADMIT: принимает реальный declared usage, проверяет ex
 
 #### E. Ошибки и ответственность реализации
 
-Предлагаемый `sourceProofErrors.py`:
+Предлагаемый `sourceErrors.py`:
 
-- SourceProofOperation: ADMIT, READ, ADMIT_GROUPS, VERIFY_GROUPS, SELECT. Внутренние стадии не добавляют публичные операции.
-- SourceProofFieldCode: INVALID_SHAPE, INVALID_IDENTITY, NON_CANONICAL_PROOF, INVALID_SELECTION, GROUP_COUNT_MISMATCH. SourceProofFieldIssue — concrete FieldPathError[SourceProofFieldCode] с inherited code/path/message; общий carrier не клонируется.
-- SourceProofLogicCode: WRONG_WORLD, CAPTURE_NOT_FINALIZED, DEPENDENCY_NOT_CAPTURED, REVISION_CONFLICT, BODY_MAPPING_CONFLICT, UNSUPPORTED_FORMAT, MISSING_BODY, CORRUPT_BODY, UNSEALED_BODY, INCOMPLETE_CLOSURE, PROOF_MISMATCH, SELECTION_PROOF_MISMATCH, SELECTION_OUT_OF_RANGE, SELECTION_USAGE_MISMATCH, CLOSURE_MISMATCH. Общий USAGE_MISMATCH не вводится: нарушение exact union — PROOF_MISMATCH, отдельной selection — SELECTION_USAGE_MISMATCH.
-- SourceProofLogicIssue: `code: SourceProofLogicCode`, `group_index: StrictInt | None`, `use_index: StrictInt | None`, `source: SourceVersionRef | SourceCollectionVersionRef | None`, `artifact: ArtifactRef | None`; все поля обязательны. Индексы при наличии ge=0, относятся к исходному request. Для ошибки proof/result целиком оба индекса None; для одиночной операции group_index=None. Fictitious use_index=0 запрещён. Вложенные refs имеют разные обязательные поля object_id/collection_id и extra-forbid, поэтому union не допускает смешанную запись.
-- SourceProofFailure: `operation: SourceProofOperation`, `field_issues: tuple[SourceProofFieldIssue, ...]`, `logic_issues: tuple[SourceProofLogicIssue, ...]`; хотя бы одна issue. Независимые дефекты агрегируются; недоступная зависимая проверка пропускается, но не остальные группы. Infra exceptions не превращаются в MISSING_BODY; hold errors не клонируются из Artifacts.
+- SourceOperation и единые SourceFieldCode/SourceLogicCode объявлены в §11.3. Proof использует ADMIT, READ, ADMIT_GROUPS, VERIFY_GROUPS, SELECT; internal stages сохраняют operation вызывающей операции. Источник определения — один модуль sourceErrors.
+- SourceFieldIssue — единственный concrete FieldPathError[SourceFieldCode] для Source, поля code/path/message наследуются. Полный roster и mapping — §11.3.
+- SourceLogicCode — единый enum §11.3; отдельного proof-specific enum или общего неоднозначного USAGE_MISMATCH нет.
+- SourceLogicIssue: `code: SourceLogicCode`, `group_index: StrictInt | None`, `use_index: StrictInt | None`, `source: SourceVersionRef | SourceCollectionVersionRef | None`, `artifact: ArtifactRef | None`; все поля обязательны. Индексы при наличии ge=0, относятся к исходному request. Для ошибки proof/result целиком оба индекса None; для одиночной операции group_index=None. Fictitious use_index=0 запрещён. Вложенные refs имеют разные обязательные поля object_id/collection_id и extra-forbid, поэтому union не допускает смешанную запись.
+- SourceFailure: `operation: SourceOperation`, `field_issues: tuple[SourceFieldIssue, ...]`, `logic_issues: tuple[SourceLogicIssue, ...]`; хотя бы одна issue. Независимые дефекты агрегируются; недоступная зависимая проверка пропускается, но не остальные группы. Infra exceptions не превращаются в MISSING_BODY; hold errors не клонируются из Artifacts.
 
-Эти proof-specific ошибки не разрешают второй совпадающий SourceFieldIssue из §4: до реализации сверить общий Source diagnostics roster и выбрать одну декларацию каждого semantic кода. Exact schema error translation/typed field selectors ещё требует реализации на existing validation infrastructure; список кодов не считается завершённой приёмкой ошибок.
+SourceFieldIssue и SourceLogicIssue общие для Source; никаких параллельных carriers §4/§6 не остаётся. Operation сохраняется при передаче diagnostics из internal validator в pipeline, typed paths rebased к исходному request.
 
 | Класс / модуль в application/worldData/sourceVersioning | Ответственность, зависимости, эффекты | Отказ |
 |---|---|---|
@@ -291,7 +291,7 @@ ADMIT: принимает реальный declared usage, проверяет ex
 
 Статус: PROPOSED, для согласования с владельцем потребителя. Source знает только ordered groups заявленного usage, exact captures и dependencies. Group может соответствовать полю, нескольким полям или иному результату; имён полей, PackMetadataSubject, DTO metadata и алгоритма Pack в Source нет. Выбор модели «один proof строки + selections» остаётся решением потребителя. Для неё Source предоставляет следующие универсальные операции.
 
-**SourceDurableProof:** единая кандидатная форма A/G/§9 — `SourceDurableProof(world_uid: EntityUid, uses: tuple[SourceCaptureUsage, ...])`. World обязателен даже при пустом uses, сравнивается с request world и мирами всех captures. Отсутствующий proof не заменяется пустым.
+**SourceDurableProof:** единая кандидатная форма A/G/§9 — `SourceDurableProof(schema_version: Literal[1], world_uid: EntityUid, uses: tuple[SourceCaptureUsage, ...])`. World обязателен даже при пустом uses, сравнивается с request world и мирами всех captures. Отсутствующий proof не заменяется пустым.
 
 | Модуль под app.dataModel.sourceVersioning | Тип и полный состав | Смысл |
 |---|---|---|
@@ -305,14 +305,14 @@ ADMIT: принимает реальный declared usage, проверяет ex
 
 **Адресация внутри proof.** Сначала canonical ordered uses по full capture identity. В каждом use — canonical objects, затем canonical collections. Каждый элемент порождает один atom `(capture, category, exact SourceVersionRef)`; глобальный zero-based ordinal этого потока — dependency index. Одинаковый SourceVersionRef в разных captures остаётся разными atoms; object/collection categories не сливаются. Indices strict int, ge=0, уникальны и возрастают; bounds проверяются относительно конкретного proof. Это selection над уже предъявленным proof; снятое предложение BLOB-body indices внутри capture не возвращается.
 
-Fingerprint selection — existing canonical content digest **полного SourceDurableProof**, включая world и все capture/dependency identities, по зарегистрированной Source schema. Не hash output metadata, не hash тела объекта и не новый hash algorithm. Canonical IDs/version binding должны быть приняты до реализации. Fingerprint отсутствует как второе поле самого proof: он вычисляется owning codec. Перестановка исходных групп не меняет общий canonical proof, но меняет порядок selections. Любое изменение semantic состава общего proof инвалидирует прежние selections, даже если некоторые indices остались в пределах bounds; перенос выполняется через Source операцию, не поправкой indices в DAG.
+Fingerprint selection — existing canonical content digest полного SourceDurableProof, включая schema_version/world/capture identities и dependencies, по SOURCE_PROOF_SCHEMA_V1 (§11.4). Это не metadata/body hash и не новый algorithm. Fingerprint не хранится вторым полем proof. Перестановка declared groups сохраняет union proof, но переставляет selections. Изменение proof инвалидирует прежние selections; DAG не исправляет indices.
 
 **Новые методы того же SourceProofPipelineOpenPipeline / ISourceProofPipelineOpenPipeline:**
 
 ```python
-async def admit_groups(self, request: SourceProofGroupsInput) -> SourceProofGroupsResult | SourceProofFailure: ...
-async def verify_groups(self, request: SourceProofGroupsVerifyInput) -> SourceProofGroupsResult | SourceProofFailure: ...
-async def select(self, request: SourceProofSelectInput) -> SourceProofResult | SourceProofFailure: ...
+async def admit_groups(self, request: SourceProofGroupsInput) -> SourceProofGroupsResult | SourceFailure: ...
+async def verify_groups(self, request: SourceProofGroupsVerifyInput) -> SourceProofGroupsResult | SourceFailure: ...
+async def select(self, request: SourceProofSelectInput) -> SourceProofResult | SourceFailure: ...
 ```
 
 ADMIT_GROUPS — одна операция read admission: проверить каждую заявленную группу, собрать canonical union exact atoms без потери capture provenance, построить общий SourceDurableProof, получить полный closure общего proof, выдать selections в исходном порядке. Source не вызывает публичный admit в цикле: shared validator/normalizer/reader выполняют внутренний алгоритм этой операции. Успех всего запроса атомарен как результат: при одной ошибке частичный result не возвращается. Это не storage transaction и не приобретение holds.
@@ -349,7 +349,7 @@ SELECT проверяет world, fingerprint/bounds/canonical selection и exact
 
 SourceProofValidator, SourceProofNormalizer и SourceProofSelector из E/G — внутренние pure компоненты: revalidation, canonical atom enumeration, нормализация declared usage, exact union и matching selections. Они не читают storage, не запускают публичные операции и не принимают callback/codec от потребителя. Pack и DAG не воспроизводят эти алгоритмы.
 
-SourceProofGroupsMatchInput не вводится: pure matching является внутренней стадией VERIFY_GROUPS над его входом. Публичные EXTRACT_USAGE/MATCH_GROUPS и соответствующие значения SourceProofOperation также не вводятся. Исторический subset проверяет SELECT, возвращающий SourceProofResult. Сопоставление proof.world_uid/proof.uses с конкретным Pack usage input предъявляет owning binding; второй usage record в result не добавляется.
+SourceProofGroupsMatchInput не вводится: pure matching является внутренней стадией VERIFY_GROUPS над его входом. Публичные EXTRACT_USAGE/MATCH_GROUPS и соответствующие значения SourceOperation также не вводятся. Исторический subset проверяет SELECT, возвращающий SourceProofResult. Сопоставление proof.world_uid/proof.uses с конкретным Pack usage input предъявляет owning binding; второй usage record в result не добавляется.
 
 Pure стадия подтверждает лишь структурную согласованность значений. Finalized capture, exact mappings и полный closure проверяются IO стадиями одной owning операции. Поддельный внутренне согласованный proof может пройти pure проверку, но не должен получить успешный IO result. Живые holds проверяет Artifacts/publication scoped owner.
 
@@ -396,7 +396,7 @@ Metadata передаётся таким же способом как готов
 | Scope-bound domain writer | Применение уже подготовленного body/membership в переданном scope | Собственный commit, latest read вместо expected revision, derived output без классификации |
 | SourceRevisionStore (проект) | Append/read revision mapping и receipts; не body codec | Выбор producer, семантическая проекция чужой модели, отдельный commit |
 | Owning source codec/projector | Typed body + semantic/authored-presence representation | Второе hash-ядро, неполный round-trip, IO при pure validation |
-| Source capture adapter | Согласованный read и materialized immutable result | Назначение seq, lazy service в POJO, смешанные snapshots |
+| SourceCaptureAdapter / capture/captureAdapter.py (§12.2) | Передаёт подготовленный witness в SourceCaptureFinalizer одним finalize_capture вызовом; внешняя capture привязка остаётся отдельной | Сборка reserve/append/seal/commit в caller, назначение seq, lazy service в POJO |
 | Artifact ports | Seal, holds, GC, bounded read | Удержания SQL row выдаются за artifact holder без контракта |
 | Pack assembler/codec | Единственный полный manifest, проверка evidence/address/schema | Запуск source read/producer, перезапись proof inherited части |
 | Existing publication/Snapshot owner | Scope, atomic apply, outcome/recovery | Materialization внутри apply или самостоятельный commit домена после gameplay |
@@ -419,7 +419,7 @@ Metadata передаётся таким же способом как готов
 
 ## 9. Сводный кандидат контракта для приёмки — 2026-11-13
 
-Этот раздел сводит публичную поверхность A–H и уточняет canonical ordering. Статус **PROJECT / NOT ACCEPTED**: описание точных верхнеуровневых records не закрывает зависимости §9.4. Нельзя объявить runtime import готовым. §3 и §6 сохраняют обоснование и детали; при расхождении будущая приёмка должна исправить обе записи, не выбирать версию по усмотрению implementer.
+Этот раздел сводит публичную поверхность A–H с уточнениями §10–12. **Проектный proof-срез ACCEPTED** по независимому акту 2026-11-13. Открытые runtime и внешние зависимости §9.4–5 остаются отдельными gates, не отменяют приёмку схемы. Runtime импорты ещё не готовы.
 
 ### 9.1. Публичные значения и операции
 
@@ -431,7 +431,7 @@ Metadata передаётся таким же способом как готов
 |---|---|
 | sourceCaptureRef | SourceCaptureRef(world_uid: EntityUid, artifact: ArtifactRef) |
 | sourceCaptureUsage | SourceCaptureUsage(capture: SourceCaptureRef, dependencies: SourceDependencySet) |
-| sourceDurableProof | SourceDurableProof(world_uid: EntityUid, uses: tuple[SourceCaptureUsage, ...]) |
+| sourceDurableProof | SourceDurableProof(schema_version: Literal[1], world_uid: EntityUid, uses: tuple[SourceCaptureUsage, ...]) |
 | sourceProofInput | SourceProofInput(world_uid: EntityUid, uses: tuple[SourceCaptureUsage, ...]); SourceProofReadInput(world_uid: EntityUid, proof: SourceDurableProof) |
 | sourceProofResult | SourceProofResult(proof: SourceDurableProof, durable_refs: tuple[ArtifactRef, ...]) |
 | sourceProofGroups | SourceProofGroupsInput(groups: tuple[SourceProofInput, ...]); SourceProofGroupsResult(admission: SourceProofResult, selections: tuple[SourceProofSelection, ...]) |
@@ -440,7 +440,7 @@ Metadata передаётся таким же способом как готов
 
 Внешний import proof: `app.dataModel.sourceVersioning.sourceDurableProof.SourceDurableProof`.
 
-Concrete публичный IO класс: `app.application.worldData.sourceVersioning.sourceProofPipelineOpenPipeline.SourceProofPipelineOpenPipeline`; интерфейс с префиксом I в `interfaces.sourceProofPipelineOpenPipeline`. Методы async, возвращают указанный result либо единый SourceProofFailure из `sourceProofErrors`:
+Concrete публичный IO класс: `app.application.worldData.sourceVersioning.sourceProofPipelineOpenPipeline.SourceProofPipelineOpenPipeline`; интерфейс с префиксом I в `interfaces.sourceProofPipelineOpenPipeline`. Методы async, возвращают указанный result либо единый SourceFailure из `sourceErrors`:
 
 | Метод | Request | Success | Проверяемая гарантия |
 |---|---|---|---|
@@ -454,11 +454,11 @@ Concrete публичный IO класс: `app.application.worldData.sourceVers
 
 ### 9.2. Единые правила значения, порядка и сравнения
 
-1. `E(value)` — bytes существующего `CanonicalCodec.encode` при фиксированном Source canonical manifest. Source normalizer сортирует лексикографически по bytes: uses по E(full SourceCaptureRef), objects и collections внутри use отдельно по E(full SourceVersionRef), durable_refs по E(full ArtifactRef). Не сортировать по hash вместо полного значения, по repr, Python module name или порядку обнаружения. Type IDs/версия manifest остаются обязательной dependency до реализации; они фиксируются в Source composition и недоступны для подмены caller.
+1. `E(value)` — bytes CanonicalCodec.encode с SOURCE_PROOF_SCHEMA_V1 (§11.4). Source normalizer сортирует bytes лексикографически: uses по full SourceCaptureRef; objects по SourceVersionRef, collections по SourceCollectionVersionRef; durable_refs по full ArtifactRef. IDs/версия закреплены, caller не передаёт manifest. repr, Python module name, hash вместо full value и discovery order запрещены.
 2. Admission объединяет одинаковые full capture refs, удаляет exact дубликаты dependencies; затем сортирует. Разные revisions одной identity внутри capture отклоняются, а в разных captures сохраняются. Пустые usages удаляются только при admission. READ/SELECT/VERIFY предъявленного persisted proof требуют уже canonical порядка, уникальности и отсутствия пустых usages; не исправляют его.
 3. World proof обязателен даже при uses=(). Capture worlds совпадают с ним; request world проверяется отдельно. Проверки мира и применимости каждой identity не заменяются одним сравнением capture.world_uid: world-scoped dependency не может принадлежать чужому миру, global library dependency требует owning membership witness.
 4. Groups непусты, одного мира, порядок сохраняется. Каждая группа может явно заявить пустой usage. Неизвестное происхождение не превращается в пустую группу. Atom stream = ordered uses, затем objects, затем collections; atom identity включает capture, category и exact revision. Selection indices строго возрастают, уникальны, в границах этого потока. Одинаковые selections разных groups разрешены.
-5. Fingerprint = существующий canonical content digest всего proof по фиксированной схеме; формат digest соответствует RevisionHex. Нужна одна named Source schema binding с закреплёнными IDs и версией, не implicit current global registry. Fingerprint не удостоверяет capture-finalize или producer completeness.
+5. Fingerprint = content_digest(CanonicalCodec(SOURCE_PROOF_SCHEMA_V1).encode(proof)).hex(), включая обязательный schema_version=1. Type IDs/field order/compatibility зафиксированы в §11.4. Fingerprint не удостоверяет capture-finalize или producer completeness.
 6. VERIFY_GROUPS требует точного равенства normalized expected union предъявленному proof и точного равенства каждого subset соответствующей группе. Проверка union без покомпонентного matching недостаточна. durable_refs обязаны быть canonical tuple exact полного closure; missing, extra, duplicate или неверно упорядоченные refs не исправляются. READ возвращает неизменный proof, не пересобранную semantic approximation.
 7. Все независимые доступные ошибки собираются до отказа; dependent IO не выполняется после нарушения предусловия. Никакого partial success. Ошибки инфраструктуры не превращаются в отсутствие body. Привязка typed field paths и единый error roster требуют §9.4; список правил не заменяет error POJO.
 
@@ -466,7 +466,7 @@ Concrete публичный IO класс: `app.application.worldData.sourceVers
 
 Полный closure включает capture witness, необходимые исторические object/collection bodies и все обязательные рёбра owning форматов. **Минимальность subset не гарантируется.** Если capture-формат удерживает невыбранные bodies, они входят в closure SELECT тоже. Это не разрешает произвольно добавлять unrelated refs: состав определяется registered format dependency traversal. Пустой proof без captures даёт пустой source closure.
 
-Sealed artifact доказывает content integrity в границах Artifacts, но не сам факт согласованной Source capture-finalize. До реализации нужен конкретный immutable witness/его trusted binding: какие данные подтверждают согласованность capture, какие exact revision→body mappings проверяются после restart и как отвергается корректно sealed, но не finalized capture. Флаг caller `finalized=true` или наличие самого SourceCaptureRef этого не доказывают.
+Sealed artifact подтверждает content integrity, не финализацию. Concrete witness определён в §10.3, same-scope committed Source binding — §11.2. Caller finalized=true и один SourceCaptureRef не доказывают наличие committed записи. До runtime требуется реализовать именно этот binding.
 
 Возвращённые refs не являются lease или receipt живого удержания. До публикации нужен existing scoped owner, атомарно проверяющий доступность/исходное удержание и acquiring target holds; source release выполняется owning lifecycle отдельно. Source read не вызывает Pack и не производит скрытый handoff. Точный Pack input и scope binding согласуются с владельцем Pack; результат обсуждения фиксируется отдельно.
 
@@ -479,9 +479,9 @@ Mapping: SourceProofResult.proof → PackStoredProvenance.source_proof; Planning
 | Identity | §10.1–2 задаёт варианты, descriptor/key carrier и owning validation; принять schema и полный roster поддерживаемых bindings | Без регистрации и проверки adapters identity не считается admitted |
 | Semantic body | SourceRevision, live/tombstone representation, label audit, authored-presence, canonical defaults/overlay witness; устранить расхождения с основным планом | Исторический body не восстанавливается из текущих defaults |
 | Capture | §10.3–4 задаёт SourceCaptureWitness, committed SQL_ROWS authority и полный v1 closure; принять format/store bindings | ArtifactRef и seal без committed Source witness недостаточны |
-| Encoding | Named schema binding, stable type IDs/версия и совместимость сохранённых proofs/selections | Смена encoding меняет fingerprint и индексы |
-| Errors | Единый proof roster §E, schema error translation и typed field paths; устранение пересечения с проектируемыми CRUD diagnostics §4 | Список кодов не закрывает field descriptors и недублирование ошибок всего Source |
-| Storage | Concrete exact-read и closure adapter, read boundary, existing scoped holder binding с testable failure contract | Полный refs список не устраняет race с GC |
+| Encoding | SOURCE_PROOF_SCHEMA_V1, IDs, schema_version и эталонные векторы закреплены в §11.4 | Нельзя перенумеровывать типы либо выбирать current global registry |
+| Errors | Единый sourceErrors roster, семантика и typed paths закреплены в §11.3 | Нельзя создавать SourceIssueCode/proof-specific carriers либо терять независимые diagnostics |
+| Storage | Concrete existing adapters, новые internal ports и one-scope lifecycle определены §11.1–2; реализовать и проверить | Полный refs список вне scope не устраняет race с GC |
 | Consumer | Проверка Pack-порядка, места usage extraction/matching и transient refs input; решение по pure binding | Запрет прямых междоменных операций не снимается названием helper |
 
 Основной порядок не меняется: inventory → contracts/projector → revisions/history/retained bodies → capture-finalize. На стадии design можно согласовать внешний proof-контракт отдельно; работающий durable proof зависит от этих механизмов. Нельзя требовать всю миграцию producers для принятия схемы, но нельзя объявить durable API реализуемым одним POJO-файлом. Следующий runtime срез допускается только после приёмки его конкретных классов, CRUD зависимостей, ошибок и маршрутов по обязательным критериям проекта.
@@ -491,7 +491,7 @@ Mapping: SourceProofResult.proof → PackStoredProvenance.source_proof; Planning
 - Identity descriptor должен однозначно определять категорию, scope, owning key validation и версию семантического body-контракта. Runtime проверка пары descriptor/key обязательна; nominal carrier без зарегистрированного adapter недостаточен. Unknown descriptor и чужой world отклоняются, global library identity не объявляется world-owned искусственно. Точные поля и roster ещё не приняты — перечисленные ограничения не являются заменой POJO.
 - Capture witness должен однозначно связывать world, exact object/collection revisions и immutable body mappings с успешно завершённой capture-finalize. Источник доверия не может быть caller boolean или текущий latest registry. После restart доступны те же сведения; допустимая форма свидетельства и его конкретный reader ещё требуют проекта.
 - Negative cases для witness: sealed, но не finalized capture; подмена body при прежнем exact revision; чужой world; отсутствующее membership evidence; потеря required body после release. Первые четыре дают owning отказ, а GC race закрывается scoped acquisition, не повторной pure validation.
-- Отдельно сверить SourceRevision/label и tombstone representation с черновыми сигнатурами основного плана: там label находится в SourceRevision и tombstone описан флагом, здесь label вынесен в audit и предложен union. Пока расхождение не устранено согласованной правкой, реализации этих типов нет.
+- SourceRevision содержит только seq/content_hash; label — audit mutation metadata, не поле proof и не часть semantic equality. Черновая сигнатура основного плана синхронизирована. Tombstone — запись состояния revision storage, не элемент live SourceCapture.
 
 ### 9.5. Проверка требований с владельцем Pack — 2026-11-13
 
@@ -507,7 +507,7 @@ Mapping: SourceProofResult.proof → PackStoredProvenance.source_proof; Planning
 
 ## 10. Identity и finalized witness: конкретный проект Source
 
-Владелец всех новых типов ниже — Source. Это проект для приёмки, а не просьба Pack определить Source POJO и не отчёт о runtime. Этот раздел заменяет неопределённые варианты identity/witness в §3 и §9 конкретным предлагаемым решением. До кода остаются приёмка решения и привязка реализации к существующим storage ports. Все новые POJO frozen/strict/extra-forbid/revalidate-always; поля обязательны, включая nullable; коллекции tuple. Discriminator поля обязательны и не заполняются скрытым default.
+Владелец всех новых типов ниже — Source. Identity/witness входят в принятый проектный proof-срез, уточнённый §11–12; это не runtime implementation. Все новые POJO frozen/strict/extra-forbid/revalidate-always; поля обязательны, включая nullable; коллекции tuple. Discriminator поля обязательны и не имеют скрытого default.
 
 ### 10.1. Descriptor и носитель ключа
 
@@ -548,7 +548,7 @@ Owning key adapter выполняет strict validate и exact encode обрат
 
 `sourceBodyVersion.SourceBodyVersion(source: SourceVersionRef, body: ArtifactRef)` — mapping live object; `sourceBodyVersion.SourceCollectionVersion(source: SourceCollectionVersionRef, body: ArtifactRef)` — mapping состава. Body format должен быть зарегистрирован для descriptor и версии; semantic hash не равен автоматически content_hash ArtifactRef. `sourceCollection.SourceCollectionBody(collection: SourceCollectionId, members: tuple[SourceObjectId, ...])`: members unique по full identity; WORLD members того же мира, GLOBAL library members допустимы только если их descriptor включён в member_descriptors. SET сортируется по canonical bytes; SEQUENCE сохраняет owning порядок. Порядок значим и входит в semantic hash. Несовпадение body.collection с mapping.source.collection_id — отказ.
 
-Proof не доказывает absence через ссылку на tombstone: отсутствие/состав устанавливается exact collection revision. Live SourceCapture не содержит tombstone body. Удерживаемая старая live revision остаётся валидной после удаления текущего объекта. Проект исторического tombstone storage и label audit не включается в proof POJO: это отдельные revision storage contracts шага 3. Label не влияет на SourceRevision equality и canonical proof. Эти два уточнения требуют синхронизации черновых сигнатур основного плана при приёмке, не молчаливого изменения runtime.
+Proof не доказывает absence через tombstone: отсутствие устанавливается exact collection revision. Live SourceCapture не содержит tombstone body; историческая live revision остаётся валидной после удаления latest. Tombstone storage — запись состояния revision шага 3. Label хранится в audit metadata, не участвует в SourceRevision equality/canonical proof; черновая сигнатура основного плана синхронизирована.
 
 ### 10.3. Один capture body и один finalize witness
 
@@ -566,25 +566,296 @@ Finalization store не является вторым body store: тела ра�
 
 До finalize подготовлены sealed body artifacts и полный capture body под действующим staging hold. Source не вычисляет seq во время capture. Effective inputs, включая canonical defaults, должны уже иметь exact revision→effective-body mappings: storage содержит материализованный semantic body с authored-presence. Историческое чтение не накладывает текущие defaults. Смена defaults/overlay policy, меняющая effective body, должна учитываться owning revision preparation до capture; отсутствие такой версии — отказ, не synthetic seq в finalize.
 
-В одной короткой транзакции existing commit scope, сериализованной с mutation/prune: проверить ожидаемые object/membership revisions и exact body mappings; проверить seals; приобрести source capture holds на body, witness и все обязательные dependencies; записать committed witness. Только после успешного commit выдаётся SourceCaptureRef. При конфликте повтор захвата выбирает owning DAG в пределах трёх попыток основного плана; proof pipeline retry не выполняет. Unknown commit outcome восстанавливается existing transaction recovery и exact lookup capture_uid, не повтором с новым uid. Acquire и witness commit должны rollback-иться вместе; техническое связывание source finalize с existing artifact scope — обязательный тест реализации.
+Finalize выполняется в общей короткой транзакции по точной последовательности §11.1–2: same-scope validation → Source committed row → seal под действующим writer claim → full-closure holds; наружу ref выдаётся только после commit. Эта последовательность заменяет прежнее неопределённое «приобрести source capture holds». Proof pipeline не назначает seq и не делает retry.
 
 READ/ADMIT/SELECT: exact-read committed witness по full ArtifactRef → проверить uid/world/format/hash/row_count → exact-read capture_body → проверить canonical capture и world → проверить membership каждой заявленной dependency и equality exact revision → проверить required body formats/bytes и собрать closure. Source proof не перепроверяет latest revisions после finalize и не запускает mutation. После restart witness и capture доступны по тем же refs. Если сохранённого witness нет, sealed capture body не превращается в finalized capture.
 
 **V1 closure одного непустого use:** witness artifact + capture_body + все body refs mappings в этом capture + их обязательные owning format dependencies. Exact dedup/sort по §9.2. SELECT любого непустого subset того же capture сохраняет весь этот storage closure; его logical usage остаётся только выбранным subset. Несколько captures дают union closure. Пустой proof — пустой closure. Это сознательно полный, проверяемый формат, согласующийся с ответом Pack §9.5.
 
-Witness нельзя удалить отдельно, пока удерживается его ArtifactRef; удаление owning SQL_ROWS через existing GC guard. Holding witness обязан защищать обязательные closure dependencies по accepted artifact dependency/holder binding. SourceProofResult сам hold не приобретает: publication приобретает весь returned closure атомарно до освобождения исходного holder. Backup/import не может восстановить доверие одним пользовательским JSON: требуется доверенное восстановление finalized Source rows и artifact catalog либо новая owning capture-finalize.
+Witness и каждый ref полного closure удерживаются явно текущим root holder (§11.1); hold witness сам по себе НЕ защищает dependencies. После публикации root — existing published owner, до неё — OperationHolder действующей preparation. Guarded GC проверяет реальные holds каждого ref. Backup/import не создаёт доверие пользовательским JSON: восстановить trusted finalize rows/catalog либо выполнить новый finalize.
 
 ### 10.5. Ответственность реализации и приёмка среза
 
 | Concrete кандидат / модуль | Ответственность и зависимости | Критерий отказа |
 |---|---|---|
 | SourceDescriptorBindingRegistry / application/worldData/sourceVersioning/contracts/descriptorBindings.py | Immutable composition binding descriptor → owning key validator/projector/codec; без чтения latest и mutable runtime регистрации | Unknown descriptor принят, key изменён нормализацией, доменная модель импортирована в source identity POJO |
+| SourceCaptureFinalizer / application/worldData/sourceVersioning/capture/captureFinalizer.py (§12.2) | Один finalize(request: SourceCaptureWitness, lease) владеет replay/new ветвью и полной transaction/writer последовательностью | Caller собирает стадии, latest проверяется при successful replay, unknown commit выдаётся за rollback |
 | SourceCaptureFinalizationStore / application/worldData/sourceVersioning/capture/finalizationStore.py | Internal scope-bound append/exact-read finalize record; использует готовые mappings и existing commit scope, не планирует capture | Свой commit, выдача ref до commit, назначение seq или retry workflow |
 | SourceCaptureWitnessBackend / application/worldData/sourceVersioning/capture/witnessBackend.py | Owning SQL_ROWS format adapter поверх finalization store; exact committed read/verify и guarded deletion | Staged либо caller-supplied witness признан finalized; общая seal-проверка вместо проверки Source record |
 | SourceProofReadBinding / proof/readBinding.py | Witness → capture → bodies exact read через owning bindings | latest fallback, чтение staged record, самостоятельная финализация |
 | SourceProofClosureCollector / proof/closure.py | Полный v1 traversal и canonical refs, shared exact reader | Пропуск невыбранного body из capture v1 или добавление unrelated ref |
+| SourceCaptureRetentionBinding / capture/retentionBinding.py (§12.1) | Computed closure от exact SourceProofReadInput в borrowed write scope, проверка per-ref source holders и acquire target | Принят caller refs tuple как полный, отдельное окно GC либо release source |
 
-До runtime приёмки обязательны конкретные сигнатуры внутренних ports/диагностики, canonical type IDs и scope integration tests. Поля identity/witness здесь определены; это уже не dependency на неизвестный контракт другого владельца. Оставшиеся детали реализации принадлежат Source и принимаются в следующих конкретных срезах implement-plan. Ноды DAG и Pack DTO этим разделом не меняются.
+Internal ports, единые diagnostics и canonical type IDs определены в §11.2–4. До runtime приёмки обязательны их реализация и scope/round-trip tests. Все эти обязанности принадлежат Source; Pack не определяет identity/witness POJO. Ноды и Pack DTO не меняются.
 
 Минимальные проверки: foreign descriptor/world; key canonical round-trip; object ref в collections и обратная подмена; duplicate/conflicting revisions; typed UUID mismatch; SET/SEQUENCE round-trip; sealed unfinalized capture; same capture_uid different body; rollback witness+holds; unknown commit recovery; restart после удаления latest; deletion/GC при удерживаемом witness; subset с неизменным полным closure; empty proof; несколько независимых diagnostics. Все обязательные проектные критерии по-прежнему применяются: перечень тестов не является приёмкой.
+
+## 11. Исправления независимого ревью 2026-11-13
+
+Основание: source-durable-proof-contract-review-2026-11-13.md, findings 1–5. Эти исправления вошли в последующий независимо принятый проектный срез (§12 и отдельный акт). Существующие API сверены с кодом; новые Source classes/signatures остаются обязательствами runtime реализации. Порядок основного плана и Pack/DAG-ноды не меняются.
+
+### 11.1. Конкретный holder lifecycle finalized capture
+
+**Выбранная модель: явное удержание полного closure одним внешним root holder.** Нет Source self-hold, фиктивного PinHolder или предположения, что acquire(witness) обходит зависимости. Existing `SqliteArtifactHolders.acquire` удерживает один ref. Source возвращает полный closure; каждый ref удерживается отдельно тем же владельцем. Root lifetime принадлежит существующей подготовке/публикации, а не самому witness.
+
+| Фаза | Конкретный holder | Удерживаемые refs и прекращение |
+|---|---|---|
+| Подготовка capture и finalized in-flight capture | `OperationHolder(lease: OperationLeaseRef)` существующей caller preparation | Witness, capture body и все required bodies. Holds переживают restart как записи Artifacts. Завершение Python вызова ничего не освобождает |
+| Публикация Pack | `ArtifactRetentionHolder(artifact=sealed_manifest_ref)` существующего publication owner | Каждый ref Source closure конечного state. Сам manifest должен иметь existing published/pinned root; Source его не создаёт. Exact Pack entry mapping остаётся внешним gate §9.5 |
+| Публикация Snapshot | Existing `SnapshotHolder(snapshot)` | Closure перечисляется в retained_artifacts Snapshot; existing handoff проверяет owning operation и приобретает snapshot holds |
+| Отмена без публикации | Existing operation cancellation/drain lifecycle | `IArtifactLeases.cancel(operation_id, fence)` подтверждает отсутствие publication и drain, освобождает operation holds. Затем GC вправе удалить witness и тела, если иных holders нет |
+
+При успешном adoption Source operation hold освобождается только после приобретения всех target holds и закрытия writer admission/drain в принятом lifecycle caller. Для Snapshot применим existing `IArtifactHolders.handoff(scope, lease, snapshots, retained_refs)` с его требованиями APPLYING/drained. Для Pack нельзя назвать тот же метод готовым Pack binding: concrete final-prepare вход остаётся у Pack; проверяемый внутренний алгоритм acquisition ниже применим к его scoped owner. Все unrelated holds операции сохраняются.
+
+Adoption (§12.1) вычисляет exact closure от request.proof внутри borrowed write scope; sources содержит по одной existing VerifiedArtifactRef паре на ref. До первого append проверяются exact set, world/captures, все исходные holds и target. Target ArtifactRetentionHolder требует sealed owner, SnapshotHolder/OperationHolder — owning identity/lifecycle validation; для operation holder «sealed owner artifact» неприменим. Acquire выполняется только по computed refs. Source release — отдельный lifecycle; наружный success только после caller commit. Один bound writer scope исключает окно concurrent release/GC.
+
+**Время жизни:** finalized не означает held навечно. После явной отмены/освобождения всех roots неиспользуемый capture собирается GC; его proof больше не обязан читаться. Сохранённый published proof обязан иметь retained полный closure; если Source witness held, а его body не held, это нарушение binding, а не автоматическое удержание по ссылке. Историческое чтение требует availability/retention, но не живой engine session. Восстановление после restart published proof сохраняется; незавершённый V1 bake не объявляется возобновляемым автоматически.
+
+**Граница pregame mutation:** данный binding заимствует уже легитимную preparation lease. Source не открывает новую операцию под ложным PACK_ACTIVATION. Отдельная pregame запись revision/latest до такой preparation всё ещё требует принятого staging owner по §5; это зависимость шага 3, не неопределённость holder уже подготовленного capture. Создавать новый OperationKind или обходить ledger этой правкой не разрешается.
+
+### 11.2. Storage ports, общий scope и вложенные вызовы
+
+Existing contracts/реализации:
+
+| Участник | Используемый метод | Роль и конкретный отказ |
+|---|---|---|
+| `app.db.repositories.sqlite.snapshotCore.commitScope.SqlitePublicationCommitStore` | `transaction(operation_id) -> AbstractAsyncContextManager[CommitScope]`, `read_scope(existing_scope=None)` | Единственный transaction owner данного binding; запрещает ambient legacy UOW, quarantines unknown outcome |
+| `app.db.repositories.sqlite.artifacts.access.artifactScope.SqliteArtifactScope` | `bind(scope)`, `read_scope()` | Заимствует ту же DB/task capability; foreign/expired/read-only scope отказывает до SQL; повторный bind запрещён |
+| `app.db.repositories.sqlite.shared.access.scopedAccess.ScopedSqliteAccess` | `one_row`, `all_rows`, `insert` | Только SQL через проверенную capability; не commit и не domain orchestration |
+| `app.db.repositories.sqlite.artifacts.catalogStore.SqliteArtifactCatalog` / `IArtifactCatalog` | `reserve(lease, descriptor)`, `seal(reservation)`, `is_sealed(ref)`, `read(ref)` | Reserve даёт OperationHolder; seal требует действующий writer claim, reservation и lease. Не вызывает Source finalize |
+| `app.application.artifacts.storage.artifactLeases.IArtifactLeases`, SQLite lease adapter | `writer(reservation)`, `assert_writable(lease)`, `cancel`, `recover` | Fenced writer/drain/recovery; Source не подменяет эти процедуры своими bool flags |
+| `app.db.repositories.sqlite.artifacts.holderStore.SqliteArtifactHolders` / `IArtifactHolders` | `holders`, `is_held`, `acquire`, `release`, `handoff` | Единственный writer holder chains. Не получает права интерпретировать Source usage |
+| `app.application.artifacts.registry.artifactRegistry.ArtifactFormatRegistryBinding` | `resolve`, `encode`, `decode`, `verify` | Exact owning format dispatch, не discovery по произвольному JSON |
+| `app.application.artifacts.contracts.blobRead.ReadableBlobBackend` | `read_verified(ref, max_bytes=...) -> bytes` | Проверенные bytes bounded read; cap берётся из принятого binding, не безлимитный ref.nbytes fallback |
+| `app.application.artifacts.lifecycle.artifactGc.ArtifactGarbageCollector` | `collect(operation_id, candidates)` | guard → holder check → owning delete → mark_deleted; Source не удаляет body напрямую |
+
+Новые **внутренние** ports. Runtime capability передаётся параметром, не полем persisted POJO. Предполагаемые пути совпадают с §10.5; SQL adapter размещается под `app.db.repositories.sqlite.sourceVersioning`:
+
+```python
+# capture/finalizationStore.py — scope-bound SQL state only
+async def find(self, scope: CommitReadScope, capture_uid: EntityUid) -> SourceCaptureRef | None: ...
+async def read(self, scope: CommitReadScope, ref: SourceCaptureRef) -> SourceCaptureWitness | None: ...
+async def append(self, scope: CommitScope, witness: SourceCaptureWitness,
+                 witness_ref: ArtifactRef) -> SourceCaptureRef | SourceFailure: ...
+async def delete_content(self, scope: CommitScope, ref: SourceCaptureRef) -> None: ...
+
+# capture/retentionBinding.py — reconstruct closure from proof inside write scope
+async def adopt(self, scope: CommitScope, request: SourceProofReadInput,
+                sources: tuple[VerifiedArtifactRef, ...],
+                target: ArtifactHolderRef) -> SourceProofResult | SourceFailure: ...
+
+# proof/readBinding.py — owns exact registered decode, not latest projection
+async def read_capture(self, scope: CommitReadScope,
+                       ref: SourceCaptureRef, *, operation: SourceOperation) -> SourceCapture | SourceFailure: ...
+async def read_collection(self, scope: CommitReadScope,
+                          version: SourceCollectionVersion, *, operation: SourceOperation) -> SourceCollectionBody | SourceFailure: ...
+async def verify_object(self, scope: CommitReadScope,
+                        version: SourceBodyVersion, *, operation: SourceOperation) -> None | SourceFailure: ...
+```
+
+`append` сравнивает full witness identity и canonical ref; same uid/same world/body — идемпотентный результат, другой payload — CAPTURE_ID_CONFLICT. Persisted invalid row shape и сбой DB — existing PublicationInfrastructureError, не None. `find/read=None` означает отсутствие committed content; proof reader переводит это в CAPTURE_NOT_FINALIZED для найденного staged witness либо MISSING_BODY для удалённого finalized content. Append-only uid→content identity/recovery факт сохраняется после guarded GC; content deletion не разрешает повтор uid с другим body. После GC `find` может вернуть старый identity, но `read` не выдаёт отсутствующий payload как успех. Новая попытка capture получает новый uid, не оживляет старый terminal outcome.
+
+Internal append failure имеет operation FINALIZE_CAPTURE, adopt failure — ADOPT_CLOSURE. Read binding получает operation явно от вызывающей Source операции; перенос paths/group/use к исходному request выполняет owning pipeline без замены кодов/смысла. SourceFailure не возвращается из середины write transaction после частичной записи: действует rollback правило ниже.
+
+`SourceCaptureWitnessBackend` реализует existing `ArtifactBackend[SourceCaptureWitness]`: `contract`, `write(reservation, content)`, `verify(ref)`, `delete(ref)`. `write` может разместить только staged content под writer claim; **не** вызывает append finalized record. `verify` требует committed Source record, а не наличие staged content. При finalize uncommitted append виден только внутри текущей транзакции; другим читателям — лишь после commit. `delete` вызывается registry из guarded GC и удаляет только owning payload; общие catalog/holder events принадлежат Artifacts. Никаких публичных Source вызовов из backend.
+
+**Точная finalize последовательность:** единственный internal owner — `SourceCaptureFinalizer.finalize(request: SourceCaptureWitness, *, lease: OperationLeaseRef)` (§12.2). Caller и SourceCaptureFinalizationStore не собирают эти стадии самостоятельно. Ранний replay и повторная проверка capture_uid внутри transaction выполняются по §12.2 до проверки latest revisions; следующие пункты относятся к новой финализации.
+
+1. Caller уже имеет допустимую lease. Вне короткой транзакции подготовлены verified capture/body bytes и их operation holds; catalog.reserve witness создаёт reservation+operation hold. Writer claim witness открывается existing leases.writer. Вычисленный witness ArtifactRef полностью соответствует frozen content.
+2. Войти `commits.transaction(lease.operation_id)`, **один раз** `artifact_scopes.bind(scope)`. Все Source store/revision-index обращения используют тот же scope, все catalog/holder методы заимствуют его через bind. Не входить во второй guard/transaction или legacy Database.transaction.
+3. Проверить current lease/fence, полные expected revisions/membership и body mappings через scope-bound revision index, seals/наличие исходных holds. Независимые нарушения собрать до записи; SourceFailure на этой стадии ничего не меняет.
+4. Source store.append finalized witness → owning witness verify в том же scope → catalog.seal(reservation) под тем же live writer claim → убедиться в OperationHolder на всём closure, приобретая необходимые holds в этом scope. Source root = OperationHolder, witness не используется как retention owner.
+5. Любая ошибка после первого write должна выйти из transaction как отказ/исключение и вызвать rollback; её нельзя поймать внутри и commit-ить частичные события. SourceFailure формируется наружной границей после подтверждённого rollback. Существовавшие до transaction reservation/staging holds могут остаться для drain/cleanup — это не finalized capture.
+6. Успешно выйти из commit, закрыть writer claim, затем вернуть SourceCaptureRef. UnknownCommitOutcome не преобразуется в SourceFailure или новый uid: existing coordinator quarantines connection; после recovery exact find/read старого uid определяют committed outcome. Проверка finalize membership не выполняется заново против latest при уже найденном успешном witness.
+
+Internal `SourceCaptureRetentionBinding.adopt` получает exact proof через SourceProofReadInput и сам восстанавливает полный closure внутри переданного write scope (§12.1). sources — existing VerifiedArtifactRef, лишь заявления о наличии исходных holds, не trusted token. Missing/extra refs относительно computed closure отклоняются до acquire. После первого append любая ошибка обязана размотать caller transaction. Method не освобождает source и не вызывает публичный proof pipeline.
+
+Полное storage API revision-index шага 3 остаётся отдельным срезом. Для finalize используется только его exact comparison, не назначение seq; конкретный требуемый метод `verify_capture(scope: CommitReadScope, capture: SourceCapture) -> None | SourceFailure` в `application/worldData/sourceVersioning/revisions/revisionReadBinding.py::SourceRevisionReadBinding`. Он проверяет все identities/membership как одну read boundary, сохраняет operation FINALIZE_CAPTURE, не вызывает owning CRUD и не запускает retry. Отсутствие реализации этого метода блокирует runtime finalize, не схему proof.
+
+### 11.3. Один error-контракт Source
+
+Единственное место объявления — `app.dataModel.sourceVersioning.sourceErrors`. SourceIssueCode, SourceProofFieldIssue/SourceProofLogicIssue/SourceProofFailure и их enum-зеркала **не создаются**. Existing FieldPathError, ValidatedFieldPath, FieldRef/bind_field, CheckedPath и ValidatorAggregationHelper переиспользуются.
+
+`SourceOperation` (wire lower_snake_case): ADMIT, READ, ADMIT_GROUPS, VERIFY_GROUPS, SELECT, VALIDATE_DESCRIPTOR, FINALIZE_CAPTURE, READ_EXACT, PREPARE_MUTATION, APPLY_MUTATION, ADOPT_CLOSURE. Последние значения описывают owning internal boundaries, не разрешают новые публичные CRUD методы или отдельные DAG-ноды. Internal validator сохраняет operation внешней Source операции, не заменяет READ на VALIDATE_DESCRIPTOR.
+
+`SourceFieldCode`: INVALID_SHAPE, INVALID_IDENTITY, NON_CANONICAL_PROOF, INVALID_SELECTION, GROUP_COUNT_MISMATCH, DUPLICATE_IDENTITY. `SourceFieldIssue(FieldPathError[SourceFieldCode])`: только inherited code, path, message.
+
+`SourceLogicCode`: UNKNOWN_DESCRIPTOR, DESCRIPTOR_MISMATCH, WRONG_WORLD, CAPTURE_NOT_FINALIZED, CAPTURE_ID_CONFLICT, DEPENDENCY_NOT_CAPTURED, REVISION_CONFLICT, BODY_MAPPING_CONFLICT, UNSUPPORTED_FORMAT, MISSING_BODY, CORRUPT_BODY, UNSEALED_BODY, INCOMPLETE_CLOSURE, MISSING_HOLD, INCOMPLETE_COLLECTION, TOMBSTONE, PROOF_MISMATCH, SELECTION_PROOF_MISMATCH, SELECTION_OUT_OF_RANGE, SELECTION_USAGE_MISMATCH, CLOSURE_MISMATCH.
+
+`SourceLogicIssue(code, group_index: StrictInt | None, use_index: StrictInt | None, source: SourceVersionRef | SourceCollectionVersionRef | None, artifact: ArtifactRef | None)` — те же поля §6.E, все обязательны. Индексы >=0, исходного запроса. Missing group/use — None, не фиктивный 0. Контекст descriptor/finalize uid восстанавливается по исходному request; произвольный dict context не вводится. Обёртка `SourceFailure(operation: SourceOperation, field_issues: tuple[SourceFieldIssue, ...], logic_issues: tuple[SourceLogicIssue, ...])` требует хотя бы одну issue.
+
+| Semantic condition | Единственный код / carrier | Path либо context | Где обнаруживается |
+|---|---|---|---|
+| Неверный тип/лишнее или отсутствующее поле | INVALID_SHAPE / field | Полный путь к известному owning полю; неизвестный child указывает на содержащий record field, имя детали только в message | Все входы |
+| Неканоничный/невалидный member key, UUID | INVALID_IDENTITY / field | uses[i].dependencies.objects[j].object_id.member_key/template_uid через typed selector и variant | Descriptor adapter при всех операциях |
+| Синтаксически верный незарегистрированный descriptor | UNKNOWN_DESCRIPTOR / logic | source ref, исходные group/use; при registration без ref оба None | Registry lookup |
+| Descriptor существует, но category/scope/adapter не подходит | DESCRIPTOR_MISMATCH / logic | source ref | Registry validation |
+| Foreign world, включая пустой proof | WRONG_WORLD / logic | group/use при наличии; для proof целиком None | Все world-scoped входы |
+| Несортированный persisted proof, duplicate canonical atoms | NON_CANONICAL_PROOF / field | proof.uses либо конкретная nested коллекция | READ/SELECT/VERIFY_GROUPS |
+| Duplicate definition/member identity при registration | DUPLICATE_IDENTITY / field | entries[i].key либо members[i] | Descriptor/collection validation |
+| Bool/negative/duplicate/unsorted selection index | INVALID_SELECTION / field | selection.dependency_indices[j] либо result.selections[i]... | SELECT/VERIFY_GROUPS |
+| Валидный int вне atom bounds | SELECTION_OUT_OF_RANGE / logic | group_index=selection position, use_index=None | SELECT/VERIFY_GROUPS |
+| Чужой fingerprint | SELECTION_PROOF_MISMATCH / logic | selection position | SELECT/VERIFY_GROUPS |
+| Неверное число selections | GROUP_COUNT_MISMATCH / field | result.selections | VERIFY_GROUPS |
+| Неверный union / неверный subset одной группы | PROOF_MISMATCH / SELECTION_USAGE_MISMATCH, logic | whole result / group_index | VERIFY_GROUPS |
+| Не finalized witness / повтор capture uid с другим body | CAPTURE_NOT_FINALIZED / CAPTURE_ID_CONFLICT, logic | witness ArtifactRef при наличии | Read binding / finalize append |
+| Exact revision не captured / conflicting revisions | DEPENDENCY_NOT_CAPTURED / REVISION_CONFLICT, logic | source ref и исходные group/use | Admission / finalize comparison |
+| Та же exact revision связана с другим body | BODY_MAPPING_CONFLICT / logic | source ref + предъявленный artifact | Capture/body mapping |
+| Нет required body / неверные bytes / нет seal | MISSING_BODY / CORRUPT_BODY / UNSEALED_BODY, logic | exact ArtifactRef | Owning typed read/verify |
+| Неподдержанный format/version | UNSUPPORTED_FORMAT / logic | ArtifactRef | Format lookup |
+| Неполный состав коллекции / неразрешимый required graph | INCOMPLETE_COLLECTION / INCOMPLETE_CLOSURE, logic | collection ref / обязательный artifact | Collection/closure read |
+| Предъявленный closure не равен computed | CLOSURE_MISMATCH / logic | missing/extra ref в canonical порядке | VERIFY_GROUPS |
+| Нет исходного live hold | MISSING_HOLD / logic | exact artifact | ADOPT_CLOSURE, finalize retention check |
+| Exact live read обращён к tombstone | TOMBSTONE / logic | source ref | READ_EXACT; не превращается в absence proof |
+
+Field paths строятся из FieldRef/bind_field и CheckedPath от конкретного request POJO. Для ошибки root record без валидного field segment стандартный Pydantic boundary отказ не фабрикуется как несуществующий path; Source typed operation начинает работу после валидированного request. Nested model_construct/foreign instances повторно валидируются; путь начинается с содержащего поля request. Эти исключения не превращаются в успешный SourceFailure с пустым path.
+
+Порядок diagnostics: schema/field checks в порядке объявления полей и исходных индексов; затем logic по world → descriptor → capture → dependency → selection → closure. В каждом tuple порядок стабилен; SourceFailure не обещает общий interleaving двух tuple. Недоступная зависимая ветвь пропускается, остальные groups продолжаются. IO error, permission error, unknown commit outcome и corrupt DB row shape остаются existing infrastructure exceptions. CorruptBlobError от проверенного чтения конкретного artifact переводится в CORRUPT_BODY с ref; произвольный ValueError storage/SQL не перехватывается как MISSING_BODY. Ошибки holder/lease infrastructure не клонируются: typed MISSING_HOLD создаётся только по успешной отрицательной is_held проверке.
+
+### 11.4. Закреплённый canonical manifest v1
+
+Публичный **Source-owned encoding binding**, не consumer-supplied registry: `app.application.worldData.sourceVersioning.encoding.sourceProofSchemaV1.SOURCE_PROOF_SCHEMA_V1`. Это immutable CanonicalSchemaManifest; encoder — existing `app.encoding.canonicalCodec.CanonicalCodec`, digest — existing content_digest, lowercase hex. `SourceDurableProof` получает обязательное первым поле `schema_version: Literal[1]`; bool/другие числа отклоняются strict проверкой. Всеми операциями output строится с явной версией 1. Это изменение кандидата схемы, а не миграция уже сохранённого Source runtime.
+
+IDs закрепляются этим проектом. Поиск 71000–71999 в текущих backend/app и планах перед назначением не выявил занятых IDs. Проверка коллизий всех merged manifests обязательна при реализации. V1 IDs/field order/enum wire values никогда не переназначаются, даже при добавлении нового Source binding. V2 требует отдельного manifest/версии и сохранения v1 decoder; исторические selections вычисляются только по версии их proof. Pack enclosing codec обязан сохранять schema_version и выбирать owning decoder, не нормализовать старый proof текущей схемой.
+
+| ID | Вид | Тип / порядок полей |
+|---|---|---|
+| 20003 | ENUM, existing | ArtifactKind: blob, sql_rows |
+| 20107 | RECORD, existing | ArtifactRef: kind, format_key, format_version, content_hash, nbytes, row_count |
+| 71001 | ENUM | SourceDescriptorCategory: registry_member, library_member, entity, settings, collection |
+| 71110 | RECORD | RegistryMemberId: kind, world_uid, descriptor, member_key |
+| 71111 | RECORD | LibraryMemberId: kind, descriptor, template_uid |
+| 71112 | RECORD | EntityObjectId: kind, world_uid, descriptor, entity_uid |
+| 71113 | RECORD | SourceSettingsId: kind, world_uid, descriptor |
+| 71114 | RECORD | SourceCollectionId: kind, world_uid, descriptor |
+| 71120 | RECORD | SourceRevision: seq, content_hash |
+| 71121 | RECORD | SourceVersionRef: object_id, revision |
+| 71122 | RECORD | SourceCollectionVersionRef: collection_id, revision |
+| 71123 | RECORD | SourceDependencySet: objects, collections |
+| 71124 | RECORD | SourceBodyVersion: source, body |
+| 71125 | RECORD | SourceCollectionVersion: source, body |
+| 71126 | RECORD | SourceCollectionBody: collection, members |
+| 71127 | RECORD | SourceCapture: world_uid, objects, collections |
+| 71128 | RECORD | SourceCaptureWitness: capture_uid, world_uid, capture_body |
+| 71129 | RECORD | SourceCaptureRef: world_uid, artifact |
+| 71130 | RECORD | SourceCaptureUsage: capture, dependencies |
+| 71131 | RECORD | SourceDurableProof: schema_version, world_uid, uses |
+| 71138 | RECORD | SourceProofSelection: proof_fingerprint, dependency_indices |
+
+Это полный transitive roster persisted proof/capture/selection: nominal keys, EntityUid, RevisionHex — existing scalar strings; Literal version — int; tuple кодируется existing tag. DescriptorRegistry, requests/results, SourceFailure и runtime ports не являются дочерними значениями persisted proof и в этот manifest не включаются. Для них не назначаются случайные IDs «заодно». Shared ArtifactRef/ArtifactKind используют те же ID/owner, что ARTIFACT_CORE_SCHEMA; full lifecycle manifest не требуется. Порядок uses/refs/atoms задаётся §9.2 по bytes этой фиксированной схемы.
+
+Для schema_version обязателен before-validator `type(value) is int` и затем Literal[1] validation: одна аннотация Literal не считается доказательством отказа на bool. Enum kind на Python входе — exact SourceDescriptorCategory member; wire decoder восстанавливает enum по зарегистрированному ID и lower_snake_case value, не оставляет bare str перед canonical encode.
+
+**Эталонные векторы:** вычислены read-only через existing CanonicalCodec scalar/tuple/TLV operations и content_digest, без создания placeholder Source моделей или файлов реализации. Они проверяют layout схемы; runtime round-trip с реальными Source POJO обязателен при реализации.
+
+V0: SourceDurableProof(schema_version=1, world_uid="world-test", uses=()). Atoms=(), nbytes=160, fingerprint=`753fac72650941d0eb1708e8ae777e2de3bd59c0b8e4278d50dd75cd040267a3`. Exact bytes hex:
+
+```text
+07000000000000009708000000000000008e020000000000000004000115db08000000000000007808000000000000002204000000000000000e736368656d615f76657273696f6e0200000000000000020001080000000000000025040000000000000009776f726c645f75696404000000000000000a776f726c642d7465737408000000000000001604000000000000000475736573080000000000000000
+```
+
+V1: тот же world/version, один use. Witness ArtifactRef(kind=SQL_ROWS, format_key="source.capture-witness", format_version=1, content_hash="0" repeated 64, nbytes=100, row_count=1). Одна object dependency RegistryMemberId(kind=REGISTRY_MEMBER, world_uid="world-test", descriptor="SCH-WORLD-TERRAIN/member", member_key="plains"), SourceRevision(seq=1, content_hash="1" repeated 64); collections=(). Это encoding fixture, не существующий finalized artifact и не IO acceptance. Canonical proof nbytes=1400; fingerprint=`430089f08bc0dc668b64a374c2a274a2a2f9b9216618b7e8baf5ed4e8d989cc7`. Atom 0 — ровно указанная capture/object/ref тройка; SHA-256 encoded SourceVersionRef=`4bce60a245f95d2b11b604393e52c54832e04b659994ec2728086ddcfb4f220a`. Selection fingerprint равен proof fingerprint, indices=(0,), nbytes=204. При добавлении collection atom он следует после objects, при смене capture полный atom identity меняется.
+
+Обязательные runtime векторы дополнительно: два captures с разными revisions одной identity; перестановка declared groups даёт тот же union fingerprint и переставленные selections; изменение schema_version отклоняется v1; label-only audit не меняет bytes; изменение body ArtifactRef witness меняет proof fingerprint; registered v1 round-trip после добавления v2 bindings воспроизводит прежние bytes. V0/V1 выше — fixed expected values, не вычисляемые из тестируемого encoder expected результаты.
+
+### 11.5. Статус замечаний и повторная приёмка
+
+| Finding | Исправление проекта | Что ещё нельзя утверждать |
+|---|---|---|
+| P1 holder lifecycle | §11.1–2: OperationHolder full closure, explicit target holds, drain/release, rollback/recovery; no self-hold | Runtime bindings/Pack adoption ещё не реализованы; pregame revision root §5 — отдельная зависимость |
+| P1 canonical IDs | §11.4: immutable named v1, version field, full transitive IDs и fixed vectors | POJO encode/decode tests ещё не запускались — моделей нет |
+| P2 errors | §11.3 и синхронная замена §4/6: единые Source carriers/codes, path/mapping/aggregation | Concrete field bindings и boundary translation требуют реализации |
+| P2 противоречия | §6.0 явно superseded прежний отказ full capture closure; основной план убрал label из SourceRevision | Не объявляется приёмка всей схемы по факту правки текста |
+| P2 storage ports | §11.2: concrete existing participants, internal signatures, one-scope nested chain | Нужны реализации и tests foreign/task/read-only scope, rollback, unknown commit outcome |
+
+Независимый исходный отчёт сохраняется неизменным как evidence прежней проверки. Последующая независимая приёмка проектного среза получена и зафиксирована отдельно; таблица выше описывает исправления, а не самоприёмку автора. Pack/DAG integration и runtime остаются OPEN/NOT ACCEPTED в пределах акта.
+
+## 12. Исправления повторного ревью R1/R2
+
+Основание: source-durable-proof-repeat-review-fixes.md. **R1/R2 закрыты независимой проектной приёмкой 2026-11-13**; новых блокирующих дефектов reviewer не нашёл. Ниже принятые internal contracts; runtime/SQL/Pack/DAG не менялись. Canonical v1, error roster и full closure v1 сохранены.
+
+### 12.1. R1: adoption получает основание полноты
+
+Выбран вариант 1 повторного ревью: owning closure заново вычисляется от exact proof **внутри** write scope. Прежняя сигнатура adopt(scope, refs, source, target) отозвана. Concrete internal класс — `app.application.worldData.sourceVersioning.capture.retentionBinding.SourceCaptureRetentionBinding`:
+
+```python
+async def adopt(self, scope: CommitScope, request: SourceProofReadInput,
+                sources: tuple[VerifiedArtifactRef, ...],
+                target: ArtifactHolderRef) -> SourceProofResult | SourceFailure: ...
+```
+
+`VerifiedArtifactRef` переиспользуется из `app.dataModel.artifacts.lifecycle.holders`: ref + holder, без нового Source receipt/token. Несмотря на имя, caller-created экземпляр не является доказательством hold. Для каждого computed ref требуется ровно одна пара; разные refs могут иметь разные source holders, что позволяет использовать несколько historical captures. Duplicates, missing и extra pairs отклоняются. Отдельного caller refs tuple больше нет.
+
+Concrete зависимость — existing proposed internal `SourceProofClosureCollector` (`proof/closure.py`) с уточнённым методом:
+
+```python
+async def collect(self, scope: CommitReadScope, request: SourceProofReadInput,
+                  *, operation: SourceOperation) -> SourceProofResult | SourceFailure: ...
+```
+
+`collect` использует SourceProofValidator → SourceProofReadBinding.read_capture → registered body/collection readers → owning format traversal. Он проверяет persisted canonical proof, expected world, finalized witnesses и exact dependency membership, а не просто обходит переданные refs. Public SourceProofPipelineOpenPipeline.read и adoption используют этот общий internal algorithm; adoption **не вызывает публичный read**. Caller не получает доступ к промежуточным стадиям.
+
+**Nested trace и write boundary:**
+
+1. Owning publication infrastructure caller открывает `SqlitePublicationCommitStore.transaction(operation_id)` и передаёт write scope в adopt. Concrete Pack/Snapshot entry mapping остаётся внешним gate; он не определяет внутренний closure алгоритм. Artifact scopes при входе unbound; adopt проверяет capability и сам делает ровно один `SqliteArtifactScope.bind(scope)`. Already-bound/foreign/read-only/expired scope — отказ до IO, не новый nested transaction.
+2. В этом bind `collector.collect(scope.read_scope, request, operation=ADOPT_CLOSURE)` проверяет proof и получает точный SourceProofResult. Witness, capture, bodies читаются через тот же scope и registered exact readers; physical bytes проверяются read_verified без повторного catalog.guard. При ошибке результата нет и writes не начинаются.
+3. Canonical full ref set результата сравнивается с refs всех sources. Missing/extra/duplicate — CLOSURE_MISMATCH, ни одного acquire. Затем для всех пар повторно проверяются seal и `holders.is_held(pair.ref, pair.holder)`; false — MISSING_HOLD. Пустой proof требует sources=(). Источники не ищутся автоматически среди случайных holders и не подменяются latest.
+4. Проверить target по existing holder контракту: корректный identity, существующий sealed retention owner/реальный Snapshot ref/актуальная OperationLeaseRef. Для OperationHolder world_uid обязан совпасть с request.world_uid. PinHolder не создаётся и не используется как новый target в этой операции. ArtifactRetentionHolder.artifact не может быть элементом принимаемого closure (self-hold запрещён); существование root lifetime target manifest обеспечивает owning publication caller в этой же transaction. Source не читает Pack DTO для интерпретации root. Проверки известных нарушений и независимых source holds завершаются до первого append; все infrastructure ошибки и late storage refusals прерывают transaction.
+5. Только по computed `result.durable_refs` выполнить `holders.acquire(ref, target)` для каждого ref, внутри того же bind/scope. Caller sources не становятся источником списка acquire. Source holds не освобождаются. Возвращается этот же SourceProofResult; это внутренний provisional результат, не token успешного commit.
+6. Caller фиксирует общий commit до внешнего success. Ошибка после первого acquire должна выйти из caller transaction и откатить все новые target holds; нельзя поймать её внутри и commit-ить часть. Concurrent release/GC используют тот же writer coordinator и не вклиниваются между collect/hold checks/acquire. SourceFailure возвращается только до первого write; после write — rollback через exception и внешний error boundary. Unknown commit outcome идёт в existing recovery, не в частичный успешный result.
+
+**Сценарий R1:** в sources есть witness и capture_body, но нет обязательного object body. Collector независимо от sources читает полный capture v1 и включает object body в result.durable_refs. Сравнение шага 3 выдаёт CLOSURE_MISMATCH до первого append. Если body уже отсутствует — owning read даёт MISSING_BODY ещё раньше. Ни один путь не приобретает неполный target closure с успешным результатом.
+
+**Ответственность:** SourceCaptureRetentionBinding владеет exact proof→closure verification и full-set acquisition в borrowed scope; не владеет commit/release/target publication lifecycle. Collector read-only; holders владеет holder SQL. Нарушение: принять sources как удостоверенный closure, вызвать public pipeline, открыть свою transaction либо снять source hold.
+
+### 12.2. R2: одна concrete finalize-операция
+
+Concrete internal owner — `app.application.worldData.sourceVersioning.capture.captureFinalizer.SourceCaptureFinalizer`. Полная операция:
+
+```python
+async def finalize(self, request: SourceCaptureWitness,
+                   *, lease: OperationLeaseRef) -> SourceCaptureRef | SourceFailure: ...
+```
+
+Request — уже определённый immutable witness **кандидат** (capture_uid, world_uid, capture_body), не trusted finalized record. Result — existing SourceCaptureRef, failure — existing SourceFailure(operation=FINALIZE_CAPTURE). OperationLeaseRef — runtime capability аргумент, не новое persisted поле. Infrastructure/UnknownCommitOutcome/cleanup exceptions не маскируются доменным failure.
+
+Concrete caller внутри Source — `app.application.worldData.sourceVersioning.capture.captureAdapter.SourceCaptureAdapter.finalize_capture(request: SourceCaptureWitness, *, lease: OperationLeaseRef) -> SourceCaptureRef | SourceFailure`. Это конкретизация роли Source capture adapter §7, не новый публичный orchestrator или DAG-вход. Adapter передаёт подготовленный request finalizer одним вызовом и передаёт результат; не делает reserve, writer, append, seal, commit, retry или recovery самостоятельно. Подготовка capture/body существует до этого вызова по основному плану; повтор уже подготовленного request не требует предварительного повторного stage. Внешний caller/DAG binding capture adapter принимается отдельно; никакой обходной публичный route этим разделом не создаётся.
+
+**Зависимости конструктора finalizer:** SourceCaptureFinalizationStore, SourceRevisionReadBinding, SourceProofReadBinding, SourceProofClosureCollector, immutable SOURCE_PROOF_SCHEMA_V1/owning format contracts, ArtifactFormatRegistryBinding, IArtifactCatalog, IArtifactLeases, IArtifactHolders, SqlitePublicationCommitStore и SqliteArtifactScope (в SQLite composition). Все adapter instances делят один coordinator/registry/DB; проверка composition обязательна. Ни Pack API, ни SourceProofPipelineOpenPipeline, ни owning domain CRUD не являются зависимостями.
+
+Для ещё не finalized body read binding и collector имеют внутренние методы (не публичные операции):
+
+```python
+async def read_capture_body(self, scope: CommitReadScope, world_uid: EntityUid,
+                            ref: ArtifactRef, *, operation: SourceOperation
+                            ) -> SourceCapture | SourceFailure: ...
+async def collect_capture_body(self, scope: CommitReadScope, capture: SourceCapture,
+                               capture_body: ArtifactRef, *, operation: SourceOperation
+                               ) -> tuple[ArtifactRef, ...] | SourceFailure: ...
+```
+
+Первый проверяет SourceCapture bytes/format/world/canonical shape, но не утверждает finalized status. Второй проверяет complete mappings, collections и required bodies и возвращает full closure **без witness**. Finalizer сам добавляет вычисленный exact witness ref; SourceProofReadBinding.read_capture сначала проверяет committed witness и только затем использует тот же body reader. Не конструировать фиктивный finalized SourceCaptureRef для входа в public READ.
+
+**Nested trace:**
+
+1. Adapter → finalizer.finalize. Finalizer revalidate request/lease, проверяет world; вычисляет exact witness ArtifactRef через registered source.capture-witness v1 contract и существующий content_digest. На входе нет ambient UOW или borrowed scope: owner сам управляет одной короткой transaction; caller не может передать уже частично выполненную finalize.
+2. **Ранний replay:** в existing read scope выполнить store.find(capture_uid). Если identity существует, сравнить его полный computed ArtifactRef и world с request **до** assert_writable/reserve/writer/revision verification. Другой content/world — CAPTURE_ID_CONFLICT даже после GC. Same identity → store.read + owning witness/capture/body verification и полный closure availability: вернуть прежний ref без latest check, нового seq, повторного append/seal либо нового uid. Это повтор committed outcome, не приобретение hold для новой lease; caller не выводит из replay новую retention гарантию. Если committed content/required body удалён GC — MISSING_BODY; uid не переиспользуется. Сам seal при отсутствии committed record не даёт replay success.
+3. Если record отсутствует: leases.assert_writable → catalog.reserve(lease, computed_witness_ref) → leases.writer(reservation). Finalizer владеет этим context manager до конца, не witness backend. Вызов generic TypedArtifactStager для witness запрещён: его backend write/seal не доказывает finalize. Body artifacts подготовлены ранее и должны быть held.
+4. Внутри writer claim finalizer входит в commits.transaction(lease.operation_id), затем один artifact_scopes.bind(scope). **Повторно** store.find под writer scope перед latest comparison: конкурентно завершённый same uid обрабатывается как replay шага 2, другой content — конфликт; никаких повторных mutations. Если record по-прежнему отсутствует: read_capture_body → collect_capture_body → revision_read.verify_capture(scope.read_scope, capture) → current lease/seals/source holds checks. Revision verification не выполняется для уже committed capture.
+5. До первого write собрать независимые diagnostics. При отказе выйти из scope без append; только после закрытия scope/writer вернуть SourceFailure. Новая успешная ветвь: store.append(scope, request, computed_ref) → witness backend.verify(computed_ref) в том же scope → catalog.seal(reservation) под имеющимся writer claim → полный OperationHolder на witness + capture body + computed body closure. Ни одна стадия не выбирается caller. Store отвечает только за SQL consistency/идемпотентность, не начинает transaction и не управляет leases/holders.
+6. При доменном отказе после append internal rollback signal несёт **тот же** SourceFailure наружу transaction; finalizer ловит его только после подтверждённого rollback. Для этого допустим единственный internal exception `SourceFinalizeAbort(failure: SourceFailure)` в captureFinalizer.py, без нового error POJO/code. Infrastructure exception остаётся исходным. Новые witness/seal/holder events откатываются вместе; предтранзакционный reservation/operation hold может остаться для existing cleanup и не считается finalized outcome.
+7. После подтверждённого commit закрыть leases.writer (existing fenced cleanup) и лишь затем вернуть ref. Если cleanup не подтверждён, success не выдаётся; сохранённый witness не отменяется задним числом и определяется exact replay после recovery. Не скрывать writer-cleanup failure успешным domain result.
+8. **Unknown outcome:** finalizer сохраняет UnknownCommitOutcome как основной результат отказа; если writer cleanup на quarantined coordinator также не удался, он идёт причиной/контекстом, не ложным «finalize rolled back». До reopening/recovery нет повторной writable попытки, release или нового uid. Existing infrastructure owner восстанавливает coordinator и доказывает quiescence/drain; `leases.recover(lease.operation_id)` используется после этого и сам не объявляется методом восстановления соединения/удаления orphan claim. Повтор с тем же request попадает в exact find/read шага 2. Committed → прежний ref после проверки availability; отсутствующий record при подтверждённом rollback и пригодной lease → новая попытка той же finalize; неразрешённый recovery → infrastructure refusal. Finalizer не выполняет retry loop и не выбирает следующий DAG шаг.
+
+Ранний replay не проверяет latest и не требует writable lease завершённой операции, поскольку не пишет. World/shape сохраняются обязательными; возврат ref не обещает текущего holder. Новый acquire для дальнейшего использования выполняется по §12.1/owning lifecycle, а не скрыто в replay. Это отделяет идемпотентный terminal result от права продолжать подготовку.
+
+**Сценарий R2:** после store.append происходит ошибка seal либо acquire. Она выходит из единственного transaction owner, rollback удаляет новые Source/Artifact events; finally закрывает writer claim. Adapter не может commit-ить промежуточный result, поскольку не имеет внутренних стадий или scope. При потере commit acknowledgement нельзя повторно назначить revision или новый capture uid: exact replay определяет уже сохранённый исход. При concurrent finalize повторный find до latest comparison сохраняет те же гарантии.
+
+**Роли/отказ:** SourceCaptureFinalizer — одна атомарная Source finalize, локальные new/replay ветви не выбирают другие публичные операции. SourceCaptureAdapter — один internal call, без lifecycle. FinalizationStore — SQL state; WitnessBackend — committed-content verification; Proof pipeline — read-only. Нарушение: caller собирает стадии, store открывает commit, proof API делает finalize, generic seal считается финализацией, либо successful replay сверяется с latest.
+
+### 12.3. Граница повторной приёмки
+
+R1 имеет proof в сигнатуре, owning collector и одна защищённая цепочка до acquire. R2 имеет concrete owner/caller, typed I/O/error и new/replay/GC/rollback/unknown-outcome правила. Это исправления проекта, не доказательство runtime. Проверить negative traces: missing source body в sources, extra pair, foreign-world empty proof, разные source holders, late acquire failure, same uid/different body после GC, concurrent same uid, cleanup failure после commit и lost commit acknowledgement. Source schema v1 и error roster не изменены.
+
+Внешние gates сохраняются: точный Pack/Snapshot input→publication binding, public capture caller/DAG route и шаг 3 pregame revision staging. Ни один не заменяет внутреннее доказательство R1/R2 и не требует полной миграции Source для повторного review этой документации.
 
