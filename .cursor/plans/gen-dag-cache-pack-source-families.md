@@ -590,6 +590,8 @@ CRUD настройки не добавляется. Изоляция namespace 
 
 ## 6.7. Source ↔ DAG ↔ Pack: сопоставление данных после уточнения contracts
 
+По следующему поручению пользователя подготовлен [конкретный проект Pack inputs/outputs обмена](pack-source-exchange-contract.md): historical select request/import, grouped result в bind и полный closure input prepare. Это кандидаты для совместной проверки, не принятые новые ноды, порядок или runtime signatures. Незавершённые места таблицы ниже получили предложение data-контракта; execution trust и owning приёмка остаются OPEN.
+
 По поручению пользователя синхронизированы owning signatures, а не назначена новая sequence нод. Действует read/write → operation leaf → public owning method через engine. Прямой Pack → SourceProofValues/extract_usage/match_groups запрещён; pure характер helper исключения не создаёт. Source internals могут использовать его внутри собственной операции. DAG не вычисляет canonical atoms, union, indices, hash или domain merge.
 
 | Данные на границе | Owning операция / тип | Возврат к Pack и состояние binding |

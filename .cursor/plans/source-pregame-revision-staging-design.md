@@ -209,6 +209,18 @@ Artifacts root acquire использует этот binding внутри соб
 
 Критерии проверки binding/lifetime: historical A читается после B и restart без внешнего holder; GC не удаляет A до prune; latest prune запрещён; внешний hold блокирует prune; общий artifact двух revisions не теряет root второй; label-only не меняет mapping; rollback acquire/prune не оставляет частичный live-set; tombstone не превращается в live body; pruned и отсутствующие bytes различимы; не вызывается latest fallback. До runtime evidence и joint review P2/P3 остаются OPEN.
 
+### P2.6. Повторный ответ владельца: отказ и полномочия acquire
+
+Получен [ответ Artifacts/publication от 2026-11-13](source-mutation-artifacts-publication-response-2026-11-13.md). Он подтверждает как согласованное направление обсуждения сохранение historical roots до explicit prune и уточняет acquire до `acquire(scope: CommitScope, claim: PublicationOwner, holder: SourceRootHolder) -> None | SourceFailure`. Это заменяет первоначальное двухаргументное предложение P2.3; runtime API пока отсутствует и не принят.
+
+Владелец рекомендует Source-owned terminal envelope `SourceMutationRefused(operation_id, world_uid, request_fingerprint, failure: SourceFailure)` с failure.operation=APPLY_MUTATION. Envelope фиксирует identity запроса и исходный отказ в едином ledger, не дублирует diagnostics новым failure DTO. Exact replay возвращает сохранённый failure; исправленный запрос требует нового operation_id. Canonical ID и включение SourceFailure с его nested diagnostics в terminal manifest требуют отдельного roster/round-trip review; P2.1 пока описывает только success/input и не является полным terminal manifest.
+
+**Найденный блокер:** runtime ConfirmedRollback capability не переживает crash между rollback и записью refusal. После рестарта отсутствие terminal не доказывает исходный отказ и не разрешает проверить изменившийся latest вместо прежнего результата. Поэтому предложенные transaction_for_claim и record_source_refusal остаются неполными до durable recovery/единственной apply attempt. Source не объявляет этот протокол готовым на основании одного terminal POJO.
+
+Для acquire дополнительно требуется Source-owned `validate_acquisition(scope: CommitScope, source: SourceVersionRef | SourceCollectionVersionRef, *, operation_id: EntityUid, operation: SourceOperation) -> None | SourceFailure` в retention/rootEligibilityBinding.py. Проверка должна связывать текущую mutation с exact revision, включая no-op/audit-only, где created_by_operation принадлежит прежней операции. Это internal eligibility, не public CRUD и не разрешение caller передать произвольный ref.
+
+Оставшиеся конкретные результаты: Source проектирует scoped operation→revision linkage без копии terminal outcome, diagnostics MUTATION_BINDING_MISMATCH и правила no-op; Artifacts/publication завершает durable refusal recovery, исключение конкурирующих apply attempts и typed acquire infrastructure errors. Допустимые исходные durable holders для reused closure согласуются совместно. Explicit prune/release требует собственного scoped usage-контракта. До этих результатов P2/P3 остаются OPEN.
+
 ## Следующие проверяемые проектные результаты
 
 | Порядок | Результат | Владелец и граница |
