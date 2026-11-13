@@ -59,6 +59,35 @@ DAG передаёт готовые owning результаты в публич�
 
 ## 6. Проверки и статус приёмки
 
+### Минимальный срез моделей 3a — конкретизация
+
+**Срез 3a-A: metadata addresses + metadata subject.** Он дополняет существующие payload addresses и даёт точный тип результата describe_metadata без зависимости от Source. Это самостоятельный value-contract срез, не реализация describe/bind и не готовый state. Решением пользователя 2026-11-13 выбрана форма ТЗ; appendix синхронизирован. Фиксация выбора не является отчётом о runtime-реализации.
+
+Предлагаемые файлы под `backend/app/dataModel/worldPack/preparation/`: существующий `addresses.py` (добавить metadata address union) и новый `metadataSubject.py` (только PackMetadataSubject). Existing payload addresses не переименовываются. Не добавлять Source imports, forward refs на отсутствующие типы, заглушки state, публичные wrappers или ещё один coordinate DTO.
+
+| POJO | Поля по owning ТЗ | Ответственность и локальная проверка |
+|---|---|---|
+| PackAssemblyHeaderAddress | `kind: Literal["header"]` | Только адрес header; extra запрещены |
+| PackTileMetadataAddress | `kind: Literal["tile"]`, `gx: int`, `gy: int` | Metadata тайла, не map_tile payload; strict координаты, отрицательные macro допустимы |
+| PackChunkMetadataAddress | `kind: Literal["chunk"]`, `gx: int`, `gy: int`, `cx: int`, `cy: int` | Metadata chunk; strict координаты, cx/cy неотрицательны; upper bounds требуют captured geometry и не проверяются этим value record |
+| PackLocationMetadataAddress | `kind: Literal["location"]`, `location_uid: EntityUid` | Адрес location metadata, без payload ref |
+| PackSettlementMetadataAddress | `kind: Literal["settlement"]`, `location_uid: EntityUid` | Адрес settlement metadata, отличный от location |
+| PackRegionMetadataAddress | `kind: Literal["region"]`, `region_uid: EntityUid` | Тип нового адреса по ТЗ; existing WildernessRegionEntry не изменяется |
+| PackAssemblyAddress | Discriminated union шести указанных records по kind | Unknown/extra отклоняются; union не отдельный record |
+| PackMetadataSubject | `base_publication: WorldPublicationRef`, `address: PackAssemblyAddress`, `value_fingerprint: RevisionHex` | Идентичность projection конкретной базы. Не proof и не holder. Deep revalidation, без IO |
+
+Общие настройки новых records: strict/frozen/extra-forbid/revalidate-always, обязательные поля без defaults. WorldPublicationRef переиспользуется из `dataModel/worldSnapshot/identity/publication.py`, RevisionHex — из `validation/diagnostics/runtimeIssueContext.py`, EntityUid — из `identity/uid.py`. Модели не подтверждают наличие projection: это ответственность последующего describe/bind. Subject не записывается в manifest вторым provenance.
+
+**Расхождение схем устранено решением пользователя «по ТЗ» (2026-11-13).** Используются плоские metadata адреса и имена из `docs/tz_world_pack_storage.md`, пункта «3. Происхождение метаданных». `rev-02-r1-public-pipelines.md §2.1` приведён к той же форме. Новый region metadata address использует EntityUid по ТЗ; существующая WildernessRegionEntry сохраняет str. EntityUid запрещает пустое значение и краевые пробелы; это admission нового адреса, не миграция сохранённых регионов. До подключения к реальным данным проверить compatibility, без trim, aliases или второго wire-варианта.
+
+**Проверка недублирования:** payload address выбирает bytes part, metadata address — projection; tile metadata может существовать без map_tile part. Поэтому совпадение координат не означает одинаковую семантику типов. PackTileRef — existing permissive planning tile key с extra=ignore, не точный metadata discriminator; создавать его strict копию для плоской схемы не требуется. PackMetadataSubject не копирует row, а хранит её адрес/fingerprint и full publication identity. Ошибки структурного построения остаются существующими Pydantic ValidationError; будущая публичная операция переводит их по согласованному PackPreparationDiagnostic union. Отдельный error DTO для этого value среза не вводится.
+
+**DoD 3a-A:** все шесть variants и subject проходят round-trip; extra/unknown kind, bool/float/string координаты и negative local indices отвергаются; forged вложенные instances revalidate; независимые ошибки сохраняют исходные paths; location/settlement и payload/metadata не смешиваются; subject mutation запрещена; полная WorldPublicationRef не сокращается до pack_hash. JSON round-trip здесь не заменяет отдельную canonical/storage serialization приёмку. Existing 8 address/coverage tests остаются зелёными.
+
+**Следующие модели, не входящие в 3a-A:** PackAssemblyInput и PackChunk/Tile/Location/SettlementAssembly не требуют Source, но требуют точных effective scalar constraints и strict admission existing TerritoryVolume/WildernessRegionEntry без зеркал. После их проверки — один принятый assembly срез. PackStoredProvenance → stored part/assembly provenance → _PackCompositionFields → PackPreparationState зависят от concrete внешнего SourceDurableProof. До его предъявления этот хвост не реализуется даже с nullable/Any. PackMetadataSubjectsInput(state, addresses) и PackMetadataProofBinding(subject, provenance) подключаются только после появления соответствующих owning records; пустые промежуточные версии не создаются.
+
+Проверка обязательных правил для 3a-A: классы/поля/ответственность перечислены выше; effects отсутствуют, DAG orchestration и CRUD не добавляются; public/internal граница не раскрывает runtime capabilities; implementation порядок 3a сохраняется; existing типы переиспользуются. Конфликт формы адресов закрыт, не открывать его повторно. Runtime DoD и compatibility проверяются при реализации через implement-plan; это не приёмка полного state/describe/bind или Source integration.
+
 ### Сверка следующего шага 3a с runtime — 2026-11-13
 
 По единой таблице основного плана следующий локальный слой — 3a, а не перескок к 4b/READY. В коде проверены `dataModel/worldPack/preparation/addresses.py` (10 payload address variants) и `coverage.py` (materialized/without_payload, coverage entry). Выполнено `python -B -m unittest tests.spatial_pack.test_preparation_addresses tests.spatial_pack.test_preparation_coverage` из backend: **8 tests, OK**. Проверены existing round-trip, strict shape, nested forgery, immutability и независимые ошибки. Это проверка уже существующей реализации, не новая поставка.

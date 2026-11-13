@@ -6,7 +6,7 @@
 
 Все пути ниже относительно backend/app. `PackPreparationService` — PROJECT в `application/worldData/pack/preparation/packPreparationService.py`. Его state — `dataModel/worldPack/preparation/state.py::PackPreparationState(base_publication, parts, assembly, assembly_provenance)`. Start inputs — `dataModel/worldPack/preparation/start.py`, остальные inputs таблицы изменений — `dataModel/worldPack/preparation/operations.py`. Shared addresses/parts/assembly — соответствующие модули preparation/addresses.py, parts.py, assembly.py по общему проекту.
 
-Общий semantic failure start/write/prepare: `application/worldData/pack/preparation/errors.py::PackPreparationFailure`, несущий `dataModel/worldPack/preparation/errors.py::PackPreparationError(reason, issues)` и PackPreparationIssue(code, path, message). Структурные ошибки не дублируются semantic кодами: closed union с existing JsonFieldError/WireShapeIssue и PackPreparationIssue ещё проходит freeze в write-плане. Поэтому наличие имени Failure не закрывает весь Error-критерий. Infrastructure/cancellation сохраняют owning типы и не превращаются в success/absent.
+Общий semantic failure start/write/prepare: `application/worldData/pack/preparation/errors.py::PackPreparationFailure`, несущий `dataModel/worldPack/preparation/errors.py::PackPreparationError(reason, issues)` и PackPreparationIssue(code, path, message). Согласованный closed union: `PackPreparationDiagnostic = JsonFieldError | WireShapeIssue | PackPreparationIssue`; issues — обязательный tuple, пустой допускается только для MANIFEST_OVERSIZE. Structural issues дают INVALID_INPUT без дублирования semantic кодами. [Точный контракт и admission](pack-preparation-issue-union.md) описаны; реализация и полная semantic матрица этим не принимаются. Infrastructure/cancellation сохраняют owning типы и не превращаются в success/absent.
 
 ## C/U: начало и явные изменения нового состава
 
@@ -14,7 +14,7 @@
 
 | CRUD | Полная сигнатура | Смысл и конкретность |
 |---|---|---|
-| C | `def start_empty(self, request: PackPreparationEmptyInput) -> PackPreparationState` | Начальная версия при base_publication.pack_hash=None; initial assembly/provenance объявлены в write-плане, metadata-output уточнение ещё применимо |
+| C | `def start_empty(self, request: PackPreparationEmptyInput) -> PackPreparationState` | Начальная версия при base_publication.pack_hash=None; initial assembly/provenance объявлены в write-плане |
 | U | `async def start_from_base(self, request: PackPreparationBaseInput) -> PackPreparationState \| ManifestReadRefusal` | Pin + max_manifest_bytes → проверенный состав базы; без fallback в start_empty |
 | U | `def sync_grid_metadata(self, request: PackGridMetadataInput) -> PackPreparationState` | Captured grid; не меняет last_l0_mode |
 | U | `def set_last_l0_mode(self, request: PackLastL0ModeInput) -> PackPreparationState` | Отдельный эффект после L0 writes по принятому порядку |
@@ -31,7 +31,18 @@
 | C/U | `def write_spatial_root(self, request: PackSpatialRootInput) -> PackPreparationState` | Готовый root одного domain, без Hydrology |
 | U | `def recalculate_wilderness_status(self, request: PackWildernessStatusInput) -> PackPreparationState` | Явный expected/provisional пересчёт по старой policy |
 
-Точные поля inputs и специализации PackPartInput приведены в write-плане; каждый input именованный и содержит общий state, а не его копию. Таблица не утверждает завершённость полей metadata/provenance: принятый metadata-output маршрут ещё требует concrete DTO. Запись U означает новое immutable значение и впоследствии новую версию, а не in-place изменение опубликованного manifest.
+Точные поля inputs и специализации PackPartInput приведены в write-плане; каждый input именованный и содержит общий state, а не его копию. Запись U означает новое immutable значение и впоследствии новую версию, а не in-place изменение опубликованного manifest.
+
+### Metadata: описание и привязка evidence
+
+Оба метода — PROJECT того же PackPreparationService, общий Failure выше; pure, без Source I/O, запуска prepare и выбора workflow.
+
+| CRUD | Полная сигнатура | Конкретные POJO и эффект |
+|---|---|---|
+| R | `def describe_metadata(self, request: PackMetadataSubjectsInput) -> tuple[PackMetadataSubject, ...]` | `dataModel/worldPack/preparation/metadataSubject.py`: input(state, addresses); output subject(base_publication, address, value_fingerprint). Описывает identity текущих значений, не создаёт proof |
+| U | `def bind_metadata_provenance(self, request: PackMetadataProvenanceInput) -> PackPreparationState` | Input в preparation/operations.py: state, entries: tuple[PackMetadataProofBinding, ...]; binding(subject, provenance) в preparation/metadataSubject.py. Проверяет уникальность адресов, base/current fingerprint и provenance admission; возвращает state без изменения parts/assembly |
+
+Порядок: DAG вызывает describe после выбранных writes, получает evidence у владельца и передаёт bindings в Pack. Прежний вход из PackAssemblyProvenanceEntry не сохраняется как alias. Точные проверки — в write-плане; внешнее evidence mapping не объявляется реализованным.
 
 ## D: новый состав и отдельное освобождение кандидата
 
@@ -80,10 +91,10 @@ EXISTING `PinnedManifestReader` в [read/pinnedManifestReader.py](../../backend/
 
 ## Открытые строки, которые нельзя скрыть таблицей
 
-1. **Metadata output/bind:** имя `PackPreparationService.bind_metadata_provenance(request: PackMetadataProvenanceInput) -> PackPreparationState` уже предложено, но прежний Input(state, entries) признан недостаточным. Принято направление subject/dependencies → DAG → evidence → Pack bind; полный DTO результата write, выдача subject и exact binding ещё не предъявлены. Это незавершённый публичный контракт, а не готовая строка U. PACK-METADATA-PLANNING сохраняет разрешённую отсрочку и не переоткрывается как блокер текущего объёма.
-2. **Errors:** closed structural/semantic union, field paths и неизбыточное mapping результатов ещё проходят общий freeze. Отсутствующий exact Error-контракт означает отказ в полной приёмке, а не разрешение Any/строкового ValueError.
+1. **Metadata output/bind:** concrete DTO и обе публичные операции описаны выше и в write-плане. Проверке подлежат реализация и внешний evidence mapping; утверждение об отсутствии subject/bind DTO устарело. PACK-METADATA-PLANNING сохраняет разрешённую отсрочку и не переоткрывается как блокер текущего объёма.
+2. **Errors:** состав closed structural/semantic union согласован; остаются проверка полной semantic матрицы, field paths и реализации mapping. Это не разрешение Any/строкового ValueError. Canonical registration/identity/recovery ведутся в [отдельном плане](pack-serialization-deserialization.md), не блокируют независимый текущий scope, но обязательны для соответствующего runtime-пути.
 3. **Final admission/lifecycle:** exact scope/coverage, inherited proofs, полный closure, atomic adoption/activation/release и restart/replay остаются соответствующими gates. Внешние типы/ports не реализуются Pack по догадке; отсутствие миграции callers не запрещает самостоятельную Pack-owned работу.
 4. **Payload bindings:** descriptors и strict bounded decoder/composition проверяются по каждому owning контракту. Для grade descriptors уже предложены в ТЗ: storage world_pack.grade_slots.json/version 1 и read world_pack.grade_slots/version 1; это не открытый выбор имени. Реализация, budget и registration не подтверждены одним текстом ТЗ.
 5. **Настройки:** эта таблица намеренно о данных. Отдельную обязательную C/R/U/D сверку настроек выполнять по [уже принятым решениям](pack-v2-domain-contract-spec.md#5-crud-и-настройки-не-подменять-семантику), без повторного выбора manifest_cache/CachePolicy и без выдуманного hot settings service.
 
-Полный CRUD данных пока **не принят**: открытая metadata-строка и общие Error/binding gates достаточны для отказа по обязательным критериям. Классы/POJO и их ответственность не заменяются одной таблицей; детальные traces остаются нормативными для проекта. DAG вызывает публичные методы напрямую, выбирает порядок и ветви; операции не оркестрируют друг друга. Порядок источники → evidence → manifest → codec/readers, перенос callers до удаления legacy и отдельный последующий аудит версионных имён/комментариев сохраняются.
+Полный CRUD данных пока **не принят**: остаются проверки Error/binding/lifecycle и реализации по обязательным критериям. Отсутствие metadata DTO больше не является основанием отказа. Классы/POJO и их ответственность не заменяются одной таблицей; детальные traces остаются нормативными для проекта. DAG вызывает публичные методы напрямую, выбирает порядок и ветви; операции не оркестрируют друг друга. Порядок источники → evidence → manifest → codec/readers, перенос callers до удаления legacy и отдельный последующий аудит версионных имён/комментариев сохраняются.

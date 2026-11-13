@@ -62,14 +62,14 @@ Owning модули: `dataModel/worldPack/preparation/addresses.py` и `provenan
 
 | Модель metadata address | Поля |
 |---|---|
-| PackHeaderAssemblyAddress | `kind: Literal["header"]` |
-| PackTileAssemblyAddress | `kind: Literal["tile"]`, `tile: PackTileRef` |
-| PackChunkAssemblyAddress | `kind: Literal["chunk"]`, `chunk: PackChunkAddress` |
-| PackLocationAssemblyAddress | `kind: Literal["location"]`, `location_uid: EntityUid` |
-| PackSettlementAssemblyAddress | `kind: Literal["settlement"]`, `location_uid: EntityUid` |
-| PackRegionAssemblyAddress | `kind: Literal["region"]`, `region_uid: str` — existing WildernessRegionEntry identity, непустая строка без переопределения формата UID |
+| PackAssemblyHeaderAddress | `kind: Literal["header"]` |
+| PackTileMetadataAddress | `kind: Literal["tile"]`, `gx: int`, `gy: int` |
+| PackChunkMetadataAddress | `kind: Literal["chunk"]`, `gx: int`, `gy: int`, `cx: int`, `cy: int` |
+| PackLocationMetadataAddress | `kind: Literal["location"]`, `location_uid: EntityUid` |
+| PackSettlementMetadataAddress | `kind: Literal["settlement"]`, `location_uid: EntityUid` |
+| PackRegionMetadataAddress | `kind: Literal["region"]`, `region_uid: EntityUid` |
 
-`PackAssemblyAddress` — discriminated union этих шести моделей. Tile использует existing PackTileRef, chunk — уже предложенный PackChunkAddress: второго coordinate POJO нет. Discriminator metadata отличает назначение от payload address: tile metadata существует и без map_tile payload. Строгость nested PackTileRef проверяется на wire boundary, его extra=ignore не разрешает игнорировать лишние поля нового входа.
+**Решение пользователя 2026-11-13: использовать форму owning ТЗ.** `PackAssemblyAddress` — discriminated union этих шести моделей. Координаты плоские strict int; macro gx/gy могут быть отрицательными, локальные cx/cy неотрицательны. Вложенные tile/chunk и прежние Assembly-имена отозваны; aliases и второй wire-вариант не вводятся. Discriminator metadata отличает назначение от payload address: tile metadata существует и без map_tile payload. Existing PackTileRef, payload PackChunkAddress и модели других доменов не меняются. EntityUid у нового region metadata address следует ТЗ и не меняет str в existing WildernessRegionEntry: неподходящая identity отклоняется на новой границе, не обрезается и не нормализуется автоматически. Проверка совместимости реальных region identities обязательна до cutover.
 
 - `PackAssemblyProvenanceInput(address: PackAssemblyAddress, provenance: PackPartProvenance)` — переиспользуется тот же union new/inherited, поскольку смысл происхождения одинаков; второй набор вариантов не создаётся. Название union не означает наличие payload в metadata.
 - `PackStoredAssemblyProvenance(address: PackAssemblyAddress, provenance: PackStoredProvenance)` — durable record без new/inherited.

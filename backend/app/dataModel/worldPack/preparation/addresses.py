@@ -1,4 +1,4 @@
-"""Immutable logical payload addresses shared by Pack preparation and storage."""
+"""Immutable logical payload and metadata addresses for Pack."""
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -70,5 +70,45 @@ PackPartAddress = Annotated[
     | PackSettlementAddress | PackCoarseClimateAddress | PackFineClimateAddress
     | PackLocationsIndexAddress | PackSpatialRootAddress | PackTileGradeSlotsAddress
     | PackLocationGradeSlotsAddress,
+    Field(discriminator="kind"),
+]
+
+
+class PackAssemblyHeaderAddress(_PackAddress):
+    kind: Literal["header"]
+
+
+class PackTileMetadataAddress(_PackAddress):
+    kind: Literal["tile"]
+    gx: int
+    gy: int
+
+
+class PackChunkMetadataAddress(_PackAddress):
+    kind: Literal["chunk"]
+    gx: int
+    gy: int
+    cx: int = Field(ge=0)
+    cy: int = Field(ge=0)
+
+
+class PackLocationMetadataAddress(_PackAddress):
+    kind: Literal["location"]
+    location_uid: EntityUid
+
+
+class PackSettlementMetadataAddress(_PackAddress):
+    kind: Literal["settlement"]
+    location_uid: EntityUid
+
+
+class PackRegionMetadataAddress(_PackAddress):
+    kind: Literal["region"]
+    region_uid: EntityUid
+
+
+PackAssemblyAddress = Annotated[
+    PackAssemblyHeaderAddress | PackTileMetadataAddress | PackChunkMetadataAddress
+    | PackLocationMetadataAddress | PackSettlementMetadataAddress | PackRegionMetadataAddress,
     Field(discriminator="kind"),
 ]
