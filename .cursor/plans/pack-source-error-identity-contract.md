@@ -1,6 +1,6 @@
 # Pack exchange: конкретизация A3 и preparation identity
 
-2026-11-14. Проект для приёмки. Код не изменён. Дополняет [exchange](pack-source-exchange-contract.md) и [A1–A4](pack-source-leaf-acceptance.md), не утверждает новый порядок или внешнюю publication boundary. Четыре metadata semantic кода остаются предложением до приёмки; наличие этой таблицы не означает freeze.
+2026-11-14. A3: локальная согласованность bind/diagnostics принята после исправления A3-R1/R2; [вердикт](pack-source-a3-reacceptance-2026-11-14.md). Код не изменён. Дополняет [exchange](pack-source-exchange-contract.md) и [A1–A4](pack-source-leaf-acceptance.md), не утверждает новый порядок или внешнюю publication boundary. Четыре metadata semantic кода синхронизированы с ТЗ. Полный route/schema/runtime freeze не заявляется.
 
 ## 1. Уже принятые ограничения
 
