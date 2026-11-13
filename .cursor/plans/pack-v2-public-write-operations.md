@@ -144,6 +144,8 @@ Write-входы таблицы не содержат metadata provenance: он�
 
 ### Пункт 2 рабочего списка: header и metadata provenance
 
+Актуальное уточнение 2026-11-13: [metadata dependency usage](pack-metadata-dependency-usage.md). Пользователь согласовал детализацию по независимо обновляемым полям, необходимые изменения Pack POJO и отказ partial update старой строки при неизвестных зависимостях сохранённых полей; read/unchanged inheritance разрешены. [Конкретный проект POJO](pack-metadata-dependency-pojo.md) предъявляет transient usage, describe/bind и durable attribution. Предыдущие сигнатуры ниже — исходная схема до этого дополнения; точные новые carriers/bindings ещё требуют проверки, не реализуются по одному факту согласования направления.
+
 Проверка старых операций `worldPackWriter.py`: sync_world_metadata, _upsert_tile, write_world_map_tile, commit_chunk, recalc_wilderness_status, write_climate_tile, publish_settlement_structure. Единица свидетельства — сохранённая semantic projection из owning контракта, а не имя операции или её частичный input. Header содержит только скаляры PackAssemblyInput; codec/envelope в него не добавляются. Tile projection исключает chunks; chunk имеет отдельный адрес. При сравнении используются значения owning POJO и canonical codec, а не repr и не количество payload.
 
 | Операция | Потенциально изменяемые metadata projections | Что сохраняется |

@@ -4,6 +4,10 @@
 
 ## 1. Решение, требующее принятия
 
+**Результат повторной проверки:** [Source/Pack DAG review](source-pack-dag-contract-review.md) выявило блокирующие R1–R6. В частности, single-capture схема ниже не покрывает metadata из pinned base и новых входов, а results проверки/closure не имеют полного Pack input mapping. Схема остаётся кандидатом для исправления; начинать её реализацию до устранения этих находок нельзя.
+
+**Уточнение пользователя:** Source — вспомогательный модуль, не отдельный полноценный домен CRUD. Порядок поставки, legacy callers и условия переключения вынесены в [отдельный план перехода](source-module-transition.md). Владельцы исходных данных сохраняют их revisions/CRUD, Artifacts/publication — физическое хранение и удержания. Предлагаемые пути sourceVersioning пока не приняты как окончательное размещение. Упоминания общей Source migration ниже обозначают внешние зависимости, а не scope этого модуля.
+
 SourceDurableProof — immutable значение: точный ref завершённого Source capture и позиции фактически прочитанных object/collection revisions внутри него. Сам capture хранится в существующем Artifacts; новый proof artifact, blob store, receipt или Pack DTO не вводится. Capture содержит стабильные канонические массивы объектов и коллекций. Позиция имеет смысл только вместе с полным capture ArtifactRef; это не identity Source-объекта и не замена SourceVersionRef.
 
 Это новое **предложение представления**, а не ранее принятое решение. Оно позволяет отделить схему proof от полного SourceObjectId union. Proof требует owning capture format и verifier; произвольный ArtifactRef без проверки формата и содержимого не принимается.

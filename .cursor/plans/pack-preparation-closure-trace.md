@@ -1,5 +1,7 @@
 # Pack: полнота зависимостей и точность READY membership
 
+Продолжение в границах ядра Pack: [admission внешнего provenance и полнота closure](pack-source-admission-boundary.md). Уточнены точки DAG inputs, обязательное покрытие всех logical uses и независимость semantic closure от operation holds; Source internals и новый публичный DTO не вводятся.
+
 Статус: REV-02, статический trace. Runtime не изменён. Разделение обязанностей уже следует из [Pack contract](pack-v2-domain-contract-spec.md); ниже конкретизировано, что подтверждает existing finish, а чего он не проверяет.
 
 ## Existing finish гарантирует точное множество holds
