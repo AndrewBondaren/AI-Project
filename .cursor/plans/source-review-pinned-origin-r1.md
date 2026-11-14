@@ -1,5 +1,29 @@
 # Source review: pinned-origin редакция 1
 
+Актуальный итог: [независимое финальное ревью редакции 2](source-pinned-origin-final-review-2026-11-14.md) — PASS узкого design first-call/retained-input repeat. Три design findings закрыты; нижние промежуточные статусы сохранены как история. Полный crash recovery, SQL/codec и runtime не приняты.
+
+## Актуальный статус после пользовательского решения
+
+2026-11-14: сверена исправленная редакция 2 snapshot-pinned-origin-contract-r1.md, включая §9. Пользователь согласовал single full origin/ровно один grant и сохранение historical admission provenance без post-commit runtime consumer. Повторные Source/Pack checks подтверждают текстовое исправление grants и полноту ledger test requirements. Ниже приведены исторические CHANGES REQUIRED и адресные verdicts; они не отражают новое ожидание пользовательского выбора. Сейчас требуется итоговое ревью единой редакции 2 по всем обязательным критериям в узком first-call/retained-input repeat scope. Общий PASS и runtime readiness пока не объявлены.
+
+Source implementation-план синхронизирован: ограничение относится к pinned issuer, не меняет generic Source adopt; same request/different pins конфликтует и для empty proof. Full crash input producer, SQL/codec и runtime остаются gates. Код не менялся.
+
+## Последующее итоговое ревью: CHANGES REQUIRED
+
+2026-11-14 пользователь предъявил три замечания к редакции 1. Исторический адресный PASS ниже не закрывает их и не является основанием общей приёмки. Source подтверждает необходимость исправления; итоговый статус pinned-среза — CHANGES REQUIRED до owning решения и повторной проверки.
+
+- P1 / PIN-GRANTS-1: сочетание полного coverage/preflight/holds каждого pin с правилом объединения нескольких grants неоднозначно. Snapshot должен явно выбрать полные альтернативные origins либо partial coverage с отдельной спецификацией evidence/union. Дополнительно определить повтор одного request с разными manifests и immutable key conflict. Source не выбирает это молча за владельца.
+- P2 / PIN-BINDING-PURPOSE-1: durable binding коммитится только вместе с READY, а READY replay origin не читает. Зафиксировать назначение после commit и конкретного потребителя либо честно указать отсутствие runtime consumer и обоснование сохранения. Не выдавать запись за recovery mechanism и не добавлять отдельный PREPARING commit ради объяснения.
+- P2 / PIN-LEDGER-TESTS-1: добавить явные tests identical append/no-op, same key/different origin conflict, same digest/different canonical values без ложного equality, corrupt bytes/checksum infrastructure refusal, другой target fence с отказом без изменения прежней записи.
+
+Замечания переданы Snapshot/Pack в рамках разрешённого pinned-only review. Source S1/S2/adopt, G4/finalizer и DAG не расширяются. Ни исправление, ни новый общий PASS пока не заявлены.
+
+## Исторический адресный результат до итогового ревью
+
+Перед историческим результатом: повторная Source проверка исправленной редакции 2 от 2026-11-14 подтверждает устранение текстовой неоднозначности PIN-GRANTS-1 при предложенном правиле одного полного grant. Partial origins запрещены; повтор canonical request с иным manifest/pin конфликтует, включая empty proof, поскольку origin теперь хранится на binding. Это совместимо с Source full closure/adopt и не изменяет их; выбор ограничения остаётся на принятие, не объявляется автоматически ACCEPTED.
+
+PIN-BINDING-PURPOSE-1: назначение раскрыто честно — historical admission provenance, post-commit runtime consumer отсутствует, recovery роль не заявляется. Польза и стоимость такого сохранения требуют решения по предложению владельца; Source не принимает SQL/codec затраты за Snapshot/пользователя. PIN-LEDGER-TESTS-1: все пять требуемых сценариев добавлены в matrix, включая разные canonical requests при одном lookup digest и запрет мутации на fence mismatch. Пробел test requirements закрыт документально; tests не выполнены. Итоговая приёмка редакции 2 остаётся открытой до решения по двум предложенным ограничениям и Pack review.
+
 2026-11-14. Проверен snapshot-pinned-origin-contract-r1.md против принятого source-pack-s1-s2-contract.md r2 §2–5 и source-proof-v2-contract-spec.md §12.1/13. Scope — адресная Source проверка first call и explicit retained-input repeat после confirmed rollback. Это не общая приёмка storage/codec, public маршрута или всего C-PIN-1.
 
 **Verdict: PASS по совместимости с Source S1/S2 в указанной границе.** Новых блокирующих замечаний к Source semantics/order в этой редакции не найдено. Совместный ACCEPTED этим отчётом не объявляется: нужен итог Pack и owning приёмка оставшихся частей. Runtime не проверялся.

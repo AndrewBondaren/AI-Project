@@ -68,6 +68,16 @@ Trace строго: owner writer/target/replay → verified origins/manifest →
 
 ### C-PIN-1 — сценарий для уточнения у Pack/Snapshot
 
+**Итоговое ревью узкой pinned редакции 2:** [независимый акт 2026-11-14](source-pinned-origin-final-review-2026-11-14.md) — PASS для first-call/explicit retained-input repeat; три design findings закрыты. Приведённые ниже записи об ожидании итогового ревью — история. Полный C-PIN-1, SQL/codec, G1/G2/G3 и runtime gates остаются OPEN; статус этого implementation-плана NOT EXECUTION-READY не меняется.
+
+**Текущая фиксация 2026-11-14:** snapshot-pinned-origin-contract-r1.md содержит исправленную редакцию 2; §9 фиксирует пользовательское согласие на один полный pinned origin и durable historical admission provenance. Ниже сохранена история запроса; прежние OPEN по выбору этих двух вариантов заменены решением §9, но не общим runtime PASS. Итоговое ревью узкого design-среза ещё требуется.
+
+Для сценариев C действует ограничение: один manifest покрывает весь logical request и полный Source closure; ровно один grant на register. Частичные origins не объединяются, fallback/dedup с выбором другого pin отсутствуют. Повтор того же request с другим pin/manifest — IMMUTABLE_BINDING_CONFLICT с rollback всей preparation, включая empty proof. Binding хранит один origin и ordered sources; generic Source adopt и его способность принимать exact пары разных holders не сужаются — ограничение относится к pinned issuer этого среза.
+
+Durable binding сохраняется как история проверенного admission в existing preparation ledger, атомарно с READY. После commit runtime consumer здесь отсутствует; READY/retry её не требуют. Это согласованная цена хранения истории, не recovery mechanism, не новый audit API и не промежуточный PREPARING commit. Ledger matrix обязана проверять identical append/no-op, смену origin/conflict, digest collision/full canonical equality, corrupt bytes/checksum и fence mismatch/no mutation.
+
+Различать два результата приёмки: first-call/explicit repeat с полным исходным input может быть принят отдельно; весь C-PIN-1, включая автономный crash restart, остаётся OPEN без подтверждённого producer полного target/request/pin input. SQL layout/canonical registrations, G1/G2/G3, новые strict fixtures и runtime/typing/race tests также остаются открытыми. Эти решения не разрешают код и не меняют порядок A → B → C.
+
 2026-11-14, по указанию пользователя. Статус: REQUESTED, не дополнительный принятый admission-протокол. Проверить, покрывает ли уже принятый G3 законный pinned-manifest origin для всего C, включая restart, либо имеется конкретная недостающая admission-зависимость. Существующие restart-контракты, включая DAG, сначала сверить и переиспользовать; новый протокол из самого вопроса не выводить.
 
 Исходный сценарий: новый строгий manifest с Source provenance, существующий законно полученный OPEN pin и удерживаемый child closure; target preparation получает proof именно этого manifest. Owning fixtures создаются на актуальных контрактах, без legacy conversion и без ручной подстановки grant/authority. Путь C: exact pin/manifest read → coverage → fresh preflight → register/resolve → adopt → READY/commit.

@@ -1,6 +1,12 @@
-# C-PIN-1: pinned-origin — редакция 1 для совместной проверки
+# C-PIN-1: pinned-origin — исправленная редакция 2 для совместной проверки
+
+**Итог независимого review, 2026-11-14: PASS узкого design first-call/explicit retained-input repeat после confirmed rollback.** [Акт проверки](source-pinned-origin-final-review-2026-11-14.md) и границы — §10. Три findings закрыты на уровне design; SQL/codec, prerequisites, runtime и полный crash recovery остаются открытыми. Исторические статусы ниже не отменяют этот ограниченный verdict.
+
+**Актуальное решение пользователя, 2026-11-14:** ответом «Ок» после предъявления двух открытых решений согласованы (1) один origin, полностью покрывающий request, без partial union и (2) сохранение durable binding как immutable history admission без post-commit runtime consumer. Точный объём и оставшиеся gates — §9. Формулировки PROPOSED/ожидания решения ниже сохраняют историю review; по этим двум решениям ожидание снято. Это не приёмка runtime или всего C-PIN-1.
 
 2026-11-14. **PROPOSED FOR JOINT REVIEW. Не ACCEPTED, не IMPLEMENTED.** Owner — Snapshot (`application/publication` и Artifacts); Pack подтверждает authenticated pin/manifest boundary, Source — неизменность S1/S2. Основание разрешённого scope: `source-pack-s1-s2-implementation.md`, C-PIN-1, «разрешённый следующий срез». Эта редакция конкретизирует только pinned часть `pack-preparation-source-authority-contract.md`, не принимает весь прежний proposal.
+
+Файл сохраняет прежнее имя для существующих ссылок; актуальный текст — редакция 2. Итог review редакции 1: **CHANGES REQUIRED**, PIN-GRANTS-1 / PIN-BINDING-PURPOSE-1 / PIN-LEDGER-TESTS-1. Ни прежние адресные PASS, ни приведённые ниже исправления не означают принятия новых решений. Дельта для повторного review перечислена в §8.
 
 ## 1. Scope и состояние до дельты
 
@@ -78,16 +84,23 @@ Proposed module `dataModel/publication/preparationSourceAuthority.py` содер
 
 - `PreparationSourceOriginKind.PINNED_MANIFEST = "pinned_manifest"`.
 - `PinnedManifestSourceOrigin`: обязательные `kind: Literal[PreparationSourceOriginKind.PINNED_MANIFEST]`, `pin: ManifestPinRead`, `manifest: ArtifactRef`.
-- `PreparationSourceEntry`: обязательные `source: VerifiedArtifactRef`, `origin: PinnedManifestSourceOrigin` (operation variant не включать в реализацию этого среза).
-- `PreparationSourceBinding`: обязательные `target: OperationLeaseRef`, `request: SourceProofReadInput`, `entries: tuple[PreparationSourceEntry, ...]`.
+- `PreparationSourceBinding`: обязательные `target: OperationLeaseRef`, `request: SourceProofReadInput`, `origin: PinnedManifestSourceOrigin`, `sources: tuple[VerifiedArtifactRef, ...]`.
 
-Все четыре record/enum declarations принадлежат Snapshot; records strict/frozen/extra-forbid/revalidate-always, без defaults. Existing `ArtifactRef`, `OperationLeaseRef` (`dataModel/artifacts/lifecycle/lease.py`), `VerifiedArtifactRef` и holders (`dataModel/artifacts/lifecycle/holders.py`) используются без копий. Source owns request/proof types; Pack owns pin. `source` определяет фактический holder, `origin` — проверенный pin/manifest context, они не являются двумя копиями proof. SourceProofResult/private evidence в ledger не сохраняется.
+Этот roster (enum и два records) принадлежит Snapshot; records strict/frozen/extra-forbid/revalidate-always, без defaults. Existing `ArtifactRef`, `OperationLeaseRef` (`dataModel/artifacts/lifecycle/lease.py`), `VerifiedArtifactRef` и holders (`dataModel/artifacts/lifecycle/holders.py`) используются без копий. Source owns request/proof types; Pack owns pin. `sources` определяет фактические holders, единственный `origin` — проверенный pin/manifest context. SourceProofResult/private evidence в ledger не сохраняется. Прежний proposed PreparationSourceEntry удалён из pinned roster до реализации: общий origin не нужно повторять для каждого ref. Operation variant не вводится.
 
-Entries в порядке `SourceProofResult.durable_refs`; каждый full ref ровно один раз. Union refs должен точно совпасть с preflight closure. Для manifest root допустим только `PinHolder(pin.pin_id)`; для любого child — только `ArtifactRetentionHolder(origin.manifest)`. Нельзя создать фиктивный PinHolder(child). Empty Source proof/closure даёт entries=(), sources=(); issuance всё равно проверяет pin/manifest и successful empty coverage/preflight. Несколько grants допустимы только для того же exact request/target; первый по порядку grants покрывающий ref задаёт его origin, duplicate entries не создаются. Эта редакция не вводит mixed operation origins.
+**Предлагаемое owning правило PIN-GRANTS-1: только полные альтернативные origins.** Один grant удостоверяет весь exact requested proof и весь preflight closure одного manifest. Sources идут в порядке `SourceProofResult.durable_refs`, каждый full ref ровно один раз. Для manifest root допустим только `PinHolder(pin.pin_id)`; для любого child — только `ArtifactRetentionHolder(origin.manifest)`. Нельзя создать фиктивный PinHolder(child). Empty proof даёт sources=(), но origin остаётся обязательным и issuance проверяет pin/manifest и successful empty coverage/preflight. Поэтому смена origin обнаруживается даже для empty proof.
+
+Signature register_sources с tuple grants сохраняется из S1/S2, но этот pinned-only срез допускает **ровно один** полный grant; ноль или более одного → INVALID_GRANT до append. Origin задаётся переданным internal input pin до checks; issuer/provider не перебирают альтернативы и не делают fallback. Если X и Y каждый независимо покрывают полный request, вызывающая сторона может предъявить один из них для первой попытки, но Snapshot не объединяет grants и не выбирает маршрут. Если X держит A,B, Y держит C, а request требует A,B,C, этот сценарий данным контрактом не поддерживается: full checks X или Y откажут. Нельзя сначала получить partial grants и затем union. Это предложенный более узкий выбор, а не уже принятая рекомендация reviewer.
+
+Повтор одного canonical request в разных provenance rows не создаёт новый registration key. Повтор register с тем же target/request/origin/sources — no-op после fresh guards. Последовательный register того же request с другим manifest/pin (даже если оба полностью покрывают request) → IMMUTABLE_BINDING_CONFLICT, без overwrite/second row; outer transaction откатывается целиком, включая первый register/adopt. Автоматической смены origin, объединения или выбора «первого по ref» нет. После confirmed rollback retry по-прежнему предъявляет исходный input (§2), а не заменяет его другим origin.
 
 Semantic key store: target.operation_id + target.preparation_fingerprint + canonical exact request; full target fence/value проверяется при read и append. Equality — полная canonical record equality после checksum/strict decode, не совпадение digest. Same binding — no-op; другое происхождение/значение в том же key — immutable conflict. Missing binding — None только у store; provider выдаёт AUTHORITY_NOT_REGISTERED. Corrupt bytes/chain/checksum — infrastructure.
 
+Digest служит только ускорителем поиска canonical request. При совпавшем digest и разных canonical requests это разные semantic keys: append не является no-op и read не возвращает чужую запись; storage layout должен уметь различать их. При одинаковом canonical request и разных canonical binding values это IMMUTABLE_BINDING_CONFLICT независимо от digest. Caller target fence, отличный от current persisted lease, отвергается owning STALE_LEASE до mutation; existing binding с другим fence при уже проверенном current target также не переиспользуется — IMMUTABLE_BINDING_CONFLICT. Takeover/remapping записи запрещён.
+
 Append выполняется в той же target transaction, что adopt и READY. Никакого отдельного commit PREPARING. Atomic commit сохраняет binding и READY/candidate/target holds вместе. Историческая фраза исходного proposal о более раннем committed registration **не применяется к этой pinned-only редакции**. SQL layout и canonical IDs ещё требуют отдельного owning storage/codec review перед реализацией; не назначаем ID поверх добавленных R1–R3 20301/20302/20306/20307 и не создаём новый schema counter или legacy decoder.
+
+**Назначение записи, PIN-BINDING-PURPOSE-1.** Во время transaction provider.resolve_sources читает регистрацию и получает exact checked pairs; immutable key запрещает противоречивую регистрацию одного request в разных последовательных стадиях. После commit **runtime consumer этой записи в данном срезе отсутствует**: READY replay проверяет candidate/target holds и не читает origin binding. Сохранение предлагается только как immutable provenance в existing operation ledger: зафиксировать, какой exact pin/manifest и какие source-holder identities были проверены для committed preparation, чтобы запись не терялась вместе с runtime registry. Это историческое объяснение принятого admission, не доказательство нынешней доступности refs, не новый audit API, не восстановление input/grant и не recovery mechanism. Дополнительный production reader не выдумывается. Цена — codec/schema/storage без post-commit operational consumer; сохранение этой истории требует явного owning согласия при review. Если такое назначение не принимается, нужно отдельно пересмотреть принятую register/resolve/storage границу до кода, а не незаметно заменить её transient map.
 
 ## 4. Exact nested trace и неизменность порядка
 
@@ -134,12 +147,18 @@ Late refusal требует rollback всего writer. `UnknownCommitOutcome` �
 | First run / confirmed rollback retry | Настоящие Source finalized fixtures, Pack manifest/pin, issuer и store; повтор с исходным input создаёт новый grant; старый отозван. Второе соединение не видит rolled-back registrations/target holds |
 | Missing/closed/foreign pin | Нет вызова acquire/latest; exact owning refusal; нет target writes |
 | Fake/cross-task/DB/scope/grant | Отказ до effects; UID/совпадение tuples не удостоверяют grant |
-| Coverage/empty/malformed | Все proofs из manifest, extra available allowed, extra requested refused; empty sources ровно (); strict nested DTO и independent Source diagnostics |
+| Coverage/empty/malformed | Все proofs из manifest, extra available allowed, extra requested refused; empty sources ровно (), origin обязателен; strict nested DTO и independent Source diagnostics |
 | Child/root retention | Root только PinHolder; child только manifest retention; missing child refusal, без acquisition источника issuer-ом |
 | Late second-proof refusal | Первый register/adopt rolled back; exact caller refusal только после rollback; два independent SQLite connections |
 | Close/GC race | Одна временная SQLite DB, два соединения, реальный guarded close/GC; protection от первого origin read до commit; no sleeps как единственное доказательство порядка |
 | READY / unknown / cancel | Old pin closed не мешает valid READY replay; unknown не заменён refusal; evidence cleanup в finally |
 | Restart input | Отдельно показать подтверждённого owning producer полного replay input; без него crash-recovery gate OPEN, retained-input retry не переименовывать в доказательство recovery |
+| Полные альтернативы / partial запрещён | X={A,B}, Y={C}, request={A,B,C}: ни одного successful grant; X и Y каждый full: один выбранный input разрешён, tuple из двух grants → INVALID_GRANT без append; пустой tuple также отвергнут |
+| Identical ledger append | Дважды exact target/request/origin/sources → no-op второго append после guards; bytes/количество records неизменны, после commit второе соединение видит одну запись |
+| Same key / different origin | Последовательные registrations одного request с разными full origins → IMMUTABLE_BINDING_CONFLICT; исходные bytes не изменены, caller получает отказ после rollback всех provisional effects. То же для empty request с разными origins |
+| Same digest / different canonical | Контролируемая коллизия lookup digest для двух разных canonical requests не возвращает чужой binding и не даёт ложного no-op; distinct semantic keys различимы. Одинаковый request, другой canonical payload → конфликт; реальный hash взламывать не требуется |
+| Corrupt bytes / checksum | Отдельно invalid payload при проверяемом checksum и checksum mismatch → PublicationInfrastructureError; никаких None/no-op/refusal вместо corruption, запись не переписывается. Fault injection только в storage corruption test, не способ создания lawful fixture |
+| Same request / different target fence | Stale caller lease → STALE_LEASE до writes; checked current target против прежнего binding fence → IMMUTABLE_BINDING_CONFLICT. Исходный binding не меняется, новый не вставляется, second connection подтверждает отсутствие mutation |
 
 Source fixtures — `backend/tests/sourceVersioning/support/finalizedFixtures.py` по G2, без fabricated rows. Pack предложил `backend/tests/worldPack/support/pinnedProvenanceFixtures.py`: новый, ещё не implemented/accepted import; strict manifest/provenance принадлежит Pack, pins/holds создаются реальными Snapshot adapters, captures — Source G2. Snapshot integration location предлагается `backend/tests/snapshotCore/storage/publication/test_pinned_origin.py`; реализация только после prerequisite/fixture/storage acceptance. Старые fixtures не конвертировать и не создавать legacy adapters.
 
@@ -148,6 +167,8 @@ Source fixtures — `backend/tests/sourceVersioning/support/finalizedFixtures.py
 Изменение прохода — этот owning документ. Source implementation-план и runtime-код не изменены. Проверены текущие ExecutionPins/PinnedManifestGuard/ManifestPinRead, publication operation rows, R1–R3 report/types, S1/S2 r2 и исходный authority proposal. Runtime tests не запускались. Новые ноды, restart-протокол, operation-origin G4 и finalizer hookup не проектировались.
 
 ## 7. Результаты совместной проверки
+
+**Актуальный итог редакции 1 — CHANGES REQUIRED.** Последующее пользовательское review, записанное в [Source report](source-review-pinned-origin-r1.md), выявило P1 PIN-GRANTS-1 (несогласованность full issuance и per-ref union), P2 PIN-BINDING-PURPOSE-1 (нет заявленного post-commit consumer), P2 PIN-LEDGER-TESTS-1 (неполная ledger matrix). Ни один исторический адресный PASS ниже не закрывает эти findings. Редакция 2 предъявляет исправления для повторной проверки; общий PASS отсутствует.
 
 2026-11-14, Pack (чат `01a1cfce-ff7d-7e30-b738-f075bf490f13`): **PASS в узком consumer/design scope: first call + explicit retained-input retry после confirmed rollback.** Прочитана вся редакция 1, повторно сверены actual ManifestReadReason/ManifestReadRefusal и PinnedManifestGuard.manifest_guard. Actionable findings по запрошенным Pack границам нет. Подтверждены no acquire/latest, full available proofs/evidence binding, root/child holders, fresh grants, READY-before-origin и unknown precedence.
 
@@ -159,4 +180,43 @@ Pack PASS не закрывает autonomous input reconstruction, SQL/codec/run
 
 Актуальный helper для будущей реализации — `backend/app/dataModel/validation/diagnostics/validatorAggregationHelper.py`, как отмечено Source. Исторический `app.core.validatorAggregationHelper` не является основанием создавать compatibility module.
 
-Итог: получены два адресных consumer/design PASS в указанной узкой границе. Это не пользовательская приёмка всей редакции и не закрытие C-PIN-1: полный crash input producer, storage/codec и runtime gates остаются открыты. Статус документа остаётся PROPOSED FOR JOINT REVIEW; код этим итогом не разрешается.
+Исторически получены два адресных consumer/design PASS в указанной узкой границе; последующее итоговое review выше требует изменений. Полный crash input producer, storage/codec и runtime gates остаются открыты. Статус исправленной редакции 2 — PROPOSED FOR JOINT REVIEW; код этим итогом не разрешается.
+
+## 8. Решения редакции 2 для повторного review
+
+1. PIN-GRANTS-1: предлагаются full alternative origins и ровно один grant на registration. Partial union исключён. Binding хранит один origin и ordered sources; это заодно сохраняет origin empty proof. Same request с другим origin конфликтует, включая последовательные обращения в одном outer writer. Нужна проверка Source/Pack и принятие owning выбора пользователем.
+2. PIN-BINDING-PURPOSE-1: durable запись предлагается сохранять как immutable admission provenance; post-commit runtime consumer отсутствует и не заявляется. READY/recovery её не используют. Согласовать ценность сохранения истории до storage реализации; промежуточный commit не добавлен.
+3. PIN-LEDGER-TESTS-1: добавлены exact no-op/conflict/collision/corruption/fence cases с no-mutation и caller/second-connection outcomes. Это test requirements, не выполненные tests. DDL/codec layout остаётся отдельным gate.
+
+Правки прохода только документальные. Code/SQL/runtime/Source implementation-план не менялись. G4/finalizer/DAG/crash input scope не расширялся. Findings считаются предъявленными к повторному review, а не закрытыми самим автором.
+
+### Повторный Pack review редакции 2
+
+2026-11-14: Pack подтвердил устранение противоречия full grant/per-ref union, сохранение origin для empty proof и полноту design matrix PIN-LEDGER-TESTS-1. Новых Pack-boundary findings нет; **общий PASS не выдан** до решения пользователя по §8.
+
+Последствие предлагаемого правила одного origin: одинаковый proof в валидных provenance rows разных manifests приводит к отказу всей preparation, если caller предъявляет для одного request разные pins. Автоматического dedup/выбора origin нет. Это новое ограничение допустимых входов, не только техническое исправление. Requested proof A+B поддержан этим срезом лишь при полном logical coverage и storage closure одного pinned manifest; общий mixed-origin Pack остаётся вне scope.
+
+Pack также подтвердил: durable history не нужна технически для retry/READY и не является его обязательным recovery требованием. Historical-only назначение названо честно, но ценность и стоимость её сохранения требуют пользовательского решения. Ни Pack, ни Snapshot не заменяют запись на transient вариант без пересмотра контракта. Статус остаётся PROPOSED; новый общий PASS и разрешение реализации отсутствуют.
+
+### Повторный Source review редакции 2
+
+2026-11-14, [Source report](source-review-pinned-origin-r1.md): full alternatives/exactly one grant совместимы с Source semantics при принятии этого ограничения. Подтверждены binding-level origin для empty proof и same request/different pin conflict. Документальный пробел пяти ledger test requirements закрыт; runtime не проверен. Назначение historical admission provenance раскрыто без выдуманного post-commit consumer; Source не принимает за пользователя решение о сохранении и стоимости. Оба повторных consumer review получены, но общий ACCEPTED отсутствует до решения по §8. Новый scope и код не разрешены.
+
+## 9. Пользовательское решение после повторных reviews
+
+2026-11-14 пользователь согласовал оба предъявленных выбора редакции 2:
+
+1. **Single-origin принято:** один полный grant на registration; один pinned manifest покрывает весь logical request и storage closure. Partial union/fallback отсутствуют. Same request/different origin конфликтует; ограничение распространяется и на одинаковый proof в разных manifests при предъявлении разных pins. Origin сохраняется и при empty proof.
+2. **Historical persistence принято:** durable binding сохраняется как immutable admission provenance в existing preparation ledger. После commit runtime consumer в этом срезе отсутствует; для retry/READY запись технически не нужна и recovery mechanism не является. Новый audit API, промежуточный commit и автономное восстановление input не вводятся.
+
+PIN-GRANTS-1 и PIN-BINDING-PURPOSE-1 получили owning пользовательское решение после повторных Source/Pack checks. Документальный PIN-LEDGER-TESTS-1 закрыт добавленной matrix и повторными reviews; выполнение этих тестов ещё предстоит. Не объявляется новый независимый общий review PASS.
+
+Остаются открытыми: concrete SQL layout/canonical registrations и их review, implementation prerequisites G1/G2/G3, реализация и runtime/typing/race tests, producer полного input для автономного crash recovery. Scope остаётся first-call/explicit retained-input retry. G4/finalizer/DAG не расширяются. Этот ответ пользователя фиксирует решения design; runtime-код в данном проходе не меняется, готовность implementation-плана должна быть проверена отдельно.
+
+## 10. Итоговое независимое review редакции 2
+
+2026-11-14 прочитан [акт независимой проверки](source-pinned-origin-final-review-2026-11-14.md), выполненной отдельным read-only агентом `pinned_final_review`. **PASS только first-call и explicit repeat полного исходного input после confirmed rollback**, новых actionable findings нет. Проверены обязательные критерии DAG/ownership/public-internal/порядок/CRUD/dependencies/POJO-errors и пользовательское решение §9.
+
+PIN-GRANTS-1 и PIN-BINDING-PURPOSE-1 закрыты на уровне design с учётом пользовательского принятия. PIN-LEDGER-TESTS-1 закрыт на уровне требований к tests; сами tests не выполнены. Ограничение single-origin относится к pinned issuer, generic Source adopt не сужается.
+
+PASS не закрывает SQL layout/canonical registrations, implementation prerequisites G1/G2/G3, runtime/typing/race tests, autonomous crash input producer или весь C-PIN-1. G4/finalizer/public DAG wiring не входят. Код этим актом не разрешён. В этом проходе изменён только owning документ; runtime tests не запускались.
