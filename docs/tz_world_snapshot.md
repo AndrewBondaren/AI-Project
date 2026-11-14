@@ -332,8 +332,17 @@ Snapshot из чужого payload: handler сверяет свои declared tar
 
 World/player Snapshot metadata включают назначенный ref, parent ref,
 operation_id, turn_id, created_at UTC, envelope_format_version,
-base_pack_hash (для world), section state/history refs и удерживаемые
-artifact refs. created_at назначается один раз публикацией, не входит
+base_pack_hash (для world), states: tuple[SectionStateRetention, ...] и
+history: tuple[SectionHistoryRetention, ...]. Каждый record связывает exact
+state/history ref с полным artifact closure. State записи наследуются из
+pinned parent и заменяются только по owner/section; parent history не копируется.
+Holders нового snapshot получают unique union всех его state/history artifacts;
+holders прежних snapshots не снимаются. Explicit partial handoff передаёт только
+указанные transferred refs; полный apply передаёт пересечение своего operation hold
+и результирующего closure. Leftover остаётся у operation. Legacy decoder и миграции
+не вводятся; существующие canonical IDs metadata/receipt/result и версии 1 сохраняются.
+Новые retention IDs: 20301/20302, SnapshotApplyCode/RelationIssue: 20306/20307.
+created_at назначается один раз публикацией, не входит
 в request binding. Parent — фактический expected head/точка ветвления.
 CreatedAtUtc — строгая UTC wire строка `YYYY-MM-DDTHH:mm:ss.ffffffZ`
 с календарной проверкой; это явное str-исключение timestamp, не enum.
@@ -352,7 +361,21 @@ WorldSnapshotService. PatchSet не содержит validate_only: этот р�
 
 `SnapshotApplyResult` — frozen record с category: SnapshotApplyOutcomeKind,
 operation_id: EntityUid, request_fingerprint: RevisionHex,
-committed: SnapshotCommitRefs | None, diagnostics: tuple[FieldPathError, ...].
+committed: SnapshotCommitRefs | None,
+diagnostics: tuple[FieldPathError | SnapshotApplyRelationIssue, ...].
+SnapshotApplyRelationIssue — strict/frozen record с обязательными code: SnapshotApplyCode,
+section_key: SectionKey | None, player_uid: EntityUid | None, artifact: ArtifactRef | None.
+SECTION_BINDING_MISMATCH/DEPENDENCY_MISMATCH требуют только section_key;
+PLAYER_EXPECTATION_MISMATCH — только player_uid; ARTIFACT_UNAVAILABLE — только artifact.
+OPERATION_BINDING_MISMATCH, UNSUPPORTED_REQUEST_FORMAT, WORLD_EXPECTATION_MISMATCH,
+GAMEPLAY_NOT_STARTED, ACTIVE_TIMELINE_MISMATCH, TURN_SEQUENCE_MISMATCH не имеют context fields.
+Field diagnostics сохраняют concrete owner/code; SectionRefused не меняется.
+Immutable binding mismatch передаётся внутренним OperationBindingMismatchError
+с typed requested/stored binding и превращается в REJECTED предъявленного запроса
+без записи terminal исходной операции. Остальные ValueError не классифицируются по тексту.
+Сохранённая OperationCancelled передаётся через SnapshotOperationCancelledError(outcome),
+после проверки доступного binding. Отсутствующий publication fingerprint у ранней отмены
+не дописывается. Это не asyncio.CancelledError и не unknown commit outcome.
 `SnapshotCommitRefs` содержит world_snapshot: WorldSnapshotRef,
 player_snapshots: tuple[PlayerSnapshotRef, ...], publication: WorldPublicationRef.
 Валидатор требует committed!=None и diagnostics=() только при COMMITTED;

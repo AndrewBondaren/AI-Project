@@ -342,13 +342,13 @@ class PublicationCasTests(unittest.TestCase):
             async with live_database() as bundle:
                 metadata = WorldSnapshotMetadata(ref=WorldSnapshotRef(world_uid="w1", timeline_id="t1", snapshot_id="new"),
                     parent=None, operation_id="validate", turn_id=1, created_at=STAMP, envelope_format_version=1,
-                    base_pack_hash="d" * 64, state_refs=(), history_refs=(), retained_artifacts=())
+                    base_pack_hash="d" * 64, states=(), history=())
                 invalid = (
                     metadata.model_copy(update={"turn_id": True}), metadata.model_copy(update={"turn_id": "1"}),
                     metadata.model_copy(update={"turn_id": 1.5}), metadata.model_copy(update={"base_pack_hash": "bad"}),
                     metadata.model_copy(update={"operation_id": " validate "}), metadata.model_copy(update={"created_at": "today"}),
                     metadata.model_copy(update={"ref": metadata.ref.model_copy(update={"snapshot_id": ""})}),
-                    metadata.model_copy(update={"envelope_format_version": 2}), metadata.model_copy(update={"state_refs": []}),
+                    metadata.model_copy(update={"envelope_format_version": 2}), metadata.model_copy(update={"states": []}),
                 )
                 async with bundle[1].transaction("validate") as scope:
                     with patch.object(bundle[4]._access, "insert", new_callable=AsyncMock) as write:

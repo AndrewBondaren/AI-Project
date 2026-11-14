@@ -14,9 +14,9 @@ from app.dataModel.worldSnapshot.metadata.metadataIssues import (
 
 from app.application.worldSnapshot.contracts.context import SnapshotApplyContext
 from app.application.worldSnapshot.validation.receiptProvenance import validate_receipt_provenance
-from app.dataModel.artifacts.references import ArtifactRef
 from app.dataModel.patch.changes.header import PatchRef
 from app.dataModel.patch.results.sectionResult import SectionApplyReceipt
+from app.dataModel.worldSnapshot.sections.retention import SectionHistoryRetention, SectionStateRetention
 from app.dataModel.worldSnapshot.sections.refs import SectionHistoryRef, SectionStateRef
 from app.dataModel.worldSnapshot.identity.refs import SnapshotRef, WorldSnapshotRef
 from app.dataModel.worldSnapshot.metadata.envelope import (
@@ -57,12 +57,24 @@ def _owner(ref: SnapshotRef) -> tuple[str, str]:
     return ref.kind, ref.world_uid if isinstance(ref, WorldSnapshotRef) else ref.player_uid
 
 
+def _indexed_refs[T: BaseModel](values: object, field: str, model: type[T]) -> tuple[tuple[int, T], ...]:
+    """Inspect independently valid refs even when their sibling artifact closure is malformed."""
+    result: list[tuple[int, T]] = []
+    if isinstance(values, tuple):
+        for index, value in enumerate(values):
+            raw = value.get(field) if isinstance(value, dict) else getattr(value, field, None)
+            try:
+                result.append((index, model.model_validate(raw, strict=True)))
+            except ValidationError:
+                continue  # Whole-receipt validation already reports the exact original path.
+    return tuple(result)
+
+
 class SnapshotMetadataBuilder:
     @staticmethod
     def build(context: SnapshotApplyContext, turn_id: int, created_at: CreatedAtUtc,
-              receipts: tuple[SectionApplyReceipt, ...], bases: Mapping[SnapshotRef, SnapshotEnvelope],
-              retained: Mapping[SnapshotRef, tuple[ArtifactRef, ...]]) -> tuple[SnapshotEnvelope, ...]:
-        """Retention destinations are explicit; a flat receipt does not identify a holder."""
+              receipts: tuple[SectionApplyReceipt, ...], bases: Mapping[SnapshotRef, SnapshotEnvelope]) -> tuple[SnapshotEnvelope, ...]:
+        """Inherit exact closures and replace only the assigned owner/section."""
         errors: ValidatorAggregationHelper[SnapshotBuilderIssue] = ValidatorAggregationHelper(
             (SnapshotMetadataFieldIssue, SnapshotMetadataRelationIssue))
 
@@ -120,26 +132,6 @@ class SnapshotMetadataBuilder:
         for ref in bases:
             if ref not in pinned:
                 report(("bases", ref.snapshot_id), Code.UNEXPECTED_BASE, "base is not pinned")
-        artifacts: list[ArtifactRef] = []
-        for ref, values in retained.items():
-            if ref not in parents:
-                report(("retained", ref.snapshot_id), Code.FOREIGN_DESTINATION, "artifact destination is not assigned")
-            if not isinstance(values, tuple):
-                report(("retained", ref.snapshot_id), Code.INVALID_RETENTION, "retention must be a tuple")
-                continue
-            seen = set()
-            for j, artifact in enumerate(values):
-                try:
-                    artifact = ArtifactRef.model_validate(artifact, strict=True)
-                except ValidationError as error:
-                    for issue in error.errors():
-                        malformed("retained", (ref.snapshot_id, j), ArtifactRef, issue["loc"], Code.INVALID_ARTIFACT, issue["msg"])
-                    continue
-                if artifact in seen:
-                    report(("retained", ref.snapshot_id, j), Code.DUPLICATE_ARTIFACT, "duplicate retained artifact")
-                seen.add(artifact)
-                if ref in parents:
-                    artifacts.append(artifact)
         if not isinstance(receipts, tuple):
             report(("receipts",), Code.INVALID_RECEIPTS, "receipts must be a tuple")
         validated: list[SectionApplyReceipt] = []
@@ -173,24 +165,23 @@ class SnapshotMetadataBuilder:
                 op_name, op = metadata_field(patch, lambda p: p.operation_id)
                 if op != context.validation.operation_id:
                     report((*path, changed_name, j, op_name), Code.FOREIGN_OPERATION, "patch belongs to another operation")
-            name, refs = metadata_field(receipt, lambda r: r.retained_artifacts)
-            for j, artifact in _indexed_items(refs, ArtifactRef, validated=valid):
-                if artifact not in artifacts:
-                    report((*path, name, j), Code.UNASSIGNED_ARTIFACT, "receipt artifact has no metadata destination")
-            history_name, histories = metadata_field(receipt, lambda r: r.history_refs)
-            for j, entry in _indexed_items(histories, SectionHistoryRef, validated=valid):
+            history_name, histories = metadata_field(receipt, lambda r: r.history)
+            history_field = bind_field(FieldRef(lambda: SectionHistoryRetention, lambda r: r.history)).field
+            for j, entry in _indexed_refs(histories, history_field, SectionHistoryRef):
                 field, snapshot = metadata_field(entry, lambda r: r.snapshot)
                 if snapshot not in parents:
-                    report((*path, history_name, j, field), Code.FOREIGN_HISTORY, "history must target an assigned snapshot")
-            state_name, states = metadata_field(receipt, lambda r: r.state_refs)
-            indexed_states = _indexed_items(states, SectionStateRef, validated=valid)
+                    report((*path, history_name, j, history_field, field), Code.FOREIGN_HISTORY, "history must target an assigned snapshot")
+            state_name, states = metadata_field(receipt, lambda r: r.states)
+            state_field = bind_field(FieldRef(lambda: SectionStateRetention, lambda r: r.state)).field
+            closures = dict(_indexed_items(states, SectionStateRetention, validated=valid))
+            indexed_states = _indexed_refs(states, state_field, SectionStateRef)
             replacements = {(_owner(entry.snapshot), entry.section_key) for _, entry in indexed_states
                             if entry.snapshot in parents}
             for j, state_ref in indexed_states:
                 field, snapshot = metadata_field(state_ref, lambda r: r.snapshot)
                 if snapshot in parents:
                     if "changed" not in invalid_fields and not receipt.changed:
-                        report((*path, state_name, j, field), Code.NOOP_STATE, "no-op receipt cannot replace state")
+                        report((*path, state_name, j, state_field, field), Code.NOOP_STATE, "no-op receipt cannot replace state")
                 else:
                     if isinstance(snapshot, WorldSnapshotRef):
                         owner_present = snapshot.world_uid == context.world_snapshot.world_uid
@@ -202,8 +193,10 @@ class SnapshotMetadataBuilder:
                         report((*path, state_name, j), Code.SUPERSEDED_STATE, "receipt also replaces this inherited state")
                     if owner_present and parent is not None and (parent not in bases or bases[parent].ref != parent):
                         continue  # Reachability depends on the pinned base.
-                    if not owner_present or parent is None or state_ref not in bases[parent].state_refs:
-                        report((*path, state_name, j, field), Code.UNREACHABLE_STATE, "state is not reachable from pinned base")
+                    if (not owner_present or parent is None
+                            or not any(entry.state == state_ref for entry in bases[parent].states)
+                            or (j in closures and closures[j] not in bases[parent].states)):
+                        report((*path, state_name, j, state_field, field), Code.UNREACHABLE_STATE, "state closure is not reachable from pinned base")
         field, pack = metadata_field(context.next_publication, lambda p: p.pack_hash)
         if pack is None:
             report(("context", "next_publication", field), Code.MISSING_PACK, "runtime metadata requires a pack")
@@ -213,20 +206,19 @@ class SnapshotMetadataBuilder:
         envelopes: list[SnapshotEnvelope] = []
         for ref, parent in parents.items():
             base = bases[parent] if parent is not None else None
-            state = {entry.section_key: entry for entry in base.state_refs} if base else {}
-            state.update((entry.section_key, entry) for receipt in receipts for entry in receipt.state_refs
-                         if entry.snapshot == ref)
-            history = tuple(entry for receipt in receipts for entry in receipt.history_refs if entry.snapshot == ref)
+            state = {entry.state.section_key: entry for entry in base.states} if base else {}
+            state.update((entry.state.section_key, entry) for receipt in receipts for entry in receipt.states
+                         if entry.state.snapshot == ref)
+            history = tuple(entry for receipt in receipts for entry in receipt.history if entry.history.snapshot == ref)
             if isinstance(ref, WorldSnapshotRef):
                 metadata: SnapshotEnvelope = WorldSnapshotMetadata(ref=ref, parent=expected.snapshot_head,
                     operation_id=context.validation.operation_id, turn_id=turn_id, created_at=created_at,
                     envelope_format_version=1, base_pack_hash=pack,
-                    state_refs=tuple(state.values()), history_refs=history, retained_artifacts=retained.get(ref, ()))
+                    states=tuple(state.values()), history=history)
             else:
                 metadata = PlayerSnapshotMetadata(ref=ref, parent=players[ref.player_uid],
                     operation_id=context.validation.operation_id, turn_id=turn_id, created_at=created_at,
-                    envelope_format_version=1, state_refs=tuple(state.values()), history_refs=history,
-                    retained_artifacts=retained.get(ref, ()))
+                    envelope_format_version=1, states=tuple(state.values()), history=history)
             validate_receipt_provenance(metadata, receipts, base, context.validation.operation_id)
             envelopes.append(metadata)
         return tuple(envelopes)

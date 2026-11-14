@@ -23,6 +23,9 @@ from app.dataModel.validation.diagnostics.runtimeIssueContext import RuntimeIssu
 from app.dataModel.spatial.facing import Facing
 
 
+from app.dataModel.worldSnapshot.results.applyIssues import SnapshotApplyCode, SnapshotApplyRelationIssue
+
+
 ARTIFACT_CORE_SCHEMA = CanonicalSchemaManifest(entries=tuple(
     RegisteredTypeEntry(type_id=identity, python_type=owner, kind=kind)
     for identity, owner, kind in (
@@ -60,6 +63,8 @@ ARTIFACT_CORE_SCHEMA = CanonicalSchemaManifest(entries=tuple(
         (20113, VerifiedArtifactRef, CanonicalTypeKind.RECORD),
         (20123, SnapshotCommitRefs, CanonicalTypeKind.RECORD),
         (20124, SnapshotApplyResult, CanonicalTypeKind.RECORD),
+        (20306, SnapshotApplyCode, CanonicalTypeKind.ENUM),
+        (20307, SnapshotApplyRelationIssue, CanonicalTypeKind.RECORD),
         (20125, PackActivationResult, CanonicalTypeKind.RECORD),
         (20126, GameplayStarted, CanonicalTypeKind.RECORD),
         (20127, OperationCancelled, CanonicalTypeKind.RECORD),

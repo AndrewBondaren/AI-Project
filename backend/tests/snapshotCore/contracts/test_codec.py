@@ -57,7 +57,7 @@ class CanonicalRequestCodecTests(unittest.TestCase):
         self.request = self.empty.model_copy(update={"sections": (self.section,)})
         self.snapshot = WorldSnapshotMetadata(ref=WorldSnapshotRef(world_uid="w", timeline_id="t", snapshot_id="s"),
             parent=None, operation_id="o", turn_id=1, created_at="2026-10-30T00:00:00.000000Z",
-            envelope_format_version=1, base_pack_hash="a" * 64, state_refs=(), history_refs=(), retained_artifacts=())
+            envelope_format_version=1, base_pack_hash="a" * 64, states=(), history=())
 
     def test_cancelled_terminal_uses_production_codec(self):
         from app.dataModel.artifacts.lifecycle.operation.record import OperationCancellationReason, OperationCancelled
@@ -95,7 +95,7 @@ class CanonicalRequestCodecTests(unittest.TestCase):
 
     def test_core_manifests_have_exact_reserved_ids_and_shared_dependencies(self):
         by_id = {entry.type_id: entry for entry in SNAPSHOT_CORE_SCHEMA.entries}
-        self.assertEqual(set(by_id), {110, *range(20001, 20021), *range(20101, 20142)})
+        self.assertEqual(set(by_id), {110, *range(20001, 20021), *range(20101, 20142), 20301, 20302, 20306, 20307})
         self.assertIs(by_id[20101].python_type, WorldSnapshotRef)
         self.assertIs(by_id[20133].python_type, WorldSnapshotMetadata)
         self.assertIs(by_id[20139].python_type, RuntimeIssueContext)
@@ -103,7 +103,7 @@ class CanonicalRequestCodecTests(unittest.TestCase):
         self.assertNotIn(PatchSet, {entry.python_type for entry in SNAPSHOT_CORE_SCHEMA.entries})
         self.assertNotIn(FakeSection, {entry.python_type for entry in SNAPSHOT_CORE_SCHEMA.entries})
         combined = merge_manifests(ARTIFACT_CORE_SCHEMA, PATCH_CORE_SCHEMA, SNAPSHOT_CORE_SCHEMA)
-        self.assertEqual(len(combined.entries), 62)
+        self.assertEqual(len(combined.entries), 66)
         self.assertEqual(encode(self.snapshot, combined), encode(self.snapshot, SNAPSHOT_CORE_SCHEMA))
         # Manifest iteration order and Python names are not wire identities.
         reversed_schema = CanonicalSchemaManifest(entries=tuple(reversed(SNAPSHOT_CORE_SCHEMA.entries)))
@@ -139,28 +139,28 @@ class CanonicalRequestCodecTests(unittest.TestCase):
         self.assertEqual(content_digest(actual).hex(), "65ef2ac1fa4319a3a31ae95515c911ec7998333513c7cd7ecaac1508a4086e1a")
         actual = SnapshotEnvelopeCodec().encode(self.snapshot)
         self.assertEqual(actual, bytes.fromhex(
-            "0700000000000002d20800000000000002c9020000000000000003004ea50800000000000002b40800000000000000e80400"
-            "000000000000037265660700000000000000d30800000000000000ca020000000000000003004e850800000000000000b508"
-            "00000000000000390400000000000000046b696e6406000000000000002308000000000000001a020000000000000003004e"
-            "21040000000000000005776f726c6408000000000000001c040000000000000009776f726c645f7569640400000000000000"
-            "017708000000000000001e04000000000000000b74696d656c696e655f69640400000000000000017408000000000000001e"
-            "04000000000000000b736e617073686f745f6964040000000000000001730800000000000000180400000000000000067061"
-            "72656e7400000000000000000008000000000000001f04000000000000000c6f7065726174696f6e5f696404000000000000"
-            "00016f08000000000000001b0400000000000000077475726e5f696402000000000000000200010800000000000000370400"
-            "0000000000000a637265617465645f617404000000000000001b323032362d31302d33305430303a30303a30302e30303030"
-            "30305a08000000000000002b040000000000000017656e76656c6f70655f666f726d61745f76657273696f6e020000000000"
-            "000002000108000000000000006004000000000000000e626173655f7061636b5f6861736804000000000000004061616161"
-            "6161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161"
-            "6161616161616161616108000000000000001c04000000000000000a73746174655f72656673080000000000000000080000"
-            "00000000001e04000000000000000c686973746f72795f726566730800000000000000000800000000000000240400000000"
-            "0000001272657461696e65645f617274696661637473080000000000000000"
+            "07000000000000029c080000000000000293020000000000000003004ea508000000000000027e0800000000000000e8"
+            "0400000000000000037265660700000000000000d30800000000000000ca020000000000000003004e85080000000000"
+            "0000b50800000000000000390400000000000000046b696e6406000000000000002308000000000000001a0200000000"
+            "00000003004e21040000000000000005776f726c6408000000000000001c040000000000000009776f726c645f756964"
+            "0400000000000000017708000000000000001e04000000000000000b74696d656c696e655f6964040000000000000001"
+            "7408000000000000001e04000000000000000b736e617073686f745f6964040000000000000001730800000000000000"
+            "18040000000000000006706172656e7400000000000000000008000000000000001f04000000000000000c6f70657261"
+            "74696f6e5f69640400000000000000016f08000000000000001b0400000000000000077475726e5f6964020000000000"
+            "000002000108000000000000003704000000000000000a637265617465645f617404000000000000001b323032362d31"
+            "302d33305430303a30303a30302e3030303030305a08000000000000002b040000000000000017656e76656c6f70655f"
+            "666f726d61745f76657273696f6e020000000000000002000108000000000000006004000000000000000e626173655f"
+            "7061636b5f68617368040000000000000040616161616161616161616161616161616161616161616161616161616161"
+            "616161616161616161616161616161616161616161616161616161616161616161610800000000000000180400000000"
+            "00000006737461746573080000000000000000080000000000000019040000000000000007686973746f727908000000"
+            "0000000000"
         ))
-        self.assertEqual(content_digest(actual).hex(), "7e37a16d6e7e8d2db7fe5effe448982184b0288421a7e8039fead2fa71dcf7b1")
+        self.assertEqual(content_digest(actual).hex(), "baa620d1695c57c10164065057b380ab21704c885b0a8af935ff89af4a19b2ca")
         self.assertEqual(self.codec.decode(self.codec.encode(self.empty)), self.empty)
         snapshot_codec = SnapshotEnvelopeCodec()
         for envelope in (self.snapshot, PlayerSnapshotMetadata(
             ref=PlayerSnapshotRef(player_uid="player", snapshot_id="ps"), parent=None, operation_id="o", turn_id=1,
-            created_at=self.snapshot.created_at, envelope_format_version=1, state_refs=(), history_refs=(), retained_artifacts=())):
+            created_at=self.snapshot.created_at, envelope_format_version=1, states=(), history=())):
             encoded = snapshot_codec.encode(envelope)
             self.assertEqual(snapshot_codec.decode(encoded), envelope)
             self.assertEqual(snapshot_codec.encode(snapshot_codec.decode(encoded)), encoded)

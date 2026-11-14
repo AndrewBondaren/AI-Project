@@ -9,6 +9,7 @@ from app.dataModel.validation.diagnostics.runtimeIssueContext import RevisionHex
 from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
 from app.dataModel.worldSnapshot.identity.refs import PlayerSnapshotRef, WorldSnapshotRef
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
+from app.dataModel.worldSnapshot.results.applyIssues import SnapshotApplyRelationIssue
 
 
 class SnapshotCommitRefs(BaseModel):
@@ -35,7 +36,7 @@ class SnapshotApplyResult(BaseModel):
     operation_id: EntityUid
     request_fingerprint: RevisionHex
     committed: SnapshotCommitRefs | None
-    diagnostics: tuple[FieldPathError, ...]
+    diagnostics: tuple[FieldPathError | SnapshotApplyRelationIssue, ...]
 
     @model_validator(mode="after")
     def coherent_outcome(self) -> Self:

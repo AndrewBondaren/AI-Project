@@ -13,6 +13,8 @@ from app.dataModel.registryKey import RegistryKey
 from app.dataModel.validation.diagnostics.runtimeIssueContext import RevisionHex
 from app.dataModel.worldSnapshot.identity.publication import PlayerHeadExpectation, WorldPublicationRef
 from app.dataModel.worldSnapshot.identity.refs import PlayerSnapshotRef, SnapshotRef, WorldSnapshotRef
+from app.dataModel.worldSnapshot.sections.retention import SectionStateRetention, SectionHistoryRetention
+from app.dataModel.worldSnapshot.results.applyIssues import SnapshotApplyCode, SnapshotApplyRelationIssue
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
 from app.dataModel.worldSnapshot.sections.refs import SectionHistoryRef, SectionStateRef
 from app.dataModel.patch.changes.header import PatchHeader
@@ -100,16 +102,22 @@ def committed_result(refs: SnapshotCommitRefs, digest: RevisionHex) -> SnapshotA
                                request_fingerprint=digest, committed=refs, diagnostics=())
 
 
+def relation_diagnostics() -> SnapshotApplyRelationIssue:
+    return SnapshotApplyRelationIssue(code=SnapshotApplyCode.GAMEPLAY_NOT_STARTED,
+                                      section_key=None, player_uid=None, artifact=None)
+
+
 def immutable_envelopes(world: WorldSnapshotRef, player: PlayerSnapshotRef,
                         state: SectionStateRef, history_ref: SectionHistoryRef,
                         digest: RevisionHex) -> tuple[WorldSnapshotMetadata, PlayerSnapshotMetadata]:
     return (
         WorldSnapshotMetadata(ref=world, parent=None, operation_id="op", turn_id=1,
             created_at="2026-10-30T00:00:00.000000Z", envelope_format_version=1, base_pack_hash=digest,
-            state_refs=(state,), history_refs=(history_ref,), retained_artifacts=()),
+            states=(SectionStateRetention(state=state, artifacts=()),),
+            history=(SectionHistoryRetention(history=history_ref, artifacts=()),)),
         PlayerSnapshotMetadata(ref=player, parent=None, operation_id="op", turn_id=1,
             created_at="2026-10-30T00:00:00.000000Z", envelope_format_version=1,
-            state_refs=(), history_refs=(), retained_artifacts=()),
+            states=(), history=()),
     )
 
 

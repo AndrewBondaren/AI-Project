@@ -107,9 +107,15 @@ def different_lifecycle_types(world: WorldSnapshotRef, player: PlayerSnapshotRef
     SnapshotHolder(snapshot=publication)  # EXPECT: reportArgumentType
     SnapshotApplyResult(category="committed", operation_id="op", request_fingerprint="a" * 64, committed=commit, diagnostics=())  # EXPECT: reportArgumentType
     SnapshotLogRecord(activity=SnapshotLogActivity.APPLY_STARTED, operation_id="op", world_uid="world", request_fingerprint=None, timeline_id=None, snapshot_id=None, section_key=None, outcome=OperationPhase.TERMINAL)  # EXPECT: reportArgumentType
-    WorldSnapshotMetadata(ref=player, parent=None, operation_id="op", turn_id=1, created_at="2026-10-30T00:00:00.000000Z", envelope_format_version=1, base_pack_hash="a" * 64, state_refs=(), history_refs=(), retained_artifacts=())  # EXPECT: reportArgumentType
-    PlayerSnapshotMetadata(ref=player, parent=world, operation_id="op", turn_id=1, created_at="2026-10-30T00:00:00.000000Z", envelope_format_version=1, state_refs=(), history_refs=(), retained_artifacts=())  # EXPECT: reportArgumentType
-    WorldSnapshotMetadata(ref=world, parent=None, operation_id="op", turn_id=1, created_at="2026-10-30T00:00:00.000000Z", envelope_format_version=1, base_pack_hash="a" * 64, state_refs=(), history_refs=(state,), retained_artifacts=())  # EXPECT: reportArgumentType
+    WorldSnapshotMetadata(ref=player, parent=None, operation_id="op", turn_id=1, created_at="2026-10-30T00:00:00.000000Z", envelope_format_version=1, base_pack_hash="a" * 64, states=(), history=())  # EXPECT: reportArgumentType
+    PlayerSnapshotMetadata(ref=player, parent=world, operation_id="op", turn_id=1, created_at="2026-10-30T00:00:00.000000Z", envelope_format_version=1, states=(), history=())  # EXPECT: reportArgumentType
+    WorldSnapshotMetadata(ref=world, parent=None, operation_id="op", turn_id=1, created_at="2026-10-30T00:00:00.000000Z", envelope_format_version=1, base_pack_hash="a" * 64, states=(), history=(state,))  # EXPECT: reportArgumentType
+    from app.dataModel.worldSnapshot.sections.retention import SectionStateRetention, SectionHistoryRetention
+    from app.dataModel.worldSnapshot.results.applyIssues import SnapshotApplyCode, SnapshotApplyRelationIssue
+    SectionHistoryRetention(history=state, artifacts=())  # EXPECT: reportArgumentType
+    SectionStateRetention(state=world, artifacts=())  # EXPECT: reportArgumentType
+    SnapshotApplyRelationIssue(code="gameplay_not_started", section_key=None, player_uid=None, artifact=None)  # EXPECT: reportArgumentType
+    SnapshotApplyRelationIssue(code=SnapshotApplyCode.GAMEPLAY_NOT_STARTED, section_key=None, player_uid=None, artifact=world)  # EXPECT: reportArgumentType
 
 from app.application.patch.contracts.sectionHandler import DomainSectionHandler, SectionContract
 from app.application.patch.registry.sectionRegistry import SectionRegistry

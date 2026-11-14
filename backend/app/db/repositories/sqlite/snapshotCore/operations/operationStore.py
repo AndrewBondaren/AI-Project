@@ -2,7 +2,8 @@
 
 from pydantic import TypeAdapter
 
-from app.application.publication.errors import PublicationInfrastructureError
+from app.application.publication.errors import PublicationInfrastructureError, OperationBindingMismatchError
+from app.dataModel.publication.operationBindingMismatch import OperationBindingMismatch
 from app.application.worldSnapshot.contracts.commitScope import CommitScope, CommitReadScope
 from app.dataModel.artifacts.lifecycle.lease import OperationLeaseRef
 from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind, OperationPhase
@@ -116,7 +117,13 @@ class SqliteOperationStore:
             else:
                 if (record.world_uid != world_uid or record.kind is not kind or record.preparation_fingerprint != preparation_fingerprint
                         or (record.publication_fingerprint is not None and record.publication_fingerprint != request_fingerprint)):
-                    raise ValueError("operation identity reused with another immutable binding")
+                    raise OperationBindingMismatchError(OperationBindingMismatch(
+                        operation_id=operation_id, requested_kind=kind, requested_world_uid=world_uid,
+                        requested_preparation_fingerprint=preparation_fingerprint,
+                        requested_request_fingerprint=request_fingerprint, stored_kind=record.kind,
+                        stored_world_uid=record.world_uid,
+                        stored_preparation_fingerprint=record.preparation_fingerprint,
+                        stored_request_fingerprint=record.publication_fingerprint))
                 if record.phase is OperationPhase.TERMINAL:
                     return PublicationTerminal(record=record)
                 if record.phase is not OperationPhase.READY:

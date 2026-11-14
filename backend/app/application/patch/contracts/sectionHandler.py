@@ -53,6 +53,9 @@ class SectionContract[S: DomainSection]:
 
 
 class DomainSectionHandler[S: DomainSection](ABC):
+    # SNAPSHOT-V1-BOUNDARY: deferred external contracts remain v1; this is not
+    # a v1 adapter. Admit native section contracts only, without legacy conversion.
+    # Scope: .cursor/plans/snapshot-public-contracts-dag-integration.md, section 7.
     @property
     @abstractmethod
     def contract(self) -> SectionContract[S]: ...
@@ -73,4 +76,6 @@ class DomainSectionHandler[S: DomainSection](ABC):
     @abstractmethod
     def decode(self, payload: bytes, version: FormatVersion) -> S:
         """Validate canonical bytes before any supported read-upgrade."""
+        # The Snapshot integration slice does not authorize read-upgrades for
+        # deferred v1 domains: no dual-read, fallback or compatibility adapter.
         ...

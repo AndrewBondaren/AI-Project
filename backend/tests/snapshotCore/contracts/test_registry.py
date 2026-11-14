@@ -284,14 +284,17 @@ class SectionRegistryTests(unittest.TestCase):
                             self.assertNotIn(".service.", name, source)
 
     def test_metadata_builder_merges_pinned_state_and_partitions_tick_receipts(self):
-        from app.application.worldSnapshot.service.snapshotMetadataBuilder import SnapshotMetadataBuilder
+        from app.application.worldSnapshot.service.snapshotMetadataBuilder import SnapshotMetadataBuilder, SnapshotMetadataFailure
+        from app.application.worldSnapshot.validation.retentionClosure import retention_closure
         from app.dataModel.patch.results.sectionResult import SectionApplyReceipt
         from app.dataModel.worldSnapshot.identity.publication import PlayerHeadExpectation
         from app.dataModel.worldSnapshot.identity.refs import PlayerSnapshotRef
         from app.dataModel.worldSnapshot.metadata.envelope import WorldSnapshotMetadata
         from app.dataModel.worldSnapshot.sections.refs import SectionHistoryRef, SectionStateRef
+        from app.dataModel.worldSnapshot.sections.retention import SectionStateRetention, SectionHistoryRetention
         from tests.snapshotCore.support.artifactFixtures import descriptor
         from tests.snapshotCore.support.fixtures import STAMP
+        from unittest.mock import patch
 
         parent = WorldSnapshotRef(world_uid="world", timeline_id="timeline", snapshot_id="old")
         world = parent.model_copy(update={"snapshot_id": "tick"})
@@ -301,51 +304,33 @@ class SectionRegistryTests(unittest.TestCase):
         validation = replace(self.context, expected_world=expected,
             expected_players=(PlayerHeadExpectation(player_uid="p1", expected_head=None),))
         ctx = SnapshotApplyContext(validation, world, (player,), self.scope, target)
-        old = SectionStateRef(snapshot=parent, section_key=self.key, format_version=1)
-        unchanged = old.model_copy(update={"section_key": RegistryKey[PatchSectionRegistry]("unchanged")})
+        a, b, shared, historic = (descriptor(name) for name in ("a", "b", "shared", "historic"))
+        old = SectionStateRetention(state=SectionStateRef(snapshot=parent, section_key=self.key, format_version=1),
+                                    artifacts=(a, shared))
+        unchanged = SectionStateRetention(state=old.state.model_copy(update={"section_key": "unchanged"}),
+                                          artifacts=(b, shared))
         base = WorldSnapshotMetadata(ref=parent, parent=None, operation_id="prior", turn_id=1,
-            created_at=STAMP, envelope_format_version=1, base_pack_hash="a"*64, state_refs=(old, unchanged),
-            history_refs=(), retained_artifacts=())
-        state = old.model_copy(update={"snapshot": world})
-        event = SectionHistoryRef(snapshot=player, section_key=self.key, format_version=1)
-        artifact = descriptor()
+            created_at=STAMP, envelope_format_version=1, base_pack_hash="a"*64, states=(old, unchanged),
+            history=(SectionHistoryRetention(history=SectionHistoryRef(snapshot=parent, section_key=self.key,
+                      format_version=1), artifacts=(historic,)),))
+        state = SectionStateRetention(state=old.state.model_copy(update={"snapshot": world}), artifacts=(shared,))
+        event = SectionHistoryRetention(history=SectionHistoryRef(snapshot=player, section_key=self.key,
+                                        format_version=1), artifacts=(a,))
         receipt = SectionApplyReceipt(section_key=self.key, changed=(self.section.patches[0].header.ref,),
-            state_refs=(state,), history_refs=(event,), retained_artifacts=(artifact,))
-        def build(receipts, retained, bases):
-            return SnapshotMetadataBuilder.build(ctx, 2, STAMP, receipts, bases, retained)
+                                      states=(state,), history=(event,))
 
-        w, p = build((receipt,), {player: (artifact,)}, {parent: base})
-        self.assertEqual((w.ref, w.parent, w.state_refs, w.history_refs, w.retained_artifacts),
-                         (world, parent, (state, unchanged), (), ()))
-        self.assertEqual((p.ref, p.parent, p.state_refs, p.history_refs, p.retained_artifacts),
-                         (player, None, (), (event,), (artifact,)))
-        noop, _ = build((), {}, {parent: base})
-        self.assertEqual(noop.state_refs, base.state_refs)
-        for bad in (receipt.model_copy(update={"changed": ()}),
-                    receipt.model_copy(update={"history_refs": (event.model_copy(update={"snapshot": parent}),)}),
-                    receipt.model_copy(update={"state_refs": (state.model_copy(update={"snapshot":
-                        parent.model_copy(update={"snapshot_id": "unreachable"})}),)})):
-            with self.assertRaises(ValueError):
-                build((bad,), {player: (artifact,)}, {parent: base})
-        with self.assertRaises(ValueError):
-            build((receipt,), {}, {parent: base})
-        with self.assertRaises(ValueError):
-            build((), {}, {})
+        def build(receipts, bases):
+            return SnapshotMetadataBuilder.build(ctx, 2, STAMP, receipts, bases)
 
-        from unittest.mock import patch
-        from app.application.worldSnapshot.service.snapshotMetadataBuilder import SnapshotMetadataFailure
-
-        bad = receipt.model_copy(update={"changed": (), "history_refs": (event.model_copy(update={"snapshot": parent}),)})
-        with patch("app.application.worldSnapshot.service.snapshotMetadataBuilder.validate_receipt_provenance") as next_stage:
-            with self.assertRaises(SnapshotMetadataFailure) as caught:
-                build((bad,), {}, {})
-            next_stage.assert_not_called()
-        self.assertEqual([(issue.code, issue.diagnostic_path) for issue in caught.exception.diagnostics], [
-            ("snapshot.metadata.missing_base", ("bases", "old")),
-            ("snapshot.metadata.unassigned_artifact", ("receipts", 0, "retained_artifacts", 0)),
-            ("snapshot.metadata.foreign_history", ("receipts", 0, "history_refs", 0, "snapshot")),
-            ("snapshot.metadata.noop_state", ("receipts", 0, "state_refs", 0, "snapshot")),
-        ])
+        w, p = build((receipt,), {parent: base})
+        self.assertEqual((w.ref, w.parent, w.states, w.history), (world, parent, (state, unchanged), ()))
+        self.assertEqual((p.ref, p.parent, p.states, p.history), (player, None, (), (event,)))
+        self.assertEqual(retention_closure(w), (shared, b))
+        self.assertEqual(retention_closure(p), (a,))
+        noop, _ = build((), {parent: base})
+        self.assertEqual(noop.states, base.states)
+        self.assertEqual(noop.history, ())
+        self.assertEqual(retention_closure(noop), (a, shared, b))
 
         def diagnostics(call):
             with self.assertRaises(SnapshotMetadataFailure) as failure:
@@ -353,41 +338,47 @@ class SectionRegistryTests(unittest.TestCase):
             return [(issue.code.removeprefix("snapshot.metadata."), issue.diagnostic_path)
                     for issue in failure.exception.diagnostics]
 
-        self.assertEqual(diagnostics(lambda: build((), {world: (artifact, artifact), player: (artifact, artifact)},
-                                                   {parent: base})),
-                         [("duplicate_artifact", ("retained", "tick", 1)),
-                          ("duplicate_artifact", ("retained", "player", 1))])
+        inherited = receipt.model_copy(update={"changed": (), "states": (old,)})
+        self.assertEqual(build((inherited,), {parent: base})[0].states, base.states)
+        for artifacts in ((), (a,), (a, shared, b)):
+            invalid = inherited.model_copy(update={"states": (old.model_copy(update={"artifacts": artifacts}),)})
+            self.assertEqual(diagnostics(lambda: build((invalid,), {parent: base})),
+                             [("unreachable_state", ("receipts", 0, "states", 0, "state", "snapshot"))])
+        foreign = event.model_copy(update={"history": event.history.model_copy(update={"snapshot": parent})})
+        bad = receipt.model_copy(update={"changed": (), "history": (foreign,)})
+        with patch("app.application.worldSnapshot.service.snapshotMetadataBuilder.validate_receipt_provenance") as next_stage:
+            self.assertEqual(diagnostics(lambda: build((bad,), {})), [
+                ("missing_base", ("bases", "old")),
+                ("foreign_history", ("receipts", 0, "history", 0, "history", "snapshot")),
+                ("noop_state", ("receipts", 0, "states", 0, "state", "snapshot"))])
+            next_stage.assert_not_called()
         for assigned, codes in (((), ["missing_player"]),
                                 ((player.model_copy(update={"player_uid": "guest"}),), ["unexpected_player", "missing_player"])):
             direct = replace(ctx, player_snapshots=assigned)
             self.assertEqual([code for code, _ in diagnostics(
-                lambda: SnapshotMetadataBuilder.build(direct, 2, STAMP, (), {parent: base}, {}))], codes)
-
+                lambda: SnapshotMetadataBuilder.build(direct, 2, STAMP, (), {parent: base}))], codes)
         self_parent = replace(ctx, validation=replace(validation, expected_world=expected.model_copy(
             update={"snapshot_head": world})))
         self.assertEqual(diagnostics(lambda: SnapshotMetadataBuilder.build(self_parent, 2, STAMP, (),
-            {world: base.model_copy(update={"ref": world})}, {})), [("self_parent", ("parents", "tick"))])
-        previous = parent.model_copy(update={"timeline_id": "previous"})
-        inherited = old.model_copy(update={"snapshot": previous})
-        mixed = receipt.model_copy(update={"state_refs": (inherited, state)})
-        self.assertEqual(diagnostics(lambda: build((mixed,), {player: (artifact,)},
-            {parent: base.model_copy(update={"state_refs": (inherited,)})})),
-            [("superseded_state", ("receipts", 0, "state_refs", 0))])
-        self.assertEqual(diagnostics(lambda: build((mixed,), {player: (artifact,)}, {})),
-                         [("missing_base", ("bases", "old")),
-                          ("superseded_state", ("receipts", 0, "state_refs", 0))])
+            {world: base.model_copy(update={"ref": world})})), [("self_parent", ("parents", "tick"))])
+
+        mixed = receipt.model_copy(update={"states": (old, state)})
+        self.assertEqual(diagnostics(lambda: build((mixed,), {parent: base})),
+                         [("invalid_receipt", ("receipts", 0)), ("superseded_state", ("receipts", 0, "states", 0))])
+        self.assertEqual(diagnostics(lambda: build((mixed,), {})),
+                         [("missing_base", ("bases", "old")), ("invalid_receipt", ("receipts", 0)),
+                          ("superseded_state", ("receipts", 0, "states", 0))])
         empty_heads = replace(ctx, validation=replace(validation,
             expected_world=expected.model_copy(update={"snapshot_head": None})))
-        cross_owner = receipt.model_copy(update={"state_refs": (inherited, state.model_copy(update={"snapshot": player}))})
-        self.assertEqual(diagnostics(lambda: SnapshotMetadataBuilder.build(
-            empty_heads, 2, STAMP, (cross_owner,), {}, {player: (artifact,)})),
-            [("unreachable_state", ("receipts", 0, "state_refs", 0, "snapshot"))])
-        partial = receipt.model_copy(update={"history_refs": (None, event.model_copy(update={"snapshot": parent}))})
-        self.assertEqual(diagnostics(lambda: build((partial,), {player: (artifact,)}, {parent: base})),
-                         [("invalid_receipt", ("receipts", 0, "history_refs", 0)),
-                          ("foreign_history", ("receipts", 0, "history_refs", 1, "snapshot"))])
-        corrupt = receipt.model_copy(update={"retained_artifacts": (None,),
-            "history_refs": (event.model_copy(update={"snapshot": parent}),)})
-        self.assertEqual(diagnostics(lambda: build((corrupt,), {}, {parent: base})),
-                         [("invalid_receipt", ("receipts", 0, "retained_artifacts", 0)),
-                          ("foreign_history", ("receipts", 0, "history_refs", 0, "snapshot"))])
+        cross_owner = receipt.model_copy(update={"states": (old,
+            state.model_copy(update={"state": state.state.model_copy(update={"snapshot": player})}))})
+        self.assertEqual(diagnostics(lambda: SnapshotMetadataBuilder.build(empty_heads, 2, STAMP, (cross_owner,), {})),
+                         [("unreachable_state", ("receipts", 0, "states", 0, "state", "snapshot"))])
+        partial = receipt.model_copy(update={"history": (None, foreign)})
+        self.assertEqual(diagnostics(lambda: build((partial,), {parent: base})), [
+            ("invalid_receipt", ("receipts", 0, "history", 0)),
+            ("foreign_history", ("receipts", 0, "history", 1, "history", "snapshot"))])
+        corrupt = receipt.model_copy(update={"history": (foreign.model_copy(update={"artifacts": (None,)}),)})
+        self.assertEqual(diagnostics(lambda: build((corrupt,), {parent: base})), [
+            ("invalid_receipt", ("receipts", 0, "history", 0, "artifacts", 0)),
+            ("foreign_history", ("receipts", 0, "history", 0, "history", "snapshot"))])

@@ -375,7 +375,7 @@ Fingerprint включает оба coverage поля и их proofs после 
 Переиспользуются `dataModel/worldPack/preparation/input.py` и существующие проектные имена; второй FinishPackInput не вводится:
 
 - `PackPreparationInput(operation_id: EntityUid, preparation_fingerprint: RevisionHex, body: PackPreparationBody)`.
-- `PackPreparationBody(state: PackPreparationState, capture: <concrete owning capture>, scope: PackPreparationScope)`.
+- `PackPreparationBody(state: PackPreparationState, capture: SourceCaptureRef, scope: PackPreparationScope)`.
 
 State единожды содержит base_publication, parts, assembly, assembly_provenance. World берётся из state.base_publication. Верхний body не дублирует их отдельными полями. Capture остаётся внешним типом другого агента, его форма здесь не определяется. Scope переиспользуется из owning проекта ТЗ; он не является командой запустить другие операции. Codec_version/payload_format формирует внутренний Pack binding.
 

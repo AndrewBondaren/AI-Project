@@ -61,8 +61,8 @@ class FakeSectionHandler(DomainSectionHandler[FakeSection]):
 
     async def apply(self, section: FakeSection, context: SnapshotApplyContext) -> SectionApplyReceipt:
         self.calls.append("apply")
-        return SectionApplyReceipt(section_key=section.header.key, state_refs=(), history_refs=(),
-                                   changed=(), retained_artifacts=())
+        return SectionApplyReceipt(section_key=section.header.key, states=(), history=(),
+                                   changed=())
 
     def encode(self, section: FakeSection) -> bytes:
         self.calls.append("encode")

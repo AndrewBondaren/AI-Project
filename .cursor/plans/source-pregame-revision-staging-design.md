@@ -6,6 +6,8 @@
 
 ## Ограничение среза и порядок
 
+Текущая проработка шага 2 вынесена в [Source revision storage и initial bootstrap](source-revision-storage-design.md). Это owning storage proposal; он не назначает Terrain writer, не меняет Snapshot apply и не вводит междоменные API шага 3.
+
 Разобрать одну атомарную persisted source mutation до появления Pack/Snapshot: подготовка immutable тела → staging → запись exact revision/membership → root retention → terminal outcome. Требуется инфраструктура уже для выбранных источников, но не автоматическая миграция всех WorldService/library/entity writers. Proof/schema v1, R1/R2 и порядок основного плана не переоткрываются.
 
 Это детализация зависимости шага 3 основного плана. Шаги 1–2 (конкретный inventory выбранного источника и projector) остаются prerequisites реализации, не пропускаются. Код, SQL, Artifacts public enums/holders, Pack DTO и DAG в этом проектном проходе не меняются. Будущий код — отдельный принятый implement-plan срез.

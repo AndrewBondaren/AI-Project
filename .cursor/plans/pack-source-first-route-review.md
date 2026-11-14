@@ -1,5 +1,7 @@
 # Первый Pack / Source маршрут: partial settlement update
 
+**Исправление 2026-11-14:** по [указанию пользователя, переданному владельцем DAG](dag-pack-source-binding-response-2026-11-14.md) конкретные связи detailed_initialization с генераторами не спроектированы. Приведённые ниже агентские continuation/registrations/command proposals и основанные на них A1/A2 gates отозваны; их нельзя использовать как требования к текущему Pack или основание реализации. Состав нод и связи определяются только вместе с пользователем; legacy-ноды не используются. Исторические утверждения о принятии конкретных bindings не действуют. Независимые owning Pack/Source решения и локальный A3 POJO/error review сохраняются; это не приёмка DAG маршрута.
+
 Дата: 2026-11-13. Статус: CALLER / SEQUENCE ACCEPTED; полная implementation-приёмка ещё не пройдена. Пользователь подтвердил detailed_initialization и порядок шагов 1–7. Основания: [exchange](pack-source-exchange-contract.md), [execution binding](pack-source-dag-execution-binding.md). Код и новые NodeId не создаются.
 
 ## 1. Проверенный caller scope и предложение

@@ -4,13 +4,12 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.dataModel.artifacts.references import ArtifactRef
 from app.dataModel.patch.changes.header import PatchRef
 from app.dataModel.patch.registry.sectionMetadata import SectionKey
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
 from app.dataModel.worldSnapshot.identity.refs import WorldSnapshotRef
-from app.dataModel.worldSnapshot.sections.refs import SectionHistoryRef, SectionStateRef
+from app.dataModel.worldSnapshot.sections.retention import SectionHistoryRetention, SectionStateRetention
 
 
 class SectionAccepted(BaseModel):
@@ -37,14 +36,13 @@ class SectionApplyReceipt(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
 
     section_key: SectionKey
-    history_refs: tuple[SectionHistoryRef, ...]
-    state_refs: tuple[SectionStateRef, ...]
+    states: tuple[SectionStateRetention, ...]
+    history: tuple[SectionHistoryRetention, ...]
     changed: tuple[PatchRef, ...]
-    retained_artifacts: tuple[ArtifactRef, ...]
 
     @model_validator(mode="after")
     def coherent_references(self) -> Self:
-        for refs in (self.history_refs, self.state_refs):
+        for refs in (tuple(entry.history for entry in self.history), tuple(entry.state for entry in self.states)):
             chains = tuple((ref.snapshot.kind, ref.snapshot.world_uid, ref.snapshot.timeline_id)
                            if isinstance(ref.snapshot, WorldSnapshotRef) else
                            (ref.snapshot.kind, ref.snapshot.player_uid)
@@ -57,6 +55,4 @@ class SectionApplyReceipt(BaseModel):
             raise ValueError("changed patch belongs to another section")
         if len(set(self.changed)) != len(self.changed):
             raise ValueError("duplicate changed patch")
-        if len(set(self.retained_artifacts)) != len(self.retained_artifacts):
-            raise ValueError("duplicate retained artifact")
         return self

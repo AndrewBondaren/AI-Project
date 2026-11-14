@@ -57,7 +57,8 @@ class AcceptedStateReader:
             return StateReadFailure.MISSING_SNAPSHOT
         if not isinstance(metadata, WorldSnapshotMetadata) or metadata.ref != snapshot:
             raise PublicationInfrastructureError("history returned metadata for another snapshot")
-        for state in metadata.state_refs:
+        for entry in metadata.states:
+            state = entry.state
             if state.section_key == key:
                 owner = state.snapshot
                 if (not isinstance(owner, WorldSnapshotRef) or owner.world_uid != snapshot.world_uid

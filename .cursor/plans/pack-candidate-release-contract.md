@@ -50,6 +50,24 @@ Caller — DAG, прямой вызов этого публичного мето
 
 ## Внешний binding и критерии приёмки
 
+### Уточнение internal границы 2026-11-14
+
+[Владелец Artifacts/publication предъявил](pack-storage-lifecycle-finalization-response-2026-11-14.md) `async IPackCandidateRetention.release_scoped(scope: CommitScope, candidate: PreparedPackCandidate) -> None`. Это proposed internal port, не готовая runtime реализация. Он использует existing terminal OperationHolder, persisted lease/fence и acquire/release history; новый holder, version или release marker исключены. Public pipeline/input/output выше не меняются. None внутри scope ещё не public success: PackCandidateReleaseResult возвращается только после confirmed outer commit либо подтверждённого replay в успешно завершённой transaction.
+
+| Подтверждённый internal исход | Pack public mapping |
+|---|---|
+| PackLifecycleCode.OPERATION_NOT_FOUND | PackCandidateReleaseRefusal(candidate, UNKNOWN_CANDIDATE) |
+| PackLifecycleCode.BINDING_MISMATCH для caller candidate | PackCandidateReleaseRefusal(candidate, IDENTITY_MISMATCH) |
+| PackLifecycleCode.ACTIVE_CANDIDATE или WRONG_PHASE, когда durable состояние не допускает release | PackCandidateReleaseRefusal(candidate, NOT_READY_INACTIVE) |
+| Успешное release_scoped, включая exact event-chain replay после GC | После confirmed outer transaction — PackCandidateReleaseResult(candidate) |
+| OperationBusyError, включая writers/recovery contention | Сохраняется existing busy outcome, не NOT_READY_INACTIVE |
+| Повреждённые persisted candidate/terminal/holder events, IO, недействительный internal scope | Infrastructure failure; не UNKNOWN_CANDIDATE и не успешный replay |
+| Unknown COMMIT/ROLLBACK | Existing UnknownCommitOutcome, fresh recovery по binding/history; успех не заявляется |
+
+STALE_LEASE не является полевой ошибкой публичного candidate: lease выбирает internal binding, public Input его не содержит. MEMBERS_MISMATCH/UNSEALED_MEMBER относятся к preparation/finish, не штатным release outcomes; если adapter выдаёт их для release без соответствующего predicate, это нарушение internal контракта, не новый PackCandidateReleaseReason. Механически переводить весь enum в один refusal запрещено.
+
+Повтор после GC не читает bytes: descriptor identity, candidate binding и event chain обязаны сохраняться в owning catalog/ledger. Отсутствие live hold без полной valid release history не даёт idempotent success. Shared children не освобождаются Pack release, head/activation terminal не переписываются. Новый internal fault roster остаётся на приёмке владельца; этот mapping не объявляет его runtime реализованным.
+
 Подтверждены existing `IArtifactHolders.release(ref, holder)`, `SqliteArtifactHolders.release`, `OperationLedger.read/recover`, holder event chain. Не подтверждён принятый единый scoped method, который проверяет terminal candidate identity, снимает его владение, безопасно обрабатывает shared closure и восстанавливает release outcome. Имя/сигнатура этого внешнего метода здесь не объявляются existing и его разработка не назначается Pack. Разрешение использовать terminal OperationHolder как долгоживущий root также требует owning фиксации.
 
 Требуемая входная связь: existing PreparedPackCandidate → exact durable OperationRecord/PackActivationResult → конкретное удержание root. Выход binding должен различать подтверждённое освобождение (включая replay), отсутствие кандидата, несовпадение identity и недопустимое состояние, сохраняя infrastructure/unknown outcome отдельно. Пока такого concrete Input/Output/Error и ownership atomic scope нет, реализация release зависит от внешнего контракта. Публичный Pack проект можно обсуждать отдельно; полная приёмка этого среза пока OPEN.

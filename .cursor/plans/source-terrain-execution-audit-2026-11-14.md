@@ -4,6 +4,8 @@
 
 ## Подтверждённые пути совместимости
 
+**Изменение ограничения 2026-11-14:** пользователь строго запретил адаптацию старой формы. Ниже перечислены evidence текущего кода, а не требования сохранить старые входы. Legacy before-validator, serializer compatibility, dual-read/fallback и вывод hills_authored по отсутствующим полям исключены из целевого решения. Проверка callers теперь означает прямой переход на новый строгий контракт. Bootstrap не может обходить это ограничение автоматической нормализацией. Старые bytes не изменяются; наличие исторического формата требует явного решения о границе поддержки, а не скрытого адаптера.
+
 Все пути ниже относительно корня репозитория.
 
 | Путь | Наблюдаемое поведение | Что требуется при приёмке |
@@ -39,9 +41,52 @@ Stored registry, resolved registry и captured consumer subset — три раз
 
 ## Остаток шага 1
 
-1. Terrain: окончательные legacy schema/serializer и strict POJO правила; полный generic caller inventory. Одобрение пользователем поля hills_authored уже отражено в dossier, повторно выбирать representation не требуется.
+### Результат разрешённого semantic review
+
+Проверка eligibility/RegionState завершена на уровне данных: nonempty fact string сохраняется без Source whitelist/normalization; current_type/pending_target относятся к live state, history.* — к истории. History содержит keys, не revision refs, поэтому автоматическая гарантия pinned resolve отсутствует. Evidence внесено в обзор ссылок и dossier. Это закрывает соответствующие вопросы inventory, не добавляя алгоритмы Regions, новые API или state migration. Runtime vocabulary admission/исторический as-of, если потребуются целевой интеграции, не объявлены готовыми.
+
+Повторная сверка с основным планом закрыла лишний вопрос audit о допустимости dangling non-null refs: раздел «Ref-integrity latest и pinned-графов (решение 2026-10-24)» и п.15 уже определяют итоговый атомарный граф, проверку исходящих ссылок и запрет неявного fallback. Latest и pinned-графы разделены. Это перенесено в semantic evidence и dossier; новая политика/интерфейс не вводились. Для RegionState остаётся классификация конкретных live/history usages, а не повторное проектирование общего принципа.
+
+Последующее решение пользователя 2026-11-14: cell_state_registry оставить как есть с пометкой «разобраться отдельно», **вне скоупа этого плана**. Ранее указанная остановка ради назначения владельца state больше не требует ответа в текущем этапе; дальнейшая проработка state прекращена. Найденные usages остаются evidence внешней зависимости, без объявления её runtime готовой.
+
+Уточнение 2026-11-14 по прямому поручению пользователя: danger_level_registry закреплён за Locations в docs/tz_locations.md; прежние отметки неизвестного владельца danger сняты. Cell-state ownership не назначался. Проверка использования cell_state_registry: Python application consumers по имени не найдены; есть raw World column, SQL registry column и таблица cell_states. Поиск cell_states/CellState/default_state выявил Terrain default_state literals и enum, но не исполняемый resolver состояний. Формулы travel/danger и создание/история состояний описаны в ТЗ; их runtime готовность не подтверждена.
+
+[Обзор ссылок](terrain-source-ref-integrity-contract-proposal.md) получен. Подтверждены namespaces category/material/lore и inbound cells, placement, RegionState, landcover map keys/values, terrain masks, hydrology shore. Это evidence текущих данных, не утверждение целевого API или полного динамического inventory. Отдельно подтверждено: missing observation имеет scoring-смысл, unknown fact token не получает этим разрешения; исторические transitions не равны live блокирующим ссылкам.
+
+Проектирование временных adapter/error/composition signatures удалено из §4 dossier. Остаток семантики: dangling non-null refs, утверждённый vocabulary execution v1, live/history delete policy. Для state/danger владелец не установлен; по прямому ограничению пользователя уточнение этих правил остановлено до его решения. Никакой новый домен/порт для обхода остановки не создаётся. Шаг 1 целиком закрытым не объявляется.
+
+**Коррекция scope 2026-11-14:** прежнее требование закрыть scoped/public API зависимостей до завершения шага 1 снято. Здесь фиксируются семантика ссылок, требования целостности и inventory существующего кода. Проектирование целевых междоменных контрактов/consistency bindings и DAG routes переносится на шаг 3 совместно с DAG. Отсутствие API не блокирует семантический результат; неразрешённая семантика по-прежнему требует решения. Общая приёмка implementation-плана не ослабляется. Агенту ref-integrity отправлена коррекция: временные signatures/ports не разрабатывать.
+
+### Ответ Artifacts: registration/read проверены статически
+
+Ответ владельца в `source-mutation-artifacts-publication-response-2026-11-13.md`, раздел «Terrain source-entry v1: format registration», сверен с текущими `application/artifacts/contracts/formatBackend.py`, `registry/artifactRegistry.py` и `contracts/blobRead.py`.
+
+* Existing `ArtifactFormatRegistryBinding.register(contract, backend)` требует unique format key и exact contract instance у backend. `resolve(contract)` требует ту же identity. Новый registry или Source mirror contract не нужен.
+* Кандидат `terrain.source-entry` v1: `ArtifactKind.BLOB`, `ArtifactFormatContract[bytes]`, `content_model=bytes`, `supported_versions=frozenset({1})`, `row_count=None`. Это соответствует existing BLOB constraints. TerrainRegistryEntry нельзя назначить content_model этого BLOB.
+* `registry.validate(ref)` проверяет key/kind/version. Physical reader — `ReadableBlobBackend.read_verified(ref, *, max_bytes) -> bytes`; composition обязана предоставить эту capability явно. Затем owning Terrain canonical decoder проверяет форму и семантику. Physical hash/size не удостоверяют Source revision mapping или полноту proof.
+* Proposed registration module `application/artifacts/registry/terrainSourceEntryFormat.py` ещё не реализован. Принятый byte budget, exact reader composition, GC protection и vectors остаются условиями приёмки. Format registration не добавляет defaults/landcover в body или closure автоматически.
+
+Закрыт вопрос наличия подходящего registry/read port; runtime registration и полный execution contract этим не приняты. Для ref-integrity открыт ограниченный чат «Terrain dependencies: контракты ref-integrity»: результат ожидается в `terrain-source-ref-integrity-contract-proposal.md`, без реализации и без назначения этому чату владения всеми зависимыми доменами.
+
+### Решение bootstrap и дополнительные результаты текущего прохода
+
+Пользователь выбрал: **первые Source revisions фиксируют явно подготовленные authored-записи нового строгого контракта; defaults и landcover — отдельные зависимости**. Выбор authored/effective закрыт. Это не разрешение нормализовать существующие записи. Нет полного целевого input — нет bootstrap; storage/идемпотентность bootstrap относятся к шагу 2.
+
+Дополнительно проверены прямые constructors в terrainZ, coverageBackground и landcover/collect: они создают WorldTerrainRegistry из list; целевые callers должны создавать tuple непосредственно. `registries/repairWorldDefaults.py::apply_import_normalize_to_world` получает world wire, вызывает normalize_world и изменяет world: этот repair нельзя включать в Source bootstrap. `worldBundle/worldCopyImport.py` проходит через world_handler.import_section, поэтому generic import boundary должен быть проверен до caller cutover. Fixture `fixtures/world_template.json` содержит terrain_registry и требует прямого задания новой формы; runtime converter не допускается. Список не является доказательством завершения всех dynamic/generic writer traces.
+
+Конкретные внешние пробелы ref-integrity:
+
+* `db/models/world.py` хранит cell_state_registry и danger_level_registry как dict; это не typed scoped read/delete contract.
+* `dataModel/lore/loreRegistry/loreRegistryEntry.py` прямо обозначает body как stub; map namespace виден в WorldLoreRegistry, но atomic live-target/inbound guards этим не определены.
+* `application/worldData/regions/regionFacts.py::value_for` возвращает None как при неизвестном имени, так и при отсутствии observation; flora не имеет зарегистрированного consumer. Метод не заменяет проверку допустимого vocabulary execution v1.
+
+Актуальное распределение: на шаге 1 — данные и семантика, на шаге 2 — owning storage, на шаге 3 — целевые contracts/errors/consistency совместно с DAG, на шаге 4 — полная приёмка. Прежняя последовательность scoped contracts как prerequisite semantic dossier снята. Existing format/read ports сверены выше; это не подтверждает runtime registration.
+
+Обязательные критерии проекта остаются открытыми в части точных dependencies/errors/classes и вложенных вызовов. Новые pipeline/DAG routes не назначались; inventory/projector не перепрыгнуты. Существующий proof не переоткрыт, зеркальные POJO не введены. Даже после очистки dossier шаг 1 нельзя объявлять полностью принятым лишь на основании выбранной representation.
+
+1. Terrain: §5b dossier теперь задаёт строгие constructors/with-методы, полные required rosters и schema/export без адаптации. Остаётся полный generic caller inventory и его приёмка. Legacy schema/serializer не разрабатываются.
 2. Terrain и владельцы ссылок: точный ref-integrity roster, nullable/missing/foreign и inbound delete semantics. Отсутствие проверки в найденном caller не доказывает отсутствие ссылки.
 3. Terrain/Source/Artifacts: окончательные manifest/format, membership semantics, execution binding и canonical vectors; отсутствие неявных settings/dependency reads.
 4. Source: сверить owning ответ с этим evidence и обязательными критериями проекта; закрыть шаг только после устранения конкретных OPEN.
 
-Owning ответ получен и записан в §5a Terrain dossier. Он подтверждает caller/bootstrap зависимости, добавляет существующие canonical registrations и ref candidates. Ref candidates не равны принятым scoped mutation guards. Разделение legacy input и canonical validation context, совместимость ID 17, stored-authored/effective-normalized bootstrap и оставшиеся owning решения требуют закрытия до приёмки. Runtime код, SQL и DAG не изменены; runtime tests/golden vectors не запускались. Полный контракт и шаг 1 не приняты.
+Owning ответ получен; актуальный итог ограниченного этапа собран в §7 Terrain dossier. Семантический dossier подготовлен, а не принят как исполняемый контракт. Ref inventory не равен scoped mutation guards; их проектирование и обязательная приёмка остаются на соответствующих следующих шагах. Runtime код, SQL и DAG не изменены; runtime tests/golden vectors не запускались. Полнота generic caller cutover не заявлена.

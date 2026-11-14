@@ -4,6 +4,7 @@ from dataclasses import replace
 from pydantic import TypeAdapter
 
 from app.application.publication.errors import PublicationInfrastructureError
+from app.application.worldSnapshot.validation.retentionClosure import retention_closure
 from app.application.worldSnapshot.contracts.commitScope import CommitReadScope, CommitScope
 from app.dataModel.artifacts.references import ArtifactRef
 from app.dataModel.artifacts.lifecycle.lease import OperationLeaseRef
@@ -248,7 +249,7 @@ class SqliteArtifactHolders:
                     raise ValueError("handoff snapshot is not owned by operation")
                 if isinstance(snapshot, WorldSnapshotRef) and snapshot.world_uid != lease.world_uid:
                     raise ValueError("handoff snapshot world mismatch")
-                for ref in metadata.retained_artifacts:
+                for ref in retention_closure(metadata):
                     planned.setdefault(ref, []).append(SnapshotHolder(snapshot=snapshot))
             # The caller may catch a refusal and commit the borrowed scope.
             # Validate every destination, including metadata-only refs, before

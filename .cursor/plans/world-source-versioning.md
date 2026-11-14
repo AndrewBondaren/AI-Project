@@ -1,5 +1,9 @@
 # World source versioning — версионирование объектов N+1 и граница мутации
 
+**Контроль дрейфа:** [контрольная точка контрактов и будущей реализации 2026-11-14](source-contract-baseline-2026-11-14.md) разделяет принятый proof design, proposals, runtime evidence и разрешённый scope. Source storage остановлен на отсутствующем authored-write binding; PACK-S1/S2 отдельно разрешены пользователем только для design/review с Source/Pack/Snapshot/Artifacts. Эта запись не заменяет ТЗ/спецификацию и не разрешает реализацию.
+
+PACK-S1/S2: единая редакция 2 принята как ограниченный design и синхронизирована в proof specification §13. [План реализации дельты](source-pack-s1-s2-implementation.md) подготовлен, но NOT EXECUTION-READY: G1 базовые Source POJO/pure contracts, G2 durable collector/read/adopt и G3 consumer composition ещё не реализованы. Порядок основного плана не меняется; эти prerequisites не включаются в дельту автоматически. Заглушки/legacy adapters/зеркальные DTO запрещены.
+
 Проектный срез SourceDurableProof и исправления R1/R2 в [спецификации](source-proof-v2-contract-spec.md) **приняты независимым reviewer**: [акт 2026-11-13](source-durable-proof-contract-acceptance-2026-11-13.md). Это не приёмка runtime durable API или всего Source и не изменение порядка основного плана. Внешние capture/DAG и Pack/Snapshot bindings, полный CRUD/disposition, pregame revision staging и runtime проверки остаются OPEN. Следующая локальная проработка — [pregame staging](source-pregame-revision-staging-design.md). Отдельные Source contract/transition документы не являются альтернативным основным планом.
 
 Статус: DESIGN согласовано в чате 2026-10-24; после критического ревью
@@ -29,14 +33,39 @@ Identity/revision, fingerprint, pinning и retention переиспользую�
 
 ## Ближайшие четыре шага подготовки первого среза (2026-11-14)
 
-Статус всех четырёх шагов: **OPEN**. Это сводный порядок завершения проектирования, а не разрешение реализации. Первый кандидат — одна world-scoped registry mutation batch с membership; Terrain остаётся выбранным кандидатом до приёмки его owning-контракта. Полная миграция Source и внутреннее устройство Pack в этот срез не входят.
+**Обязательное ограничение пользователя 2026-11-14:** адаптация старой формы строго запрещена. Для Terrain/Source не вводятся legacy compatibility adapters, dual-read, fallback или восстановление обязательных полей из старого input. Callers переходят непосредственно на новый строгий контракт; неполные старые входы отклоняются. Проверка совместимости в шагах ниже означает выявление затронутых consumers и точный cutover, а не сохранение старой формы. Bootstrap подчиняется тому же запрету. Решение не разрешает удалять или переписывать исторические данные.
+
+Статус: **семантический dossier шага 1 подготовлен**, итог и пределы evidence — [§7 Terrain dossier](terrain-source-execution-contract-dossier.md#7-сводный-результат-ограниченного-шага-1). Шаги 2–4 OPEN; общая приёмка implementation-плана не пройдена. Это сводный порядок завершения проектирования, а не разрешение реализации. Первый кандидат — одна world-scoped registry mutation batch с membership; Terrain остаётся выбранным кандидатом до приёмки его owning-контракта. Полная миграция Source и внутреннее устройство Pack в этот срез не входят.
 
 | Шаг | Что завершить | Владелец и проверяемый результат |
 |---|---|---|
-| 1. Terrain execution | Окончательные codec/manifest и canonical vectors; совместимость существующих POJO, authored presence и всех callers; правила membership, semantic projection и ref-integrity, неизменная семантика execution_version | Terrain отвечает за свои данные и callers, Source — за привязку execution version. Результат: принятый [owning dossier](terrain-source-execution-contract-dossier.md), полный inventory и отсутствие неразрешённых зависимостей для выбранного исполнения. Предложения dossier не считаются принятыми автоматически |
+| 1. Terrain execution | Точные POJO, строгая валидация, codec/manifest и требования к vectors; membership и semantic projection; семантика ссылок и требования целостности; inventory затронутых callers | Terrain подтверждает данные и существующий код, Source сводит требования. Результат: согласованная модель данных и семантический dossier. Новые междоменные API, scoped bindings и DAG routes не проектируются здесь; отсутствие будущего API не блокирует этот результат. Он не является приёмкой исполняемого контракта |
 | 2. Source storage | Точный revision store и схема append-only записи; owning writer выбранного реестра; initial bootstrap с сохранением достоверного authored state; revision/body/tombstone mapping и retention | Source владеет revision/history, Terrain — записью своих данных, Artifacts/publication — lifecycle инфраструктурой. Результат: конкретные scoped ports/classes, транзакционные границы, ошибки и bootstrap-порядок без обхода owning writer. Зависит от шага 1 |
 | 3. Публичная граница | Единые mutation/recovery Input/Result/Error и публичные пути импорта; initial prepare/stage и recovery entry; различение preflight refusal, committed terminal и unknown outcome; логирование причины, operation_id и результата; точная связь с DAG | Каждый домен утверждает свой контракт; Source сводит карту интеграции. Результат: полный маршрут public input → прямой DAG caller → операция → result/error, включая вложенные вызовы. Scope, grant и executor остаются внутренними. Завершить согласование preflight logging с owning invariant. Зависит от шагов 1–2 |
 | 4. Итоговая приёмка | Свести принятые решения в единый актуальный контракт, явно отметить заменённые предложения; проверить все обязательные правила проекта; подготовить конкретный implementation-план с файлами, зависимостями и проверками | Source сводит результат с подтверждениями владельцев внешних контрактов. Результат: приёмка без OPEN в выбранном срезе и отдельный принятый план для implement-plan. Любое нарушение или отсутствие evidence означает отказ. Зависит от шагов 1–3 |
+
+Уточнение границы шагов 2026-11-14: целевые междоменные Input/Result/Error, consistency bindings и маршруты вызовов проектируются на шаге 3 совместно с DAG и владельцами сразу как окончательное решение. Текущие POJO/read paths Terrain — evidence, не гарантия актуальности DAG-контракта. Шаг 2 описывает owning storage, но не вводит временные междоменные API. Обязательная приёмка всего implementation-плана сохраняется на шаге 4; промежуточное завершение inventory/семантики её не заменяет и не разрешает код.
+
+### Разрешённые границы уточнений
+
+**Решение пользователя 2026-11-14:** `cell_state_registry` оставить как есть с пометкой «разобраться отдельно». Определение владельца, семантики, POJO/API и реализация этого реестра **вне скоупа данного плана**. Не запрашивать по нему дальнейшие решения и не включать его разработку в критерии завершения шага 1. Существующая ссылка Terrain.default_state остаётся отмеченной внешней зависимостью; это не подтверждение её runtime integrity и не разрешение на fallback/адаптацию.
+
+Обязательное указание пользователя: **при выходе за перечисленные рамки остановиться до работы вне scope и предъявить пользователю конкретную зависимость; не расширять задачу самостоятельно и не запускать новый домен/чат для обхода ограничения**.
+
+| Домен | Что можно уточнять в текущем шаге 1 | Граница |
+|---|---|---|
+| Source | Identity/revision, semantic projection, membership, требования к входным данным и proof | Не переоткрывать принятый proof; не проектировать новые междоменные операции |
+| Terrain | Существующие POJO, смысл 19 полей и nested values, строгая валидация, canonical manifest, семантика ссылок и inventory callers | Ответ Terrain не удостоверяет целевые DAG API; генераторы/CRUD не реализуются |
+| Artifacts/publication | Существующие format registry, ArtifactRef/Kind, verified-read и ограничения bytes storage | Не проектировать новый lifecycle, retention authority resolver или recovery в рамках шага 1 |
+| Materials | Только namespace/default_material, смысл отсутствия/nullable target и факты использования | Не проектировать Materials CRUD/scoped ports |
+| Lore | Только namespace/glossary_ref, смысл отсутствия/nullable target и факты использования | Не развивать Lore stub в новый доменный контракт |
+| Regions/Landcover | Только vocabulary eligibility.fact, различие unknown/missing observation, ссылки на terrain и authored/derived semantics | Не проектировать Regions API, state transitions или генерацию |
+| Hydrology | Только существующие shore-ссылки на terrain и требования их целостности | Не менять гидрологию или её pipeline |
+| Locations | Только ссылки клеток/placement на terrain и требования целостности | Не проектировать storage/writer/CRUD Locations |
+| DAG | Уточнение его ответственности и уже принятых ограничений | Целевые маршруты и междоменные Input/Result/Error — отдельный шаг 3, не текущая работа |
+| Pack | Только уже принятые требования потребителя к Source proof/capture | Никакого проектирования внутренностей Pack или расширения текущего Terrain-среза |
+
+По явному поручению пользователя 2026-11-14 владелец семантики danger_level_registry установлен: **Locations**, см. соответствующий раздел docs/tz_locations.md. Допустимы уточнения identity/priority и смысла ссылок, без разработки API. Владелец cell_state_registry пока не назначен: текущее расположение raw поля в World и enum в Terrain не определяет владение. Если для завершения семантики требуется такое решение — остановиться и предъявить вопрос пользователю. Общий dependency-review чат имеет право только собрать evidence в перечисленных границах, а не принимать решения за владельцев.
 
 Детали и evidence остаются в [pregame design](source-pregame-revision-staging-design.md), [ревью среза](source-recovery-slice-review-2026-11-14.md) и [ответе Artifacts/publication](source-mutation-artifacts-publication-response-2026-11-13.md). Для шага 1 начат [статический аудит Terrain callers и bootstrap](source-terrain-execution-audit-2026-11-14.md); owning ответ запрошен, шаг не закрыт. Эта таблица консолидирует остаток; она не переоткрывает принятый SourceDurableProof и закрытые проектные решения recovery/fencing/logging. Закрытие замечания по документам не доказывает готовность runtime.
 

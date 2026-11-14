@@ -1,5 +1,7 @@
 # Pack / Source: concrete leaf contracts первого маршрута
 
+**Исправление 2026-11-14:** по [указанию пользователя, переданному владельцем DAG](dag-pack-source-binding-response-2026-11-14.md) конкретные связи detailed_initialization с генераторами не спроектированы. Приведённые ниже агентские continuation/registrations/command proposals и основанные на них A1/A2 gates отозваны; их нельзя использовать как требования к текущему Pack или основание реализации. Состав нод и связи определяются только вместе с пользователем; legacy-ноды не используются. Исторические утверждения о принятии конкретных bindings не действуют. Независимые owning Pack/Source решения и локальный A3 POJO/error review сохраняются; это не приёмка DAG маршрута.
+
 Дата: 2026-11-14. Статус: CONTRACT PROPOSAL. Caller detailed_initialization и [последовательность 1–7](pack-source-first-route-review.md) согласованы. Здесь предъявляются имена/классы/POJO/registration для их проверки; код, новые runtime NodeId и canonical numeric IDs не создаются.
 
 ## 1. Имена и единственные owning вызовы

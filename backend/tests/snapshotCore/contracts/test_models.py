@@ -34,6 +34,7 @@ from app.dataModel.worldSnapshot.identity.refs import (
     PlayerSnapshotRef, SnapshotChainKind, SnapshotRef, WorldSnapshotRef,
 )
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
+from app.dataModel.worldSnapshot.sections.retention import SectionStateRetention, SectionHistoryRetention
 from app.dataModel.worldSnapshot.sections.refs import SectionHistoryRef, SectionStateRef
 
 
@@ -173,7 +174,7 @@ class CoreModelTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             PlayerHeadExpectation.model_validate({"player_uid": "player"})
 
-    def test_state_and_history_refs_are_distinct_for_either_chain(self) -> None:
+    def test_state_and_history_are_distinct_for_either_chain(self) -> None:
         for snapshot in (self.world, self.player):
             values = {"snapshot": snapshot, "section_key": self.section_key, "format_version": 1}
             state = SectionStateRef.model_validate(values)
@@ -329,18 +330,20 @@ class CoreModelTests(unittest.TestCase):
         history = SectionHistoryRef(snapshot=self.world, section_key=self.section_key, format_version=1)
         state = SectionStateRef(snapshot=self.world, section_key=self.section_key, format_version=1)
         changed = PatchRef(operation_id="op", section_key=self.section_key, ordinal=0)
-        values = dict(section_key=self.section_key, history_refs=(history,), state_refs=(state,),
-                      changed=(), retained_artifacts=())
+        history = SectionHistoryRetention(history=history, artifacts=())
+        state = SectionStateRetention(state=state, artifacts=())
+        values = dict(section_key=self.section_key, history=(history,), states=(state,),
+                      changed=())
         receipt = SectionApplyReceipt.model_validate(values)
         self.assertEqual(SectionApplyReceipt.model_validate_json(receipt.model_dump_json()), receipt)
         # A no-op may retain old state and still write history; comparisons to
         # the captured base and declared participants belong to application.
         later = self.world.model_copy(update={"snapshot_id": "tick-2"})
         for changes in (
-            {"state_refs": (state, state.model_copy(update={"snapshot": later}))},
-            {"history_refs": (history, history)}, {"changed": (changed, changed)},
+            {"states": (state, state.model_copy(update={"state": state.state.model_copy(update={"snapshot": later})}))},
+            {"history": (history, history)}, {"changed": (changed, changed)},
             {"section_key": RegistryKey[PatchSectionRegistry]("other")},
-            {"state_refs": (history,)}, {"retained_artifacts": (self.artifact, self.artifact)},
+            {"states": (history,)}, {"retained_artifacts": (self.artifact, self.artifact)},
         ):
             with self.subTest(changes=changes), self.assertRaises(ValidationError):
                 SectionApplyReceipt.model_validate({**values, **changes})
@@ -395,8 +398,8 @@ class CoreModelTests(unittest.TestCase):
             TargetAbsent(), TargetVersionExpected(version=pack, presence=TargetPresence.PRESENT),
             SectionAccepted(), SectionRefused(category=SnapshotApplyOutcomeKind.REJECTED,
                                               diagnostics=(target_issue("invalid"),)),
-            SectionApplyReceipt(section_key=self.section_key, history_refs=(), state_refs=(),
-                                changed=(), retained_artifacts=()),
+            SectionApplyReceipt(section_key=self.section_key, history=(), states=(),
+                                changed=()),
             PatchSet[DomainSection[PatchHeader]](
                 format_version=1, operation_id="op", preparation_fingerprint="b" * 64,
                 world_uid="world", timeline_id="main", turn_id=1, expected_world=publication,
@@ -446,9 +449,8 @@ class CoreModelTests(unittest.TestCase):
                                 (PlayerSnapshotMetadata, self.player, old_player)):
             values = dict(ref=ref, parent=old, operation_id="op", turn_id=1,
                           created_at="2026-10-30T01:02:03.123456Z", envelope_format_version=1,
-                          state_refs=(SectionStateRef(snapshot=old, section_key=self.section_key, format_version=1),),
-                          history_refs=(SectionHistoryRef(snapshot=ref, section_key=self.section_key, format_version=1),),
-                          retained_artifacts=(self.artifact,))
+                          states=(SectionStateRetention(state=SectionStateRef(snapshot=old, section_key=self.section_key, format_version=1), artifacts=(self.artifact,)),),
+                          history=(SectionHistoryRetention(history=SectionHistoryRef(snapshot=ref, section_key=self.section_key, format_version=1), artifacts=()),))
             if model is WorldSnapshotMetadata:
                 values["base_pack_hash"] = "a" * 64
             record = model.model_validate(values)
@@ -458,12 +460,12 @@ class CoreModelTests(unittest.TestCase):
             wrong = self.player if model is WorldSnapshotMetadata else self.world
             for changes in (
                 {"ref": wrong}, {"parent": wrong}, {"parent": ref},
-                {"state_refs": (SectionStateRef(snapshot=wrong, section_key=self.section_key, format_version=1),)},
-                {"history_refs": (SectionHistoryRef(snapshot=old, section_key=self.section_key, format_version=1),)},
-                {"state_refs": (values["state_refs"][0],) * 2},
-                {"history_refs": (values["history_refs"][0],) * 2},
-                {"state_refs": values["history_refs"]}, {"turn_id": True}, {"turn_id": 0},
-                {"retained_artifacts": (self.artifact, self.artifact)}, {"state_refs": []},
+                {"states": (SectionStateRetention(state=SectionStateRef(snapshot=wrong, section_key=self.section_key, format_version=1), artifacts=()),)},
+                {"history": (SectionHistoryRetention(history=SectionHistoryRef(snapshot=old, section_key=self.section_key, format_version=1), artifacts=()),)},
+                {"states": (values["states"][0],) * 2},
+                {"history": (values["history"][0],) * 2},
+                {"states": values["history"]}, {"turn_id": True}, {"turn_id": 0},
+                {"retained_artifacts": (self.artifact, self.artifact)}, {"states": []},
             ):
                 with self.subTest(model=model, changes=changes), self.assertRaises(ValidationError):
                     model.model_validate({**values, **changes})
@@ -680,7 +682,7 @@ class CoreModelTests(unittest.TestCase):
         publication, commit, diagnostic, success, refusal, lease, ready, terminal = self._snapshot_dto_fixtures()
         metadata = WorldSnapshotMetadata(ref=self.world, parent=None, operation_id="op", turn_id=1,
             created_at="2026-10-30T00:00:00.000000Z", envelope_format_version=1, base_pack_hash="a" * 64,
-            state_refs=(), history_refs=(), retained_artifacts=())
+            states=(), history=())
         player = PlayerSnapshotMetadata(**{key: value for key, value in metadata.model_dump().items()
                                           if key not in ("ref", "base_pack_hash")}, ref=self.player)
         records = (metadata, player, commit, success, refusal, lease, ready, terminal,

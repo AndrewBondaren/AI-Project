@@ -30,6 +30,8 @@ Existing finish_pack_preparation знает manifest_ref в памяти и вы
 
 ### Направление закрытия F2 без нового store
 
+**Отозвано как основание реализации, 2026-11-14:** следующий вариант с повторной сборкой противоречит принятому запрету ТЗ на READY. Для текущего плана требуется durable exact candidate mapping от владельца Snapshot/Artifacts, без пересборки и эвристического выбора ref. Историческое предложение ниже не является действующим решением.
+
 Предлагается использовать тот же полный prepare request: после проверки preparation fingerprint и READY identity чистый assembler повторно строит manifest из конечного state, а закреплённый encoder получает точные bytes. Из них существующий content_digest и len дают ожидаемый полный ArtifactRef с owning descriptor. Затем проверяется именно этот ref в leased_artifacts и его verified bytes/hold, а также полный ожидаемый closure. Никакой reserve/stage/seal/finish при replay не вызывается; producer/write-операции не повторяются. Посторонние manifest refs не выбираются даже при том же format.
 
 Необходимые предпосылки: assembler и encoding детерминированы; все влияющие значения присутствуют в semantic body либо закреплённом versioned binding; нет latest settings/time/random defaults; порядок canonical manifest одинаков в первой попытке и replay. Если изменённый deployment не умеет воспроизвести прежний binding, требуется явный отказ совместимости, а не выбор другого ref или повторная запись. Конкретное включение binding revision в preparation identity ещё должно быть сверено — сейчас одним body digest это не доказано.

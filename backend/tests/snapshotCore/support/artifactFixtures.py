@@ -74,15 +74,25 @@ async def close_preparation(bundle, lease, *, ready=False):
 
 
 async def snapshot_metadata(bundle, scope, lease, world_refs=(), player_refs=None):
+    from app.dataModel.patch.results.sectionResult import SectionApplyReceipt
+    from app.dataModel.worldSnapshot.sections.refs import SectionHistoryRef
+    from app.dataModel.worldSnapshot.sections.retention import SectionHistoryRetention
+
     ref = WorldSnapshotRef(world_uid="w1", timeline_id="t1", snapshot_id=lease.operation_id + "-world")
+    player = PlayerSnapshotRef(player_uid="p1", snapshot_id=lease.operation_id + "-player")
+    histories = (SectionHistoryRetention(history=SectionHistoryRef(snapshot=ref, section_key="test.holds",
+                  format_version=1), artifacts=world_refs),)
+    if player_refs is not None:
+        histories += (SectionHistoryRetention(history=SectionHistoryRef(snapshot=player, section_key="test.holds",
+                       format_version=1), artifacts=player_refs),)
+    receipts = (SectionApplyReceipt(section_key="test.holds", states=(), history=histories, changed=()),)
     metadata = WorldSnapshotMetadata(ref=ref, parent=None, operation_id=lease.operation_id, turn_id=1,
         created_at=STAMP, envelope_format_version=1, base_pack_hash="d" * 64,
-        state_refs=(), history_refs=(), retained_artifacts=world_refs)
-    await bundle[4].append(scope, metadata, ())
+        states=(), history=histories[:1])
+    await bundle[4].append(scope, metadata, receipts)
     if player_refs is None:
         return (ref,)
-    player = PlayerSnapshotRef(player_uid="p1", snapshot_id=lease.operation_id + "-player")
     await bundle[4].append(scope, PlayerSnapshotMetadata(ref=player, parent=None,
         operation_id=lease.operation_id, turn_id=1, created_at=STAMP, envelope_format_version=1,
-        state_refs=(), history_refs=(), retained_artifacts=player_refs), ())
+        states=(), history=histories[1:]), receipts)
     return ref, player

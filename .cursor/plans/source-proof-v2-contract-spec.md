@@ -2,6 +2,8 @@
 
 Дата: 2026-11-12; актуализация статуса 2026-11-13. Основание: поручение REV-02 и основной [Source-design](world-source-versioning.md). **ACCEPTED — проектный срез SourceDurableProof и R1/R2 по независимому reviewer** ([акт приёмки](source-durable-proof-contract-acceptance-2026-11-13.md)). **Runtime durable API — NOT ACCEPTED; весь Source — OPEN.** Статические проверки не заменяют реализацию. Исторические аудиты §3/3.1/3.2/8 и записи предъявления §11/12 читаются с этим последующим вердиктом, не переоткрывают закрытые findings.
 
+Актуализация 2026-11-14: принята ограниченная дельта PACK-S1/S2, [единая редакция 2](source-pack-s1-s2-contract.md), [совместный акт](source-pack-s1-s2-acceptance-2026-11-14.md). §6.E/G, §11.3 и §13 синхронизированы только с этой дельтой. Исторический независимый verdict 2026-11-13 не приписывается новым изменениям. Runtime/public DAG/full Source остаются непринятыми. План поставки дельты — [source-pack-s1-s2-implementation.md](source-pack-s1-s2-implementation.md), с явными prerequisite gates.
+
 ## 1. Подтверждённые границы записи
 
 | Writer / исходник | Подготовка и изменение | Транзакция / место адаптации |
@@ -260,7 +262,7 @@ ADMIT: принимает реальный declared usage, проверяет ex
 - SourceOperation и единые SourceFieldCode/SourceLogicCode объявлены в §11.3. Proof использует ADMIT, READ, ADMIT_GROUPS, VERIFY_GROUPS, SELECT; internal stages сохраняют operation вызывающей операции. Источник определения — один модуль sourceErrors.
 - SourceFieldIssue — единственный concrete FieldPathError[SourceFieldCode] для Source, поля code/path/message наследуются. Полный roster и mapping — §11.3.
 - SourceLogicCode — единый enum §11.3; отдельного proof-specific enum или общего неоднозначного USAGE_MISMATCH нет.
-- SourceLogicIssue: `code: SourceLogicCode`, `group_index: StrictInt | None`, `use_index: StrictInt | None`, `source: SourceVersionRef | SourceCollectionVersionRef | None`, `artifact: ArtifactRef | None`; все поля обязательны. Индексы при наличии ge=0, относятся к исходному request. Для ошибки proof/result целиком оба индекса None; для одиночной операции group_index=None. Fictitious use_index=0 запрещён. Вложенные refs имеют разные обязательные поля object_id/collection_id и extra-forbid, поэтому union не допускает смешанную запись.
+- SourceLogicIssue: `code: SourceLogicCode`, `group_index: StrictInt | None`, `use_index: StrictInt | None`, `source: SourceVersionRef | SourceCollectionVersionRef | None`, `artifact: ArtifactRef | None`; все поля обязательны. Индексы при наличии ge=0, относятся к исходному request. Для ошибки proof/result целиком оба индекса None; для одиночной операции group_index=None, кроме принятого CHECK_COVERAGE: available issue использует исходный available index (§13). Fictitious use_index=0 запрещён. Вложенные refs имеют разные обязательные поля object_id/collection_id и extra-forbid, поэтому union не допускает смешанную запись.
 - SourceFailure: `operation: SourceOperation`, `field_issues: tuple[SourceFieldIssue, ...]`, `logic_issues: tuple[SourceLogicIssue, ...]`; хотя бы одна issue. Независимые дефекты агрегируются; недоступная зависимая проверка пропускается, но не остальные группы. Infra exceptions не превращаются в MISSING_BODY; hold errors не клонируются из Artifacts.
 
 SourceFieldIssue и SourceLogicIssue общие для Source; никаких параллельных carriers §4/§6 не остаётся. Operation сохраняется при передаче diagnostics из internal validator в pipeline, typed paths rebased к исходному request.
@@ -334,6 +336,8 @@ SELECT проверяет world, fingerprint/bounds/canonical selection и exact
 **Diagnostics групповых операций:** единый roster §E. Для ошибки selection group_index — её исходная позиция, use_index=None; для expected.groups[i].uses[j] задаются оба индекса. FieldPathError содержит полный typed путь от корня request, например result.selections[i].dependency_indices[j]. Независимые diagnostics исходных groups не теряются после union. Exact typed field descriptors обязательны до реализации.
 
 **Ответственность дополнительного internal класса:** `SourceProofSelector`, модуль `application/worldData/sourceVersioning/proof/selector.py`, pure алгоритм canonical atom enumeration, построения selections и exact subset comparison по Source POJO/CanonicalCodec. Не читает storage, не знает Pack fields, не делает normalize captured body и не принимает retention решения. Он не вызывает публичные методы; pipeline передаёт готовые проверенные данные. Признаки отказа в приёмке: зависимости от Pack DTO, body IO, создание другого hash engine или изменение requested groups ради совпадения результата.
+
+Принятая 2026-11-14 конкретизация: selector.check_coverage(input: SourceProofCoverageCheckInput) -> None | SourceFailure; internal named input и точная semantics/error root заданы в §13 и единой редакции S1/S2 §2. Это не public operation и не замена SELECT/VERIFY_GROUPS.
 
 **Публичные импорты для потребителя:** SourceProofInput из `sourceProofInput`; SourceProofGroupsInput/SourceProofGroupsResult/SourceProofGroupsVerifyInput из `sourceProofGroups`; SourceProofSelection/SourceProofSelectInput из `sourceProofSelection`; SourceDurableProof из `sourceDurableProof`; SourceProofResult из `sourceProofResult`. Все префиксы — `app.dataModel.sourceVersioning`. Пока это объявленные проектные пути, не runtime импорты. Не создавать aliases SourceDependencyAdmission/SourceDependencySelection по именам чужого черновика.
 
@@ -676,7 +680,7 @@ Internal `SourceCaptureRetentionBinding.adopt` получает exact proof че
 
 Единственное место объявления — `app.dataModel.sourceVersioning.sourceErrors`. SourceIssueCode, SourceProofFieldIssue/SourceProofLogicIssue/SourceProofFailure и их enum-зеркала **не создаются**. Existing FieldPathError, ValidatedFieldPath, FieldRef/bind_field, CheckedPath и ValidatorAggregationHelper переиспользуются.
 
-`SourceOperation` (wire lower_snake_case): ADMIT, READ, ADMIT_GROUPS, VERIFY_GROUPS, SELECT, VALIDATE_DESCRIPTOR, FINALIZE_CAPTURE, READ_EXACT, PREPARE_MUTATION, APPLY_MUTATION, ADOPT_CLOSURE. Последние значения описывают owning internal boundaries, не разрешают новые публичные CRUD методы или отдельные DAG-ноды. Internal validator сохраняет operation внешней Source операции, не заменяет READ на VALIDATE_DESCRIPTOR.
+`SourceOperation` (wire lower_snake_case): ADMIT, READ, ADMIT_GROUPS, VERIFY_GROUPS, SELECT, VALIDATE_DESCRIPTOR, FINALIZE_CAPTURE, READ_EXACT, PREPARE_MUTATION, APPLY_MUTATION, ADOPT_CLOSURE, CHECK_COVERAGE. CHECK_COVERAGE (check_coverage) добавлен принятой дельтой S1/S2 2026-11-14. Последние значения описывают owning internal boundaries, не разрешают новые публичные CRUD методы или отдельные DAG-ноды. Internal validator сохраняет operation внешней Source операции, не заменяет READ на VALIDATE_DESCRIPTOR.
 
 `SourceFieldCode`: INVALID_SHAPE, INVALID_IDENTITY, NON_CANONICAL_PROOF, INVALID_SELECTION, GROUP_COUNT_MISMATCH, DUPLICATE_IDENTITY. `SourceFieldIssue(FieldPathError[SourceFieldCode])`: только inherited code, path, message.
 
@@ -691,13 +695,15 @@ Internal `SourceCaptureRetentionBinding.adopt` получает exact proof че
 | Синтаксически верный незарегистрированный descriptor | UNKNOWN_DESCRIPTOR / logic | source ref, исходные group/use; при registration без ref оба None | Registry lookup |
 | Descriptor существует, но category/scope/adapter не подходит | DESCRIPTOR_MISMATCH / logic | source ref | Registry validation |
 | Foreign world, включая пустой proof | WRONG_WORLD / logic | group/use при наличии; для proof целиком None | Все world-scoped входы |
-| Несортированный persisted proof, duplicate canonical atoms | NON_CANONICAL_PROOF / field | proof.uses либо конкретная nested коллекция | READ/SELECT/VERIFY_GROUPS |
+| Несортированный persisted proof, duplicate canonical atoms | NON_CANONICAL_PROOF / field | proof.uses либо конкретная nested коллекция; CHECK_COVERAGE — от named input через request/available | READ/SELECT/VERIFY_GROUPS/CHECK_COVERAGE |
 | Duplicate definition/member identity при registration | DUPLICATE_IDENTITY / field | entries[i].key либо members[i] | Descriptor/collection validation |
 | Bool/negative/duplicate/unsorted selection index | INVALID_SELECTION / field | selection.dependency_indices[j] либо result.selections[i]... | SELECT/VERIFY_GROUPS |
 | Валидный int вне atom bounds | SELECTION_OUT_OF_RANGE / logic | group_index=selection position, use_index=None | SELECT/VERIFY_GROUPS |
 | Чужой fingerprint | SELECTION_PROOF_MISMATCH / logic | selection position | SELECT/VERIFY_GROUPS |
 | Неверное число selections | GROUP_COUNT_MISMATCH / field | result.selections | VERIFY_GROUPS |
 | Неверный union / неверный subset одной группы | PROOF_MISMATCH / SELECTION_USAGE_MISMATCH, logic | whole result / group_index | VERIFY_GROUPS |
+| Requested atom отсутствует в available coverage | PROOF_MISMATCH / logic | group_index=None, исходный requested use_index, exact source ref, witness artifact | CHECK_COVERAGE |
+| В available одной full capture соответствуют conflicting revisions одной dependency identity | REVISION_CONFLICT / logic | исходные available group_index/use_index, exact source ref, witness artifact | CHECK_COVERAGE |
 | Не finalized witness / повтор capture uid с другим body | CAPTURE_NOT_FINALIZED / CAPTURE_ID_CONFLICT, logic | witness ArtifactRef при наличии | Read binding / finalize append |
 | Exact revision не captured / conflicting revisions | DEPENDENCY_NOT_CAPTURED / REVISION_CONFLICT, logic | source ref и исходные group/use | Admission / finalize comparison |
 | Та же exact revision связана с другим body | BODY_MAPPING_CONFLICT / logic | source ref + предъявленный artifact | Capture/body mapping |
@@ -709,6 +715,8 @@ Internal `SourceCaptureRetentionBinding.adopt` получает exact proof че
 | Exact live read обращён к tombstone | TOMBSTONE / logic | source ref | READ_EXACT; не превращается в absence proof |
 
 Field paths строятся из FieldRef/bind_field и CheckedPath от конкретного request POJO. Для ошибки root record без валидного field segment стандартный Pydantic boundary отказ не фабрикуется как несуществующий path; Source typed operation начинает работу после валидированного request. Nested model_construct/foreign instances повторно валидируются; путь начинается с содержащего поля request. Эти исключения не превращаются в успешный SourceFailure с пустым path.
+
+CHECK_COVERAGE имеет named diagnostic root SourceProofCoverageCheckInput: поля request/available и nested selectors выбираются typed FieldRef. Available issues используют group_index исходного available proof, requested issues — None; отсутствующие use/source/artifact остаются явными None. WRONG_WORLD применяется также к foreign-world empty available. INVALID_SHAPE/INVALID_IDENTITY и independent aggregation действуют по общей схеме, точный S1 порядок — единая редакция §2. Новый input не входит в persisted canonical manifest и не получает type ID; cold diagnostic transport, если используется, обязан зарегистрировать exact root.
 
 Порядок diagnostics: schema/field checks в порядке объявления полей и исходных индексов; затем logic по world → descriptor → capture → dependency → selection → closure. В каждом tuple порядок стабилен; SourceFailure не обещает общий interleaving двух tuple. Недоступная зависимая ветвь пропускается, остальные groups продолжаются. IO error, permission error, unknown commit outcome и corrupt DB row shape остаются existing infrastructure exceptions. CorruptBlobError от проверенного чтения конкретного artifact переводится в CORRUPT_BODY с ref; произвольный ValueError storage/SQL не перехватывается как MISSING_BODY. Ошибки holder/lease infrastructure не клонируются: typed MISSING_HOLD создаётся только по успешной отрицательной is_held проверке.
 
@@ -858,4 +866,18 @@ async def collect_capture_body(self, scope: CommitReadScope, capture: SourceCapt
 R1 имеет proof в сигнатуре, owning collector и одна защищённая цепочка до acquire. R2 имеет concrete owner/caller, typed I/O/error и new/replay/GC/rollback/unknown-outcome правила. Это исправления проекта, не доказательство runtime. Проверить negative traces: missing source body в sources, extra pair, foreign-world empty proof, разные source holders, late acquire failure, same uid/different body после GC, concurrent same uid, cleanup failure после commit и lost commit acknowledgement. Source schema v1 и error roster не изменены.
 
 Внешние gates сохраняются: точный Pack/Snapshot input→publication binding, public capture caller/DAG route и шаг 3 pregame revision staging. Ни один не заменяет внутреннее доказательство R1/R2 и не требует полной миграции Source для повторного review этой документации.
+
+## 13. Принятая internal дельта PACK-S1/S2 — 2026-11-14
+
+Нормативная детализация этого ограниченного среза — [source-pack-s1-s2-contract.md, редакция 2](source-pack-s1-s2-contract.md). Это одна принятая редакция, не набор альтернатив из прежней переписки. Ниже закреплены Source declarations и границы; алгоритмы, exact nested dependency trace и error carriers не копируются вторично.
+
+**S1:** app.application.worldData.sourceVersioning.proof.coverageCheckInput.SourceProofCoverageCheckInput — named concrete immutable BaseModel с обязательными request: SourceProofReadInput и available: tuple[SourceDurableProof, ...], frozen/strict/extra-forbid/revalidate-always. SourceProofSelector.check_coverage(self, input: SourceProofCoverageCheckInput) -> None | SourceFailure — pure internal логическое включение exact capture/dependency/revision atoms. None не даёт origin authority/finalization/holds. Validation, world/empty/historical/conflict/subset semantics, порядок diagnostics и exact ModelIdentity/FieldRef paths — единая редакция §2. SourceOperation.CHECK_COVERAGE и применимость существующих кодов синхронизированы в §11.3. Зеркала proof/DTO в Pack запрещены.
+
+**S2:** app.application.worldData.sourceVersioning.capture.retentionBinding.SourceCaptureRetentionBinding.collect_for_adoption(self, scope: CommitScope, request: SourceProofReadInput) -> SourceProofResult | SourceFailure. Operation=ADOPT_CLOSURE. Valid write scope/unbound helper → один bind → collector.collect(scope.read_scope, request, operation=ADOPT_CLOSURE) → reset в finally. Нет acquire/release/append/commit или authority token. Чужой/task/revoked/read-only/already-bound scope — infrastructure refusal до IO.
+
+Принята sequential composition на одном живом outer writer scope: preflight bind/reset → explicit scoped provenance checks → unchanged §12.1 adopt bind/collect/check/acquire/reset. Adopt заново вычисляет closure и проверяет exact sources/holds/target; preflight его не заменяет. Read facet не покидает lifetime transaction. Snapshot владеет outer transaction/private evidence/rollback; exact ports, full caller trace, same-DB writer/GC guard и Pack read refusal union/carrier закреплены в единой редакции §4–5. Source не импортирует Pack manifest, не удостоверяет origin и не вызывает public pipeline другого домена.
+
+Принятый design не означает наличие runtime dependencies. Полный operation-origin path требует отдельного trusted acquisition admission/finalizer hookup; этот участок и authored writer/bootstrap не входят в S1/S2. Public CRUD/DAG ноды не добавлены, public SELECT/READ/VERIFY_GROUPS, canonical IDs и capture finalizer algorithm не изменены. §12.3 описывает историческую R1/R2 дельту; новая дельта enum относится только к этому §13.
+
+Порядок поставки и evidence отсутствующих prerequisites — [implementation-план S1/S2](source-pack-s1-s2-implementation.md). Подставлять placeholder collector, legacy adapter, fabricated holder или зеркальный DTO ради запуска запрещено.
 

@@ -39,6 +39,8 @@
 
 ## Ответственность и приёмка
 
+**Контрактный результат и runtime evidence различаются.** Публичные четыре encoded budget поля и error mapping уже перечислены; конкретные внутренние count/decoder boundaries приведены выше и в budget wiring. max_total_bytes не объявляется пределом process RSS/всех OS-read bytes: accounting касается encoded bodies, отдельный probe сохраняется для обнаружения corruption. Пока owning формат не предъявил допустимый output cap, соответствующий binding нельзя регистрировать с выдуманным default или unlimited fallback. Этот остаток относится к конкретному формату, а не блокирует весь read API/Pack или требует запуска генераторов. Фактические cap/cap+1, malformed, guard-cancel и memory проверки выполняются при реализации; их отсутствие сейчас не самостоятельный отказ в приёмке текста плана.
+
 [Resource-limit trace и проект](pack-read-resource-limit-signal.md) конкретизирует canonical subtype, сохранение через wrappers и прямую проверку encoded IO. Реализация и bounded zstd output signal ещё OPEN.
 
 Публичный wrapper делегирует одной `PackPartReadOperation`; она учитывает ресурсы своего чтения и возвращает existing `PackPartReadRefusal(BUDGET_EXCEEDED)` при достоверно установленном превышении. Pure decoder ограничивает свой output/структуру, backend проверяет bytes, guard сохраняет lifetime до завершения IO. DAG выбирает дальнейшую операцию; Cache/Source/producer не вызываются. Новых публичных методов, зеркальных DTO, CRUD или изменения порядка sources → evidence → manifest → codec/readers нет.

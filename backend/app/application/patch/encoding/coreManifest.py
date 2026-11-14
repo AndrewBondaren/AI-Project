@@ -10,6 +10,7 @@ from app.dataModel.patch.preconditions.runtime import (
     TargetAbsent, TargetVersionExpected,
 )
 from app.dataModel.patch.results.sectionResult import SectionAccepted, SectionRefused, SectionApplyReceipt
+from app.dataModel.worldSnapshot.sections.retention import SectionStateRetention, SectionHistoryRetention
 
 
 PATCH_CORE_SCHEMA = CanonicalSchemaManifest(entries=ARTIFACT_CORE_SCHEMA.entries + tuple(
@@ -31,5 +32,7 @@ PATCH_CORE_SCHEMA = CanonicalSchemaManifest(entries=ARTIFACT_CORE_SCHEMA.entries
         (20130, SectionAccepted, CanonicalTypeKind.RECORD),
         (20131, SectionRefused, CanonicalTypeKind.RECORD),
         (20132, SectionApplyReceipt, CanonicalTypeKind.RECORD),
+        (20301, SectionStateRetention, CanonicalTypeKind.RECORD),
+        (20302, SectionHistoryRetention, CanonicalTypeKind.RECORD),
     )
 ))

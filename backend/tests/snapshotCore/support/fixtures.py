@@ -275,9 +275,9 @@ async def live_tick(bundle, operation_id="tick", *, fail=False, entered=None, ho
     old_player = await players.read("p1")
     turn = 1 if expected.snapshot_head is None else (await history.read(expected.snapshot_head)).turn_id + 1
     metadata = WorldSnapshotMetadata(ref=world_ref, parent=expected.snapshot_head, operation_id=operation_id, turn_id=turn,
-        created_at=STAMP, envelope_format_version=1, base_pack_hash="d" * 64, state_refs=(), history_refs=(), retained_artifacts=())
+        created_at=STAMP, envelope_format_version=1, base_pack_hash="d" * 64, states=(), history=())
     player = PlayerSnapshotMetadata(ref=player_ref, parent=old_player, operation_id=operation_id, turn_id=turn,
-        created_at=STAMP, envelope_format_version=1, state_refs=(), history_refs=(), retained_artifacts=())
+        created_at=STAMP, envelope_format_version=1, states=(), history=())
     publication = WorldPublicationRef(world_uid="w1", publication_id=operation_id + "-pub", pack_hash="d" * 64,
         snapshot_head=world_ref, active_timeline_id="t1", gameplay_started=True)
     result = SnapshotApplyResult(category=SnapshotApplyOutcomeKind.COMMITTED, operation_id=operation_id,

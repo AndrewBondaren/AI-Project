@@ -34,20 +34,29 @@ def validate_receipt_provenance(metadata: SnapshotEnvelope, receipts: tuple[Sect
     if any(patch.operation_id != operation_id for receipt in receipts for patch in receipt.changed):
         raise ValueError("receipt belongs to another operation")
 
-    history = tuple(ref for receipt in receipts for ref in receipt.history_refs if ref.snapshot == metadata.ref)
-    if sorted(history, key=lambda ref: str(ref.section_key)) != sorted(metadata.history_refs, key=lambda ref: str(ref.section_key)):
+    history = tuple(entry for receipt in receipts for entry in receipt.history if entry.history.snapshot == metadata.ref)
+    if sorted(history, key=lambda entry: str(entry.history.section_key)) != sorted(
+            metadata.history, key=lambda entry: str(entry.history.section_key)):
         raise ValueError("metadata history does not match section receipts")
-    state = tuple(ref for receipt in receipts for ref in receipt.state_refs if ref.snapshot == metadata.ref)
-    current = tuple(ref for ref in metadata.state_refs if ref.snapshot == metadata.ref)
-    if sorted(state, key=lambda ref: str(ref.section_key)) != sorted(current, key=lambda ref: str(ref.section_key)):
-        raise ValueError("new metadata state does not match section receipts")
+    states = {entry.state.section_key: entry for entry in base.states} if base is not None else {}
     for receipt in receipts:
-        if any(_same_owner(ref.snapshot, metadata.ref) and ref.snapshot != metadata.ref
-               for ref in receipt.history_refs):
-            raise ValueError("receipt history does not use the assigned snapshot")
-        if any(_same_owner(ref.snapshot, metadata.ref) and ref not in metadata.state_refs
-               for ref in receipt.state_refs):
-            raise ValueError("receipt state is missing from the resulting metadata")
-    if any(ref.snapshot != metadata.ref and (base is None or ref not in base.state_refs)
-           for ref in metadata.state_refs):
-        raise ValueError("retained section state is not reachable from the pinned base")
+        for entry in receipt.history:
+            if _same_owner(entry.history.snapshot, metadata.ref) and entry.history.snapshot != metadata.ref:
+                raise ValueError("receipt history does not use the assigned snapshot")
+        for entry in receipt.states:
+            ref = entry.state
+            if not _same_owner(ref.snapshot, metadata.ref):
+                continue
+            if ref.snapshot == metadata.ref:
+                if not receipt.changed:
+                    raise ValueError("no-op receipt cannot replace state")
+                states[ref.section_key] = entry
+            elif base is None or entry not in base.states:
+                raise ValueError("inherited state closure differs from the pinned base")
+    if sorted(states.values(), key=lambda entry: str(entry.state.section_key)) != sorted(
+            metadata.states, key=lambda entry: str(entry.state.section_key)):
+        raise ValueError("metadata state closure does not match receipts and pinned base")
+    for receipt in receipts:
+        for entry in receipt.states:
+            if _same_owner(entry.state.snapshot, metadata.ref) and entry not in metadata.states:
+                raise ValueError("receipt state is missing or superseded in metadata")

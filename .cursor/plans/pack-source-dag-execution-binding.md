@@ -1,5 +1,7 @@
 # Pack / Source: binding результата через engine CALL
 
+**Исправление 2026-11-14:** по [указанию пользователя, переданному владельцем DAG](dag-pack-source-binding-response-2026-11-14.md) конкретные связи detailed_initialization с генераторами не спроектированы. Приведённые ниже агентские continuation/registrations/command proposals и основанные на них A1/A2 gates отозваны; их нельзя использовать как требования к текущему Pack или основание реализации. Состав нод и связи определяются только вместе с пользователем; legacy-ноды не используются. Исторические утверждения о принятии конкретных bindings не действуют. Независимые owning Pack/Source решения и локальный A3 POJO/error review сохраняются; это не приёмка DAG маршрута.
+
 Дата: 2026-11-13. Статус: PROPOSED для приёмки. Конкретизирует [Pack exchange inputs](pack-source-exchange-contract.md) и [DAG §6.7](gen-dag-cache-pack-source-families.md). Код, NodeId и новый порядок не вводятся; Source API не меняется.
 
 ## 1. Проверенная основа engine

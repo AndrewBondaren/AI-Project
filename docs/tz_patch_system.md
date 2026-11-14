@@ -289,9 +289,16 @@ diagnostics: tuple[FieldPathError, ...], непустой. Producer выбира
 категорию в точке решения, не по diagnostic.code на стороне consumer.
 
 `SectionApplyReceipt` содержит section_key,
-history_refs: tuple[SectionHistoryRef, ...],
-state_refs: tuple[SectionStateRef, ...], changed: tuple[PatchRef, ...],
-retained_artifacts: tuple[ArtifactRef, ...]. Нет changed — domain state_ref
+states: tuple[SectionStateRetention, ...],
+history: tuple[SectionHistoryRetention, ...], changed: tuple[PatchRef, ...].
+SectionStateRetention содержит state: SectionStateRef и artifacts: tuple[ArtifactRef, ...];
+SectionHistoryRetention содержит history: SectionHistoryRef и artifacts: tuple[ArtifactRef, ...].
+Оба strict/frozen records задают полный closure своего ref, без дубликатов artifacts;
+пустой closure допустим. Flat retained_artifacts и compatibility aliases не вводятся.
+Новый state заменяет closure только своей пары owner/section; inherited state
+должен полностью совпадать с записью pinned parent, включая artifacts.
+Отсутствие state в receipt сохраняет parent state, а не удаляет его.
+Нет changed — domain state_ref
 не меняется; history текущей операции всё равно может фиксировать no-op.
 Refs сгруппированы по участвующим world/player snapshots; повтор пары
 chain identity + section_key запрещён. Domain receipt не добавляет участника,

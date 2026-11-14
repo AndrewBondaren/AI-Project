@@ -1,3 +1,8 @@
+from app.application.worldSnapshot.validation.retentionClosure import retention_closure
+from app.dataModel.worldSnapshot.sections.retention import SectionHistoryRetention
+from app.dataModel.worldSnapshot.sections.refs import SectionHistoryRef
+from app.dataModel.patch.results.sectionResult import SectionApplyReceipt
+from app.dataModel.patch.changes.header import PatchRef
 """Append-only schema and rollback probes, not a production transaction adapter."""
 
 import sqlite3
@@ -427,8 +432,7 @@ class AssignedPublicationTests(unittest.TestCase):
                         f"marker-{section.header.key}", "w1", OperationKind.SNAPSHOT_APPLY.value, "a" * 64))
                     if mode == "refuse" and section.header.key == "two":
                         return refused
-                    return SectionApplyReceipt(section_key=section.header.key, state_refs=(), history_refs=(),
-                                               retained_artifacts=(), changed=())
+                    return SectionApplyReceipt(section_key=section.header.key, states=(), history=(), changed=())
 
                 for key in ("one", "two", "three"):
                     header = SectionHeader(key=RegistryKey[PatchSectionRegistry](key), format_version=1, depends_on=())
@@ -446,11 +450,11 @@ class AssignedPublicationTests(unittest.TestCase):
                         async with service._apply_to_target(scope, validation, tuple(sections), assigned, player_refs) as (ctx, receipts):
                             await history.append(scope, WorldSnapshotMetadata(ref=assigned, parent=base.snapshot_head,
                                 operation_id=op, turn_id=1, created_at=STAMP, envelope_format_version=1,
-                                base_pack_hash=base.pack_hash, state_refs=(), history_refs=(), retained_artifacts=()), receipts)
+                                base_pack_hash=base.pack_hash, states=(), history=()), receipts)
                             for ref in ctx.player_snapshots:
                                 await history.append(scope, PlayerSnapshotMetadata(ref=ref, parent=None, operation_id=op,
-                                    turn_id=1, created_at=STAMP, envelope_format_version=1, state_refs=(),
-                                    history_refs=(), retained_artifacts=()), receipts)
+                                    turn_id=1, created_at=STAMP, envelope_format_version=1, states=(),
+                                    history=()), receipts)
                             if mode in ("metadata_error", "metadata_cancel"):
                                 raise faults[mode]
 
@@ -627,7 +631,7 @@ class AssignedPublicationTests(unittest.TestCase):
                     validation = SnapshotValidationContext("next", expected,
                         (PlayerHeadExpectation(player_uid=parent.player_uid, expected_head=parent),), (), scope.read_scope)
                     async with service._apply_to_target(scope, validation, (), snapshot, (player,)) as (ctx, receipts):
-                        await service._append_metadata(ctx, 2, STAMP, receipts, {})
+                        await service._append_metadata(ctx, 2, STAMP, receipts)
                 for ref, pinned in ((snapshot, expected.snapshot_head), (player, parent)):
                     envelope = await peer[4].read(ref)
                     self.assertEqual((envelope.parent, envelope.turn_id, envelope.operation_id), (pinned, 2, "next"))
@@ -667,8 +671,12 @@ class AssignedPublicationTests(unittest.TestCase):
                     async with commits.transaction(lease.operation_id) as scope:
                         validation = SnapshotValidationContext(lease.operation_id, expected, (head,), (), scope.read_scope)
                         async with service._apply_to_target(scope, validation, (), snapshot, (player,)) as (ctx, receipts):
+                            receipts = (SectionApplyReceipt(section_key="test.holds", changed=(), states=(),
+                                history=tuple(SectionHistoryRetention(history=SectionHistoryRef(snapshot=dest,
+                                    section_key="test.holds", format_version=1), artifacts=(artifact,))
+                                    for dest, artifact in ((snapshot, a), (player, b)))),)
                             await service._append_metadata_and_handoff(ctx, 1, STAMP, receipts,
-                                {snapshot: (a,), player: (b,)}, holders=holders, lease=owner.lease, transferred=transferred)
+                                holders=holders, lease=owner.lease, transferred=transferred)
                     return ctx.next_publication
 
                 async def assert_rolled_back():
@@ -701,7 +709,7 @@ class AssignedPublicationTests(unittest.TestCase):
                 self.assertEqual(await peer[2].read("w1"), target)
                 self.assertEqual(await peer[3].read("p1"), player)
                 for ref, destination in ((a, snapshot), (b, player)):
-                    self.assertEqual((await peer[4].read(destination)).retained_artifacts, (ref,))
+                    self.assertEqual(retention_closure(await peer[4].read(destination)), (ref,))
                 self.assertEqual(await peer_holders.holders(a), (SnapshotHolder(snapshot=snapshot),))
                 self.assertCountEqual(await peer_holders.holders(b),
                                       (SnapshotHolder(snapshot=player), OperationHolder(lease=lease)))
@@ -734,12 +742,12 @@ class AssignedPublicationTests(unittest.TestCase):
                 expected = active.model_copy(update={"snapshot_head": old})
                 target = active.model_copy(update={"snapshot_head": new, "publication_id": "q"})
                 service = WorldSnapshotService(SectionRegistry(), world_store, player_store, history)
-                a = SectionApplyReceipt(section_key="a", changed=(), state_refs=(), retained_artifacts=(),
-                    history_refs=(SectionHistoryRef(snapshot=old, section_key="a", format_version=1),))
-                a = a.model_copy(update={"history_refs": (a.history_refs[0].model_dump(),),
-                                         "retained_artifacts": (None,)})
-                b = SectionApplyReceipt(section_key="b", changed=(), state_refs=(), history_refs=(),
-                                        retained_artifacts=(descriptor(),))
+                entry = SectionHistoryRetention(history=SectionHistoryRef(snapshot=old, section_key="a",
+                    format_version=1), artifacts=())
+                a = SectionApplyReceipt(section_key="a", changed=(), states=(), history=(entry,))
+                a = a.model_copy(update={"history": (entry.model_copy(update={"artifacts": (None,)}).model_dump(),)})
+                b = SectionApplyReceipt(section_key="b", states=(), history=(),
+                    changed=(PatchRef(operation_id="foreign", section_key="b", ordinal=0),))
                 for player_parent in (None, player.model_copy(update={"snapshot_id": "p-old"})):
                     heads = (PlayerHeadExpectation(player_uid="p1", expected_head=player_parent),)
                     async with commits.transaction("candidate") as scope:
@@ -751,7 +759,7 @@ class AssignedPublicationTests(unittest.TestCase):
                               patch("app.application.worldSnapshot.service.worldSnapshotService.ValidatorAggregationHelper",
                                     wraps=ValidatorAggregationHelper) as service_collector):
                             with self.assertRaises(PublicationInfrastructureError) as caught:
-                                await service._append_metadata(ctx, 2, STAMP, (a, b), {})
+                                await service._append_metadata(ctx, 2, STAMP, (a, b))
                             append.assert_not_awaited()
                             builder_collector.assert_called_once_with((SnapshotMetadataFieldIssue, SnapshotMetadataRelationIssue))
                             admitted = (MissingPersistedSnapshotBase, SnapshotMetadataFieldIssue, SnapshotMetadataRelationIssue)
@@ -769,7 +777,7 @@ class AssignedPublicationTests(unittest.TestCase):
                     if player_parent:
                         issues.append(("missing_persisted_base", ("validation", "expected_players", 0, "expected_head")))
                     self.assertEqual([(i.code.removeprefix("snapshot.metadata."), i.diagnostic_path) for i in caught.exception.args[0]],
-                                     issues + [("invalid_receipt", ("receipts", 0, "retained_artifacts", 0)),
-                                               ("foreign_history", ("receipts", 0, "history_refs", 0, "snapshot")),
-                                               ("unassigned_artifact", ("receipts", 1, "retained_artifacts", 0))])
+                                     issues + [("invalid_receipt", ("receipts", 0, "history", 0, "artifacts", 0)),
+                                               ("foreign_history", ("receipts", 0, "history", 0, "history", "snapshot")),
+                                               ("foreign_operation", ("receipts", 1, "changed", 0, "operation_id"))])
         run_async(check())

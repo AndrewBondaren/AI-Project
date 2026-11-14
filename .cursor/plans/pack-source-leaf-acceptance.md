@@ -1,5 +1,7 @@
 # Приёмка семи Pack / Source leaf contracts
 
+**Исправление 2026-11-14:** по [указанию пользователя, переданному владельцем DAG](dag-pack-source-binding-response-2026-11-14.md) конкретные связи detailed_initialization с генераторами не спроектированы. Приведённые ниже агентские continuation/registrations/command proposals и основанные на них A1/A2 gates отозваны; их нельзя использовать как требования к текущему Pack или основание реализации. Состав нод и связи определяются только вместе с пользователем; legacy-ноды не используются. Исторические утверждения о принятии конкретных bindings не действуют. Независимые owning Pack/Source решения и локальный A3 POJO/error review сохраняются; это не приёмка DAG маршрута.
+
 Дата: 2026-11-14. Вердикт: **полный маршрут НЕ ПРИНЯТ к реализации**. Проверены [leaf contracts](pack-source-leaf-contracts.md), [exchange](pack-source-exchange-contract.md), [execution binding](pack-source-dag-execution-binding.md), [карточка порядка](pack-source-first-route-review.md), [DAG families](gen-dag-cache-pack-source-families.md) и [обязательные критерии](../rules/dag-generator-interface.mdc). Caller detailed_initialization и последовательность 1–7 уже согласованы, повторного выбора не требуют. Это review документов и статическая сверка engine, без изменения кода/тестов.
 
 ## 1. Адресные замечания

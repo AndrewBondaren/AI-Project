@@ -18,6 +18,7 @@ from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
 from app.dataModel.worldSnapshot.results.apply import SnapshotApplyResult, SnapshotCommitRefs
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
 from app.dataModel.worldSnapshot.sections.refs import SectionStateRef, SectionHistoryRef
+from app.dataModel.worldSnapshot.sections.retention import SectionStateRetention, SectionHistoryRetention
 from app.db.repositories.sqlite.snapshotCore.history.rowProjection import encode_history_row, decode_history_row
 from tests.snapshotCore.support.fixtures import STAMP, live_database, live_started, run_async
 
@@ -28,15 +29,19 @@ OTHER = RegistryKey[PatchSectionRegistry]("test.other")
 def envelope(ref, *, parent=None, operation="op", states=(), histories=()):
     model = WorldSnapshotMetadata if isinstance(ref, WorldSnapshotRef) else PlayerSnapshotMetadata
     values = dict(ref=ref, parent=parent, operation_id=operation, turn_id=1 if parent is None else 2,
-        created_at=STAMP, envelope_format_version=1, state_refs=states, history_refs=histories, retained_artifacts=())
+        created_at=STAMP, envelope_format_version=1,
+        states=tuple(SectionStateRetention(state=ref, artifacts=()) for ref in states),
+        history=tuple(SectionHistoryRetention(history=ref, artifacts=()) for ref in histories))
     if isinstance(ref, WorldSnapshotRef):
         values["base_pack_hash"] = "d" * 64
     return model.model_validate(values, strict=True)
 
 
 def receipt(*, states=(), histories=(), key=KEY, changed=()):
-    return SectionApplyReceipt(section_key=key, state_refs=states, history_refs=histories,
-        changed=changed, retained_artifacts=())
+    return SectionApplyReceipt(section_key=key,
+        states=tuple(SectionStateRetention(state=ref, artifacts=()) for ref in states),
+        history=tuple(SectionHistoryRetention(history=ref, artifacts=()) for ref in histories),
+        changed=changed or ((PatchRef(operation_id="op", section_key=key, ordinal=0),) if states else ()))
 
 
 class SnapshotHistoryTests(unittest.TestCase):
@@ -61,7 +66,7 @@ class SnapshotHistoryTests(unittest.TestCase):
                 new = WorldSnapshotRef(world_uid="w1", timeline_id="t1", snapshot_id="next")
                 valid = envelope(new, parent=old, operation="next", states=(state,))
                 unknown = state.model_copy(update={"format_version": 2})
-                invalid = valid.model_copy(update={"state_refs": (unknown,)})
+                invalid = valid.model_copy(update={"states": (SectionStateRetention(state=unknown, artifacts=()),)})
                 async with commits.transaction("next") as scope:
                     with patch.object(history._access, "insert", new_callable=AsyncMock) as insert:
                         with self.assertRaises(ValueError):
@@ -145,11 +150,11 @@ class SnapshotHistoryTests(unittest.TestCase):
         ref = WorldSnapshotRef(world_uid="w1", timeline_id="t1", snapshot_id="new")
         metadata = envelope(ref)
         for invalid in (metadata.model_copy(update={"turn_id": True}),
-                        metadata.model_copy(update={"state_refs": []}),
+                        metadata.model_copy(update={"states": []}),
                         metadata.model_copy(update={"ref": ref.model_copy(update={"world_uid": " bad "})})):
             with self.subTest(invalid=invalid), self.assertRaises(ValueError):
                 validate_receipt_provenance(invalid, (), None, "op")
-        for invalid in ([receipt()], (receipt().model_copy(update={"state_refs": []}),),
+        for invalid in ([receipt()], (receipt().model_copy(update={"states": []}),),
                         (receipt().model_copy(update={"section_key": 123}),)):
             with self.subTest(receipts=invalid), self.assertRaises(ValueError):
                 validate_receipt_provenance(metadata, invalid, None, "op")
@@ -191,9 +196,9 @@ class SnapshotHistoryTests(unittest.TestCase):
                             PlayerSnapshotRef(player_uid="p1", snapshot_id="new-player")):
                     model = WorldSnapshotMetadata if isinstance(ref, WorldSnapshotRef) else PlayerSnapshotMetadata
                     values = dict(ref=ref, parent=None, operation_id="validate", turn_id=1,
-                        created_at=STAMP, envelope_format_version=1, history_refs=(), retained_artifacts=(),
-                        state_refs=(SectionStateRef(snapshot=ref,
-                            section_key=RegistryKey[PatchSectionRegistry]("test.unbacked"), format_version=1),))
+                        created_at=STAMP, envelope_format_version=1, history=(),
+                        states=(SectionStateRetention(state=SectionStateRef(snapshot=ref,
+                            section_key=RegistryKey[PatchSectionRegistry]("test.unbacked"), format_version=1), artifacts=()),))
                     if isinstance(ref, WorldSnapshotRef):
                         values["base_pack_hash"] = "d" * 64
                     metadata = model.model_validate(values, strict=True)

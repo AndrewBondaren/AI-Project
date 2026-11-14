@@ -791,6 +791,8 @@ Overlay холмов локации — отдельный целевой кон
 
 ### `worlds.danger_level_registry` (N+1)
 
+Владелец семантики реестра — **Locations** (явно установлен 2026-11-14 по поручению пользователя). Locations определяет identity `system_danger`, числовой порядок `priority` и смысл сравнения опасности ячеек/маршрутов. Terrain и определения состояний используют ссылки на этот реестр; Source владеет только versioning/proof, Artifacts — хранением. Это назначение ответственности не объявляет существующим typed CRUD или DAG-контракт и не вводит новый runtime-модуль.
+
 ```json
 [
   { "system_danger": "none",   "display_danger": "Безопасно", "priority": 0 },
