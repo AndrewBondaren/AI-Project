@@ -281,6 +281,8 @@ Full snapshotCore в этом проходе не повторялся: shared c
 
 ## 12. Binding canonical codec — 2026-11-15
 
+Повторное независимое review 2026-11-15: **PASS узкого binding/diagnostics/validator/canonical-codec среза**, BIND-1 закрыт с учётом принятой root/location delta. [Актуальный отчёт](snapshot-pinned-origin-binding-codec-review.md). Исторические результаты и прежний verdict ниже сохранены; ledger/runtime этим не принимаются.
+
 ### BIND-1 correction, разрешено «Исправляй» / «Делай»
 
 **Root/location delta принята пользователем 2026-11-15 («Ок» после сравнения вариантов) и реализована.** Ниже сохраняется история промежуточного ограничения; актуально: `PreparationSourceBindingShapeIssue(code, location, message)` добавлен в existing preparationSourceBindingIssue.py, strict/frozen/extra-forbid/revalidate-always, все поля обязательны. Code ограничен INVALID_SHAPE, location — immutable tuple strict str/int, root=(). Existing FieldPathError не меняется. Alias PreparationSourceBindingIssue объединяет два concrete carriers; validator return — tuple этого union, exact admitted — FieldIssue и ShapeIssue. Shared resolver используется без сокращения loc: неразрешимый полный адрес сохраняется в ShapeIssue. Корневой/unknown-field отказ больше не обрывает доступные relations; codec уже сохраняет tuple обоих типов без дополнительной конвертации.

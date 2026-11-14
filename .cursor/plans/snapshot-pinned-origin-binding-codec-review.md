@@ -1,5 +1,27 @@
 # Snapshot pinned-origin binding / codec: independent review
 
+## Повторное независимое review — 2026-11-15
+
+**PASS узкого binding/diagnostics/validator/canonical-codec среза; BIND-1 закрыт.** Новых actionable findings не найдено. Исторический CHANGES REQUIRED ниже сохранён как evidence первого прохода и не является текущим verdict.
+
+Baseline: `1450f0fb`, рабочее дерево перед review чистое. Семь файлов теперь tracked; прочитаны текущие файлы и фактический `git diff HEAD~1 HEAD --` для validator, diagnostics и binding tests. Исправление состоит в INVALID_SHAPE, новом concrete ShapeIssue и независимой strict проверке доступных полей. Согласование root/location delta явно записано в owning §12; прежняя shape-first формулировка §11 заменена этой дельтой.
+
+Исходный BIND-1 воспроизведён заново: sources=(None,) плюс foreign target даёт INVALID_SHAPE(sources[0]), WORLD_MISMATCH(request.world_uid), WORLD_MISMATCH(origin.pin.world_uid), в этом порядке. Новый regression с двумя последующими invalid children проверяет все шесть причин и точные индексы 0/1/2. Root None даёт ShapeIssue с location=(); root/nested extras сохраняют полные locations и обе доступные world причины. Дополнительный независимый probe malformed holder.pin_id сохранил полный union loc `('sources', 0, 'holder', 'pin', 'pin_id')`, а затем duplicate/holder ошибки элементов 1 и 2. Валидный ref malformed-holder элемента участвует в duplicate check: независимая информация не теряется.
+
+Exact admitted roster теперь FieldIssue | ShapeIssue. Оба concrete carriers strict/frozen/extra-forbid/revalidate-always. ShapeIssue имеет обязательные code/location/message, code ограничен INVALID_SHAPE, location — tuple strict str/int; bool отвергается. Declared paths остаются CheckedPath, неразрешимый полный loc не сокращается и не подменяется фиктивным field path. Это разные области представимости адресов, а не дублирование runtime authority/hold errors. Structural причины идут в порядке Pydantic перед relation причинами. Codec encode сохраняет tuple без потери типов/paths/locations и не вызывает canonical encoder при отказе (mock assertion). Decode по-прежнему сначала требует canonical structurally valid bytes: malformed bytes — canonical failure с cause, а не обещание частичного relation анализа повреждённого wire.
+
+Повторно проверены обязательные критерии: роли моделей, carriers, validator, manifest и codec и их границы из раздела DAG ниже сохранены; новые helpers только читают typed fields и валидируют owning annotations, не осуществляют IO/authority. Нет выбора самостоятельных операций, скрытого запуска pipeline или прямого междоменного CRUD. Public data/settings C/R/U/D не добавлены; runtime caller по поиску backend/app отсутствует. Порядок соответствует явно принятой correction §12: structural collection → доступные relations → отказ до encoding. Новые DTO не копируют Source/Pack values. Manifest IDs/owners/roster и fixed-layout vector не менялись; тесты Source/Pack и request projection повторены. Полный domain/storage/runtime PASS из этого не следует.
+
+Повторные команды:
+
+- Из backend: `.venv/Scripts/python.exe -B -m unittest tests.snapshotCore.contracts.test_preparation_source_binding tests.snapshotCore.contracts.test_preparation_source_codec tests.snapshotCore.contracts.test_codec tests.sourceVersioning.test_request_canonical tests.sourceVersioning.test_canonical tests.spatial_pack.test_pin_canonical_registration` — **42 OK**, 1.618s.
+- Из корня: та же приведённая ниже команда pyright для пяти production-файлов — **0 errors, 0 warnings**. Tests не включались в typing scope.
+- Из backend: `.venv/Scripts/python.exe -B -m unittest discover -s tests/snapshotCore -t .` с доступом к временным каталогам — **194 tests, OK (skipped=1), 176.263s**, exit 0. Fixed-layout и новые BIND-1 regressions включены. Документальный `git diff --check` — PASS.
+
+Пределы: проверен текущий committed срез и перечисленные regression/probes; это не exhaustive fuzzing. Ledger/DDL, actual holds, coverage, runtime wiring, terminal/retry и Time вне scope. Код и тесты reviewer не менял; изменения review ограничены этим отчётом и ссылкой в owning §12.
+
+## История первого review
+
 2026-11-15. **CHANGES REQUIRED**. Scope: семь файлов из запроса, owning storage/codec §11–12 и pinned contract r2. Production и тесты не изменялись.
 
 ## Finding BIND-1 — P2: malformed sibling подавляет доступные relation diagnostics
