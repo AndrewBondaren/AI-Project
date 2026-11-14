@@ -3,6 +3,13 @@
 from typing import TypeVar
 
 from pydantic import BaseModel
+from app.dataModel.artifacts.references import ArtifactKind
+from app.dataModel.worldPack.meta.parts import PackStoredPart
+from app.dataModel.worldPack.preparation.parts import PackCoarseClimatePartInput, PackLocationsIndexPartInput
+from app.dataModel.worldPack.meta.locationsIndexStorageFormat import LOCATIONS_INDEX_FORMAT_KEY, LOCATIONS_INDEX_FORMAT_VERSION
+from app.dataModel.worldPack.preparation.operations import PackLocationsIndexInput
+from app.dataModel.worldPack.preparation.errors import PackPreparationIssue, PackPreparationIssueCode
+from app.dataModel.worldPack.wire.climateFieldWire import CLIMATE_FIELD_FORMAT_KEY, CLIMATE_FIELD_FORMAT_VERSION
 
 from app.application.worldData.pack.preparation.errors import (
     preparation_errors, raise_preparation_errors, validate_preparation_input,
@@ -12,7 +19,7 @@ from app.dataModel.fields.checkedPath import CheckedPath
 from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.worldPack.preparation.errors import PackPreparationFailureReason
 from app.dataModel.worldPack.preparation.operations import (
-    PackDeletePartInput, PackDeleteLocationTerrainInput, PackDeleteSettlementStructureInput,
+    PackDeletePartInput, PackDeleteLocationTerrainInput, PackDeleteSettlementStructureInput, PackCoarseClimateInput,
 )
 from app.dataModel.worldPack.preparation.addresses import (
     PackPartAddress, PackAssemblyAddress, PackLocationMetadataAddress, PackSettlementMetadataAddress,
@@ -49,6 +56,72 @@ def _without_representation(state: PackPreparationState, address: PackPartAddres
 
 
 class PackPreparationService:
+    def replace_locations_index(self, request: PackLocationsIndexInput) -> PackPreparationState:
+        errors = preparation_errors()
+        checked = validate_preparation_input(PackLocationsIndexInput, request, errors)
+        validator = PackPreparationValidator()
+        if checked is not None:
+            root = CheckedPath.root(PackLocationsIndexInput)
+            state_path = root.field(FieldRef(lambda: PackLocationsIndexInput, lambda value: value.state))
+            validator.check_state_identities(checked.state, state_path, errors)
+            validator.check_metadata_groups(checked.state, state_path, errors)
+            part_path = root.field(FieldRef(lambda: PackLocationsIndexInput, lambda value: value.part))
+            artifact_field = FieldRef(lambda: PackLocationsIndexPartInput, lambda value: value.artifact)
+            artifact = artifact_field.select(checked.part)
+            if (artifact.kind is not ArtifactKind.BLOB or artifact.format_key != LOCATIONS_INDEX_FORMAT_KEY
+                    or artifact.format_version != LOCATIONS_INDEX_FORMAT_VERSION):
+                errors.add(PackPreparationIssue(code=PackPreparationIssueCode.FORMAT_MISMATCH,
+                    path=part_path.field(artifact_field).freeze(), message="unsupported locations index descriptor"))
+            provenance_field = FieldRef(lambda: PackLocationsIndexPartInput, lambda value: value.provenance)
+            if provenance_field.select(checked.part).provenance.source_proof.world_uid != checked.state.base_publication.world_uid:
+                errors.add(PackPreparationIssue(code=PackPreparationIssueCode.SOURCE_PROOF_MISMATCH,
+                    path=part_path.field(provenance_field).freeze(), message="index proof belongs to another world"))
+        raise_preparation_errors(errors, PackPreparationFailureReason.DEPENDENCY_MISMATCH)
+        assert checked is not None
+        state = checked.state
+        stored = PackStoredPart(address=checked.part.address, artifact=checked.part.artifact,
+                                provenance=checked.part.provenance.provenance)
+        existing = any(part.address == stored.address for part in state.parts)
+        parts = tuple(stored if part.address == stored.address else part for part in state.parts)
+        if not existing:
+            parts = (*parts, stored)
+        result = PackPreparationState(base_publication=state.base_publication, parts=parts, assembly=state.assembly,
+            assembly_provenance=state.assembly_provenance, metadata_dependencies=state.metadata_dependencies)
+        return validator.validate_state(result)
+
+    def write_coarse_climate(self, request: PackCoarseClimateInput) -> PackPreparationState:
+        errors = preparation_errors()
+        checked = validate_preparation_input(PackCoarseClimateInput, request, errors)
+        validator = PackPreparationValidator()
+        if checked is not None:
+            root = CheckedPath.root(PackCoarseClimateInput)
+            state_path = root.field(FieldRef(lambda: PackCoarseClimateInput, lambda value: value.state))
+            validator.check_state_identities(checked.state, state_path, errors)
+            validator.check_metadata_groups(checked.state, state_path, errors)
+            part_path = root.field(FieldRef(lambda: PackCoarseClimateInput, lambda value: value.part))
+            artifact_field = FieldRef(lambda: PackCoarseClimatePartInput, lambda value: value.artifact)
+            artifact = artifact_field.select(checked.part)
+            if (artifact.kind is not ArtifactKind.BLOB or artifact.format_key != CLIMATE_FIELD_FORMAT_KEY
+                    or artifact.format_version != CLIMATE_FIELD_FORMAT_VERSION):
+                errors.add(PackPreparationIssue(code=PackPreparationIssueCode.FORMAT_MISMATCH,
+                    path=part_path.field(artifact_field).freeze(), message="unsupported climate field descriptor"))
+            provenance_field = FieldRef(lambda: PackCoarseClimatePartInput, lambda value: value.provenance)
+            if provenance_field.select(checked.part).provenance.source_proof.world_uid != checked.state.base_publication.world_uid:
+                errors.add(PackPreparationIssue(code=PackPreparationIssueCode.SOURCE_PROOF_MISMATCH,
+                    path=part_path.field(provenance_field).freeze(), message="climate proof belongs to another world"))
+        raise_preparation_errors(errors, PackPreparationFailureReason.DEPENDENCY_MISMATCH)
+        assert checked is not None
+        state = checked.state
+        stored = PackStoredPart(address=checked.part.address, artifact=checked.part.artifact,
+                                provenance=checked.part.provenance.provenance)
+        existing = any(part.address == stored.address for part in state.parts)
+        parts = tuple(stored if part.address == stored.address else part for part in state.parts)
+        if not existing:
+            parts = (*parts, stored)
+        result = PackPreparationState(base_publication=state.base_publication, parts=parts, assembly=state.assembly,
+            assembly_provenance=state.assembly_provenance, metadata_dependencies=state.metadata_dependencies)
+        return validator.validate_state(result)
+
     def delete_location_terrain(self, request: PackDeleteLocationTerrainInput) -> PackPreparationState:
         checked = _admit(PackDeleteLocationTerrainInput, request,
                          FieldRef(lambda: PackDeleteLocationTerrainInput, lambda value: value.state))

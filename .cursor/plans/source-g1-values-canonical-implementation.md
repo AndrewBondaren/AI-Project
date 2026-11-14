@@ -64,7 +64,7 @@ Pure responsibilities уже приняты: validator проверяет гот
 
 **G1-BIND OPEN:** §10.1 задаёт semantics owning key validation, но exact application adapter declarations/registration ещё нужно предъявить и принять. Ни G1.1/G1.2, ни тестовая stub registry не закрывают этот gate. После API sheet сверить актуальные owning key contracts; если нужна новая внешняя операция/изменение другого домена — остановка и конкретная зависимость пользователю. Не переносить эту дыру в реализацию S1.
 
-Owning сверка Terrain получена 2026-11-14 и зафиксирована в [API sheet §3.1](source-g1-pure-api-sheet.md#31-ответ-владельца-terrain--2026-11-14). Подтверждён key type, но accepted exact-validator signature, body codec/format registration и semantic projector отсутствуют. Старые TerrainSourceAdapter/TerrainSourceError/integration signatures отозваны; использовать их для закрытия gate запрещено. Это конкретный внешний остаток G1-BIND, не новый блокер импортов Pack.
+Owning сверка Terrain обновлена 2026-11-15 в [API sheet §3.1](source-g1-pure-api-sheet.md#31-ответ-владельца-terrain--2026-11-14) и [binding proposal §5–6](source-g1-terrain-binding-proposal.md). Exact-key signatures/rules согласованы отдельно, реализация ещё не принята. Body layout, semantic policy, membership SET, concrete format registration и полная Source composition остаются открытыми. Старые TerrainSourceAdapter/TerrainSourceError/integration signatures отозваны; использовать их для закрытия gate запрещено. Это конкретный остаток G1-BIND, не новый блокер импортов Pack.
 
 ## 6. Проверки и outputs
 
