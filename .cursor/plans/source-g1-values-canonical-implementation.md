@@ -1,6 +1,6 @@
 # Source G1 — базовые значения, canonical schema и pure validation
 
-2026-11-14. **Полный G1 — DRAFT; отдельный POJO-срез для Pack 3a разрешён пользователем по исключению §7.** Основной план world-source-versioning.md сохраняет порядок inventory → owning contracts/projector → revisions/history/retention → finalize → integrations. Этот срез поставляет базовые значения и pure контракты до S1; не объявляет G1 закрытым только по наличию POJO.
+2026-11-14. **G1.1 → G1.2 разрешены пользователем до закрытия G1-BIND; полный G1 остаётся незавершённым.** Решение передано через Source 2 и зафиксировано в §7; оно расширяет прежнее исключение POJO для Pack 3a. G1.3/pure semantic composition требует собственного закрытия G1-BIND. Основной план world-source-versioning.md сохраняет порядок inventory → owning contracts/projector → revisions/history/retention → finalize → integrations. Наличие POJO/manifest не означает завершения G1 или разрешения S1/runtime.
 
 ## 1. Источники и проверенное состояние
 
@@ -50,7 +50,7 @@ Production path: backend/app/application/worldData/sourceVersioning/encoding/sou
 
 Никакого нового codec/hash engine. Existing CanonicalCodec encode/decode/content_digest должны воспроизводить literal V0/V1 vectors §11.4. Nominal SourceMemberKey/RegistryKey round-trip проверяется реальными типами, не scalar stand-ins; enum decode восстанавливает exact owner. Изменение shared encoding не делать «заодно» при ошибке round-trip — предъявить конкретный defect dependency.
 
-Requests/results/errors/descriptor registry не входят в persisted proof schema, как требует §11.4. SourceProofReadInput существует как POJO, но не получает canonical ID из этого плана. Поступивший запрос Snapshot на encoding сохранённого request — отдельная proposed Source-owned binding dependency: решение не менять proof bytes/IDs и не добавлять mirror. Пока exact registration не принята, Snapshot storage codec gate OPEN. UUID ManifestPinRead.store_id принадлежит отдельной Snapshot/Pack codec задаче и не основание менять Source proof schema.
+Requests/results/errors/descriptor registry не входят в persisted proof schema, как требует §11.4. Настоящий SourceProofReadInput поставляется в G1.1 по §7, но не получает canonical ID из G1.2. После подтверждённых G1.1/G1.2 Source 2 продолжает отдельный request registration/composition/tests срез по source-2-snapshot-request-encoding-proposal.md (71201), не меняя proof bytes/IDs и не добавляя mirror. Наличие request POJO не считается готовой registration. UUID ManifestPinRead.store_id принадлежит отдельной Snapshot/Pack codec задаче и не основание менять Source proof schema.
 
 ## 5. G1.3 — pure semantics и G1-BIND
 
@@ -82,24 +82,35 @@ Typing files: backend/tests/typing/sourceVersioning/valid.py, invalid.py и pyri
 
 ## 7. Порядок и приёмка
 
+Следующий абзац — история первоначального исключения Pack 3a. Его ограничения и ссылка на прежний запрет первого кода заменены актуальным решением G1.1 → G1.2 ниже; не применять их как действующий gate read requests/encoding.
+
 **Разрешённое пользователем исключение 2026-11-14 — POJO для Pack 3a.** До приёмки G1.3 отдельно поставляются SourceDurableProof, SourceCaptureUsage, SourceCaptureRef, SourceProofInput, SourceProofGroupsInput/Result, SourceProofResult, SourceProofSelection и их транзитивные descriptor/identity/revision/dependency типы. Для этого среза G1-BIND/API sheet не prerequisite. Ответственность классов и shared dependencies — §3; поля — спецификация §9.1/10.1–2. Проверки только структурные: strict/frozen/deep revalidation, обязательные поля, shape и локальные инварианты. Canonical ordering, owning descriptor admission, union/subset/closure и matching fingerprint остаются application ответственностью G1.3, не перемещаются в модели. Отдельные read/select/verify requests, error roster, capture body/witness, encoding, storage, finalizer, pipelines, adoption, DAG и Pack code в этот срез не входят. Порядок внутри среза: shared leaves → descriptors/identities/revisions → dependencies → proof/input/result/selection/groups → собственные runtime/typing проверки → отдельная независимая приёмка. Новых CRUD/междоменных вызовов нет, data/settings CRUD этим срезом не принимаются. Не вводятся дубли ошибок: структурный отказ — Pydantic ValidationError, domain diagnostics остаются будущей pure boundary. Этот результат не закрывает весь G1; запрет первого кода ниже сохраняется для остального полного среза.
 
-Порядок конкретизации: G1.3 API sheet/owning binding gap → согласование этого полного среза → implement-plan G1.1 values → G1.2 schema/vectors → G1.3 pure components → общий review G1. Контракт G1.3 принимается ДО первого кода, даже если реализуется после values/schema. Это позволяет избежать поставки placeholders и циклических dependencies. Scope не расширяется до runtime IO.
+**Актуальное решение пользователя, переданное Source 2 2026-11-14:** разрешено завершить **G1.1 → G1.2 до G1-BIND**, включая настоящий SourceProofReadInput и полный SOURCE_PROOF_SCHEMA_V1 с проверками. Пользователь отдельно потребовал закрепить изменение порядка именно в owning-плане. Это решение заменяет прежний общий запрет первого кода до приёмки G1.3; предыдущий POJO-срез и его exclusions выше описывают историю первой поставки, а не новый запрет read request/capture/schema в G1.1/G1.2.
+
+Разрешённая последовательность:
+
+1. G1.1 — завершить values/structural validation по §3, включая SourceProofReadInput(world_uid, proof) и настоящие transitive типы полного persisted roster. Сохранить чужие незавершённые edits; не создавать mirrors или permissive adapters. Проверить strict/frozen/revalidation/negative cases и typing. Семантический admission, descriptor-aware ordering и closure не переносить в POJO.
+2. G1.2 — полный immutable SOURCE_PROOF_SCHEMA_V1 по §4 и accepted spec §11.4; exact IDs/bytes/версия неизменны. Подтвердить прежние literal V0/V1, round-trip настоящих types, negative cases и collision checks. Не ограничивать manifest заглушкой под один consumer. Обозначить результат как G1.1/G1.2 evidence, не G1 complete.
+3. После подтверждённой поставки G1.1/G1.2 — отдельный Source 2 registration-срез: request ID71201, owning request manifest/composition и адресные tests по его отдельному proposal. Не включать request в SOURCE_PROOF_SCHEMA_V1 и не менять proof wire. G1-BIND не prerequisite этого pure encoding-среза; собственная contract/implementation проверка registration обязательна.
+4. G1.3 — exact API sheet/owning adapters/composition принять и закрыть G1-BIND до реализации соответствующего pure/semantic слоя; затем его checks и общий review G1. Отсутствующие adapters не заменять stub.
+
+Scope не расширяется до runtime IO, semantic admission/S1, finalizer, adoption или DAG. Прежний Source чат этим документальным изменением не затрагивается. Запись переданного решения не заявляет, что G1.1/G1.2 уже реализованы или приняты по tests.
 
 Definition of Done G1: все exact imports доступны, проверки values/canonical/pure и typing выполнены, G1-BIND закрыт принятой конкретной dependency composition; ни public durable API, ни финализация/holds не обещаются. Только после этого слой A S1 может начинаться по source-pack-s1-s2-implementation.md. Наличие файлов без pure adapter evidence — PARTIAL, не G1 complete.
 
 | Обязательный критерий | Проверка |
 |---|---|
 | Три запрета DAG | Pure library, без pipeline/IO/public domain calls; ноды/ветвление/HTTP не добавляются |
-| Ответственность всех классов | G1.1 table и existing schema/codec/shared helpers; concrete G1.3 signatures ещё OPEN — до них приёмка невозможна |
+| Ответственность всех классов | G1.1 table и existing schema/codec/shared helpers достаточны для разрешённого G1.1/G1.2 среза; concrete G1.3 composition ещё OPEN и блокирует приёмку G1.3/полного G1, но не values/schema |
 | Public/internal | Public value imports только; application helpers internal; не вводить public ADMIT/READ stubs |
-| Утверждённый порядок | Контракт до реализации; values → schema → pure checks → A; storage/finalize/integration позже по основному плану |
+| Утверждённый порядок | По решению §7: G1.1 values → G1.2 schema/vectors → отдельный Source 2 request encoding; G1.3 после собственного G1-BIND → общий G1 review → A. Storage/finalize/integration позже по основному плану |
 | Data C/R/U/D | Новых public операций нет; construction/validation value не durable C/U; R storage отсутствует; D отсутствует |
 | Settings C/R/U/D | Immutable descriptor configuration, без mutable registry CRUD и runtime discovery |
 | Междоменные зависимости | Shared leaves/codecs existing; owning key adapters требуют точного принятого API. Нет импорта Terrain registry в Source identity |
 | POJO/typed errors | Единственный Source roster, existing FieldPathError/CheckedPath/FieldRef/aggregation reuse; нет mirrored proof/receipt или новых generic key frameworks |
 
-**Verdict полного G1: DRAFT, NOT ACCEPTED FOR IMPLEMENTATION — конкретный gate G1-BIND/API sheet.** Исключение — разрешённый выше POJO-срез Pack 3a. Для остального полного G1 следующее действие Source — предъявить exact pure/binding API в указанной границе; при необходимости внешнего контракта сообщить владельца и зависимость. Runtime IO работа только implement-plan после снятия соответствующего gate и приёмки. Ручные edits apply_patch; mandatory diff перед отчётом; no commit/push/server/SQL/DAG.
+**Verdict:** G1.1/G1.2 разрешены к реализации по §7 через implement-plan; полный G1 не завершён. G1-BIND/API sheet остаётся gate соответствующего G1.3 pure/semantic слоя и общей приёмки G1, не первым шагом перед values/schema. При необходимости внешнего контракта сообщить владельца и конкретную зависимость, не расширять её заглушкой. Runtime IO/S1/finalizer этим решением не разрешены. Ручные edits apply_patch; mandatory diff перед отчётом; no commit/push/server/SQL/DAG.
 
 ## 8. Поставка POJO для Pack 3a — собственная проверка 2026-11-14
 
@@ -131,3 +142,21 @@ Private `_value.SourceValue` задаёт общую конфигурацию и
 Команды: из backend `.venv/Scripts/python.exe -B -m unittest discover -s tests/sourceVersioning -p test_values.py`; из корня `node node_modules/pyright/index.js -p backend/tests/typing/sourceVersioning/pyrightconfig.valid.json` и corresponding invalid config (ожидается exit 1 и пять указанных ошибок).
 
 Граница: POJO не проверяет canonical bytes ordering/fingerprint, descriptor admission, принадлежность library captured membership, finalized witness, exact stored mappings или полноту durable closure. Bounds и соответствие selections исходным группам проверит application; в этом срезе нет atom enumeration/union/subset/closure. Успешный constructor SourceProofResult не удостоверяет durable admission. Read/select/verify requests и algorithms/storage/finalizer/pipelines/adoption/DAG/Pack не реализовывались.
+
+## 9. G1.1 declarations и G1.2 encoding — поставка 2026-11-14
+
+Продолжение выполнено после прямого «Делаем наш план далее»; актуальное исключение порядка — §7. §8 выше описывает предыдущую поставку. Независимая приёмка нового среза не проводилась. **Два отсутствовавших import prerequisites Source 2 теперь поставлены**, но его request registration и Snapshot ledger этим не принимаются.
+
+Добавлены `sourceProofInput.SourceProofReadInput`, `sourceProofSelection.SourceProofSelectInput`, `sourceProofGroups.SourceProofGroupsVerifyInput`, `sourceBodyVersion.SourceBodyVersion/SourceCollectionVersion`, `sourceCollection.SourceCollectionBody`, `sourceCapture.SourceCapture`, `sourceCaptureWitness.SourceCaptureWitness`. Все под `app.dataModel.sourceVersioning`; shared ArtifactRef/EntityUid/revision types переиспользованы. Проверки — structural shape, worlds, unique identities, witness format, request correlation; canonical ordering/owning admission/closure в модели не перенесены.
+
+Добавлен единый `sourceErrors`: SourceOperation (включая CHECK_COVERAGE), SourceFieldCode/SourceFieldIssue, SourceLogicCode/SourceLogicIssue, SourceFailure с обязательным nullable context и непустым набором issues. SourceFieldIssue — concrete specialization existing FieldPathError; новых error carriers вместо него нет. Runtime immutable configuration наследуется от shared FieldPathError. **Реализованы значения ошибок, но не G1.3 boundary translation/semantic aggregation.** Существующие TODO(SOURCE-TYPED-ERRORS) остаются открыты; создание sourceErrors.py не является завершением перехода всех validators на typed diagnostics.
+
+Поставлен `app.application.worldData.sourceVersioning.encoding.sourceProofSchemaV1.SOURCE_PROOF_SCHEMA_V1`: immutable manifest с ровно 21 accepted entry §11.4 (2 shared Artifact + 19 Source). Requests/results/errors/descriptor configuration не зарегистрированы; request ID71201 не добавлялся. Новый codec, v2 schema или формат Terrain не создавались.
+
+Собственные проверки: **34 tests Source PASS**, **13 shared canonical/UUID regression tests PASS**, positive Pyright **0 errors**, negative Pyright **ровно 5 ожидаемых errors**. Подтверждены V0 exact hex/160 bytes/fingerprint, V1 1400 bytes/fingerprint, SourceVersionRef fingerprint и selection 204 bytes; весь transitive roster/field order round-trip, cold process round-trip, исторические revisions, изменение witness fingerprint, стабильность bytes при порядке/расширении manifest, malformed wire/wrong root/version refusals. Merge проверен с ARTIFACT_CORE_SCHEMA, SNAPSHOT_CORE_SCHEMA и PACK_PIN_SCHEMA; ID/owner/kind conflicts отклоняются. FieldIssue paths собраны existing CheckedPath/FieldRef; shared aggregation сохраняет порядок двух issues. Это проверка carriers, не реализация operation-wide aggregation.
+
+Команды: из backend `.venv/Scripts/python.exe -B -m unittest discover -s tests/sourceVersioning -p "test_*.py"` и `.venv/Scripts/python.exe -B -m unittest tests.planning.encoding.test_canonical_codec tests.planning.encoding.test_uuid_codec`; positive/negative Pyright configs — §8. Исполняемый полный список imports обновлён в tests/typing/sourceVersioning/valid.py. Diff просмотрен; shared production codec, Terrain, Pack, Snapshot, SQL, pipelines и DAG не изменялись.
+
+Независимая проверка declarations/encoding завершена 2026-11-15: **PASS**, замечаний нет; [акт и границы verdict](source-g1-foundation-review-2026-11-15.md). Отдельный reviewer повторил 47 tests и positive/negative Pyright. Source 2 уже поставил request registration по своему proposal §6; его отдельный review и Snapshot integration этим PASS не покрыты.
+
+Следующий наш этап — G1.3/API/G1-BIND и semantic typed-error transition. Source-owned API sheet остаётся DRAFT; concrete owning exact key/body/projector bindings Terrain не приняты по ответу §3.1 этого sheet. До их согласования зависимую реализацию не начинать, не подменять bindings тестовыми adapters и не распространять PASS foundation на G1 целиком. Request registration повторно не реализовывать; его текущая поставка относится к отдельному Source 2 срезу.

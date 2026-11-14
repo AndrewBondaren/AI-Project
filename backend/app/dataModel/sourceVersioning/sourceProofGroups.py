@@ -29,3 +29,18 @@ class SourceProofGroupsInput(SourceValue, frozen=True):
 class SourceProofGroupsResult(SourceValue, frozen=True):
     admission: SourceProofResult
     selections: tuple[SourceProofSelection, ...] = Field(min_length=1)
+
+
+class SourceProofGroupsVerifyInput(SourceValue, frozen=True):
+    """Expected usage and supplied result; exact union/closure verification is external."""
+
+    expected: SourceProofGroupsInput
+    result: SourceProofGroupsResult
+
+    @model_validator(mode="after")
+    def correlation_shape(self) -> Self:
+        if len(self.expected.groups) != len(self.result.selections):
+            raise ValueError("one selection per expected group is required")
+        if self.expected.groups[0].world_uid != self.result.admission.proof.world_uid:
+            raise ValueError("result world differs from expected world")
+        return self

@@ -1,8 +1,20 @@
 # Source 2: encoding SourceProofReadInput для Snapshot ledger
 
-2026-11-14. **PROPOSED, NOT ACCEPTED, NOT IMPLEMENTED.** Отдельное Source-owned предложение; не изменение Source spec, G1 или разрешение runtime. Scope пользователя — только encoding уже согласованного request в historical pinned-origin binding. Общий UUID encoding ManifestPinRead вне scope.
+2026-11-14. **Registration-срез реализован и самостоятельно проверен; независимая приёмка остаётся отдельной.** Разрешение ID71201/composition и реализации передано Snapshot после пользовательских «Делай»/«далее»; owning G1 §7/§9 разрешает отдельную registration после foundation. Актуальная поставка — §6. Ниже сохранена история proposal/readiness; прежние NOT READY/ожидание согласования заменены §6. Source spec/G1 и durable runtime этим срезом не изменяются. Общий UUID encoding ManifestPinRead вне scope.
 
 ## 1. Baseline и граница решения
+
+### Повторная проверка после появления foundation, 2026-11-14
+
+**Imports доступны, но подтверждённая поставка G1.1/G1.2 пока не предъявлена; registration не начинать.** Этот verdict заменяет предыдущий NOT READY по отсутствующим imports. G1-BIND согласно актуальному owning G1-плану §7 больше не prerequisite request encoding; его закрытия здесь не требуем.
+
+Прочитаны настоящие sourceProofInput.py и application/worldData/sourceVersioning/encoding/sourceProofSchemaV1.py. SourceProofReadInput теперь объявлен по authoritative path с обязательными world_uid/proof, наследует SourceValue и проверяет совпадение миров. Manifest содержит полный roster из 21 entry: 20003/20107, 71001, 71110–71114, 71120–71131, 71138; ID/owner/kind по декларациям соответствуют §11.4. Request/results/errors туда не включены. Это снимает прежние два import blocker, но само по себе не является приёмкой.
+
+Read-only запуск `.venv/Scripts/python.exe -B -m unittest discover -s tests/sourceVersioning -p 'test_*.py'` из backend: **27 tests OK** (test_values.py и test_foundation.py). Foundation проверяет read request/world/required fields, capture graph, diagnostics и nested revalidation; JSON round-trip в этих tests не заменяет canonical round-trip. Отдельный smoke на реальных imports: 21 entries; V0 160 bytes, digest 753fac72650941d0eb1708e8ae777e2de3bd59c0b8e4278d50dd75cd040267a3; canonical decode равен proof; request fields ровно world_uid/proof.
+
+На момент чтения test_canonical.py отсутствует в tests/sourceVersioning; literal V0/V1 hashes найдены в spec, а не в Source tests. Полный canonical round-trip roster, V1, collision/owner/field-order/noncanonical negatives и regression evidence G1.2 пока не предъявлены. Typing valid.py уже импортирует новые types/manifest, но наличие imports не доказывает успешный positive/expected-negative Pyright прогон. Owning G1 §8 пока описывает историческую поставку 20 tests и старые отсутствующие request/schema, а не завершение новой foundation; нового акта поставки G1.1/G1.2 в прочитанном плане нет.
+
+Остаток: владелец завершает G1.2 canonical tests и фиксирует V0/V1/full-roster round-trip/negative/collision/regression результаты, актуальные positive/negative typing и статус поставки G1.1/G1.2. После этого проверить evidence и актуальные identities, затем отдельный 71201 registration/composition/tests. Не требовать G1.3 или production G1-BIND для этого шага и не считать чужое меняющееся дерево стабильной принятой поставкой. Этот проход не заменяет независимую приёмку foundation. Source код/spec/G1 и прежний чат не изменены; обновлён только данный proposal.
 
 ### Актуальный readiness после поручения «Делай», 2026-11-14
 
@@ -79,3 +91,23 @@ Source dependencies: принятие этой отдельной registration; 
 Роли и признаки нарушения — §3; public/internal граница и все три запрета DAG — §3; неизменный порядок и открытые prerequisites — §4; POJO не дублируются — §2–3; новых междоменных CRUD маршрутов нет. Это адресный proposal encoding, не приёмка домена Source или всего Snapshot storage плана. При отсутствии evidence для любого обязательного критерия зависимая реализация не принимается.
 
 Нужно отдельное owning/joint review и явное принятие 71201/composition. Runtime tests не запускались, golden request vector пока не предъявлен; это не PASS реализации. Изменён только этот документ. Source spec, G1/implementation планы, runtime, SQL, Pack UUID и прежний Source чат не затронуты.
+
+## 6. Поставка отдельной registration, 2026-11-14
+
+Предыдущий §5 — исторический verdict. Foundation prerequisites повторно проверены: owning G1 §9 фиксирует declarations/encoding evidence, до правки повторён Source discover — 34 tests OK. Полный 21-entry proof roster и настоящие request/proof types доступны. Повторный поиск 71201 в backend/docs/plans перед правкой нашёл только согласованные proposals/ссылки, не существующую code registration. G1-BIND не prerequisite по актуальному §7 G1; semantic layer остаётся открытым.
+
+Добавлены только:
+
+- `backend/app/application/worldData/sourceVersioning/encoding/sourceProofRequestSchemaV1.py`: immutable SOURCE_PROOF_REQUEST_SCHEMA_V1, ровно RECORD 71201 → существующий SourceProofReadInput; SOURCE_PROOF_REQUEST_ENCODING_V1 = merge_manifests(SOURCE_PROOF_SCHEMA_V1, SOURCE_PROOF_REQUEST_SCHEMA_V1). Никаких новых моделей/codec/IO/authority.
+- `backend/tests/sourceVersioning/test_request_canonical.py`: 6 адресных tests, реальные values; owning foundation tests переиспользуются только как fixtures, без правок.
+
+Literal request V0: 269 bytes, SHA-256 `7c1637a9909f400dbfa18c6d364ae232ac277705a56854997e17fdf7615dcfec`. Golden построен независимой ручной TLV assembly (длины, tag7, ID71201, пары world_uid/proof) и literal accepted proof V0, без вызова production encoder; literal prefix + V0_HEX закреплён в тесте. Verified empty/nonempty/historical round-trip, exact owner/field order, unchanged V0/V1 proof bytes/fingerprints, enclosing Artifact/Snapshot/Pack merge и manifest-order independence. Проверены missing fragment dependencies, proof-only request refusal, unknown ID/field, wrong root/order/version, truncation/trailing bytes, forged world/missing proof/bool version и ID/owner/kind collisions. Decode не доказывает admission; descriptor-aware semantics здесь не добавляются.
+
+Выполнено после правки:
+
+1. Из backend `.venv/Scripts/python.exe -B -m unittest discover -s tests/sourceVersioning -p 'test_*.py'` — **40 tests OK**.
+2. Из backend `.venv/Scripts/python.exe -B -m unittest tests.planning.encoding.test_canonical_codec tests.planning.encoding.test_uuid_codec` — **13 tests OK**.
+3. Из корня `node node_modules/pyright/index.js -p backend/tests/typing/sourceVersioning/pyrightconfig.valid.json` — **0 errors**; existing include охватывает новый production encoding module.
+4. Corresponding pyrightconfig.invalid.json — **ровно 5 ожидаемых diagnostics**, exit1: object/collection refs, collection вне object union, foreign RegistryKey brand, list вместо tuple, frozen seq assignment.
+
+Изменён также только этот proposal для evidence. Foundation/spec/G1, Pack, shared codec, Snapshot ledger/SQL и прежний Source чат не менялись. Ответственности/CRUD/DAG границы §3 сохранены, утверждённый порядок foundation → registration соблюдён. Это самостоятельная проверка narrow encoding delivery, не приёмка всего G1, semantic admission, Snapshot binding/ledger или durable runtime; следующая граница — независимый review и Snapshot integration по его плану.

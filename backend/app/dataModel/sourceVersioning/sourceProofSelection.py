@@ -5,11 +5,13 @@
 # This transition and its acceptance criterion remain OPEN.
 # Plan: [G1 §3](../../../../.cursor/plans/source-g1-values-canonical-implementation.md#3-g11--значения-и-structural-validation).
 
-from typing import Annotated
+from typing import Annotated, Self
 
-from pydantic import Field, StrictInt, field_validator
+from pydantic import Field, StrictInt, field_validator, model_validator
 
 from app.dataModel.sourceVersioning._value import SourceValue
+from app.dataModel.identity.uid import EntityUid
+from app.dataModel.sourceVersioning.sourceDurableProof import SourceDurableProof
 from app.dataModel.validation.diagnostics.runtimeIssueContext import RevisionHex
 
 
@@ -23,3 +25,15 @@ class SourceProofSelection(SourceValue, frozen=True):
         if any(left >= right for left, right in zip(value, value[1:])):
             raise ValueError("dependency indices must be strictly increasing and unique")
         return value
+
+
+class SourceProofSelectInput(SourceValue, frozen=True):
+    world_uid: EntityUid
+    proof: SourceDurableProof
+    selection: SourceProofSelection
+
+    @model_validator(mode="after")
+    def proof_world(self) -> Self:
+        if self.proof.world_uid != self.world_uid:
+            raise ValueError("proof world differs from request world")
+        return self

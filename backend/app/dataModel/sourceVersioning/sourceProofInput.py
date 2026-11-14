@@ -12,6 +12,7 @@ from pydantic import model_validator
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.sourceVersioning._value import SourceValue
 from app.dataModel.sourceVersioning.sourceCaptureUsage import SourceCaptureUsage
+from app.dataModel.sourceVersioning.sourceDurableProof import SourceDurableProof
 
 
 class SourceProofInput(SourceValue, frozen=True):
@@ -22,4 +23,17 @@ class SourceProofInput(SourceValue, frozen=True):
     def capture_worlds(self) -> Self:
         if any(use.capture.world_uid != self.world_uid for use in self.uses):
             raise ValueError("capture world differs from input world")
+        return self
+
+
+class SourceProofReadInput(SourceValue, frozen=True):
+    """Exact persisted proof request; no normalization during construction."""
+
+    world_uid: EntityUid
+    proof: SourceDurableProof
+
+    @model_validator(mode="after")
+    def proof_world(self) -> Self:
+        if self.proof.world_uid != self.world_uid:
+            raise ValueError("proof world differs from request world")
         return self

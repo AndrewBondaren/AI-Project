@@ -12,6 +12,8 @@
 
 ## 2. Ошибки — применение принятого контракта
 
+Уточнение для следующей реализации: после PASS G1.1/G1.2 `sourceErrors` уже существует; его не объявлять повторно. Для nested revalidation классификация отказа должна опираться на типизированный selector/check и SourceFieldCode из §11.3, не на текст ValueError. Проверка соответствия groups/result использует исходный SourceProofGroupsVerifyInput как diagnostic root; нельзя сначала вызвать normalize над синтетическим SourceProofInput и вернуть его paths потребителю VERIFY_GROUPS. Ошибки всех доступных expected groups собираются до построения union; один ошибочный group не отменяет независимые проверки остальных.
+
 Единственный public carrier — `app.dataModel.sourceVersioning.sourceErrors` по §11.3: SourceFieldCode/Issue, SourceLogicCode/Issue, SourceOperation/Failure. SourceFailure — значение результата, не новый Exception subclass. Helpers собирают concrete issues через existing ValidatorAggregationHelper и формируют SourceFailure с исходной operation; инфраструктурные исключения не перехватываются как domain absence.
 
 Структурный Pydantic отказ на невалидном корне request допускается §11.3. Нельзя фабриковать пустой field path. Это не освобождает owning pure boundary от Source diagnostics для доступных nested fields и семантических проверок. Перед реализацией каждого check применяется существующая таблица condition→code из §11.3; строки ValueError не используются как ключи классификации. Typed selectors FieldRef/bind_field и CheckedPath привязаны к конкретному исходному request; group/use indices сохраняются до normalization.
@@ -46,6 +48,8 @@ class SourceDescriptorBindingRegistry:
 - Актуальный §4 Terrain dossier снял прежние TerrainSourceAdapter/TerrainSourceError/integration signatures. Их нельзя использовать как согласованные API. Нынешние mutable eligibility, extra ignore, model_fields_set presence и list root реестра — свойства текущего кода, не готового durable контракта. Предложенный выше SourceIdentityKeyAdapter остаётся Source DRAFT и не подтверждённым Terrain API.
 
 Следующий необходимый внешний результат: принятые owning exact key validation и body codec/projector contracts выбранного Terrain scope. Source затем фиксирует concrete composition/registration; текущий код не адаптируется как legacy. Реализация Terrain, writer/storage/DAG и миграция реестра этим уточнением не разрешены. Поставленные Pack POJO imports от этой зависимости не зависят.
+
+2026-11-15: получен ответ на запрос конкретного design-предложения; [сигнатуры, semantic policy, format boundary и остаток приёмки](source-g1-terrain-binding-proposal.md) зафиксированы отдельно. Concrete TerrainKeyValidator, TerrainBodyCodecV1 и TerrainSemanticProjectorV1 предложены, но ещё не приняты. В частности, reuse ID17 при изменении layout и BLOB bytes registration требуют owning compatibility/Artifacts подтверждений. Scope ограничен существующей зависимостью, без кода, writer/storage/recovery/DAG и других реестров. Ответ не снимает G1-BIND; Source не регистрирует invented или permissive adapter.
 
 ## 4. SourceProofValidator
 
@@ -156,9 +160,11 @@ union_groups сначала проверяет все groups с исходным
 
 ### 8.1. Точные prerequisites потребителя Snapshot
 
-Получен readiness Source 2; повторная локальная проверка 2026-11-14 подтверждает **NOT READY для request encoding registration**. Основание — [proposal §1](source-2-snapshot-request-encoding-proposal.md#1-baseline-и-граница-решения). Это отдельная готовность от уже поставленных Pack 3a POJO.
+Решение пользователя после предъявления этого среза: «Делаем наш план далее». Поставка G1.1 → G1.2 до production G1-BIND разрешена и записана в §7 owning G1-плана. DRAFT статуса G1.3 API и отдельного request registration это решение не меняет.
 
-1. В `app.dataModel.sourceVersioning.sourceProofInput` отсутствует `SourceProofReadInput(world_uid: EntityUid, proof: SourceDurableProof)`. Его поставляет оставшийся G1.1; SourceProofInput не является заменой.
-2. Отсутствует `app.application.worldData.sourceVersioning.encoding.sourceProofSchemaV1.SOURCE_PROOF_SCHEMA_V1` и application directory. Его поставляет G1.2 после полного transitive Source value roster; обязательны accepted IDs/field order, V0/V1 bytes и round-trip. Одно объявление пустого manifest не закрывает prerequisite.
+Исторический readiness Source 2 и первая локальная проверка 2026-11-14 дали **NOT READY для request encoding registration** по двум отсутствовавшим imports ниже. Основание — [proposal §1](source-2-snapshot-request-encoding-proposal.md#1-baseline-и-граница-решения). После реализации разрешённого G1.1/G1.2 оба import prerequisites доступны и проверены: актуальное evidence — owning G1-план §9. Source 2 повторяет свою readiness; его registration этим не объявляется принятой.
+
+1. `app.dataModel.sourceVersioning.sourceProofInput.SourceProofReadInput(world_uid: EntityUid, proof: SourceDurableProof)` поставлен в G1.1; SourceProofInput не используется как замена.
+2. `app.application.worldData.sourceVersioning.encoding.sourceProofSchemaV1.SOURCE_PROOF_SCHEMA_V1` поставлен в G1.2 с полным accepted transitive roster, IDs/field order, проверками V0/V1 и round-trip. Это полный manifest, не заглушка под consumer.
 
 По readiness владельца UUID и PACK_PIN_SCHEMA присутствуют; их не переоткрывать как Source blocker. После поставки и проверки двух указанных imports Source 2 повторяет readiness и выполняет свой отдельно разрешённый registration/composition срез. Его proposed request ID 71201 и request manifest не включаются автоматически в SOURCE_PROOF_SCHEMA_V1 или текущую Source поставку. Здесь не меняются Source 2 proposal, Snapshot ledger или Pack code. Отсутствие этих dependencies не устраняется mirrors/lazy imports/fallback.

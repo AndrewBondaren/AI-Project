@@ -19,6 +19,17 @@ from app.dataModel.sourceVersioning.sourceProofInput import SourceProofInput
 from app.dataModel.sourceVersioning.sourceProofResult import SourceProofResult
 from app.dataModel.sourceVersioning.sourceProofSelection import SourceProofSelection
 from app.dataModel.sourceVersioning.sourceVersionRef import SourceCollectionVersionRef, SourceVersionRef
+from app.dataModel.sourceVersioning.sourceBodyVersion import SourceBodyVersion, SourceCollectionVersion
+from app.dataModel.sourceVersioning.sourceCollection import SourceCollectionBody
+from app.dataModel.sourceVersioning.sourceCapture import SourceCapture
+from app.dataModel.sourceVersioning.sourceCaptureWitness import SourceCaptureWitness
+from app.dataModel.sourceVersioning.sourceProofInput import SourceProofReadInput
+from app.dataModel.sourceVersioning.sourceProofSelection import SourceProofSelectInput
+from app.dataModel.sourceVersioning.sourceProofGroups import SourceProofGroupsVerifyInput
+from app.dataModel.sourceVersioning.sourceErrors import (
+    SourceOperation, SourceFieldCode, SourceFieldIssue, SourceLogicCode, SourceLogicIssue, SourceFailure,
+)
+from app.application.worldData.sourceVersioning.encoding.sourceProofSchemaV1 import SOURCE_PROOF_SCHEMA_V1
 
 
 def construct_values(
