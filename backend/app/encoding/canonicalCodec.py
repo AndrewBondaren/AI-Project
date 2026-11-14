@@ -4,6 +4,7 @@ from dataclasses import dataclass, fields, is_dataclass
 from enum import Enum
 from math import isfinite
 from struct import pack
+from uuid import UUID
 
 from pydantic import BaseModel
 from pydantic import TypeAdapter
@@ -71,6 +72,8 @@ class CanonicalCodec:
             return self._tlv(4, value.encode("utf-8"))
         if isinstance(value, bytes):
             return self._tlv(5, value)
+        if type(value) is UUID:
+            return self._tlv(10, value.bytes)
         identity = id(value)
         if identity in active:
             raise ValueError("cyclic canonical value")
@@ -174,6 +177,10 @@ def _decode_scalar(tag: int, body: bytes | memoryview) -> object:
         return bytes(body).decode("utf-8", errors="strict")
     if tag == 5:
         return bytes(body)
+    if tag == 10:
+        if len(body) != 16:
+            raise CanonicalEncodingError("invalid UUID width")
+        return UUID(bytes=bytes(body))
     raise CanonicalEncodingError("unknown canonical scalar tag")
 
 
@@ -195,7 +202,7 @@ def _decode_one(encoded: bytes, manifest: CanonicalSchemaManifest) -> tuple[obje
     if end > len(encoded):
         raise CanonicalEncodingError("truncated canonical value")
     body = encoded[9:end]
-    if tag <= 5:
+    if tag <= 5 or tag == 10:
         return _decode_scalar(tag, body), end
     if tag in (8, 9):
         values: list[object] = []

@@ -24,6 +24,10 @@
 
 Результат — конкретный pure serialization contract, воспроизводимые bytes/ref и identity. Ни stage/seal, ни публикация head не становятся эффектами encoder. Критерий отказа: latest lookup, случайные defaults, несовпадение bytes при том же принятом binding, ручной второй DTO состава.
 
+### Зависимость metadata-операций 3a
+
+До зависимых writes/describe/import/bind отдельно принять минимальный canonical binding metadata values/subjects и используемых Source values: конкретные owning declarations, правила порядка и контрольные fingerprints. Он использует тот же encoding, что полный codec, без временного hash или дублирующей схемы. Полный body/manifest round-trip и READY recovery следуют после фиксации состава 3b. Это разделение поставки внутри serialization-задачи устраняет зависимость завершения всего 3a от более позднего 4a; не требует заранее реализовать storage/replay.
+
 ## Подзадача 2. Десериализация и восстановление
 
 **Матрица обязательных контрольных случаев:** (1) перестановка только объявленных множеств после проверки duplicates сохраняет fingerprint; (2) изменение каждого semantic body поля меняет fingerprint; (3) изменение operation_id вне body не меняет preparation digest, но меняет lifecycle identity; (4) изменение Source dependency revision меняет digest, selectors не нормализует Pack; (5) повтор bytes→POJO→bytes сохраняет exact bytes зарегистрированного binding; (6) malformed/unknown schema и forged instances отклоняются до зависимых эффектов; (7) два manifest ref одинакового формата в operation не мешают выбрать сохранённый exact candidate; (8) потеря ответа после READY/рестарт возвращает тот же candidate без assembly/stage/finish; (9) terminal activation replay после release не восстанавливает holds. Existing activation vectors в отдельном документе не считаются vectors ещё не составленного prepare schema.

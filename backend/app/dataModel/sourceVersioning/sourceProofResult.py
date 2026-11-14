@@ -1,5 +1,10 @@
 """Result value; construction neither computes closure nor acquires holds."""
 
+# TODO(SOURCE-TYPED-ERRORS): Migrate the manual ValueError diagnostics below to
+# the agreed Source typed-error contract; independent failures need aggregation.
+# This transition and its acceptance criterion remain OPEN.
+# Plan: [G1 §3](../../../../.cursor/plans/source-g1-values-canonical-implementation.md#3-g11--значения-и-structural-validation).
+
 from typing import Self
 
 from pydantic import model_validator

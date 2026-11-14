@@ -4,6 +4,26 @@
 
 ## 1. Baseline и граница решения
 
+### Актуальный readiness после поручения «Делай», 2026-11-14
+
+**NOT READY для отдельного registration module + tests: две обязательные runtime dependencies отсутствуют.** Исторические сведения ниже об отсутствии всех Source directories относятся к первому чтению. Разрешение следующего шага не позволяет создавать отсутствующие G1 модели или менять чужой Source код.
+
+Read-only rg по backend и чтение реальных файлов установили:
+
+| Dependency / authoritative import | Фактическое состояние |
+|---|---|
+| app.dataModel.sourceVersioning.sourceProofInput.SourceProofReadInput | Путь подтверждён spec §6.A/§10.3 и G1 §3. Файл существует, но объявляет только SourceProofInput(world_uid, uses). SourceProofReadInput и альтернативное объявление/экспорт в backend не найдены. SourceProofInput не заменяет read request. |
+| app.dataModel.sourceVersioning.sourceDurableProof.SourceDurableProof | Реальный класс существует: schema_version: Literal[1], world_uid: EntityUid, uses: tuple[SourceCaptureUsage, ...], exact-int version check. Это не доказательство готовности полного G1. |
+| app.application.worldData.sourceVersioning.encoding.sourceProofSchemaV1.SOURCE_PROOF_SCHEMA_V1 | Authoritative path подтверждён spec §11.4 и G1 §4. Application directory отсутствует (Test-Path=False); export не найден rg в backend. |
+| app.dataModel.worldPack.encoding.pinBindings.PACK_PIN_SCHEMA | Реальный manifest существует: ManifestPinRead RECORD 20205. |
+| Shared canonical UUID | В canonicalCodec.py найдены native UUID encoder и tag10 decoder. Это наличие кода, не повторная приёмка тестов Snapshot. |
+
+Точное условие возобновления: owning Source поставляет настоящий SourceProofReadInput по указанному пути с полями world_uid/proof и настоящий immutable SOURCE_PROOF_SCHEMA_V1 с полным accepted transitive roster. Нужны подтверждённые imports, прежние V0/V1 bytes/round-trip и готовность owning prerequisites по утверждённому порядку. Existing SourceValue/SourceDurableProof/sourceProofInput содержат OPEN TODO SOURCE-TYPED-ERRORS; их закрытие и G1-BIND не входят в эту задачу. Чужие незавершённые edits не исправлять и не считать принятыми.
+
+После появления dependencies узкий результат — только новый sourceProofRequestSchemaV1.py (§2) и адресные registration/composition tests (§4), с повторной проверкой ID71201 и реальных owner identities. Сейчас модуль имел бы неразрешимые imports; fake classes, lazy fallback, локальная копия proof manifest и новый request class запрещены. Поиск 71201 в backend/app совпадений не дал. Runtime registration/tests не создавались. Причина — отсутствующие dependencies, не filesystem permissions и не необходимость повторного разрешения пользователя.
+
+UUID и Pack registration больше не являются открытыми prerequisite этой Source-задачи; прежний список ниже исторический. Snapshot binding/ledger и весь G1 этим readiness не принимаются. Source spec/G1/runtime/прежний чат не изменены; актуализирован только этот proposal.
+
 Проверен HEAD `b1ecaea67e6f1e63f7b3ca70aa9b7e7af04ce52a`. Прочитаны AGENTS.md, implement-plan (код не запрошен), обязательные критерии dag-generator-interface.mdc, source-proof-v2-contract-spec.md §11.4, source-g1-values-canonical-implementation.md, snapshot-pinned-origin-contract-r1.md (r2), snapshot-pinned-origin-storage-codec-proposal.md.
 
 Accepted: SourceDurableProof ID 71131, поля schema_version/world_uid/uses, версия 1 и proof vectors; SOURCE_PROOF_SCHEMA_V1 исключает requests/results/errors. Accepted Snapshot decision — single full origin и historical-only durable binding. Независимый PASS ограничен first-call и explicit retained-input repeat; он не принимает storage encoding или crash recovery.

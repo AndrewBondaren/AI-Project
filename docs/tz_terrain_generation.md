@@ -3309,7 +3309,14 @@ Canonical codec v1 — бинарный TLV: tag один byte; длина paylo
 (sign byte 0/1 + минимальная big-endian magnitude; zero — sign byte 0
 и один magnitude byte 0, negative zero/leading zeroes rejected),
 3=float (IEEE754 binary64 big-endian, finite, -0 нормализуется к +0),
-4=UTF-8 str, 5=bytes, 6=enum, 7=record, 8=ordered tuple, 9=frozenset.
+4=UTF-8 str, 5=bytes, 6=enum, 7=record, 8=ordered tuple, 9=frozenset,
+10=UUID (ровно 16 bytes в порядке UUID.bytes, не bytes_le; decode возвращает
+native UUID без string coercion). Ограничений UUID version/variant нет;
+nil/all-ones допустимы как значения, не как подтверждение namespace authority.
+UUID не получает record type ID. Обычный и bounded decoder поддерживают tag 10
+с теми же strict type и budget checks; другая длина отвергается.
+Bytes ранее поддержанных значений и tags 0–9 не меняются; legacy decoder
+или fallback для UUID не вводится.
 Enum payload — codec tuple (registered enum type id, wire value); record —
 codec tuple (registered schema type id, tuple(field-name,value) в declared
 field order). Tuple payload — concatenation TLV элементов. Set payload —

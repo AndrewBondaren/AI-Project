@@ -54,6 +54,8 @@ Requests/results/errors/descriptor registry не входят в persisted proof
 
 ## 5. G1.3 — pure semantics и G1-BIND
 
+Конкретные signatures и границы предъявлены в [source-g1-pure-api-sheet.md](source-g1-pure-api-sheet.md). Статус DRAFT до приёмки. Error roster и semantics уже определены спецификацией §11.3; их повторное согласование не требуется. Оставшаяся production dependency G1-BIND — concrete owning adapters и полная key/body/projector composition, не наличие импортов для Pack.
+
 Перед кодом слоя предъявить отдельный exact API sheet для уже названных SourceProofValidator (proof/validator.py), SourceProofNormalizer (proof/normalizer.py), canonical atom enumeration SourceProofSelector (proof/selector.py) и SourceDescriptorBindingRegistry (contracts/descriptorBindings.py). Пути под backend/app/application/worldData/sourceVersioning. Это Source-owned работа по конкретизации, не запрос Terrain придумать будущий DAG API.
 
 В API sheet обязательны: signatures и inputs/results/errors; constructor dependencies; exact key-adapter contract/registration и strict round-trip; разделение structural validation, descriptor lookup и decoded-capture semantic checks; diagnostic root и aggregation stable order; отсутствие IO/projector calls в proof validation. Метод CHECK_COVERAGE не реализуется здесь; downstream A использует готовые helpers. Не придумывать universal dict/Any adapter, callback в public POJO или «все TEXT допустимы» fallback.
@@ -61,6 +63,8 @@ Requests/results/errors/descriptor registry не входят в persisted proof
 Pure responsibilities уже приняты: validator проверяет готовые Source/decoded POJO; normalizer группирует full capture, dedup declared exact refs, canonical sort, отказывает conflicting revisions внутри одного capture, сохраняет historical revisions между captures; selector enumerates canonical object/collection atoms без чтения body. Нормализация ADMIT input и отказ noncanonical persisted proof не взаимозаменяемы. Empty usage исключается из normalized input, но не принимается в persisted proof. Наличие dependency в captured membership проверяется по предъявленным decoded values, не latest/DB.
 
 **G1-BIND OPEN:** §10.1 задаёт semantics owning key validation, но exact application adapter declarations/registration ещё нужно предъявить и принять. Ни G1.1/G1.2, ни тестовая stub registry не закрывают этот gate. После API sheet сверить актуальные owning key contracts; если нужна новая внешняя операция/изменение другого домена — остановка и конкретная зависимость пользователю. Не переносить эту дыру в реализацию S1.
+
+Owning сверка Terrain получена 2026-11-14 и зафиксирована в [API sheet §3.1](source-g1-pure-api-sheet.md#31-ответ-владельца-terrain--2026-11-14). Подтверждён key type, но accepted exact-validator signature, body codec/format registration и semantic projector отсутствуют. Старые TerrainSourceAdapter/TerrainSourceError/integration signatures отозваны; использовать их для закрытия gate запрещено. Это конкретный внешний остаток G1-BIND, не новый блокер импортов Pack.
 
 ## 6. Проверки и outputs
 
@@ -98,6 +102,8 @@ Definition of Done G1: все exact imports доступны, проверки v
 **Verdict полного G1: DRAFT, NOT ACCEPTED FOR IMPLEMENTATION — конкретный gate G1-BIND/API sheet.** Исключение — разрешённый выше POJO-срез Pack 3a. Для остального полного G1 следующее действие Source — предъявить exact pure/binding API в указанной границе; при необходимости внешнего контракта сообщить владельца и зависимость. Runtime IO работа только implement-plan после снятия соответствующего gate и приёмки. Ручные edits apply_patch; mandatory diff перед отчётом; no commit/push/server/SQL/DAG.
 
 ## 8. Поставка POJO для Pack 3a — собственная проверка 2026-11-14
+
+Уточнение статуса после проверки ошибок: импортный блокер Pack снят поставкой values. Обязательство Source typed diagnostics по §3/спецификации §11.3 не отменено; TODO(SOURCE-TYPED-ERRORS) в коде отмечает незавершённый переход. Исключение §7 не является отказом от error roster в G1. Структурный Pydantic boundary отказ допустим ровно в границе §11.3, а семантические diagnostics и независимая агрегация требуют реализации. Полный шаг G1 не завершён.
 
 Реализован только разрешённый срез §7. Независимая приёмка не выполнялась; G1-BIND, canonical manifest и pure алгоритмы остаются открыты. До поставки каталога dataModel/sourceVersioning не было; shared ArtifactRef/Kind, EntityUid, RevisionHex, RegistryKey и validate_immutable переиспользованы без изменений.
 

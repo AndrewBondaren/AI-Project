@@ -113,7 +113,7 @@ class _Reader:
     def value(self, bound, depth, annotation, size=None):
         tag, end = self.header(bound, depth)
         options = _options(annotation)
-        if tag <= 5:
+        if tag <= 5 or tag == 10:
             value = self.scalar(tag, end)
             if any(_matches(option, type(value), value) for option in options):
                 return value

@@ -41,10 +41,10 @@ Pack принимает готовые типизированные резуль
 
 | Этап | Ответственность Pack / результат | Приёмочное доказательство |
 |---|---|---|
-| 3a | Shared records, named inputs, start/write/delete/describe/import/bind и pure state validation | Нет дублей, IO или скрытой оркестрации; preserve/empty/delete, aggregation, forged instances, mixed metadata origin. Для массовых writes — измерения 1000/4000/16000, без заявления линейности до измерений |
+| 3a | Shared records и named inputs; start_empty, pure write/delete и metadata operations. Для describe/import/bind и writes с value fingerprints сначала принят минимальный metadata canonical binding из 4a | Нет дублей или скрытой оркестрации; pure методы без IO. Preserve/empty/delete, aggregation, forged instances, mixed metadata origin; локальные измерения 1000/4000/16000. Фактический DAG transport проверяется при последней интеграции |
 | 3b | Final admission и manifest assembler | Полный состав, exact coverage и inherited provenance; изменения A не теряют B; неполный state не становится кандидатом |
-| 4a — отдельная задача | Принятый serialization/deserialization binding | Единственная identity/schema/encoding, контрольные vectors и exact READY recovery; см. отдельный план |
-| 4b | Подключение codec/read/prepare к готовым bindings | Strict immutable round-trip, budgets до чрезмерной аллокации, pin guard, полный closure и exact candidate после restart |
+| 4a — отдельная задача | Минимальный metadata canonical binding принимается до зависимых операций 3a; полный manifest/body codec и READY recovery — после фиксации состава 3b | Один owning encoding, без временного hash. Metadata vectors отдельно от полного round-trip и READY recovery |
+| 4b | Подключение codec/read/prepare к готовым bindings, включая IO-ветвь start_from_base | Strict immutable round-trip, budgets до чрезмерной аллокации, pin guard, полный closure и exact candidate после restart. start_from_base не входит в pure-приёмку 3a |
 | 4c | Activate/release через принятые internal ports | Atomic CAS/holds/terminal, refusal/replay без второго эффекта, release не затрагивает head/чужие holds |
 | Последний шаг — интеграция с DAG | После завершения Pack совместно с пользователем определить/принять ноды и bindings, подключить готовые публичные операции и выполнить сквозную приёмку | Owning контракты Pack/Source/Snapshot/Cache соблюдены; DAG только оркестрирует; новые генераторные bindings не выдумываются |
 | Завершение последнего шага: cutover/legacy | По готовности конкретных callers перевести их, затем удалить используемый ими legacy | Не удалять действующий путь до перевода использующих его callers; не сохранять fallback после перевода. Неготовые генераторы не блокируют локальную поставку Pack |
@@ -64,16 +64,16 @@ Pack принимает готовые типизированные резуль
 
 ### Исполнение шагов 1–4 по поручению пользователя
 
-**Четыре последних пункта — точный статус следующего прохода:**
+**Актуальный остаток: собственные контракты Pack и зависимости интеграции разделены.** Pinned-origin storage/codec доводит Snapshot; это не общий блокер завершения контрактного плана Pack. Ниже не список обязательных внешних разработок, которые Pack должен закончить самостоятельно.
 
 | Пункт | Зафиксировано | Что действительно осталось |
 |---|---|---|
 | READY | Exact candidate в existing ledger атомарно с READY принят пользователем; async append/read/finish ports и replay semantics предъявлены Snapshot | Конкретная owning ledger schema и review предложенных faults; runtime evidence относится к последующей реализации |
-| Source authority | Capture/proof canonical binding и internal adopt подтверждены Source | Конкретный preparation/publication provider persisted per-ref holder identities; не принадлежит proof DTO и не выводится из READ |
+| Source authority | Capture/proof и adopt; [S1/S2](source-pack-s1-s2-contract.md) конкретизирует coverage, scoped preflight и rollback | Snapshot поставляет pinned-origin provider/storage для зависимого исполняемого пути. Не общий gate контрактного плана Pack; operation-origin/finalizer не включать автоматически |
 | Serialization/read | Body/manifest правила, Source declarations, Cache boundary, typed decoder resource signal и cap wiring описаны; test matrix отделена от runtime результатов | Итоговая Pack canonical composition/IDs; caps неподключённых форматов остаются требованиями их будущих bindings, не общим gate Pack; existing activation vectors не заменяют prepare vectors |
 | Release | Existing terminal OperationHolder, acquire/release history, scoped release port/outcomes и public mapping предъявлены | Review предложенного owning fault/schema; доказательство atomic eligibility и history после GC проверяется при реализации |
 
-Общий вердикт пока не положительный. На этом этапе нельзя считать четыре пункта закрытыми по наличию summary; каждый названный остаток должен получить конкретное declaration/решение. Генераторы, DAG и разрешённо отложенный Planning в остаток не включены.
+Положительная приёмка всей реализации не объявляется. Собственный документальный остаток Pack — итоговая canonical composition body/manifest и проверка согласованности owning деклараций/критериев приёмки. Внешние storage/fault/runtime задачи выше остаются prerequisites соответствующих integration slices, а не требованием реализовать Snapshot внутри Pack. Генераторы, DAG и разрешённо отложенный Planning в этот остаток не включены.
 
 **Полученное уточнение storage:** Snapshot предъявил exact async append/read/scoped finish/release и единый proposed PackLifecycleFault; [ответ](pack-storage-lifecycle-finalization-response-2026-11-14.md) переписан без прежних holder/version/marker. Public release mapping добавлен в release-контракт без новых public DTO. Отсутствие сигнатур READY/release больше не является замечанием; остаются owning schema/fault review и runtime evidence реализации. По authority установлен точный недостающий контракт: durable mapping preparation identity + SourceProofReadInput → exact исходные VerifiedArtifactRef/holder identities, записанный trusted owner при acquisition и доступный после restart. Source proof/READ/candidate этого mapping не содержат; готовый provider не выдуман.
 
@@ -93,7 +93,17 @@ Pack принимает готовые типизированные резуль
 
 [Ответ владельца](source-pack-boundary-response-2026-11-14.md) подтверждает SourceCaptureRef(world_uid, artifact) для body.capture: artifact — finalized SQL_ROWS witness, не capture body и не capability. Placeholder заменён этим owning типом в ТЗ/write/domain spec. Полный proof поддерживает historical captures; единый SourceFailure сохраняется. Canonical binding SOURCE_PROOF_SCHEMA_V1 и IDs capture/proof/usage/selection закреплены владельцем; Pack использует их без перенумерации или копии моделей. Source schema не задаёт outer Pack fingerprint recipe.
 
-Internal adopt принят и заново проверяет полный closure/реальные holds в borrowed scope. Snapshot предъявил [конкретный authority proposal](pack-preparation-source-authority-contract.md): PreparationSourceBinding/Entry/Origin, trusted runtime grant, register_sources/resolve_sources и scoped pin admission. Это предложение, не принятый или реализованный provider. Владелец уточняет durable schema; Source запрошен проверить acquisition context, closure/coverage и совместимость с adopt без передачи своих алгоритмов Snapshot. Положительная приёмка доказанного schema/data contract не означает готовность этого authority binding.
+Internal adopt принят и заново проверяет полный closure/реальные holds в borrowed scope. Актуальная единая [редакция S1/S2](source-pack-s1-s2-contract.md) прошла адресные reviews Pack/Source/Snapshot: typed coverage input, scoped preflight, all-provenance reader и exact read-refusal rollback. Это отдельный design-срез, не готовый authority provider. Ранний общий authority proposal не использовать как альтернативу последующей pinned-only редакции.
+
+### Pinned-origin: актуальное решение и предел поставки
+
+[Pinned-only документ Snapshot](snapshot-pinned-origin-contract-r1.md) сохраняет историческое имя файла, но содержит исправленную редакцию и последующие решения владельца. По сообщению Snapshot пользователь его чата согласовал один полный origin/grant и историческое сохранение binding без post-commit runtime consumer. Это не recovery input store: READY использует exact candidate/target holds; после confirmed rollback нужен повторно предъявленный исходный полный input. Автономная реконструкция потерянного input после crash не поставляется этим срезом.
+
+Несколько historical captures внутри одного proof допустимы; pinned-only issuance требует покрытия всего request одним выбранным manifest. Same request с другим origin конфликтует. Это ограничение конкретного pinned пути, не изменение общего Pack mixed-provenance контракта и не разрешение обрезать dependencies до одного capture.
+
+Pack владеет verified reader: все parts[*].provenance.source_proof и assembly_provenance[*].provenance.source_proof из exact admitted manifest, без union/normalization/фильтра changed. Snapshot владеет issuer, grant, register/resolve, ledger и atomic lifecycle. [Storage/codec proposal](snapshot-pinned-origin-storage-codec-proposal.md) остаётся его зависимым срезом; Pack не обязан доводить его до runtime PASS для завершения своего контрактного плана.
+
+[Pin registration](pack-pin-canonical-registration-proposal.md) конкретизирована отдельно. В коде появился PACK_PIN_SCHEMA RECORD20205 и адресные тесты; Pack выполнил read-only owning review без findings. Самостоятельный повтор tests и полная приёмка implementation не заявлены. Эта регистрация не завершает canonical graph body/manifest и не подключает ledger автоматически. Cache key/Source proof schema не расширяются этой декларацией.
 
 ### Проверка Cache: детали
 
