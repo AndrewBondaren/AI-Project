@@ -12,6 +12,8 @@ Scope Source: pure coverage input/selector/error applicability; read-only adopti
 
 ## 2. Проверенная готовность и порядок prerequisites
 
+Конкретизация первой поставки G1 — [source-g1-values-canonical-implementation.md](source-g1-values-canonical-implementation.md). Файлы values/schema/tests и порядок заданы; до приёмки остаётся Source-owned G1-BIND: exact pure/key-adapter API и constructor composition. Ссылку на роль descriptor registry нельзя считать готовой сигнатурой. G1 пока не закрыт; Source runtime не создан.
+
 Проверка filesystem 2026-11-14: backend/app/dataModel/sourceVersioning и backend/app/application/worldData/sourceVersioning отсутствуют. Поэтому ни SourceProofReadInput/SourceDurableProof/SourceFailure, ни selector/collector/retention binding не доступны как runtime imports. Совпадающие слова Source в существующих Geo1/Pack тестах не доказывают наличие этих контрактов.
 
 | Gate | Что должно быть реально поставлено | Проверка / влияние |
@@ -38,7 +40,7 @@ Scope Source: pure coverage input/selector/error applicability; read-only adopti
 
 - application/worldData/sourceVersioning/proof/coverageCheckInput.py — новый internal named concrete BaseModel с двумя существующими Source fields; exact module/qualname diagnostic root.
 - application/worldData/sourceVersioning/proof/selector.py — check_coverage по единой редакции §2. Переиспользовать существующие Source validators/canonical enumeration; не создавать второй engine.
-- dataModel/sourceVersioning/sourceErrors.py — одно CHECK_COVERAGE значение и existing error applicability, без новых enum-дублей.
+- dataModel/sourceVersioning/sourceErrors.py — existing CHECK_COVERAGE из полного G1 error roster и его applicability; не добавлять значение повторно и не создавать enum-дубли.
 
 Сначала контракт input/operation/diagnostic root, затем complete pure implementation и прямой internal caller contract. Никаких публичных endpoint/DAG/Pack import. Если existing pure helper нуждается в изменении вне этих путей, назвать exact path/роль и согласовать изменение плана до записи; не создавать новый helper по догадке.
 

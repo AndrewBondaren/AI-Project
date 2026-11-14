@@ -1,5 +1,7 @@
 # World source versioning — версионирование объектов N+1 и граница мутации
 
+Первый implementation-кандидат G1 конкретизирован в [source-g1-values-canonical-implementation.md](source-g1-values-canonical-implementation.md): строгие значения → canonical schema → pure validation. Полный G1 остаётся DRAFT до exact pure/key-adapter API (G1-BIND). Исключение, разрешённое пользователем 2026-11-14: отдельная поставка POJO для Pack 3a до G1.3, в точной границе §7 плана G1; она не закрывает G1 и не разрешает storage/finalizer/DAG или алгоритмы proof.
+
 **Контроль дрейфа:** [контрольная точка контрактов и будущей реализации 2026-11-14](source-contract-baseline-2026-11-14.md) разделяет принятый proof design, proposals, runtime evidence и разрешённый scope. Source storage остановлен на отсутствующем authored-write binding; PACK-S1/S2 отдельно разрешены пользователем только для design/review с Source/Pack/Snapshot/Artifacts. Эта запись не заменяет ТЗ/спецификацию и не разрешает реализацию.
 
 PACK-S1/S2: единая редакция 2 принята как ограниченный design и синхронизирована в proof specification §13. [План реализации дельты](source-pack-s1-s2-implementation.md) подготовлен, но NOT EXECUTION-READY: G1 базовые Source POJO/pure contracts, G2 durable collector/read/adopt и G3 consumer composition ещё не реализованы. Порядок основного плана не меняется; эти prerequisites не включаются в дельту автоматически. Заглушки/legacy adapters/зеркальные DTO запрещены.

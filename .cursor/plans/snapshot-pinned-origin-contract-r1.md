@@ -220,3 +220,7 @@ PIN-GRANTS-1 и PIN-BINDING-PURPOSE-1 получили owning пользоват
 PIN-GRANTS-1 и PIN-BINDING-PURPOSE-1 закрыты на уровне design с учётом пользовательского принятия. PIN-LEDGER-TESTS-1 закрыт на уровне требований к tests; сами tests не выполнены. Ограничение single-origin относится к pinned issuer, generic Source adopt не сужается.
 
 PASS не закрывает SQL layout/canonical registrations, implementation prerequisites G1/G2/G3, runtime/typing/race tests, autonomous crash input producer или весь C-PIN-1. G4/finalizer/public DAG wiring не входят. Код этим актом не разрешён. В этом проходе изменён только owning документ; runtime tests не запускались.
+
+## 11. Следующий storage/codec design-срез
+
+По указанию пользователя «Далее», 2026-11-14: [конкретный storage/codec proposal](snapshot-pinned-origin-storage-codec-proposal.md). Предъявлены immutable detail-таблица existing operation ledger, exact canonical request key без hash-only equality, codec/store responsibilities и matrix проверок. Найдены два transitive contract gaps: UUID в ManifestPinRead не поддержан canonicalCodec (реальный repro: CanonicalEncodingError), SourceProofReadInput исключён из Source persisted manifest и не имеет предъявленной registration. Pack pin record registration также требует owning подтверждения. Native UUID tag 10 и отдельные owner registrations только предложены; Source/Pack запрошены, dependent code/DDL не меняются до решения. Принятый single-origin/historical design и его PASS этим не расширяются.
