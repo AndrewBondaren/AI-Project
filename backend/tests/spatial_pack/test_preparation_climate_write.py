@@ -23,6 +23,49 @@ from app.dataModel.worldPack.meta.locationsIndexStorageFormat import LOCATIONS_I
 
 
 class PreparationClimateWriteTests(unittest.TestCase):
+    def _grade_writes(self):
+        from app.dataModel.worldPack.preparation.operations import PackTileGradeSlotsInput, PackLocationGradeSlotsInput
+        from app.dataModel.worldPack.preparation.parts import PackTileGradeSlotsPartInput, PackLocationGradeSlotsPartInput
+        from app.dataModel.worldPack.preparation.addresses import PackTileGradeSlotsAddress, PackLocationGradeSlotsAddress
+        from app.dataModel.worldPack.meta.gradeSlotsStorageFormat import GRADE_SLOTS_FORMAT_KEY, GRADE_SLOTS_STORAGE_VERSION
+        artifact = self.part.artifact.model_copy(update={"format_key": GRADE_SLOTS_FORMAT_KEY,
+                                                        "format_version": GRADE_SLOTS_STORAGE_VERSION})
+        tile = PackTileGradeSlotsPartInput(address=PackTileGradeSlotsAddress(kind="tile_grade_slots", gx=0, gy=0),
+                                          artifact=artifact, provenance=self.part.provenance)
+        location = PackLocationGradeSlotsPartInput(address=PackLocationGradeSlotsAddress(kind="location_grade_slots", location_uid="place"),
+                                                  artifact=artifact, provenance=self.part.provenance)
+        return ((self.service.write_tile_grade_slots, PackTileGradeSlotsInput, tile),
+                (self.service.write_location_grade_slots, PackLocationGradeSlotsInput, location))
+
+    def test_grade_writes_replace_only_exact_address(self):
+        state = self.state
+        for method, model, part in self._grade_writes():
+            original = state
+            first = method(model(state=state, part=part))
+            replacement = part.model_copy(update={"artifact": part.artifact.model_copy(update={"content_hash": "b" * 64})})
+            state = method(model(state=first, part=replacement))
+            self.assertEqual(state.parts[:-1], original.parts)
+            self.assertEqual(state.parts[-1].artifact, replacement.artifact)
+            self.assertEqual(first.parts[-1].artifact, part.artifact)
+            self.assertEqual(state.assembly, original.assembly)
+            self.assertEqual(state.assembly_provenance, original.assembly_provenance)
+            self.assertEqual(state.metadata_dependencies, original.metadata_dependencies)
+            self.assertEqual(state.base_publication, original.base_publication)
+        self.assertEqual(len(state.parts), 3)
+
+    def test_grade_planning_error_keeps_foreign_proof_diagnostic(self):
+        for method, model, part in self._grade_writes():
+            origin = part.provenance.provenance
+            malformed = part.model_copy(update={"provenance": part.provenance.model_copy(update={"provenance":
+                origin.model_copy(update={"planning": [], "source_proof": origin.source_proof.model_copy(update={"world_uid": "foreign"})})})})
+            with self.assertRaises(PackPreparationFailure) as caught:
+                method(model.model_construct(state=self.state, part=malformed))
+            self.assertEqual([(issue.code, issue.path.projection() if hasattr(issue, "path") else issue.location.parts)
+                              for issue in caught.exception.error.issues], [
+                ("SCHEMA_VIOLATION", ("part", "provenance", "new", "provenance", "planning")),
+                (PackPreparationIssueCode.SOURCE_PROOF_MISMATCH, ("part", "provenance")),
+            ])
+
     def _spatial_part(self):
         from app.dataModel.worldPack.preparation.parts import PackSpatialRootPartInput
         from app.dataModel.worldPack.preparation.addresses import PackSpatialRootAddress
@@ -446,7 +489,7 @@ class PreparationClimateWriteTests(unittest.TestCase):
                                                            "format_version": LOCATIONS_INDEX_FORMAT_VERSION}),
             provenance=self.part.provenance)
         return ((self.service.write_coarse_climate, PackCoarseClimateInput, self.part),
-                (self.service.replace_locations_index, PackLocationsIndexInput, index))
+                (self.service.replace_locations_index, PackLocationsIndexInput, index), *self._grade_writes())
 
     def test_inherited_is_not_erased_without_verified_base_admission(self):
         for method, model, part in self._writes():

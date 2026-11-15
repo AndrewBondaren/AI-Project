@@ -36,9 +36,62 @@ from app.dataModel.worldPack.preparation.operations import PackSpatialRootInput
 from app.dataModel.worldPack.preparation.parts import PackSpatialRootPartInput
 from app.dataModel.worldPack.preparation.addresses import PackSpatialRootAddress
 from app.dataModel.worldPack.meta.spatial.domainRoot import SpatialDomainRootRef
+from app.dataModel.worldPack.preparation.operations import PackTileGradeSlotsInput, PackLocationGradeSlotsInput
+from app.dataModel.worldPack.preparation.parts import PackTileGradeSlotsPartInput, PackLocationGradeSlotsPartInput
+from app.dataModel.worldPack.meta.gradeSlotsStorageFormat import GRADE_SLOTS_FORMAT_KEY, GRADE_SLOTS_STORAGE_VERSION
+from app.dataModel.artifacts.references import ArtifactRef
+from app.dataModel.worldPack.preparation.provenance import PackPartProvenance
 
 RequestT = TypeVar("RequestT", bound=BaseModel)
 CollectionItemT = TypeVar("CollectionItemT")
+GradePartT = TypeVar("GradePartT", PackTileGradeSlotsPartInput, PackLocationGradeSlotsPartInput)
+
+
+def _write_grade_slots(model: type[RequestT], request: RequestT,
+                      state_ref: FieldRef[RequestT, PackPreparationState], part_ref: FieldRef[RequestT, GradePartT],
+                      artifact_ref: FieldRef[GradePartT, ArtifactRef],
+                      provenance_ref: FieldRef[GradePartT, PackPartProvenance]) -> PackPreparationState:
+    errors = preparation_errors()
+    checked = validate_preparation_input(model, request, errors)
+    admitted = checked if checked is not None else request
+    path = CheckedPath.root(model)
+    state = preparation_field_value(admitted, state_ref)
+    part = preparation_field_value(admitted, part_ref)
+    validator = PackPreparationValidator()
+    validator.check_state_identities(state, path.field(state_ref), errors)
+    validator.check_metadata_groups(state, path.field(state_ref), errors)
+    artifact = valid_preparation_field(part, artifact_ref)
+    if artifact is not None and (artifact.kind is not ArtifactKind.BLOB
+            or artifact.format_key != GRADE_SLOTS_FORMAT_KEY or artifact.format_version != GRADE_SLOTS_STORAGE_VERSION):
+        errors.add(PackPreparationIssue(code=PackPreparationIssueCode.FORMAT_MISMATCH,
+            path=path.field(part_ref).field(artifact_ref).freeze(), message="unsupported grade slots descriptor"))
+    provenance = preparation_field_value(part, provenance_ref)
+    inherited = valid_preparation_field(provenance, FieldRef(lambda: PackInheritedPartProvenance, lambda value: value.kind))
+    new = valid_preparation_field(provenance, FieldRef(lambda: PackNewPartProvenance, lambda value: value.kind))
+    if inherited is not None:
+        errors.add(PackPreparationIssue(code=PackPreparationIssueCode.SOURCE_PROOF_MISMATCH,
+            path=path.field(part_ref).field(provenance_ref).freeze(),
+            message="inherited input requires verified pinned-base admission; unavailable in this pure write"))
+    elif new is not None:
+        origin = preparation_field_value(provenance, FieldRef(lambda: PackNewPartProvenance, lambda value: value.provenance))
+        proof = preparation_field_value(origin, FieldRef(lambda: PackStoredProvenance, lambda value: value.source_proof))
+        proof_world = valid_preparation_field(proof, FieldRef(lambda: SourceDurableProof, lambda value: value.world_uid))
+        base = preparation_field_value(state, FieldRef(lambda: PackPreparationState, lambda value: value.base_publication))
+        world = valid_preparation_field(base, FieldRef(lambda: WorldPublicationRef, lambda value: value.world_uid))
+        if world is not None and proof_world is not None and proof_world != world:
+            errors.add(PackPreparationIssue(code=PackPreparationIssueCode.SOURCE_PROOF_MISMATCH,
+                path=path.field(part_ref).field(provenance_ref).freeze(), message="grade slots proof belongs to another world"))
+    raise_preparation_errors(errors, PackPreparationFailureReason.DEPENDENCY_MISMATCH)
+    assert checked is not None
+    checked_state, checked_part = state_ref.select(checked), part_ref.select(checked)
+    stored = PackStoredPart(address=checked_part.address, artifact=checked_part.artifact,
+                            provenance=checked_part.provenance.provenance)
+    parts = tuple(stored if row.address == stored.address else row for row in checked_state.parts)
+    if not any(row.address == stored.address for row in checked_state.parts):
+        parts = (*parts, stored)
+    return validator.validate_state(PackPreparationState(base_publication=checked_state.base_publication, parts=parts,
+        assembly=checked_state.assembly, assembly_provenance=checked_state.assembly_provenance,
+        metadata_dependencies=checked_state.metadata_dependencies))
 
 
 def _admit(model: type[RequestT], request: RequestT,
@@ -68,6 +121,20 @@ def _without_representation(state: PackPreparationState, address: PackPartAddres
 
 
 class PackPreparationService:
+    def write_tile_grade_slots(self, request: PackTileGradeSlotsInput) -> PackPreparationState:
+        return _write_grade_slots(PackTileGradeSlotsInput, request,
+            FieldRef(lambda: PackTileGradeSlotsInput, lambda value: value.state),
+            FieldRef(lambda: PackTileGradeSlotsInput, lambda value: value.part),
+            FieldRef(lambda: PackTileGradeSlotsPartInput, lambda value: value.artifact),
+            FieldRef(lambda: PackTileGradeSlotsPartInput, lambda value: value.provenance))
+
+    def write_location_grade_slots(self, request: PackLocationGradeSlotsInput) -> PackPreparationState:
+        return _write_grade_slots(PackLocationGradeSlotsInput, request,
+            FieldRef(lambda: PackLocationGradeSlotsInput, lambda value: value.state),
+            FieldRef(lambda: PackLocationGradeSlotsInput, lambda value: value.part),
+            FieldRef(lambda: PackLocationGradeSlotsPartInput, lambda value: value.artifact),
+            FieldRef(lambda: PackLocationGradeSlotsPartInput, lambda value: value.provenance))
+
     def write_spatial_root(self, request: PackSpatialRootInput) -> PackPreparationState:
         errors = preparation_errors()
         checked = validate_preparation_input(PackSpatialRootInput, request, errors)

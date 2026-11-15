@@ -53,7 +53,7 @@ Operation фиксирована классом: ADMIT, READ, ADMIT_GROUPS, VERI
 
 1. Проверить structural пригодность request и вложенных ветвей. Root failure без представимого пути сохраняет предусмотренный Pydantic отказ. Для представимых nested failures — INVALID_SHAPE с known containing path; оригинальные индексы не сдвигать.
 2. Обойти все доступные world/descriptor/key facts. Проверить world у пустого proof/group, даже когда нет dependencies. Unknown descriptor отменяет только зависящую key проверку; остальные группы продолжаются.
-3. Собрать все доступные `(original_group_index, original_use_index, usage)` и проверить conflicts целым batch; не отдельно на каждой группе. Expected и presented proof — разные стороны сравнения: не объединять их в одну конфликтную историю вместо проверки соответствия.
+3. Собрать пригодные capture refs и dependency refs с исходными group/use/dependency indices по exact facts API checker §3. Проверить conflicts целым batch, не отдельно на каждой группе. Не восстанавливать повреждённый SourceCaptureUsage ради вызова checker: пригодные leaves внутри него сохраняются независимо от повреждённых соседей. Expected и presented proof — разные стороны сравнения, их facts проверяются раздельно.
 4. Для persisted стороны проверить canonical форму без изменения. Для declared стороны repetitions/empty usages не объявлять persisted ошибкой.
 5. Проверить доступные selections; bounds требуют пригодного canonical proof/atom index. Проверка fingerprint не допускает чтения latest. При group-count mismatch дополнительно проверить доступные selections, не запускать matching отсутствующих пар.
 6. Собрать SourceFailure после всех независимых проверок. При наличии failures normalizer/union/extractor/matcher не вызываются. При None — выполнить конкретное pure преобразование §4.
@@ -102,13 +102,15 @@ pure result → будущая exact-read/closure интеграция → publi
 
 Полные request checkers используют owning key validation. Поэтому **они не являются полностью независимым production admission-срезом**, пока INT-TERRAIN/другие нужные descriptor bindings не подтверждены. Не вводить `skip_keys`, `allow_partial`, None-adapter или TEST mode в production для снятия зависимости.
 
-Независимо можно принять и реализовать world/conflict/canonical/selection инварианты и pure algorithms с документированными preconditions и existing values. Тесты этих алгоритмов используют явные значения, а не stub, объявленный owning validation. Coverage таких tests не распространяется на request-wide admission, IO, финализацию или runtime Source.
+**Выбранный кандидат первого независимого среза после R2 (2026-11-16): только world/conflict/canonical/selection инварианты и atom enumeration.** Normalizer, union builder, extractor, matcher, identity/membership checkers и все request-wide checkers не входят. Их prerequisites не ослабляются ради начала реализации. Точный перечень и гарантии — source-core-independent-slice.md. Тестовые значения не объявляются owning admission; результатов SourceProofResult и фиктивного closure в срезе нет.
 
 ## 6. Матрица проверки среза
 
 | Сценарий | Обязательный результат |
 |---|---|
 | Ошибки в groups[0] и groups[2] при повреждённой ветви [1] | Доступные независимые ошибки обеих групп сохранены, indices не сдвинуты |
+| В одном use objects=(None, A@r1), в другом той же capture A@r2 | INVALID_SHAPE и REVISION_CONFLICT; facts сохраняют исходные позиции, никакого repaired usage |
+| Capture ref непригоден, соседние dependency leaves пригодны | Отменён только capture-relative conflict; независимые shape/world/descriptor проверки продолжаются |
 | Конфликт revision между uses разных groups одной full capture | REVISION_CONFLICT до union |
 | Historical revisions разных captures | Не ложный conflict |
 | Foreign empty proof | WRONG_WORLD, не потерян из-за отсутствия atoms |

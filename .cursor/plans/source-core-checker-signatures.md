@@ -43,13 +43,22 @@ class SourceUsageConflictChecker:
     def __init__(self) -> None: ...
     def check(
         self,
-        uses: tuple[tuple[int | None, int, SourceCaptureUsage], ...],
+        *,
+        captures: tuple[tuple[int | None, int, SourceCaptureRef], ...],
+        dependencies: tuple[tuple[
+            int | None, int, int, SourceCaptureRef,
+            SourceVersionRef | SourceCollectionVersionRef,
+        ], ...],
     ) -> tuple[SourceLogicIssue, ...]: ...
 ```
 
-Каждый элемент — `(original_group_index, original_use_index, usage)`. Это internal tuple явно типизированных существующих значений, не persisted/public DTO и не зеркало ошибки. Для single request group=None; для groups/available — исходная позиция. Весь request передаётся одним batch, иначе теряются cross-use/cross-group conflicts. Checker не нормализует и не удаляет повторения.
+Уточнение R1 (2026-11-16): checker получает пригодные факты, а не целые usages. `captures` содержит `(original_group_index, original_use_index, capture_ref)` даже при повреждённых dependencies. `dependencies` содержит `(original_group_index, original_use_index, original_dependency_index, capture_ref, exact_source_ref)` для каждого пригодного ref. Object/collection категория определяется конкретным existing ref type; dependency_index относится к исходному objects либо collections, не к уплотнённому списку. Это internal tuple существующих values, не новый persisted/public DTO или error carrier.
 
-Capture uid с несовместимым full ref → CAPTURE_ID_CONFLICT; внутри одной full capture identity разные revisions dependency → REVISION_CONFLICT с exact source и исходными индексами offending occurrence. Exact повтор declared refs допустим; разные revisions в разных captures допустимы. World/descriptor checks выполняются своими owners, не повторяются здесь. Повреждённые structural branches не передаются как валидные usages; независимые доступные usages продолжают проверяться.
+Для single request group=None; для groups/available — исходная позиция. Facts всей стороны request передаются одним batch в исходном порядке; expected и presented стороны не смешиваются. Каждый dependency fact обязан ссылаться на тот же exact capture ref и исходную позицию из captures. Неуникальные capture positions, неверные indices или несогласованные факты — programming error обхода, не business failure. Checker не строит исправленный SourceCaptureUsage и не нормализует вход.
+
+Обход валидирует leaves независимо: непригодный ref получает structural diagnostic и не попадает в dependencies; пригодные соседние refs остаются. При отсутствии пригодного capture ref нельзя проверять capture-relative конфликт этого use, но world/descriptor/shape проверки доступных полей продолжаются. Capture identity проверяется по captures даже у use без пригодных dependencies. Для nested `objects=(None, A@r1)` и соседнего use той же capture с A@r2 итог содержит INVALID_SHAPE по исходному objects[0] и REVISION_CONFLICT по исходному второму use. Capture/world/ref values не достраиваются из defaults.
+
+Корректировка пользователя 2026-11-16: внутри одного exact SourceCaptureRef разные revisions dependency → REVISION_CONFLICT с exact source и исходными group/use indices offending occurrence. CAPTURE_ID_CONFLICT здесь не проверяется: capture_uid отсутствует в SourceCaptureRef и доступен только в decoded SourceCaptureWitness; эта проверка принадлежит witness/finalization. Dependency index сохраняется в facts для исходного порядка и traversal checks, но не добавляется в SourceLogicIssue новым полем. Exact повтор declared refs допустим; разные revisions в разных captures допустимы. World/descriptor checks выполняются своими owners, не повторяются здесь. Повреждённый usage не передаётся как валидный; его пригодные leaf facts продолжают участвовать в проверке.
 
 ## 4. Canonical proof и selection
 

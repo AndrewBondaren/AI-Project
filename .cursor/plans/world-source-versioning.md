@@ -52,6 +52,10 @@ Identity/revision, fingerprint, pinning и retention переиспользую�
 
 ## Актуальные следующие шаги (2026-11-15)
 
+Конкретный implementation-кандидат независимого ядра: [source-core-invariants-implementation.md](source-core-invariants-implementation.md), 2026-11-16. Пять компонентов, порядок A→D, exact exclusions и собственные/независимые проверки раздельно. Код пока не поставлен; остальные открытые области Source не включаются в этот срез.
+
+Исправления архитектурного review 2026-11-16: R1 — leaf facts с исходными indices вместо целого повреждённого usage; R2 — [точный первый independent subset](source-core-independent-slice.md). [Повторная собственная проверка](source-core-architecture-review-2026-11-15.md) не заменяет независимую приёмку; implementation-план и код ещё не разрешены.
+
 **Актуальная карта ядра и статусов:** [source-core-architecture.md](source-core-architecture.md). Это единая точка навигации по архитектуре: согласованные направления, конкретные proposals, собственный остаток и отдельный реестр интеграций. При чтении ранних таблиц учитывать перечисленные там дельты; полная архитектура ещё не принята.
 
 Оставшиеся границы ядра — [capture/prune/configuration](source-core-capture-prune-configuration.md): construction без лишнего assembler, отдельная usage/prune ownership граница и незакрытый settings lifecycle. DRAFT, без назначения Source владельцем чужого reachability и без CRUD acceptance.

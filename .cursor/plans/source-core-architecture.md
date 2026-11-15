@@ -1,5 +1,7 @@
 # Source — актуальная карта архитектуры ядра
 
+**Ревью 2026-11-15 и ответ 2026-11-16:** [отчёт и повторная проверка](source-core-architecture-review-2026-11-15.md). R1 исправлен facts API без repaired usage; R2 — выбором узкого [independent subset](source-core-independent-slice.md). Собственная проверка исправлений не является independent acceptance; код ещё не разрешён.
+
 2026-11-15. Единая навигационная карта решений и статусов; **архитектура в целом ещё не принята**. Основной план — world-source-versioning.md. Этот документ не превращает proposals в принятые контракты; детальные signatures остаются в указанных ниже спецификациях. Реализация только после приёмки конкретного среза через implement-plan.
 
 ## 1. Назначение и границы
@@ -70,7 +72,7 @@ Source фиксирует identity/revisions исходных объектов, 
 
 ## 6. Ближайший ограниченный срез для архитектурной проверки
 
-Кандидат — pure proof canonical/normalization/atom/union/extraction/matching и request checks, которые не требуют отсутствующей owning admission/IO. Он не создаёт durable result и не подтверждает capture finalization. Зависимость от concrete key adapter должна быть явно отсечена по реальным checks, а не заменена stub. Выделение именно этого среза ещё требует review и точной implementation-матрицы.
+После R2 выбран конкретный кандидат: [Source core independent slice](source-core-independent-slice.md) — world/conflict/canonical/selection checkers и atom enumeration. Normalizer/union/extractor/matcher и request-wide checks исключены, их прежние prerequisites не ослаблены. В constructor graph среза нет owning key adapter. Срез не создаёт durable result и не подтверждает capture finalization; он требует принятия и отдельного implementation-плана.
 
 До реализации: проверить ответственность каждой роли, exact inputs/errors, полноту prerequisites каждого алгоритма, original root diagnostics, absence of public nested calls и imports границы. Tests автора и independent acceptance разделены. Готовность всего ядра, настройки/CRUD и интеграции не объявлять по этому узкому результату.
 

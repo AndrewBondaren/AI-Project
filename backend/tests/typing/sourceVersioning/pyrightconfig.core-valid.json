@@ -1,0 +1,4 @@
+{
+  "extends": "pyrightconfig.valid.json",
+  "include": ["core_valid.py", "../../../app/application/worldData/sourceVersioning/proof"]
+}

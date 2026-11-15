@@ -6,6 +6,7 @@ from app.dataModel.worldPack.preparation.addresses import PackPartAddress, PackL
 from app.dataModel.worldPack.preparation.state import PackPreparationState
 from app.dataModel.worldPack.preparation.parts import PackCoarseClimatePartInput, PackLocationsIndexPartInput
 from app.dataModel.worldPack.preparation.parts import PackSpatialRootPartInput
+from app.dataModel.worldPack.preparation.parts import PackTileGradeSlotsPartInput, PackLocationGradeSlotsPartInput
 from app.dataModel.worldPack.preparation.assembly import PackAssemblyInput
 from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
 
@@ -57,3 +58,17 @@ class PackSpatialRootInput(BaseModel):
 
     state: PackPreparationState
     part: PackSpatialRootPartInput
+
+
+class PackTileGradeSlotsInput(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
+
+    state: PackPreparationState
+    part: PackTileGradeSlotsPartInput
+
+
+class PackLocationGradeSlotsInput(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
+
+    state: PackPreparationState
+    part: PackLocationGradeSlotsPartInput
