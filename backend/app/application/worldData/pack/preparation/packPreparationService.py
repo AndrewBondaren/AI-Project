@@ -10,6 +10,7 @@ from app.dataModel.worldPack.meta.parts import PackStoredPart
 from app.dataModel.worldPack.preparation.parts import PackCoarseClimatePartInput, PackLocationsIndexPartInput
 from app.dataModel.worldPack.meta.locationsIndexStorageFormat import LOCATIONS_INDEX_FORMAT_KEY, LOCATIONS_INDEX_FORMAT_VERSION
 from app.dataModel.worldPack.preparation.operations import PackLocationsIndexInput
+from app.dataModel.worldPack.preparation.operations import PackPreparationEmptyInput
 from app.dataModel.worldPack.preparation.errors import PackPreparationIssue, PackPreparationIssueCode
 from app.dataModel.worldPack.wire.climateFieldWire import CLIMATE_FIELD_FORMAT_KEY, CLIMATE_FIELD_FORMAT_VERSION
 
@@ -30,6 +31,7 @@ from app.dataModel.worldPack.preparation.assembly import PackAssemblyInput
 from app.dataModel.worldPack.preparation.state import PackPreparationState
 
 RequestT = TypeVar("RequestT", bound=BaseModel)
+CollectionItemT = TypeVar("CollectionItemT")
 
 
 def _admit(model: type[RequestT], request: RequestT,
@@ -59,6 +61,33 @@ def _without_representation(state: PackPreparationState, address: PackPartAddres
 
 
 class PackPreparationService:
+    def start_empty(self, request: PackPreparationEmptyInput) -> PackPreparationState:
+        errors = preparation_errors()
+        checked = validate_preparation_input(PackPreparationEmptyInput, request, errors)
+        admitted = checked if checked is not None else request
+        path = CheckedPath.root(PackPreparationEmptyInput)
+        base_ref = FieldRef(lambda: PackPreparationEmptyInput, lambda value: value.base_publication)
+        assembly_ref = FieldRef(lambda: PackPreparationEmptyInput, lambda value: value.initial_assembly)
+        base = valid_preparation_field(admitted, base_ref)
+        if base is not None and base.pack_hash is not None:
+            errors.add(PackPreparationIssue(code=PackPreparationIssueCode.BASE_PUBLICATION_MISMATCH,
+                path=path.field(base_ref).freeze(), message="empty preparation requires a publication without Pack"))
+        assembly = preparation_field_value(admitted, assembly_ref)
+        def require_empty(collection_ref: FieldRef[PackAssemblyInput, tuple[CollectionItemT, ...]]) -> None:
+            collection = preparation_field_value(assembly, collection_ref)
+            if isinstance(collection, tuple) and collection:
+                errors.add(PackPreparationIssue(code=PackPreparationIssueCode.METADATA_INPUT_MISMATCH,
+                    path=path.field(assembly_ref).field(collection_ref).freeze(),
+                    message="empty preparation requires an empty metadata collection"))
+        require_empty(FieldRef(lambda: PackAssemblyInput, lambda value: value.tiles))
+        require_empty(FieldRef(lambda: PackAssemblyInput, lambda value: value.locations))
+        require_empty(FieldRef(lambda: PackAssemblyInput, lambda value: value.settlements))
+        require_empty(FieldRef(lambda: PackAssemblyInput, lambda value: value.wilderness_regions))
+        raise_preparation_errors(errors, PackPreparationFailureReason.DEPENDENCY_MISMATCH)
+        assert checked is not None
+        return PackPreparationState(base_publication=checked.base_publication, assembly=checked.initial_assembly,
+                                    parts=(), assembly_provenance=(), metadata_dependencies=())
+
     def replace_locations_index(self, request: PackLocationsIndexInput) -> PackPreparationState:
         errors = preparation_errors()
         checked = validate_preparation_input(PackLocationsIndexInput, request, errors)

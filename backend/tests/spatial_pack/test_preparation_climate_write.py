@@ -23,6 +23,30 @@ from app.dataModel.worldPack.meta.locationsIndexStorageFormat import LOCATIONS_I
 
 
 class PreparationClimateWriteTests(unittest.TestCase):
+    def test_start_empty_preserves_explicit_header(self):
+        from app.dataModel.worldPack.preparation.operations import PackPreparationEmptyInput
+        assembly = self.state.assembly.model_copy(update={"tiles": ()})
+        request = PackPreparationEmptyInput(base_publication=self.state.base_publication, initial_assembly=assembly)
+        result = self.service.start_empty(request)
+        self.assertEqual(result.assembly, assembly)
+        self.assertEqual(result.base_publication, request.base_publication)
+        self.assertEqual((result.parts, result.assembly_provenance, result.metadata_dependencies), ((), (), ()))
+        self.assertEqual(self.state.parts, (self.fine,))
+        self.assertEqual(len(self.state.assembly.tiles), 1)
+
+    def test_start_empty_aggregates_schema_base_and_collection_refusals(self):
+        from app.dataModel.worldPack.preparation.operations import PackPreparationEmptyInput
+        base = self.state.base_publication.model_copy(update={"pack_hash": "a" * 64})
+        assembly = self.state.assembly.model_copy(update={"fine_cell_size": "bad"})
+        request = PackPreparationEmptyInput.model_construct(base_publication=base, initial_assembly=assembly)
+        with self.assertRaises(PackPreparationFailure) as caught:
+            self.service.start_empty(request)
+        self.assertEqual([(issue.code, issue.path.projection()) for issue in caught.exception.error.issues], [
+            ("SCHEMA_VIOLATION", ("initial_assembly", "fine_cell_size")),
+            (PackPreparationIssueCode.BASE_PUBLICATION_MISMATCH, ("base_publication",)),
+            (PackPreparationIssueCode.METADATA_INPUT_MISMATCH, ("initial_assembly", "tiles")),
+        ])
+
     def test_missing_basis_is_distinct_from_explicit_null(self):
         from app.dataModel.sourceVersioning.sourceProofSelection import SourceProofSelection
         from app.dataModel.sourceVersioning.sourceProofInput import SourceProofInput
