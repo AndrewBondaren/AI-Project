@@ -51,6 +51,18 @@ class TestPackRenderReadFacade(unittest.TestCase):
         facade = self._services().render
         self.assertIsNone(facade.try_world_map_source(self.world))
 
+    def test_wilderness_status_without_loaded_chunks(self) -> None:
+        from app.dataModel.worldPack.meta.worldPackManifest import TileManifestEntry
+        self.writer.manifest.tiles.append(TileManifestEntry(gx=0, gy=0, wilderness_refine_status="absent"))
+        self.writer.save_manifest()
+        facade = self._services().render
+        for gx, expected_status in ((0, "absent"), (1, None)):
+            with self.subTest(gx=gx):
+                source = facade.try_wilderness_tile(self.world, gx, 0)
+                assert source is not None
+                self.assertEqual(source.chunks, [])
+                self.assertEqual(source.wilderness_refine_status, expected_status)
+
     def test_try_world_map_source_with_tiles_and_pins(self) -> None:
         self.writer.write_world_map_tile(
             0, 0,

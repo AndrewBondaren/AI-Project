@@ -4,6 +4,8 @@ Does not fork ``plan_ribbon_volume``. Discover does not write z/uid.
 """
 
 from __future__ import annotations
+from app.application.worldData.errors import WorldDataValidationError
+from app.application.worldData.generators.terrain.relief.pick.ribbonGrade import RibbonGradeResult
 
 from app.application.jsonValidation import canal_templates, relief_pick_policy
 from app.application.worldData.generators.terrain.relief.canal.seedResolve import (
@@ -94,9 +96,11 @@ def apply_grade_paint_spec(
         site_id=front.site_id,
         cell_coords=tuple(front.rim),
     )
+    if front.template_uid is None:
+        raise WorldDataValidationError("grade formation requires a selected relief template")
+    result = RibbonGradeResult(segment=segment, decision=decision, template_uid=front.template_uid)
     canal = canal_for_seed(
-        segment,
-        decision,
+        result,
         requested=max(0, int(decision.requested_length)),
         L_eff=int(plan.L),
         policy_rules=tuple(relief_pick_policy(world).canal_obstacle_policy),

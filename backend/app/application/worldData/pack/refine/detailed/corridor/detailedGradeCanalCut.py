@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from app.application.worldData.generators.terrain.relief.pick.gradePass import RibbonGradeDecision
-from app.application.worldData.generators.terrain.relief.sample.ribbonSegmentize import RibbonSegment
+from app.application.worldData.generators.terrain.relief.pick.ribbonGrade import RibbonGradeResult
 from app.application.worldData.generators.terrain.relief.canal.seedResolve import (
     resolve_seed_canal,
 )
@@ -23,8 +22,7 @@ def r36t_include_cut_end(
 
 
 def canal_for_seed(
-    segment: RibbonSegment,
-    decision: RibbonGradeDecision,
+    result: RibbonGradeResult,
     *,
     requested: int,
     L_eff: int,
@@ -35,10 +33,10 @@ def canal_for_seed(
     return resolve_seed_canal(
         requested_length=requested,
         L_eff=L_eff,
-        terrain_key=segment.terrain_key,
-        knobs_earthen=decision.earthen_canal,
-        knobs_structure_canal=decision.structure_canal,
+        terrain_key=result.segment.terrain_key,
+        knobs_earthen=result.decision.earthen_canal,
+        knobs_structure_canal=result.decision.structure_canal,
         policy_rules=policy_rules,
         registry=registry,
-        site_id=segment.site_id,
+        site_id=result.segment.site_id,
     )

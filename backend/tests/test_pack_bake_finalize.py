@@ -67,7 +67,7 @@ class PackWorldWireTests(unittest.TestCase):
                          ("world_map_cells_per_tile", "invalid")):
             with self.subTest(key=key), self.assertRaises(ImportValidationError) as caught:
                 resolve_world_column(key, raw, ResolveContext())
-            self.assertEqual(caught.exception.errors[0].path, (key,))
+            self.assertEqual(caught.exception.errors[0].path.projection(), (key,))
             self.assertTrue(caught.exception.errors[0].schema_id)
 
 
@@ -190,7 +190,7 @@ class PackFinalizeTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(self.writer, "pack_storage_path", return_value=42):
             with self.assertRaises(ImportValidationError) as caught:
                 await self.finalize()
-        self.assertEqual(caught.exception.errors[0].path, ("terrain_pack_path",))
+        self.assertEqual(caught.exception.errors[0].path.projection(), ("terrain_pack_path",))
         self.repo.update.assert_not_awaited()
         reader.invalidate_manifest.assert_called_once()
 

@@ -35,8 +35,9 @@ def resolve_pack_root(
 ) -> Path:
     """Canonical pack directory for presence checks and I/O (REVIEW-1)."""
     default = WorldPackPaths.from_db_parent(db_path, world_uid).root
-    if world is not None and world.terrain_pack_path:
-        return resolve_relative_pack_root(world.terrain_pack_path, db_path)
+    stored_path = getattr(world, "terrain_pack_path", None) if world is not None else None
+    if stored_path:
+        return resolve_relative_pack_root(stored_path, db_path)
     return default
 
 
