@@ -6,7 +6,7 @@ from typing import TypeVar
 from pydantic import BaseModel
 
 from app.application.worldData.pack.preparation.errors import preparation_errors, raise_preparation_errors, validate_preparation_input
-from app.application.worldData.pack.preparation.errors import valid_preparation_field, valid_preparation_items
+from app.application.worldData.pack.preparation.errors import valid_preparation_field, valid_preparation_items, preparation_field_value
 from app.dataModel.fields.checkedPath import CheckedPath
 from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.sourceVersioning.sourceDurableProof import SourceDurableProof
@@ -47,19 +47,20 @@ class PackPreparationValidator:
         """Structural admission followed by local identities; no final completeness or IO."""
         errors = preparation_errors()
         checked = validate_preparation_input(PackPreparationState, state, errors)
-        self.check_state_identities(state, CheckedPath.root(PackPreparationState), errors)
-        self.check_metadata_groups(state, CheckedPath.root(PackPreparationState), errors)
+        admitted = checked if checked is not None else state
+        self.check_state_identities(admitted, CheckedPath.root(PackPreparationState), errors)
+        self.check_metadata_groups(admitted, CheckedPath.root(PackPreparationState), errors)
         raise_preparation_errors(errors, PackPreparationFailureReason.DEPENDENCY_MISMATCH)
         assert checked is not None
         return checked
 
     def check_metadata_groups(
-        self, state: PackPreparationState, path: CheckedPath[RootT, PackPreparationState],
+        self, state: object, path: CheckedPath[RootT, PackPreparationState],
         errors: ValidatorAggregationHelper[PackPreparationDiagnostic],
     ) -> None:
         transient = FieldRef(lambda: PackPreparationState, lambda value: value.metadata_dependencies)
         dependencies = FieldRef(lambda: PackMetadataDescription, lambda value: value.dependencies)
-        for index, description in enumerate(valid_preparation_field(state, transient) or ()):
+        for index, description in valid_preparation_items(state, transient):
             group_path = path.field(transient).item(index).field(dependencies)
             for use_index, use in enumerate(dependencies.select(description)):
                 self._check_group(description.subject.address, use.group, use.basis,
@@ -72,7 +73,7 @@ class PackPreparationValidator:
         groups = FieldRef(lambda: PackMetadataAttribution, lambda value: value.groups)
         group_field = FieldRef(lambda: PackMetadataGroupAdmission, lambda value: value.group)
         basis_field = FieldRef(lambda: PackMetadataGroupAdmission, lambda value: value.basis)
-        for index, entry in enumerate(valid_preparation_field(state, stored) or ()):
+        for index, entry in valid_preparation_items(state, stored):
             detail = attribution.select(entry)
             if detail is None:
                 continue
@@ -137,7 +138,7 @@ class PackPreparationValidator:
                                chunks_path.item(index), "basis chunk belongs to another tile")
 
     def check_state_identities(
-        self, state: PackPreparationState, path: CheckedPath[RootT, PackPreparationState],
+        self, state: object, path: CheckedPath[RootT, PackPreparationState],
         errors: ValidatorAggregationHelper[PackPreparationDiagnostic],
     ) -> None:
         """Collect local identity issues under the calling operation's named input path."""
@@ -161,26 +162,28 @@ class PackPreparationValidator:
                        "part proof belongs to another world")
 
         stored_field = FieldRef(lambda: PackPreparationState, lambda value: value.assembly_provenance)
-        stored = valid_preparation_field(state, stored_field) or ()
+        stored = valid_preparation_items(state, stored_field)
         stored_path = path.field(stored_field)
         stored_address = FieldRef(lambda: PackStoredAssemblyProvenance, lambda value: value.address)
         stored_provenance = FieldRef(lambda: PackStoredAssemblyProvenance, lambda value: value.provenance)
-        for index in _duplicates(stored_address.select(entry) for entry in stored):
+        for position in _duplicates(stored_address.select(entry) for _, entry in stored):
+            index = stored[position][0]
             _issue(errors, PackPreparationIssueCode.DUPLICATE_ADDRESS,
                    stored_path.item(index).field(stored_address), "duplicate metadata provenance address")
-        for index, entry in enumerate(stored):
+        for index, entry in stored:
             if world is not None and world_field.select(proof_field.select(stored_provenance.select(entry))) != world:
                 _issue(errors, PackPreparationIssueCode.SOURCE_PROOF_MISMATCH,
                        stored_path.item(index).field(stored_provenance).field(proof_field).field(world_field),
                        "metadata proof belongs to another world")
 
         descriptions_field = FieldRef(lambda: PackPreparationState, lambda value: value.metadata_dependencies)
-        descriptions = valid_preparation_field(state, descriptions_field) or ()
+        descriptions = valid_preparation_items(state, descriptions_field)
         descriptions_path = path.field(descriptions_field)
         subject_field = FieldRef(lambda: PackMetadataDescription, lambda value: value.subject)
         subject_address = FieldRef(lambda: PackMetadataSubject, lambda value: value.address)
         subject_base = FieldRef(lambda: PackMetadataSubject, lambda value: value.base_publication)
-        for index in _duplicates(subject_address.select(subject_field.select(entry)) for entry in descriptions):
+        for position in _duplicates(subject_address.select(subject_field.select(entry)) for _, entry in descriptions):
+            index = descriptions[position][0]
             _issue(errors, PackPreparationIssueCode.DUPLICATE_ADDRESS,
                    descriptions_path.item(index).field(subject_field).field(subject_address),
                    "duplicate metadata dependency address")
@@ -188,7 +191,7 @@ class PackPreparationValidator:
         group_field = FieldRef(lambda: PackMetadataDependencyUse, lambda value: value.group)
         usage_field = FieldRef(lambda: PackMetadataDependencyUse, lambda value: value.source_usage)
         usage_world = FieldRef(lambda: SourceProofInput, lambda value: value.world_uid)
-        for index, entry in enumerate(descriptions):
+        for index, entry in descriptions:
             entry_path = descriptions_path.item(index)
             if base is not None and subject_base.select(subject_field.select(entry)) != base:
                 _issue(errors, PackPreparationIssueCode.BASE_PUBLICATION_MISMATCH,
@@ -206,25 +209,35 @@ class PackPreparationValidator:
 
         assembly_path = path.field(FieldRef(lambda: PackPreparationState, lambda value: value.assembly))
         tiles_field = FieldRef(lambda: PackAssemblyInput, lambda value: value.tiles)
-        assembly = vars(state).get("assembly") if isinstance(state, PackPreparationState) else None
-        tiles = valid_preparation_field(assembly, tiles_field) or ()
+        assembly = preparation_field_value(state, FieldRef(lambda: PackPreparationState, lambda value: value.assembly))
+        tiles = valid_preparation_items(assembly, tiles_field)
         tiles_path = assembly_path.field(tiles_field)
-        for index in _duplicates((tile.gx, tile.gy) for tile in tiles):
+        for position in _duplicates((tile.gx, tile.gy) for _, tile in tiles):
+            index = tiles[position][0]
             _issue(errors, PackPreparationIssueCode.DUPLICATE_ADDRESS, tiles_path.item(index), "duplicate tile")
         chunks_field = FieldRef(lambda: PackTileAssembly, lambda value: value.chunks)
-        for index, tile in enumerate(tiles):
-            for duplicate in _duplicates((chunk.cx, chunk.cy) for chunk in chunks_field.select(tile)):
+        raw_tiles = preparation_field_value(assembly, tiles_field)
+        for index, tile in enumerate(raw_tiles if isinstance(raw_tiles, tuple) else ()):
+            chunks = valid_preparation_items(tile, chunks_field)
+            for position in _duplicates((chunk.cx, chunk.cy) for _, chunk in chunks):
+                duplicate = chunks[position][0]
                 _issue(errors, PackPreparationIssueCode.DUPLICATE_ADDRESS,
                        tiles_path.item(index).field(chunks_field).item(duplicate), "duplicate chunk in tile")
         locations_field = FieldRef(lambda: PackAssemblyInput, lambda value: value.locations)
-        for index in _duplicates(row.location_uid for row in (valid_preparation_field(assembly, locations_field) or ())):
+        locations = valid_preparation_items(assembly, locations_field)
+        for position in _duplicates(row.location_uid for _, row in locations):
+            index = locations[position][0]
             _issue(errors, PackPreparationIssueCode.DUPLICATE_ADDRESS,
                    assembly_path.field(locations_field).item(index), "duplicate location")
         settlements_field = FieldRef(lambda: PackAssemblyInput, lambda value: value.settlements)
-        for index in _duplicates(row.location_uid for row in (valid_preparation_field(assembly, settlements_field) or ())):
+        settlements = valid_preparation_items(assembly, settlements_field)
+        for position in _duplicates(row.location_uid for _, row in settlements):
+            index = settlements[position][0]
             _issue(errors, PackPreparationIssueCode.DUPLICATE_ADDRESS,
                    assembly_path.field(settlements_field).item(index), "duplicate settlement")
         regions_field = FieldRef(lambda: PackAssemblyInput, lambda value: value.wilderness_regions)
-        for index in _duplicates(row.region_uid for row in (valid_preparation_field(assembly, regions_field) or ())):
+        regions = valid_preparation_items(assembly, regions_field)
+        for position in _duplicates(row.region_uid for _, row in regions):
+            index = regions[position][0]
             _issue(errors, PackPreparationIssueCode.DUPLICATE_ADDRESS,
                    assembly_path.field(regions_field).item(index), "duplicate region")

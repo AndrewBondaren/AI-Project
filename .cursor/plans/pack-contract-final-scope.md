@@ -26,6 +26,8 @@ Pack принимает готовые типизированные резуль
 
 ## Зафиксированный Pack-контракт
 
+**Массовые writes, решение 2026-11-15:** пользователь выбрал однотипные пакетные операции с одним input-state admission и одним итоговым immutable state; duplicate addresses отвергаются, errors агрегируются, порядок пакетов задаёт DAG. [Точные границы решения и следующей конкретизации](pack-v2-public-write-operations.md#стоимость-последовательных-writes--отдельная-проверка-масштабирования). Первое семейство — chunks; named batch contract ещё предстоит предъявить до кода. [Замеры старого replacement](pack-write-scaling-measurement-2026-11-15.md) частичные, массовая реализация не принята. Существующие pure методы этим решением не переписываются автоматически.
+
 1. Единственный immutable состав: parts, assembly, assembly_provenance; transient metadata dependencies не дублируют значения assembly. Один сохраняемый manifest, без отдельного contents artifact. Partial state ослабляет полноту состава, но не strict types, uniqueness и immutable вложения.
 2. PackPreparationService выполняет одну названную pure операцию над state. None-preserve, explicit empty и delete имеют разные, прослеженные semantics. Изменение A сохраняет B/ref/provenance. Устаревшая metadata provenance инвалидируется; write не требует заранее proof ещё не вычисленной projection.
 3. describe_metadata возвращает descriptions с subject и dependency usage. Binding объявляется только в metadataDependencies.py: subject/provenance/source_request/source_result/groups. Исторический partial preserve без detailed attribution отклоняется; новое происхождение не выводится из совпадения значений.

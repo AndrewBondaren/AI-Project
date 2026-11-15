@@ -14,7 +14,7 @@ from app.dataModel.worldPack.preparation.errors import PackPreparationIssue, Pac
 from app.dataModel.worldPack.wire.climateFieldWire import CLIMATE_FIELD_FORMAT_KEY, CLIMATE_FIELD_FORMAT_VERSION
 
 from app.application.worldData.pack.preparation.errors import (
-    preparation_errors, raise_preparation_errors, validate_preparation_input, valid_preparation_field,
+    preparation_errors, raise_preparation_errors, validate_preparation_input, valid_preparation_field, preparation_field_value,
 )
 from app.application.worldData.pack.preparation.packPreparationValidator import PackPreparationValidator
 from app.dataModel.fields.checkedPath import CheckedPath
@@ -36,8 +36,8 @@ def _admit(model: type[RequestT], request: RequestT,
            state_field: FieldRef[RequestT, PackPreparationState]) -> RequestT:
     errors = preparation_errors()
     checked = validate_preparation_input(model, request, errors)
-    raw_state = vars(request).get(bind_field(state_field).field) if isinstance(request, model) else None
-    if isinstance(raw_state, PackPreparationState):
+    raw_state = preparation_field_value(checked if checked is not None else request, state_field)
+    if isinstance(raw_state, (PackPreparationState, dict)):
         validator = PackPreparationValidator()
         path = CheckedPath.root(model).field(state_field)
         validator.check_state_identities(raw_state, path, errors)
@@ -64,10 +64,12 @@ class PackPreparationService:
         checked = validate_preparation_input(PackLocationsIndexInput, request, errors)
         validator = PackPreparationValidator()
         state_ref = FieldRef(lambda: PackLocationsIndexInput, lambda value: value.state)
-        part = valid_preparation_field(request, FieldRef(lambda: PackLocationsIndexInput, lambda value: value.part))
-        raw_state = vars(request).get(bind_field(state_ref).field) if isinstance(request, PackLocationsIndexInput) else None
+        part_ref = FieldRef(lambda: PackLocationsIndexInput, lambda value: value.part)
+        admitted = checked if checked is not None else request
+        part = preparation_field_value(admitted, part_ref)
+        raw_state = preparation_field_value(admitted, state_ref)
         base = valid_preparation_field(raw_state, FieldRef(lambda: PackPreparationState, lambda value: value.base_publication))
-        if isinstance(raw_state, PackPreparationState):
+        if isinstance(raw_state, (PackPreparationState, dict)):
             state_path = CheckedPath.root(PackLocationsIndexInput).field(state_ref)
             validator.check_state_identities(raw_state, state_path, errors)
             validator.check_metadata_groups(raw_state, state_path, errors)
@@ -75,16 +77,17 @@ class PackPreparationService:
             root = CheckedPath.root(PackLocationsIndexInput)
             part_path = root.field(FieldRef(lambda: PackLocationsIndexInput, lambda value: value.part))
             artifact_field = FieldRef(lambda: PackLocationsIndexPartInput, lambda value: value.artifact)
-            artifact = artifact_field.select(part)
-            if (artifact.kind is not ArtifactKind.BLOB or artifact.format_key != LOCATIONS_INDEX_FORMAT_KEY
+            artifact = valid_preparation_field(part, artifact_field)
+            if artifact is not None and (artifact.kind is not ArtifactKind.BLOB or artifact.format_key != LOCATIONS_INDEX_FORMAT_KEY
                     or artifact.format_version != LOCATIONS_INDEX_FORMAT_VERSION):
                 errors.add(PackPreparationIssue(code=PackPreparationIssueCode.FORMAT_MISMATCH,
                     path=part_path.field(artifact_field).freeze(), message="unsupported locations index descriptor"))
             provenance_field = FieldRef(lambda: PackLocationsIndexPartInput, lambda value: value.provenance)
-            if isinstance(part.provenance, PackInheritedPartProvenance):
+            provenance = valid_preparation_field(part, provenance_field)
+            if isinstance(provenance, PackInheritedPartProvenance):
                 errors.add(PackPreparationIssue(code=PackPreparationIssueCode.SOURCE_PROOF_MISMATCH,
                     path=part_path.field(provenance_field).freeze(), message="inherited input requires verified pinned-base admission; unavailable in this pure write"))
-            if base is not None and provenance_field.select(part).provenance.source_proof.world_uid != base.world_uid:
+            if base is not None and provenance is not None and provenance.provenance.source_proof.world_uid != base.world_uid:
                 errors.add(PackPreparationIssue(code=PackPreparationIssueCode.SOURCE_PROOF_MISMATCH,
                     path=part_path.field(provenance_field).freeze(), message="index proof belongs to another world"))
         raise_preparation_errors(errors, PackPreparationFailureReason.DEPENDENCY_MISMATCH)
@@ -105,10 +108,12 @@ class PackPreparationService:
         checked = validate_preparation_input(PackCoarseClimateInput, request, errors)
         validator = PackPreparationValidator()
         state_ref = FieldRef(lambda: PackCoarseClimateInput, lambda value: value.state)
-        part = valid_preparation_field(request, FieldRef(lambda: PackCoarseClimateInput, lambda value: value.part))
-        raw_state = vars(request).get(bind_field(state_ref).field) if isinstance(request, PackCoarseClimateInput) else None
+        part_ref = FieldRef(lambda: PackCoarseClimateInput, lambda value: value.part)
+        admitted = checked if checked is not None else request
+        part = preparation_field_value(admitted, part_ref)
+        raw_state = preparation_field_value(admitted, state_ref)
         base = valid_preparation_field(raw_state, FieldRef(lambda: PackPreparationState, lambda value: value.base_publication))
-        if isinstance(raw_state, PackPreparationState):
+        if isinstance(raw_state, (PackPreparationState, dict)):
             state_path = CheckedPath.root(PackCoarseClimateInput).field(state_ref)
             validator.check_state_identities(raw_state, state_path, errors)
             validator.check_metadata_groups(raw_state, state_path, errors)
@@ -116,16 +121,17 @@ class PackPreparationService:
             root = CheckedPath.root(PackCoarseClimateInput)
             part_path = root.field(FieldRef(lambda: PackCoarseClimateInput, lambda value: value.part))
             artifact_field = FieldRef(lambda: PackCoarseClimatePartInput, lambda value: value.artifact)
-            artifact = artifact_field.select(part)
-            if (artifact.kind is not ArtifactKind.BLOB or artifact.format_key != CLIMATE_FIELD_FORMAT_KEY
+            artifact = valid_preparation_field(part, artifact_field)
+            if artifact is not None and (artifact.kind is not ArtifactKind.BLOB or artifact.format_key != CLIMATE_FIELD_FORMAT_KEY
                     or artifact.format_version != CLIMATE_FIELD_FORMAT_VERSION):
                 errors.add(PackPreparationIssue(code=PackPreparationIssueCode.FORMAT_MISMATCH,
                     path=part_path.field(artifact_field).freeze(), message="unsupported climate field descriptor"))
             provenance_field = FieldRef(lambda: PackCoarseClimatePartInput, lambda value: value.provenance)
-            if isinstance(part.provenance, PackInheritedPartProvenance):
+            provenance = valid_preparation_field(part, provenance_field)
+            if isinstance(provenance, PackInheritedPartProvenance):
                 errors.add(PackPreparationIssue(code=PackPreparationIssueCode.SOURCE_PROOF_MISMATCH,
                     path=part_path.field(provenance_field).freeze(), message="inherited input requires verified pinned-base admission; unavailable in this pure write"))
-            if base is not None and provenance_field.select(part).provenance.source_proof.world_uid != base.world_uid:
+            if base is not None and provenance is not None and provenance.provenance.source_proof.world_uid != base.world_uid:
                 errors.add(PackPreparationIssue(code=PackPreparationIssueCode.SOURCE_PROOF_MISMATCH,
                     path=part_path.field(provenance_field).freeze(), message="climate proof belongs to another world"))
         raise_preparation_errors(errors, PackPreparationFailureReason.DEPENDENCY_MISMATCH)

@@ -23,6 +23,102 @@ from app.dataModel.worldPack.meta.locationsIndexStorageFormat import LOCATIONS_I
 
 
 class PreparationClimateWriteTests(unittest.TestCase):
+    def test_forged_mapping_part_cannot_bypass_format_admission(self):
+        for method, model, part in self._writes():
+            for mapping in (dict(vars(part)), part.model_dump(mode="python")):
+                artifact = dict(vars(part.artifact))
+                artifact["format_version"] = 100
+                mapping["artifact"] = artifact
+                with self.subTest(method=method.__name__), self.assertRaises(PackPreparationFailure) as caught:
+                    method(model.model_construct(state=self.state, part=mapping))
+                self.assertIn(PackPreparationIssueCode.FORMAT_MISMATCH,
+                              [issue.code for issue in caught.exception.error.issues])
+
+    def test_mapping_state_cannot_bypass_delete_noop_admission(self):
+        from app.dataModel.worldPack.preparation.operations import PackDeletePartInput
+        mapping = dict(vars(self.state))
+        mapping["parts"] = (self.fine, self.fine)
+        with self.assertRaises(PackPreparationFailure) as caught:
+            self.service.delete_part(PackDeletePartInput.model_construct(state=mapping, address=self.part.address))
+        issue, = caught.exception.error.issues
+        self.assertIs(issue.code, PackPreparationIssueCode.DUPLICATE_ADDRESS)
+        self.assertEqual(issue.path.projection(), ("state", "parts", 1, "address"))
+        self.assertEqual(mapping["parts"], (self.fine, self.fine))
+
+    def test_bad_chunk_does_not_hide_valid_siblings(self):
+        from app.dataModel.worldPack.preparation.assembly import PackChunkAssembly
+        from app.application.worldData.pack.preparation.packPreparationValidator import PackPreparationValidator
+        chunk = PackChunkAssembly(cx=0, cy=0, refine_role=None)
+        bad = chunk.model_copy(update={"cx": "bad"})
+        for chunks, duplicate in (((chunk, chunk, bad), 1), ((bad, chunk, chunk), 2)):
+            tile = self.state.assembly.tiles[0].model_copy(update={"chunks": chunks})
+            state = self.state.model_copy(update={"assembly": self.state.assembly.model_copy(update={"tiles": (tile,)})})
+            for method, model, part in self._writes():
+                with self.subTest(method=method.__name__, duplicate=duplicate), self.assertRaises(PackPreparationFailure) as caught:
+                    method(model.model_construct(state=state, part=part))
+                self.assertEqual(len(caught.exception.error.issues), 2)
+                self.assertIs(caught.exception.error.issues[1].code, PackPreparationIssueCode.DUPLICATE_ADDRESS)
+                self.assertEqual(caught.exception.error.issues[1].path.projection(),
+                                 ("state", "assembly", "tiles", 0, "chunks", duplicate))
+            with self.assertRaises(PackPreparationFailure) as caught:
+                PackPreparationValidator().validate_state(state)
+            self.assertEqual(caught.exception.error.issues[1].path.projection(),
+                             ("assembly", "tiles", 0, "chunks", duplicate))
+
+    def test_bad_address_does_not_hide_artifact_format(self):
+        for method, model, part in self._writes():
+            bad = part.model_copy(update={"address": part.address.model_copy(update={"kind": "bad"}),
+                                         "artifact": part.artifact.model_copy(update={"format_version": 100})})
+            with self.subTest(method=method.__name__), self.assertRaises(PackPreparationFailure) as caught:
+                method(model.model_construct(state=self.state, part=bad))
+            self.assertEqual([issue.path.projection() for issue in caught.exception.error.issues],
+                             [("part", "address", "kind"), ("part", "artifact")])
+            self.assertIs(caught.exception.error.issues[1].code, PackPreparationIssueCode.FORMAT_MISMATCH)
+
+    def test_each_metadata_collection_preserves_valid_sibling_checks(self):
+        from app.dataModel.worldPack.meta.metadataAttribution import PackStoredAssemblyProvenance
+        from app.dataModel.worldPack.preparation.addresses import PackAssemblyHeaderAddress
+        from app.dataModel.worldPack.preparation.metadataDependencies import PackMetadataDescription
+        from app.dataModel.worldPack.preparation.metadataSubject import PackMetadataSubject
+        from app.dataModel.worldPack.preparation.assembly import PackLocationAssembly, PackSettlementAssembly
+        from app.dataModel.worldPack.wire.territoryVolume import TerritoryVolume
+        from app.dataModel.worldPack.meta.wildernessRegionEntry import WildernessRegionEntry, WildernessRegionStatus, RegionIndexBounds
+        from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
+        volume = TerritoryVolume(x0=0, y0=0, z0=0, x1=1, y1=1, z1=1)
+        location = PackLocationAssembly(location_uid="place", territory_volume=volume, climate_status="coarse")
+        settlement = PackSettlementAssembly(location_uid="place", territory_volume=volume,
+                                            structure_status="absent", packed_district_uids=())
+        region = WildernessRegionEntry(region_uid="region", entry_type=WorldTerrainRegistry.forest_terrain_key(),
+            current_type=WorldTerrainRegistry.forest_terrain_key(), bbox=RegionIndexBounds(x_min=0, y_min=0, x_max=1, y_max=1),
+            status=WildernessRegionStatus.DECLARED, parent_region_uid=None, spec_fingerprint=None)
+        entry = PackStoredAssemblyProvenance(address=PackAssemblyHeaderAddress(kind="header"),
+                                            provenance=self.part.provenance.provenance, attribution=None)
+        description = PackMetadataDescription(subject=PackMetadataSubject(base_publication=self.state.base_publication,
+            address=entry.address, value_fingerprint="b" * 64), dependencies=())
+        cases = (
+            ("tiles", self.state.assembly.tiles[0], "gx", True, ()),
+            ("locations", location, "climate_status", True, ()),
+            ("settlements", settlement, "structure_status", True, ()),
+            ("wilderness_regions", region, "status", True, ()),
+            ("assembly_provenance", entry, "attribution", False, ("address",)),
+            ("metadata_dependencies", description, "subject", False, ("subject", "address")),
+        )
+        for field, row, bad_field, in_assembly, suffix in cases:
+            bad = row.model_copy(update={bad_field: "bad"})
+            for position in (0, 2):
+                rows = (bad, row, row) if position == 0 else (row, row, bad)
+                duplicate_index = 2 if position == 0 else 1
+                state = (self.state.model_copy(update={"assembly": self.state.assembly.model_copy(update={field: rows})})
+                         if in_assembly else self.state.model_copy(update={field: rows}))
+                expected = ("state",) + (("assembly",) if in_assembly else ()) + (field, duplicate_index) + suffix
+                for method, model, part in self._writes():
+                    with self.subTest(field=field, position=position, method=method.__name__):
+                        with self.assertRaises(PackPreparationFailure) as caught:
+                            method(model.model_construct(state=state, part=part))
+                        duplicates = [issue.path.projection() for issue in caught.exception.error.issues
+                                      if issue.code == PackPreparationIssueCode.DUPLICATE_ADDRESS]
+                        self.assertEqual(duplicates, [expected])
+
     def test_bad_element_does_not_hide_other_parts_duplicates(self):
         from app.application.worldData.pack.preparation.packPreparationValidator import PackPreparationValidator
         bad = self.fine.model_copy(update={"artifact": self.fine.artifact.model_copy(update={"nbytes": "bad"})})

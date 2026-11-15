@@ -17,7 +17,7 @@
 
 Архитектура не принимается при множественной ответственности класса, совмещении самостоятельных функций метода, дублировании реализации ответственности или отсутствии сведений для этой проверки. Все обязательные критерии dag-generator-interface.mdc сохраняются. Решения по полям и алгоритмам других доменов не входят в этот этап; внешние зависимости обозначаются точными контрактами и владельцами. После приёмки архитектуры — конкретный implementation-срез через implement-plan; самостоятельные тесты не заменяют независимую приёмку.
 
-Первый implementation-кандидат G1 конкретизирован в [source-g1-values-canonical-implementation.md](source-g1-values-canonical-implementation.md): строгие значения → canonical schema → pure validation. Полный G1 остаётся незавершённым до exact pure/key-adapter API (G1-BIND) и реализации/приёмки соответствующего слоя. Исключение пользователя 2026-11-14 расширено от POJO Pack 3a до G1.1 → G1.2 перед G1-BIND, в точной границе §7 плана G1. Declarations и canonical manifest поставлены, собственные проверки — §9; независимая приёмка отдельно. Это не закрывает весь G1 и не разрешает storage/finalizer/DAG или алгоритмы proof.
+**Статус G1 на 2026-11-15:** G1.1 declarations и G1.2 canonical encoding поставлены и получили **независимый PASS** — [акт проверки](source-g1-foundation-review-2026-11-15.md). Граница проверки: values/encoding, 47 тестов и typing; это не приёмка G1.3, Source 2 registration, storage, finalizer или всего Source. **Общий G1 остаётся открытым.** Следующий этап — архитектура ядра по порядку выше; G1-BIND учитывается отдельно как интеграция. [План G1](source-g1-values-canonical-implementation.md) сохраняет evidence поставки и ранее разрешённое исключение G1.1 → G1.2 перед G1-BIND.
 
 **Контроль дрейфа:** [контрольная точка контрактов и будущей реализации 2026-11-14](source-contract-baseline-2026-11-14.md) разделяет принятый proof design, proposals, runtime evidence и разрешённый scope. Source storage остановлен на отсутствующем authored-write binding; PACK-S1/S2 отдельно разрешены пользователем только для design/review с Source/Pack/Snapshot/Artifacts. Эта запись не заменяет ТЗ/спецификацию и не разрешает реализацию.
 
@@ -52,6 +52,8 @@ Identity/revision, fingerprint, pinning и retention переиспользую�
 
 ## Актуальные следующие шаги (2026-11-15)
 
+Пункт 1 — [предложение декомпозиции ответственности ядра](source-core-responsibility-decomposition.md). Статус DRAFT: конкретные роли/classes разделены, существующие публичные signatures не изменены; полная архитектура и реализация ещё не приняты.
+
 1. Предъявить архитектуру ядра Source: папки, классы с единственной ответственностью, методы с одной функцией, POJO, внутренние зависимости и публичные границы. Проверить прежнюю группировку proof-операций, validation, reads, finalize и mutation/recovery; неподтверждённую декомпозицию не считать принятой.
 2. Принять конкретный срез ядра и его implementation-план; реализовать через implement-plan и предъявить отдельно на независимую приёмку. Подтверждать отсутствие зависимости от отложенных интеграций, не заменять их production stubs.
 3. Отдельными шагами предъявлять архитектуру подтверждённых интеграций, затем соответствующие implementation-срезы. Неизвестные/меняющиеся внешние связи остаются в реестре техдолга ниже.
@@ -62,9 +64,12 @@ Identity/revision, fingerprint, pinning и retention переиспользую�
 | Долг | Владелец / недостающий контракт | Затронутая интеграция / условие возврата |
 |---|---|---|
 | INT-TERRAIN | Terrain: body/projector/format пока proposal; shared POJO compatibility и vectors не приняты | Concrete descriptor binding; вернуться после принятого owning контракта. Поля других доменов Source не решает |
-| INT-ARTIFACTS | Artifacts/publication: concrete Source/Terrain format registration и scope composition | Durable reads/finalize/adoption; вернуться к конкретному scoped binding после принятия ядра, не создавать новый lifecycle/backend |
-| INT-WRITER | Owning домен данных + Source revision port: authored writer/bootstrap boundary | Атомарная запись revision и данных; вернуться при подтверждённом writer-контракте, без миграции чужого writer в этом плане |
-| INT-CONSUMERS | Pack/Snapshot и DAG: конкретные consumer bindings и актуальность внешних inputs/results | Runtime handoff; вернуться при подтверждённых контрактах и разрешённом интеграционном срезе. Поставленные POJO не отменяются |
+| INT-ARTIFACTS-FORMAT (часть прежнего INT-ARTIFACTS) | Artifacts/publication + owning body domain: concrete Source/Terrain ArtifactFormatContract, registry/backend instance и borrowed scope composition | Durable reads/finalize/adoption; возврат после подтверждения exact format/version, регистрации и scoped binding, без нового lifecycle/backend |
+| INT-ARTIFACTS-RETENTION (часть прежнего INT-ARTIFACTS) | Source владеет политикой истории/explicit prune; Artifacts — holders и GC. Нужен exact binding исторических revision bodies к Source root и правила освобождения root при explicit prune с сохранением остальных holders | Revision retention/prune; возврат после подтверждения holder/root ownership, атомарного acquire/release и проверки, что prune не удаляет bytes, удерживаемые capture/другими roots. Не считать format registration доказательством исторического удержания |
+| INT-WRITER | Owning домен данных + Snapshot + Source: отсутствует подтверждённый Snapshot authored-write/borrowed transaction binding, связывающий owning writer/bootstrap и Source revision append в одном scope | Атомарная запись данных и revision; возврат после exact Input/Result/Error, правил заимствования transaction, commit owner, rollback/unknown outcome. Source не мигрирует чужой writer и не создаёт второй commit owner |
+| INT-PACK (часть прежнего INT-CONSUMERS) | Pack: mapping declared usage/сохранённой provenance к Source proof/groups/selection и durable refs | Pack consumer binding; возврат после подтверждения соответствия PackStoredProvenance принятому Source proof-контракту и разрешения конкретного интеграционного среза. Поставленные POJO не отменяются |
+| INT-SNAPSHOT (часть прежнего INT-CONSUMERS) | Snapshot: exact proof request encoding, pinned origin/adoption input и target scope/fence | Snapshot consumer/retention binding; возврат после приёмки соответствующего encoding/binding и подтверждения передачи proof/holder evidence без подмены origin. Отдельно от authored-write долга INT-WRITER |
+| INT-DAG (часть прежнего INT-CONSUMERS) | Владелец DAG: прямые вызовы публичных Source операций, typed input/result/error и порядок передачи результатов между доменами | DAG wiring; возврат после совместной приёмки конкретных нод и маршрутов пользователем. Source не назначает ноды и не вводит обходной orchestrator |
 
 ### Историческая последовательность подготовки (2026-11-14, заменена порядком выше)
 
@@ -573,7 +578,9 @@ Pack DTO, holder/usage services и concrete storage в Source POJO запрещ�
 - **capture** — принимает готовый revision set как вход, не вычисляет его
   сам (projection = чужая зона).
 
-### Черновые сигнатуры
+### Исторические черновые сигнатуры — не действующий proof-контракт
+
+Сигнатуры этого раздела сохранены как история проектирования. Их нельзя использовать вместо принятого proof-контракта `source-proof-v2-contract-spec.md` (§9–13) или как разрешение реализации. Не покрытые этим proof-контрактом mutation/recovery/adoption границы требуют отдельной архитектурной конкретизации; исторический draft не заполняет пробел автоматически. Декомпозиция классов проверяется по актуальным требованиям ядра; новые публичные signatures не выводятся из старого текста молча.
 
 ```python
 # dataModel/sourceVersioning/sourceObjectContract.py

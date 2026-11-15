@@ -25,14 +25,21 @@ InputT = TypeVar("InputT", bound=BaseModel)
 ValueT = TypeVar("ValueT")
 
 
+def preparation_field_value(value: object, ref: FieldRef[InputT, ValueT]) -> object:
+    binding = bind_field(ref)
+    if isinstance(value, binding.model):
+        return vars(value).get(binding.field)
+    if isinstance(value, dict):
+        return value.get(binding.field)
+    return None
+
+
 def valid_preparation_field(value: object, ref: FieldRef[InputT, ValueT]) -> ValueT | None:
     """Validate one independent branch after root diagnostics have been collected."""
     binding = bind_field(ref)
-    if not isinstance(value, binding.model) or binding.field not in vars(value):
-        return None
     try:
         return TypeAdapter[ValueT](binding.model.model_fields[binding.field].rebuild_annotation()).validate_python(
-            vars(value)[binding.field], strict=True)
+            preparation_field_value(value, ref), strict=True)
     except ValidationError:
         return None
 
@@ -40,9 +47,7 @@ def valid_preparation_field(value: object, ref: FieldRef[InputT, ValueT]) -> Val
 def valid_preparation_items(value: object, ref: FieldRef[InputT, tuple[ValueT, ...]]) -> tuple[tuple[int, ValueT], ...]:
     """Keep valid tuple elements and their original indices after schema admission."""
     binding = bind_field(ref)
-    if not isinstance(value, binding.model):
-        return ()
-    raw = vars(value).get(binding.field)
+    raw = preparation_field_value(value, ref)
     if not isinstance(raw, tuple):
         return ()
     annotation = binding.model.model_fields[binding.field].annotation
