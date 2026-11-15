@@ -26,15 +26,17 @@ from app.dataModel.worldPack.preparation.errors import (
 
 InputT = TypeVar("InputT", bound=BaseModel)
 ValueT = TypeVar("ValueT")
+_MISSING_PREPARATION_FIELD = object()
 
 
 def preparation_field_value(value: object, ref: FieldRef[InputT, ValueT]) -> object:
+    """Preserve missing fields separately from explicit nullable values."""
     binding = bind_field(ref)
     if isinstance(value, binding.model):
-        return vars(value).get(binding.field)
+        return vars(value).get(binding.field, _MISSING_PREPARATION_FIELD)
     if isinstance(value, dict):
-        return value.get(binding.field)
-    return None
+        return value.get(binding.field, _MISSING_PREPARATION_FIELD)
+    return _MISSING_PREPARATION_FIELD
 
 
 def valid_preparation_field(value: object, ref: FieldRef[InputT, ValueT]) -> ValueT | None:

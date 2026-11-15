@@ -1,5 +1,7 @@
 # Snapshot: публичные контракты и последующая интеграция в DAG
 
+**Актуальный архитектурный gate, 2026-11-15:** этот документ подчинён ARCH-0.1–ARCH-0.6 [owning-плана](world-domain-patches-snapshots.md). До полной целевой архитектурной приёмки code/DAG implementation не продолжается. Прежнее предложение одного WorldSnapshotService для apply и всех reads находится на пересмотре по требованию одной ответственности класса: proposed отдельный read owner, exact имя/port требуют приёмки. Existing DomainSectionHandler behavior+codec также выделен как явная SRP-дельта, не разрешение скрытого refactor. Прочие signatures/evidence сохраняются в своей области; новые классы этим документом автоматически не приняты.
+
 Конкретное предложение первого public-среза: [snapshot-public-methods-contract.md](snapshot-public-methods-contract.md) — apply и два exact reads, поля POJO, public error transport, transaction traces и mapping Source/Pack/Cache. Уточнение первого пункта завершено до contract review: read-UOW issuer — existing SqlitePublicationCommitStore.read_scope через proposed ISnapshotReadScopeFactory, shape errors переиспользуются из existing JsonFieldError/WireShapeIssue. Предложение подлежит пользовательской приёмке; не означает полного CRUD или готового runtime. Current publication read остаётся отдельным срезом.
 
 Дата: 2026-11-14. Статус: DRAFT / CONTRACT DESIGN, не принят к реализации. Авторизация текущего шага — подготовить отдельный план. Код, новые ноды, production wiring, миграции и переписывание принятых срезов не входят в этот шаг.

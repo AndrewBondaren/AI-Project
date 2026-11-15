@@ -23,6 +23,44 @@ from app.dataModel.worldPack.meta.locationsIndexStorageFormat import LOCATIONS_I
 
 
 class PreparationClimateWriteTests(unittest.TestCase):
+    def test_missing_basis_is_distinct_from_explicit_null(self):
+        from app.dataModel.sourceVersioning.sourceProofSelection import SourceProofSelection
+        from app.dataModel.sourceVersioning.sourceProofInput import SourceProofInput
+        from app.dataModel.worldPack.meta.metadataAttribution import (
+            PackStoredAssemblyProvenance, PackMetadataAttribution, PackMetadataGroupAdmission, PackMetadataGroup as G)
+        from app.dataModel.worldPack.preparation.addresses import PackTileMetadataAddress
+        from app.dataModel.worldPack.preparation.metadataDependencies import PackMetadataDescription, PackMetadataDependencyUse
+        from app.dataModel.worldPack.preparation.metadataSubject import PackMetadataSubject
+        address = PackTileMetadataAddress(kind="tile", gx=0, gy=0)
+        selection = SourceProofSelection(proof_fingerprint="b" * 64, dependency_indices=())
+        usage = SourceProofInput(world_uid="world", uses=())
+        for transient in (False, True):
+            model = PackMetadataDependencyUse if transient else PackMetadataGroupAdmission
+            payload = {"source_usage": usage} if transient else {"selection": selection}
+            for basis_fields, expected_code in (({}, "SCHEMA_VIOLATION"), ({"basis": None}, PackPreparationIssueCode.METADATA_BASIS_MISMATCH),
+                                                ({"basis": "bad"}, "SCHEMA_VIOLATION")):
+                group = model.model_construct(group=G.WILDERNESS_REFINE_STATUS, **payload, **basis_fields)
+                for as_mapping in (False, True):
+                    groups = tuple(model(group=key, basis=None, **payload) for key in (G.IDENTITY, G.CLIMATE_STATUS))
+                    groups += (dict(vars(group)) if as_mapping else group,)
+                    if transient:
+                        entry = PackMetadataDescription.model_construct(subject=PackMetadataSubject(
+                            base_publication=self.state.base_publication, address=address, value_fingerprint="c" * 64),
+                            dependencies=groups)
+                        field, suffix = "metadata_dependencies", ("dependencies", 2, "basis")
+                    else:
+                        entry = PackStoredAssemblyProvenance.model_construct(address=address,
+                            provenance=self.part.provenance.provenance,
+                            attribution=PackMetadataAttribution.model_construct(groups=groups))
+                        field, suffix = "assembly_provenance", ("attribution", "groups", 2, "basis")
+                    state = self.state.model_copy(update={field: (entry,)})
+                    for method, request_model, part in self._writes():
+                        with self.subTest(transient=transient, basis=basis_fields, mapping=as_mapping, method=method.__name__):
+                            with self.assertRaises(PackPreparationFailure) as caught:
+                                method(request_model.model_construct(state=state, part=part))
+                            self.assertEqual([(issue.code, issue.path.projection()) for issue in caught.exception.error.issues],
+                                             [(expected_code, ("state", field, 0, *suffix))])
+
     def test_semantic_predicates_ignore_unrelated_invalid_fields(self):
         from app.dataModel.worldPack.meta.metadataAttribution import (
             PackStoredAssemblyProvenance, PackMetadataAttribution, PackMetadataGroupAdmission, PackMetadataGroup as G)

@@ -2,7 +2,9 @@
 
 **Межплановые зависимости:** [WORLD-PLAN-GRAPH-1](./world-generation-plan-dependency-graph.md) — навигационный граф gates GEO/SPATIAL/GEN-DAG/Patches/DAG-TYPING/PHYSICS; нормативные контракты и статусы остаются в этом owning-плане.
 
-Статус: ARCHITECTURE BASELINE ACCEPTED / READY FOR CORE DEVELOPMENT
+**Текущий статус — 2026-11-15: TARGET ARCHITECTURE REVIEW REQUIRED.** По указанию пользователя целевая архитектура всего Snapshot является первым обязательным этапом выполнения плана. До её явной приёмки дальнейшая реализация приостановлена; действующий порядок и deliverables заданы в §8, этап ARCH-0. Локальные contract freezes, tests и review PASS не заменяют эту приёмку. Исторические решения и результаты ниже сохранены; прежние разрешения продолжать разработку читаются с учётом этого нового gate.
+
+Исторический статус: ARCHITECTURE BASELINE ACCEPTED / READY FOR CORE DEVELOPMENT
 (решение мастера 2026-10-30).
 Архитектурная основа и распределение ответственности приняты для следующего
 этапа: контрактной проработки и разработки ядра Patch/Snapshot по §8.
@@ -513,6 +515,8 @@ Snapshot immutable; изменение создаёт последующее с�
 
 ## 5. Структура исходников по ответственности
 
+Актуальная целевая карта контрактов/классов/методов — ARCH-0.1–ARCH-0.6 в §8. Дерево ниже сохраняет исходную концепцию 2026-10-27, а не полный современный состав publication/artifacts/reads. Exact map теперь является частью архитектурной приёмки, а не работой, которую можно отложить до кода.
+
 Пути ниже — целевая композиция namespaces, не список файлов к созданию.
 `<domain>` сопоставляется существующим доменам после inventory, без
 дублирования их моделей. Exact class/method/file map — после архитектуры.
@@ -541,6 +545,8 @@ Storage implementations размещаются по своим существу�
 Snapshot domain payload не зависит от concrete snapshot storage.
 
 ## 6. Версионирование — переиспользование source versioning
+
+**Актуальная граница совместимости, 2026-11-15:** историческое требование read-upgrade ниже не разрешает новые legacy decoders, dual-read, compatibility adapters или миграции. По более позднему решению пользователя используется один согласованный контракт/encoding; сохранённые generator v1 контракты не конвертируются в новые автоматически. Immutable история и exact refs сохраняются, unsupported format даёт явный отказ. Сохранение читаемости данных предыдущего несовместимого формата не обещается без отдельного разрешения владельца. Existing read-upgrade code/evidence — предмет inventory, не поручение расширять или удалять его этим документом. Эту границу требуется согласованно отразить в owning ТЗ до dependent format change; данный проход ТЗ не меняет.
 
 Основа — [world-source-versioning](world-source-versioning.md), согласованный
 design 2026-10-24. Его реализация ещё не готова; наличие плана не считается
@@ -773,6 +779,143 @@ DB-модели и имена existing services не заменяют архит
 
 ## 8. Последовательность проработки и приёмки
 
+### ARCH-0. Полная целевая архитектура Snapshot — первый обязательный этап
+
+**Основание:** указание пользователя 2026-11-15 «Целевая архитектура — должна быть первым шагом выполнения плана» и «Правь план». **Статус: OPEN, архитектура целиком ещё не предъявлена и не принята.** Этот этап предшествует дальнейшему коду всего Snapshot и его зависимых локальных срезов, включая pinned-origin/retention. Нельзя закрыть его перечнем классов одного текущего среза или общим описанием слоёв. Принятая ранее архитектурная основа остаётся входом анализа, но не заменяет полную целевую карту.
+
+**Обязательный результат ARCH-0 — единая карта целевого домена в этом owning-плане:**
+
+1. Границы Snapshot, Patch, publication и используемых Artifacts механизмов: что принадлежит домену, что является внешним контрактом, где заканчиваются Source/Pack/Cache. Отдельно отразить запрет прямой записи других доменов в Snapshot. Сохранить пользовательское разрешение Snapshot использовать нужные контракты Source/Pack/Cache; остальные междоменные взаимодействия — через DAG. Это не разрешение скрыто вызывать чужие публичные pipelines.
+2. Полный реестр **публичных и внутренних контрактов**, а не только adapters: точные имя, модуль и папка, владелец, единственная ответственность, typed Input/Output/Error, callers и реализации за контрактом. Для публичных data/settings CRUD проверить C/R/U/D отдельно; отсутствие операции обосновать, не создавать CRUD по шаблону без необходимости. Для каждой внешней зависимости применить owning protocol из обязательных критериев.
+3. Полный реестр **классов**, включая задействованные existing: точное имя и путь, одна ответственность, разрешённые зависимости/effects, конкретный критерий приёмки и признак нарушения. Разделить dataModel, public contracts, internal ports, application implementation, encoding, storage adapters и physical rows. Название слоя не заменяет ответственность класса.
+4. Полный реестр **методов**: одна функция каждого метода, точная сигнатура, предусловия, результат/отказ, effects и transaction owner. Проверка одного инварианта может состоять из нескольких условий; это не повод механически дробить её. Метод, который одновременно определяет семантику чужого домена, управляет lifecycle и пишет storage, требует пересмотра границ. DTO не выполняют IO/orchestration, storage adapter не получает публичную доменную политику.
+5. Карта вызовов `DAG → публичный контракт → реализация атомарной операции → internal ports → adapters`, включая вложенные вызовы, owner ветвления и все междоменные входы/выходы. Применить все три запрета DAG: ветвящийся orchestration pipeline, скрытый запуск в обход DAG, неразрешённые прямые междоменные вызовы. Локальный алгоритм атомарной операции отделить от оркестрации. Не придумывать NodeId/ноды без совместной процедуры GEN-DAG-1; точно обозначить её отдельные integration gates.
+6. Карта транзакций/capabilities и lifecycle: кто открывает/завершает transaction, кто получает borrowed scope, кто выдаёт и отзывает evidence, когда устанавливаются/освобождаются holds, что видит caller при отказе/cancel/unknown outcome. Отразить existing принятый порядок действий со ссылкой на источник; изменение порядка требует отдельной приёмки, не прячется в реализации.
+7. Реестр POJO и typed field/logic errors: модуль, поля, owner, назначение, сравнение с existing/planned типами и отсутствие дублирования. Любое авторизованное исключение требует предусмотренных правилом пометок в коде и ТЗ. Legacy adapters/миграции не добавлять; сохранённые generator v1 зависимости явно обозначить, не проектировать за их владельцев.
+8. Сопоставление actual code с target: для каждого existing компонента `соответствует / требует переработки / ещё не реализован`, доказательство и зависимость. Не удалять и не переписывать существующий код в рамках документального этапа. Ранее выполненные срезы и tests — evidence своего объёма, не доказательство полной архитектуры.
+
+**Приёмка ARCH-0:** проверить каждый пункт [обязательных критериев](../rules/dag-generator-interface.mdc#обязательная-приёмка-плана-любого-домена) с адресом соответствующего раздела карты и основанием PASS/FAIL. Один пропуск, неустановленная ответственность, пересечение контрактов или нарушение означает отказ; нельзя отметить PASS по успешным тестам. После полной карты и проверки требуется явная приёмка пользователя. Эта запись задаёт работу и gate, сама по себе архитектуру не принимает.
+
+#### ARCH-0.1. Целевые границы и источник контрактов
+
+Редакция 2026-11-15 после проверки всего плана. Это **целевая карта для приёмки**, не новый code-go. Existing обозначает наличие declaration/implementation, а не production readiness. Proposed — конкретное предложение, требующее приёмки. OPEN — решение отсутствует, запрещено подставлять stub/придуманный порт. Все пути таблиц ниже относительно `backend/app/`.
+
+Snapshot владеет атомарным применением подготовленного PatchSet, snapshot metadata/history и согласованной публикацией world/player heads. Patch — описание изменения, а не writer. Publication/Artifacts — общие механизмы операции, staging, удержания и физической доступности, которые Snapshot использует; они не определяют семантику payload. Source owns provenance/closure; Pack owns manifest/format dependencies; Cache owns cache semantics. Snapshot не дублирует их модели и алгоритмы. DAG выбирает публичные операции/ветви и передаёт результаты; ни service, ни storage не запускает следующий публичный pipeline.
+
+Реестр публичных предложений уже существует: [public methods](snapshot-public-methods-contract.md), [DAG integration](snapshot-public-contracts-dag-integration.md). Они включаются в эту карту как детализация, не заменяются новым фасадом или зеркальными DTO. Статус public proposal не становится accepted из-за включения ссылки. Источники точных existing core signatures — §8.2 и соответствующие declarations; §8.3 остаётся картой поставленного shared core, не всей архитектурой.
+
+#### ARCH-0.2. Публичные операции и CRUD
+
+| Контракт / точное место | Метод и одна функция | Input → Output/Error; caller | Статус и критерий отказа |
+|---|---|---|---|
+| IWorldSnapshotApply, `application/worldSnapshot/contracts/applyPort.py` | `apply[S: DomainSection](patch_set: PatchSet[S]) -> SnapshotApplyResult` — атомарно опубликовать подготовленный набор | Existing `dataModel/patch/request/patchSet.py` → `dataModel/worldSnapshot/results/apply.py`; business CONFLICT/REJECTED сохраняют причины; unknown/infrastructure отдельно. Только DAG | Port existing, concrete public apply ещё не реализован. Отказ: partial commit, orchestration/materialization, public input со scope/connection |
+| WorldSnapshotService, `application/worldSnapshot/service/worldSnapshotService.py` | Целевой public `apply` реализует IWorldSnapshotApply; его одна ответственность — runtime apply lifecycle | Registry, validation, commit/history/publication/holder ports; возвращает результат после подтверждённого transaction outcome | Existing внутренние методы не равны public implementation. Не добавлять в этот класс restore/branch/все reads автоматически |
+| Proposed exact-read contract из public-methods, `application/worldSnapshot/contracts/` | `read_snapshot(snapshot: SnapshotRef) -> SnapshotReadResult` — получить exact metadata; `read_publication(request: SnapshotPublicationReadInput) -> SnapshotPublicationReadResult` — получить exact publication | Proposed POJO в `dataModel/worldSnapshot/results/read.py`, `requests/publicationRead.py`; None только штатное отсутствие, corruption не None; caller DAG | Exact DTO proposal существует; имя отдельного read port/concrete owner требует приёмки. Предлагается отделить read-owner от WorldSnapshotService вместо прежнего единственного public класса на три метода. Не создавать код до согласования этой дельты |
+| Current publication read | Выдать текущую publication с explicit missing-world semantics | Existing internal read не заменяет public input/result/error | OPEN. Не реализовывать через implicit latest внутри exact read |
+| Restore | Создать согласованный переход к выбранному состоянию, не переписать history | Exact request/result/error/CAS/replay и class/path OPEN | Отдельная ответственность от чтения и apply подготовленного PatchSet; нельзя прятать restore в read |
+| Branch | Создать ветку с точной базой и идемпотентным outcome | OperationKind/terminal/result и class/path OPEN, SN-TIME-BRANCH | Нельзя объявить branch разновидностью apply без контрактного решения |
+| Snapshot settings | Управлять только реальными настройками, если такие принадлежат Snapshot | Реестр settings POJO/owners OPEN; числовые DI policy других owners не объявлять public settings автоматически | C/R/U/D не заполнены; отсутствие настроек ещё не доказано, автоматический generic CRUD запрещён |
+
+Data CRUD: C — immutable snapshot появляется при apply; R — exact read выше; U — новое состояние через apply, не UPDATE старого snapshot; D — public delete policy OPEN, GC artifacts не является удалением истории. Для settings каждая C/R/U/D остаётся OPEN до инвентаря. Public errors/structural diagnostics определяются public-methods §3; internal scoped D1 и storage exceptions не превращаются автоматически в public DTO. Публичный input не содержит lease, handler, registry, callback, execution grant или SQL scope.
+
+#### ARCH-0.3. Внутренние контракты: один владелец и одна функция метода
+
+| Класс/контракт → файл | Одна ответственность | Методы: отдельная функция каждого | Реализация / эффекты и отказ |
+|---|---|---|---|
+| CommitReadScope / CommitScope → `application/worldSnapshot/contracts/commitScope.py` | Capability доступа к одной transaction | assert_active — проверить lifetime; read_scope — получить read facet | Existing SqliteCommitScopeBinding; нет public connection/commit |
+| IDomainCommitBinding[S] → тот же файл | Связать конкретный внутренний storage port со scope | bind(scope) → S — выдать scoped storage | Existing extension point; чужой/expired scope отказ; не разрешение произвольного public domain call |
+| IPublicationCommitStore → `application/worldSnapshot/storage/commitStore.py` | Владение transaction lifecycle | transaction(operation_id) → context manager — открыть scope и подтвердить исход при выходе | SqlitePublicationCommitStore; только owner завершает UOW; unknown не преобразуется в rollback success |
+| IExactWorldPublicationReader → `application/worldSnapshot/storage/publicationStore.py` | Exact historical lookup publication | read_exact(world_uid, publication_id, scope) → ref или None | SqliteWorldPublicationStore; read-only, без latest fallback |
+| IWorldPublicationStore / IPlayerPublicationStore → тот же файл | Состояние соответствующей publication chain | read — получить head; compare_append — условно добавить successor в caller scope | Existing world/player SQLite adapters; один общий commit, никаких domain payload writes |
+| IWorldPublicationInitializer → тот же файл | Явная initialization publication | initialize(scope, world_uid) → ref | Existing initializer capability; недоступна handlers, не side effect read |
+| ISnapshotHistoryStore → `application/worldSnapshot/storage/historyStore.py` | Immutable metadata/history | append(scope, metadata, receipts) — добавить проверенную запись; read(ref, scope) — прочитать exact envelope | SqliteSnapshotHistoryStore; domain payload не хранит и не восстанавливает |
+| IOperationStore → `application/publication/contracts/operationStore.py` | Durable identity/claim/outcome операции | read — наблюдать record; claim_publication — занять право публикации; record_terminal — сохранить подтверждаемый outcome; record_refusal — сохранить отказ по existing boundary | SqliteOperationStore; не retry scheduler и не business writer |
+| IArtifactCatalog → `application/artifacts/storage/artifactCatalog.py` | Descriptor и storage facts | guard — исключить гонку live-set; read — descriptor; reserve — reservation; seal — подтвердить sealed; is_sealed — наблюдать факт; mark_deleted — записать подтверждённое physical deletion | SqliteArtifactCatalog; filesystem IO отдельно, не создаёт semantic closure |
+| IArtifactLeases → `application/artifacts/storage/artifactLeases.py` | Admission и владение staging operation | open_operation — открыть lease; assert_writable — проверить admission; writer — владеть claim; finish_preparation — закрыть подготовку; recover — наблюдать/восстановить только разрешённое; cancel — подтверждённо отменить | SqliteArtifactLeases; full crash takeover OPEN; generic finish не доказывает Pack graph |
+| IArtifactHolders → `application/artifacts/contracts/holderPort.py` | Защита artifacts от удаления | acquire — добавить hold; release — снять exact hold; holders — перечислить; is_held — проверить; handoff — передать выбранные holds в caller transaction | SqliteArtifactHolders; не выбирает semantic destinations из payload |
+| ArtifactBackend / ReadableBlobBackend → `application/artifacts/contracts/formatBackend.py`, `blobRead.py` | Physical storage конкретного format | write — разместить; verify — проверить; delete — удалить при owning preconditions; read_verified — вернуть bounded verified bytes | ContentAddressedBlobBackend и owning backends; нет publication/CAS/semantic generation |
+| IPreparationAuthorityStore → proposed `application/publication/contracts/preparationAuthorityStore.py` | Immutable request/origin binding | append(scope,binding) — зарегистрировать provisional binding; read(scope,target,request) — exact lookup | Proposed SqlitePreparationAuthorityStore; не collect/adopt и не own UOW |
+| IPreparationCompletionCheck → proposed `application/publication/contracts/preparationCompletionCheck.py` | Проверить readiness перед commit | check(read_scope,target) → None либо infrastructure failure | Proposed SqlitePreparationCompletionCheck; SQL-only recheck trusted evidence, без repair/write/semantic blob reads |
+
+Методы в таблице обозначают фактические операции existing ports, полные аннотации сохраняются в указанных declarations; не вводится параллельная слегка отличающаяся сигнатура. Для proposed ports exact signatures и errors — pinned-origin §13; принятие этой таблицы не закрывает их незавершённые prerequisites. Не смешивать множество методов одного storage aggregate с несколькими владельцами: чтение/добавление одной chain относится к одной ответственности, semantic domain validation и physical serialization — разные владельцы.
+
+#### ARCH-0.4. Application classes, кодирование и adapters
+
+| Класс → конкретный файл | Единственная ответственность / методы | Ограничение и actual→target |
+|---|---|---|
+| SnapshotMetadataBuilder → `application/worldSnapshot/service/snapshotMetadataBuilder.py` | build — построить metadata из pinned bases/receipts/assignments с диагностикой | Existing; pure, без IO/CAS; metadata не полный domain payload |
+| AcceptedStateReader → `application/worldSnapshot/service/acceptedStateReader.py` | resolve_publication / resolve_snapshot — exact resolution section state ref для двух видов адреса | Existing internal reader; не публичный Time pipeline, не latest/payload lookup |
+| SnapshotRequestValidator → proposed `application/worldSnapshot/service/snapshotRequestValidator.py` | Проверить общий порядок/связность prepared request | Пока отдельного файла нет; не target business rules. Exact methods ещё freeze |
+| SnapshotPublicInputValidation → proposed `application/worldSnapshot/validation/publicInputValidation.py` | Revalidate public input и сохранить structural diagnostics | Proposal public-methods; не apply policy, не общий import pipeline |
+| DomainSectionHandler → `application/patch/contracts/sectionHandler.py` | Целевая ответственность — semantic section validation/apply подготовленного результата | Existing validate/apply/encode/decode смешивают behavior и serialization. **Предлагается** выделить codec, сохранив validate/apply как одну section semantics boundary; это contract delta, не разрешённый refactor |
+| Proposed SectionCodec[S] → `application/patch/contracts/sectionCodec.py` | encode — section→canonical bytes; decode — bytes→strict section | Native format only, без legacy conversion; exact binding с SectionContract требует приёмки |
+| SectionContract[S] → `application/patch/contracts/sectionHandler.py` | Immutable declaration key/model/versions/schema | Existing __post_init__ проверяет declaration; не dispatch/IO. Перемещение файла без необходимости не требуется |
+| SectionRegistry / BoundSectionHandler → `application/patch/registry/sectionRegistry.py` | Registry — exact binding lookup; BoundSectionHandler — type-safe invocation выбранного binding | Existing; не reorder/route planner; после codec split согласовать binding один раз |
+| PatchSetCodec → `application/patch/encoding/patchSetCodec.py` | Canonical request representation; encode/decode/fingerprint/fingerprint_bytes | Existing; fingerprint одного canonical representation, не второй identity protocol |
+| SnapshotEnvelopeCodec → `application/worldSnapshot/encoding/snapshotCodec.py` | Canonical metadata representation, encode/decode | Existing; не store/read restore |
+| PreparationSourceBindingValidator → `application/publication/validation/preparationSourceBindingValidator.py` | validate — pure structural/relation diagnostics binding | Existing; не проверяет actual holds/proofs |
+| PreparationSourceBindingCodec → `application/publication/encoding/preparationSourceBindingCodec.py` | encode/decode binding, encode_request — canonical projection ключа | Existing; без SQL/authority grant |
+| OperationLedger → `application/publication/service/operationLedger.py` | Bookkeeping boundary read/claim/outcome/recover/cancel | Existing; делегирует storage/lease owners, не запускает jobs/retry |
+| ArtifactStagingService → `application/artifacts/staging/artifactStaging.py` | Existing staging facade над reserve/seal/verify и lifecycle | **Нужна SRP-проверка:** recover/cancel/collect forwarding не выдавать автоматически за целевой минимальный staging port. IArtifactStaging/GC разделение предъявить до contract change |
+| TypedArtifactStager[C] → тот же файл | stage — stage одного typed content через owning format | Existing; не объявляет pack complete |
+| ArtifactFormatRegistryBinding → `application/artifacts/registry/artifactRegistry.py` | Exact format/backend binding | Existing register/resolve и encode/decode/verify/delete dispatch требуют проверки минимальной поверхности; semantic closure callback автоматически не добавлять |
+| ArtifactGarbageCollector → `application/artifacts/lifecycle/artifactGc.py` | collect — удалить только допустимые кандидаты под общей защитой | Existing; не удаляет history/held state и не выбирает terminal outcome |
+| SnapshotLifecycleLog / ArtifactLifecycleLog → `application/worldSnapshot/logging/snapshotLog.py`, `application/artifacts/logging/artifactLog.py` | Доставка owning typed events в общий logging facade | Existing; ошибка доставки не меняет durable result |
+
+DB composition **переиспользуется**, а не создаётся заново: SqlitePublicationCommitStore (`db/repositories/sqlite/snapshotCore/commitScope.py`) — transaction outcome; SqliteScopeRegistry (`shared/capabilities/scopeRegistry.py`) — capability lifetime; SqliteCommitScopeBinding (`shared/capabilities/scopeBinding.py`) — opaque token; SqliteTransactionDriver (`shared/transactions/transactionDriver.py`) — driver acknowledgement; ScopedSqliteAccess (`shared/access/scopedAccess.py`) — guarded row IO. Shared paths здесь относительно `db/repositories/sqlite/`. Точные методы, связи и признаки отказа заданы §8.13 и входят в ARCH-0 без повторного объявления реализации готовой.
+
+Owning adapters остаются в `db/repositories/sqlite/snapshotCore/{operations,publications,history}/` и `db/repositories/sqlite/artifacts/`: SqliteOperationStore — operation chain, StoredTerminalCodec — terminal representation, SqlitePublicationEvidence — исторические publication facts, SqliteOperationArtifacts — operation-held refs, SqliteWorldPublicationStore/SqlitePlayerPublicationStore — соответствующий CAS, SqliteSnapshotHistoryStore — history persistence, SqliteArtifactCatalog/SqliteArtifactLeases/SqliteArtifactHolders — соответствующие ports, SqliteArtifactScope (`artifacts/access/artifactScope.py`) — scoped join/ownership. Полные existing maps §8.13–8.14/4C3 сохраняют exact filenames и methods; physical rows в `db/models/{snapshotCore,artifacts}/` только представляют SQL, не policy. ContentAddressedBlobBackend в `storage/artifacts/blobBackend.py` выполняет physical IO, не SQL commit. Проверка каждой ответственности по actual code ещё нужна; таблица не самостоятельный PASS.
+
+#### ARCH-0.5. Контракты данных, внешние owners и вызовы
+
+| Группа / папки dataModel | Ответственность и граница |
+|---|---|
+| patch/{changes,sections,request,preconditions,results} | PatchHeader/DomainSection/PatchSet — frozen prepared changes и порядок; runtime expectation — точная исходная версия; SectionValidation/SectionApplyReceipt — owning проверка/результат, не callback/SQL |
+| worldSnapshot/{identity,sections,metadata,results} | SnapshotRef/WorldPublicationRef — identity; SectionStateRef/SectionHistoryRef — provenance; metadata — состояние ссылок; SnapshotApplyResult — outcome. Existing exact roster §8.3.1, актуальные retention/CAS delta — R1–R3 и D1, без зеркальных DTO |
+| artifacts/{references,lifecycle} | ArtifactRef — immutable descriptor; OperationLeaseRef — fence/identity; holders — причина удержания; OperationRecord — lifecycle observation; не semantic proof полноты |
+| publication/preparationSourceAuthority.py и preparationSourceBindingIssue.py | Existing binding/origin и scoped diagnostics, не durable completion receipt |
+| worldPack/preparation/{retentionGraph,errors}.py | Pack-owned input/budget/diagnostics. Реализованный E1/B1 не означает collector или graph success. Proposed graph принадлежит Pack, не Snapshot |
+| validation/importIssues и diagnostics | Shared structural/typed paths, exact admitted unions; не создавать второй generic error framework |
+
+SourceCaptureRetentionBinding — external **internal** Source port по source-pack-s1-s2-contract; collect_for_adoption проверяет proof/closure, adopt удерживает actual closure на target. PackRetentionGraphCollector — external internal Pack dependency, полный manifest closure. Cache — только по separately accepted exact contract, зависимости «на всякий случай» нет. Полные signatures/paths/принятые boundaries — owning S1/S2 и pinned-origin §13; Source runtime/budget и private completion issuer ещё OPEN. Evidence выдаёт trusted owner после реальных returns, не caller boolean/tuple. Snapshot registry не вычисляет Pack graph и Source semantics.
+
+Маршруты целевого вызова:
+
+```text
+DAG → Snapshot public apply → input/request admission → operation claim
+    → Snapshot-owned transaction → ordered native section bindings
+    → metadata/history + world/player CAS + holds + terminal
+    → confirmed outcome → DAG
+DAG → Snapshot exact read → read scope → exact history/publication port → DTO → DAG
+DAG → Pack public preparation/activation → accepted internal publication mechanisms
+    → owning transaction → result → DAG
+```
+
+Внутренний порядок write/CAS/handoff здесь обозначает состав атомарной операции, не новую перестановку accepted trace: точный порядок сохраняется из §8.1/4D2 и отдельно accepted S1/S2. В runtime apply не вставлять preparation collect/adopt задним числом. Borrowed ports не commit. Late отказ → confirmed rollback перед business refusal; unknown outcome имеет приоритет. READY holds защищают полный closure; release только после replacement protection, включая отказ/READY_INACTIVE. Terminal/retry/Time T5 остаются отдельными gates.
+
+**Handler boundary не объявляется решённой переименованием.** Для native Snapshot extension возможно validate/apply под Snapshot transaction без публичного pipeline другого домена. Для concrete handler, зависящего от внешнего контракта вне Source/Pack/Cache, прямой допуск запрещён до отдельного решения пользователя. Не переносить запись в DAG вне transaction, не строить legacy adapter. Сохраняемые generator v1 остаются disconnected/deferred с SNAPSHOT-V1 пометками. Общий handler abstraction можно описать сейчас, но ни один неподтверждённый concrete маршрут не объявляется accepted.
+
+#### ARCH-0.6. Актуальные статусы, остатки и последовательность
+
+| Область | Contract / реализация / evidence | Следующее действие после архитектурной приёмки |
+|---|---|---|
+| Shared core 4A–4C и artifact integration | Ранее принятые freezes/поставки; исторические tests сохраняются | Сопоставить с target, не реализовывать повторно |
+| Snapshot 4D2 | Assigned Q, CAS, metadata, handoff поставлены отдельными срезами; public apply и terminal/retry не завершены | Согласованный lifecycle completion, не считать internal methods public entry |
+| Public exact reads/apply | Public-methods proposal; existing scoped primitives | Отдельная приёмка contracts/error transport/read owner; затем code и DAG integration |
+| SN-TIME-READ | Existing AcceptedStateReader + T4 integration evidence | Уточнить acceptance anchor отдельно от public Snapshot read readiness; не называть весь Time gate «не начат» |
+| SN-TIME-APPLY | Передача target Q реализована в core; Time T5 отдельно OPEN | Проверять actual Time handler только в разрешённом scope |
+| SN-TIME-BRANCH / restore / current read / settings | Exact полного контракта нет | Owner proposal с Input/Output/Error/replay; никакого кода до freeze |
+| Pinned binding/codec | Узкие implementation/review evidence в pinned-origin плане | Existing values не заменить новым ledger receipt |
+| E1/B1 retention values/errors | Реализованы, tests/typing PASS; independent review ещё нет | Review только этого среза; не evidence full collector |
+| Full graph / Source budget / private completion evidence / scoped finish | Частично proposed, runtime prerequisites OPEN | Закрыть exact ports/issuer/lifetime; затем implementation по dependencies |
+| Production composition / DAG / B-2 | Отдельные gates, не поставлены текущим срезом | Только совместная приёмка нод/маршрутов, без самостоятельных NodeId |
+
+**Что исправлено этой редакцией:** связаны public и core карты; разрешения исторических этапов не являются текущим code-go; generic core отделён от concrete external handlers; compatibility/migration рамка уточнена; статус Time разделён на evidence и незавершённые контракты. **Что ещё нельзя объявить закрытым:** полный method-by-method SRP actual audit, codec/handler split, отдельный public read owner, restore/branch/settings и private issuer exact signatures. Это конкретные архитектурные решения, а не задачи «дописать по месту». Наличие этих OPEN означает ARCH-0 не принят. Следующий документальный шаг — предъявить эти решения пользователю и заполнить недостающие exact contracts, затем единую PASS/FAIL матрицу всех обязательных критериев. Код в этом проходе не меняется.
+
+**Порядок после исправления:** (1) ARCH-0 — анализ и целевая карта, только документы; (2) проверка и приёмка пользователем; (3) на основе принятой карты — последовательность реализации с точными файлами, зависимостями и критериями каждого этапа, включая необходимые переработки existing code; (4) реализация в утверждённом порядке, адресные проверки и независимое review предусмотренных срезов. Нельзя продолжать новый локальный implementation под предлогом его независимости до закрытия ARCH-0. Source/Pack ownership и отдельные integration gates сохраняются.
+
+Нижеследующая последовательность и записи §8.1+ сохраняются как история ранее принятых решений/поставок. Их разрешения на дальнейшую разработку не обходят ARCH-0. Evidence и прежние приёмки не удаляются и не переименовываются в ошибки реализации без отдельной проверки actual code.
+
 **Контрактная граница и готовность (решение мастера 2026-10-30):**
 
 - **Архитектурный baseline принят.** Владельцы read, domain CRUD,
@@ -822,6 +965,7 @@ DB-модели и имена existing services не заменяют архит
    `ConnectionPersistService`, `region_states`/`StateChangeConsumer`
    (wilderness 9a/10a), write boundary entity-lifecycle L3. Новый прямой
    writer мимо Snapshot противоречит §1 и расширяет долг миграции.
+   **Исторический шаг, не текущая авторизация:** по более поздним рамкам legacy adapters и миграции запрещены; владельцы реализуют новые native contracts. Generator v1 сохраняется до своего согласованного scope без адаптера. Inventory старых callers используется для проверки обходов, не как поручение мигрировать их из Snapshot.
 7. Закрытие плана — после устранения B-2 (bake job встроен в DAG); это
    внешняя зависимость, не шаг этого плана.
 
@@ -3057,6 +3201,8 @@ Evidence гонок получено на отдельных соединени�
 [Исправление D1: типизированный итог транзакции и подтверждение rollback](world-domain-snapshot-rollback-trace.md).
 
 ## Контракты Snapshot для интеграции Time (2026-11-03)
+
+Актуальный сводный статус — ARCH-0.6. Нижеследующие OPEN отражают первоначальную постановку: T4 evidence и assigned Q поставлены позднее, но не закрывают public API/Time T5/branch автоматически. Приёмку каждого gate связывать с exact контрактом и отдельным evidence, не с общей меткой раздела.
 
 Входящий запрос из [Time §§14.2, 34, 37, 44–46, 48](./time-domain.md). Ниже три отдельных результата с владельцем Snapshot. Статус каждого — OPEN до согласования контракта и проверки соответствующего пути. Эти работы лежат вне среза leases 4C3-C.
 

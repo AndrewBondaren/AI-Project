@@ -67,13 +67,28 @@ SourceProofGroupProjection остаётся единственным ранее 
 
 Key-validation port — внешняя нужда ядра; его exact accepted Terrain validator не превращает всю registry composition в готовую. Не использовать fake permissive port для production admission. Core-проверки, не требующие owning key validation, должны быть выделены в независимый срез, а не называться полной admission.
 
-## 3. Незавершённый typed diagnostic API — собственная задача ядра
+## 3. Typed diagnostic location — решение пользователя 2026-11-15
 
-Checkers должны возвращать existing SourceFieldIssue/SourceLogicIssue, агрегируемые в SourceFailure. Однако поля paths привязаны к типу исходного request, а shared checker получает вложенное значение. Поэтому сигнатура `check(value) -> SourceFailure` недостаточна: она теряет root/location либо вынуждает дублировать алгоритм для пяти операций.
+Согласовано использовать существующие `FieldRef`, `CheckedPath[RootT, ValueT]` и `ValidatedFieldPath` во внутренних проверках Source. Новый универсальный Source context, относительный diagnostic DTO, string paths и Any/dict context не вводятся.
 
-До кода выбрать и предъявить точный typed location-контракт на existing FieldRef/CheckedPath с сохранением original root/group/use index. Не вводить string paths, Any/dict context, зеркальный error DTO или mutable общий context. Не выдавать универсальный `SourceOperation` за dispatch-флаг. SourceOperation допустим только как diagnostic context для одного и того же check.
+Request-specific стадия строит путь от исходного request и передаёт checker проверяемое значение вместе с `CheckedPath` к нему. Checker проверяет свой инвариант, при необходимости продолжает путь typed FieldRef и формирует existing SourceFieldIssue с `path.freeze()`. Стадия request собирает независимые ошибки в исходном порядке и формирует SourceFailure; operation фиксируется владельцем операции, а не выбирает алгоритм checker.
 
-Это не внешний интеграционный долг. Пока нет точной формы root/location и отрицательных tests, полные signatures checkers и public constructors не объявляются готовыми. Request-specific aggregation принадлежит отдельной стадии проверки конкретного request, а сами инварианты имеют одного владельца из §2.
+Форма метода для field-only проверки (не общий обязательный метод всех checkers):
+
+```python
+def check[RootT: BaseModel](
+    self, usage: SourceCaptureUsage, *,
+    path: CheckedPath[RootT, SourceCaptureUsage],
+) -> tuple[SourceFieldIssue, ...]: ...
+```
+
+Один checker работает с `uses[i]`, `groups[g].uses[i]` и `expected.groups[g].uses[i]`, сохраняя original root. SourceLogicIssue остаётся отдельным существующим carrier: необходимые group_index/use_index/source/artifact передаются явно, не извлекаются разбором path и не заменяются новым DTO. Точные методы каждого checker конкретизируются по его инварианту; пример field-only метода не объявляется окончательной сигнатурой mixed checks.
+
+Предел гарантии: CheckedPath проверяет структуру/типы пути, но не доказывает, что переданное значение извлечено именно из указанного экземпляра request. Это обязанность request-specific обхода. Checker не хранит request/path в mutable состоянии. Невалидный root и неизвестное корневое поле не получают фиктивный field path; предусмотренный structural отказ сохраняется.
+
+Проверки до реализации: negative typing для несовместимого типа пути/значения; сохранение original root и group/use indices; отсутствие перенумерации diagnostics после normalization; несколько независимых ошибок; отсутствие state leakage между вызовами; отсутствие fake path для root/extra. Собственные tests не заменяют независимую приёмку.
+
+**Граница влияния:** решение только для внутренних Source checkers. Публичные Input/Result/Error Source и callers Pack/Snapshot не меняются. Terrain/Hydrology validators не обязаны принимать Source request или CheckedPath: Source привязывает результат owning validation к собственному path. Shared diagnostics не изменяются. Если обнаружится нехватка их возможностей, это отдельный вопрос владельцу с фиксацией зависимости, не новый стандарт и не автоматическое расширение Source scope.
 
 ## 4. Dependency graph без циклов
 
