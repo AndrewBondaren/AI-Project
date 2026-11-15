@@ -53,6 +53,24 @@ Normalizer объявлен вызываемым только после world/d
 
 ## Последующее ревью implementation-плана и правки — 2026-11-16
 
+### Повторная проверка исправленной редакции с A0
+
+Граница: source-core-invariants-implementation.md, A0→A→B→C→D, с уточнением одного SELECTION_OUT_OF_RANGE на selection. **Собственная проверка: новых блокирующих противоречий в этом ограниченном design не выявлено; редакция предъявляется на принятие.** Это не independent PASS, не разрешение реализации задним числом и не утверждение готовности текущего кода.
+
+| Обязательный критерий | Место и результат сверки |
+|---|---|
+| Ответственность существующих и новых участников | §2/§3.A0–D: POJO сохраняют value validation; общие функции владеют повторяющимися правилами; checkers добавляют diagnostics и application relations; AtomIndex перечисляет atoms. Второй алгоритм правила — явный критерий отказа |
+| Public/internal и вложенные вызовы | §2, A0, C/D: public shape/manifest неизменны; POJO и checkers → общие dataModel функции, SelectionChecker → AtomIndex. Новых carriers, public операций и обратного dataModel→application импорта нет |
+| Три запрета DAG | §2/§5: новых pipelines, routes, orchestration и междоменных effect calls в срезе нет. INT-DAG-SCOPED относится к исключённой S1/S2 composition и не считается решённым |
+| Порядок | §3/§5: A0 добавлен как явно предложенная дельта до A–D. Принятие изменённого порядка остаётся отдельным gate; прежние tests его не заменяют |
+| CRUD данных и настроек | §2/§5: C/R/U/D публичных данных и C/R/U/D настроек не создаются и не меняются; приёмка полного домена не заявлена, обязательства полного Source сохраняются |
+| Междоменные зависимости | §2/§5: только существующие shared values/validation/codec; новых data/settings bindings нет. Mutation phase authority и S1/S2 вынесены в точные integration gates |
+| POJO и ошибки | §2/§3.A0/D, proof spec §11.3–11.4: у SourceDurableProof сохраняются schema_version/world_uid/uses, у SourceProofSelection — proof_fingerprint/dependency_indices; новых DTO нет. Existing SourceFieldIssue сохраняет code/path/message, SourceLogicIssue — code/group_index/use_index/source/artifact. Локализация bounds честно ограничена selection, field errors сохраняют element path; общие правила не создают error carrier |
+
+Read-only feasibility probe существующей field annotation SourceProofSelection.dependency_indices: TypeAdapter её element type со strict=True принимает 0/4 как int, отклоняет True/-1/1.0/'1'. Следовательно, A0 может переиспользовать действующую structural schema без копии StrictInt/ge. Это проверка предпосылки проектного решения, не тест ещё не реализованного A0.
+
+Непринятая реализация сохраняет известные дефекты (дублирование правил и повтор bounds issues). Исправлять её следует после принятия конкретной дельты A0 с ограниченным перечнем файлов; затем выполнить предусмотренные regression/typing и отдельную независимую приёмку. Никакие обязательства владельцев других доменов этим выводом не закрыты.
+
 ### Дополнение по замечаниям другого агента
 
 Проверены текущие документы и выполнен read-only reproducer selection: три atoms, indices=(4, 5), корректный fingerprint → два равных SELECTION_OUT_OF_RANGE. Документировано исправление: ровно один logic issue на selection; код пока не исправлен, обязательные regression cases добавлены в слой D implementation-плана. Новые поля SourceLogicIssue не вводятся.
