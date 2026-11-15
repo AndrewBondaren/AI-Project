@@ -8,6 +8,8 @@
 
 В signatures ниже используются существующие Source POJO и shared BaseModel/EntityUid/CheckedPath. `SourceFieldIssue | SourceLogicIssue` — union существующих типов, не новый carrier. Aggregator стабильно разделяет issues на два tuple и применяет порядок §11.3; порядок вызова helpers не заменяет нормативный порядок diagnostics.
 
+Уточнение после ревью плана 2026-11-16: signatures остаются кандидатами; написанные пять application-компонентов не приняты. Повторяющиеся локальные правила proof/selection предлагается вынести в Source dataModel `_proofValueRules.py` и переиспользовать из POJO и checkers; exact перечень и порядок A0 — source-core-invariants-implementation.md §3.A0. Checkers владеют request diagnostics, canonical byte ordering и proof-relative checks, не второй реализацией POJO-правил. Эта дельта требует принятия до продолжения кода.
+
 ## 2. World и descriptor/key
 
 ```python
@@ -56,7 +58,7 @@ class SourceUsageConflictChecker:
 
 Для single request group=None; для groups/available — исходная позиция. Facts всей стороны request передаются одним batch в исходном порядке; expected и presented стороны не смешиваются. Каждый dependency fact обязан ссылаться на тот же exact capture ref и исходную позицию из captures. Неуникальные capture positions, неверные indices или несогласованные факты — programming error обхода, не business failure. Checker не строит исправленный SourceCaptureUsage и не нормализует вход.
 
-Обход валидирует leaves независимо: непригодный ref получает structural diagnostic и не попадает в dependencies; пригодные соседние refs остаются. При отсутствии пригодного capture ref нельзя проверять capture-relative конфликт этого use, но world/descriptor/shape проверки доступных полей продолжаются. Capture identity проверяется по captures даже у use без пригодных dependencies. Для nested `objects=(None, A@r1)` и соседнего use той же capture с A@r2 итог содержит INVALID_SHAPE по исходному objects[0] и REVISION_CONFLICT по исходному второму use. Capture/world/ref values не достраиваются из defaults.
+Обход валидирует leaves независимо: непригодный ref получает structural diagnostic и не попадает в dependencies; пригодные соседние refs остаются. При отсутствии пригодного capture ref нельзя проверять capture-relative конфликт этого use, но world/descriptor/shape проверки доступных полей продолжаются. По captures проверяется согласованность исходных позиций даже у use без пригодных dependencies, а не capture_uid identity. Для nested `objects=(None, A@r1)` и соседнего use той же capture с A@r2 итог содержит INVALID_SHAPE по исходному objects[0] и REVISION_CONFLICT по исходному второму use. Capture/world/ref values не достраиваются из defaults.
 
 Корректировка пользователя 2026-11-16: внутри одного exact SourceCaptureRef разные revisions dependency → REVISION_CONFLICT с exact source и исходными group/use indices offending occurrence. CAPTURE_ID_CONFLICT здесь не проверяется: capture_uid отсутствует в SourceCaptureRef и доступен только в decoded SourceCaptureWitness; эта проверка принадлежит witness/finalization. Dependency index сохраняется в facts для исходного порядка и traversal checks, но не добавляется в SourceLogicIssue новым полем. Exact повтор declared refs допустим; разные revisions в разных captures допустимы. World/descriptor checks выполняются своими owners, не повторяются здесь. Повреждённый usage не передаётся как валидный; его пригодные leaf facts продолжают участвовать в проверке.
 

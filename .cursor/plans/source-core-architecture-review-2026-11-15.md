@@ -50,3 +50,16 @@ Normalizer объявлен вызываемым только после world/d
 **R2 — исправлено в design вариантом (a).** source-core-independent-slice.md перечисляет пять concrete files/classes/methods, prerequisites, владельцев проверок и гарантии. Срез содержит world/conflict/canonical/selection и atom enumeration, но не normalizer/union/extraction/matching либо full request checkers. Единственная algorithm constructor dependency — SelectionChecker→AtomIndex, owning key adapter отсутствует. Требование owning admission для последующих операций не отменено и не заменено stub.
 
 Повторно сверены signatures, composition, границы результата и карта среза. Исходные R1/R2 устранены на уровне документации; новых находок в рамках этой повторной проверки не зафиксировано. **Это собственная проверка исправлений, не independent PASS и не общая архитектурная приёмка.** Следующий шаг — принятие конкретного independent subset и отдельный implementation-план через implement-plan. Full request diagnostics, mutation/capture/prune/configuration и интеграции не объявляются завершёнными.
+
+## Последующее ревью implementation-плана и правки — 2026-11-16
+
+Вердикт последующего собственного ревью: **CHANGES REQUIRED**. Он относится к source-core-invariants-implementation.md и его обязательным ссылкам; предыдущая запись о R1/R2 не является допуском новой реализации.
+
+| Замечание | Исправление документа / предел статуса |
+|---|---|
+| P1: повтор правил persisted_shape/increasing_indices в application при запрете правок dataModel | В implementation-план §3.A0 добавлен конкретный proposal общих Source dataModel функций, двух POJO wrappers и потребителей-checkers. Public shape/manifest сохраняются. Новый scope/порядок требует принятия; A0 не реализован, дублирование в текущем коде не объявлено устранённым |
+| P1: capture_uid исключён из реализации, но оставлен в критериях independent subset | Приёмка и таблица subset синхронизированы: только revisions exact capture. Capture uid conflict остаётся Source witness/finalization, без расширения ref и без обещания проверки в этом срезе |
+| P1: документы отрицают наличие кода, а implementation evidence утверждает соблюдение порядка | Основной план, карта и implementation-план фиксируют написанный, но непринятый код и отсутствие зафиксированного отдельного допуска исправленной архитектуры. Прежние tests сохранены как историческое evidence; утверждение о соблюдении принятого порядка снято. Текущее «Правь» разрешает документы, не дальнейший код |
+| P2: AtomIndex одновременно обещает отказ и полагается на caller | Выбран caller-owned prerequisite без defensive exception guarantee. Tests B→C — только pure использование; production guard обязателен в будущем request traversal, его готовность не заявляется |
+
+Повторная сверка правок документов: scope остаётся Source; storage/DAG/foreign APIs не добавлены; новые public DTO и error roster отсутствуют; дельта A0 названа явно, а не выдана за прежний утверждённый порядок. Это проверка внесённых правок автором, **не приёмка плана и не независимый PASS**. Следующий шаг — ревью и принятие исправленной редакции с A0; затем корректировка кода через implement-plan и отдельная независимая приёмка реализации.

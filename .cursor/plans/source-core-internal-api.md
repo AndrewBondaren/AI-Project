@@ -59,6 +59,8 @@ SourceProofGroupProjection остаётся единственным ранее 
 | extract | Canonical proof, selection fingerprint/order/unique/bounds | Не проверяет bytes/holds и не выбирает latest |
 | match | Корректные expected groups и предъявленные proof/selections, сохранён original root | Не заменяет closure validation |
 
+Уточнение enumerate после ревью 2026-11-16: canonical prerequisite обязан обеспечить caller. AtomIndex не содержит defensive canonical check и не гарантирует exception при нарушении предусловия; такой прямой вызов вне допустимого контракта. Проверка production guard (не вызывать enumerate/selection после ошибок canonical checker) входит в будущую приёмку request traversal. Самостоятельные tests B→C подтверждают только допустимое использование pure API. Для повторяющихся POJO/checker правил предложен prerequisite A0 в source-core-invariants-implementation.md; это дельта на принятие, не реализованная архитектура.
+
 | Checker-кандидат | Constructor dependencies | Единственная обязанность |
 |---|---|---|
 | SourceIdentityChecker | SourceDescriptorLookup + key-validation port | Identity соответствует owning descriptor/key constraints |

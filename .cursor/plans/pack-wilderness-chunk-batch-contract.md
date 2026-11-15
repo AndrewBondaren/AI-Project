@@ -1,6 +1,6 @@
 # Pack: конкретизация массовой записи wilderness chunks
 
-2026-11-16. **PROPOSAL для точной сигнатуры и семантики ниже.** Однотипный atomic batch уже согласован пользователем; этот документ уточняет его, но не объявляет новые детали принятыми или реализацию прошедшей приёмку. Runtime не меняется. Основание: [write-план](pack-v2-public-write-operations.md), [четыре принципа](pack-bulk-write-principles.md), [status basis](pack-wilderness-status-dependencies.md).
+2026-11-16. **Решения согласованы пользователем; техническая приёмка дополнения ещё не завершена.** После конкретизации пользователь явно подтвердил все четыре рекомендации: evidence внутри item с общей декларацией single/batch; последовательное применение metadata в локальном рабочем состоянии; запрет вывода metadata usage из payload proof; приоритет reason. Runtime не меняется. Основание: [write-план](pack-v2-public-write-operations.md), [четыре принципа](pack-bulk-write-principles.md), [status basis](pack-wilderness-status-dependencies.md).
 
 ## Публичный контракт
 
@@ -28,19 +28,19 @@ def write_wilderness_chunks(self, request: PackWildernessChunksInput) -> PackPre
 
 Предлагается разрешить пустой tuple: после обычного admission state операция возвращает эквивалентный state без изменений, пересчётов и инвалидирования. Равенство object identity не гарантируется. Это не способ пропустить проверки forged input.
 
-**Уточнение после сверки metadata-контракта:** `metadata_inputs` — предлагаемое размещение существующего проектного `PackMetadataInputEvidence` из [metadata POJO](pack-metadata-dependency-pojo.md), не новый тип Source proof. В первоначальной форме batch это поле было пропущено. Поле обязательное, без default; пустой tuple допустим только по явно установленному owning правилу отсутствия требуемого evidence, а не как обход неизвестного producer binding. Эта поправка требует отдельного согласования и не включается задним числом в пользовательское согласие с предыдущей формой.
+**Согласованное уточнение metadata-контракта:** `metadata_inputs` размещается внутри item и использует существующий проектный `PackMetadataInputEvidence` из [metadata POJO](pack-metadata-dependency-pojo.md), не новый тип Source proof. В первоначальной форме batch это поле было пропущено; поправка отдельно подтверждена пользователем в пункте 1. Поле обязательное, без default; пустой tuple допустим только по явно установленному owning правилу отсутствия требуемого evidence, а не как обход неизвестного producer binding.
 
 Evidence адресуется локально внутри item: VALUE/ADDRESS → `entries[i].part.address`, VALUE/REFINE_ROLE → `entries[i].refine_role`, включая None. REGION_ENTRY и прочие slots запрещены; duplicate selectors отклоняются. Fingerprint сверяется с фактическим typed значением. Индекс i задаётся положением item, отдельный batch selector/index в evidence не добавляется. Source usage берётся из предъявленного evidence и сохранённых оснований state, не извлекается эвристически из payload proof. Реальный producer binding остаётся отдельной интеграцией.
 
-Одиночный `PackWildernessChunkInput` и batch item должны использовать одно объявление полей записи через общий owning carrier/base, включая evidence после его согласования. Single и batch используют один внутренний алгоритм применения. Batch не вызывает публичный single в цикле; single не должен создавать и повторно валидировать публичный batch request ради переиспользования. Точный inheritance layout и полнота metadata evidence проверяются до реализации, а не откладываются на её приёмку.
+Одиночный `PackWildernessChunkInput` и batch item используют одно объявление полей записи через общий owning carrier/base, включая согласованное evidence. Single и batch используют один внутренний алгоритм применения. Batch не вызывает публичный single в цикле; single не должен создавать и повторно валидировать публичный batch request ради переиспользования. Точный inheritance layout и полнота metadata evidence проверяются до реализации, а не откладываются на её приёмку.
 
 ## Применение и порядок
 
 1. Проверить структуру, вложенные значения и invariants исходного state; независимо проверить доступные entries. Выявить все повторные chunk addresses внутри entries, включая одинаковые refs. Совпадение с адресом базы — разрешённый replacement, не duplicate.
 2. Только после отсутствия диагностик построить локальные индексы parts и затронутых tiles. Новые локальные контейнеры не разделяются с caller и не сохраняются между вызовами.
 3. Применить unique entries в порядке tuple. Предлагаемый порядок parts соответствует текущим pure writes: replacement сохраняет позицию базы; новые адреса добавляются в порядке entries. Для новых assembly rows сохраняется порядок первого появления owning адреса. Legacy `commit_chunk` перемещает заменённый chunk в конец своего списка: его порядок не выдаётся за доказательство нового flat-state порядка. Это различие должно быть явно проверено при приёмке.
-4. Для каждого затронутого tile выполнить provisional policy **один раз по окончательному составу**, с `expected_chunks=None`. Замена существующего payload тоже запускает этот переход: старый complete не сохраняется автоматически. Отдельный explicit recalculate с expected остаётся отдельной операцией после batch по решению DAG.
-5. Обновить chunk projections и их dependency records. Для tile сохранить climate_status и основания незатронутых групп; wilderness status получает basis итогового membership с expected=None в предусмотренной detailed форме. Canonical ordering адресов basis не равен порядку parts и учитывается отдельно в стоимости.
+4. В порядке entries применять chunk и metadata transitions к локальному рабочему состоянию. Каждый item видит результат предыдущих items, включая pending usage и invalidation. Сохраняются правила provisional перехода и отказа single операции; нельзя пропустить отказ промежуточного write из-за допустимости конечного состава. Промежуточный immutable state и полный tuple basis не собираются на каждом item: локальный membership/index обновляется инкрементально. Это уточняет прежнее требование «пересчитать один раз»: однократной является итоговая материализация, а не обход последовательных семантических проверок.
+5. Для каждого затронутого tile один раз материализовать итоговые status/basis и dependency records. Provisional policy использует expected_chunks=None; replacement тоже выполняет этот переход, старый complete не сохраняется автоматически. Climate status и основания незатронутых групп сохраняются. Canonical ordering адресов basis не равен порядку parts и учитывается отдельно в стоимости. Отдельный explicit recalculate с expected остаётся отдельной операцией после batch по решению DAG.
 6. Собрать один итоговый immutable state, выполнить финальную проверку допустимого промежуточного state и вернуть его. Final completeness, storage seals/holds и READY этой pure операцией не удостоверяются.
 
 Эквивалентность single/batch проверяется по значениям частей, assembly, актуальным dependencies и пригодности provenance к bind. Не требуется создавать промежуточные states или доказывать историю исполнения. Нельзя объединять в batch записи, между которыми DAG должен выполнить describe/bind, delete, explicit recalculate или другую публичную операцию. Пакет заменяет только непрерывный участок однотипных независимых по адресам writes; не меняет утверждённый междоменный порядок.
@@ -67,7 +67,7 @@ DAG передаёт итоговый state в `describe_metadata`, направ
 | Несовместимые world/base/provenance | Существующие owning reason/code single-write admission; path с префиксом entries[i].part либо state |
 | Недостаточная детализация сохраняемой metadata | DEPENDENCY_MISMATCH / METADATA_ATTRIBUTION_UNAVAILABLE / соответствующая запись state.assembly_provenance |
 
-Независимые ошибки агрегируются в существующей оболочке и существующем порядке: структура, затем доступные семантические проверки с исходными индексами. Невалидный parent исключает только зависящие от него проверки. При смешанных структурных/семантических issues reason следует существующему правилу INVALID_INPUT; новый batch приоритет ошибок не создаётся. Отказ не возвращает частичный state и не меняет вход. Inherited/new admission не ослабляется; batch не удостоверяет inherited origin самостоятельно.
+Независимые ошибки агрегируются в существующей оболочке и существующем порядке: структура, затем доступные семантические проверки с исходными индексами. Невалидный parent исключает только зависящие от него проверки. Согласованный приоритет reason для этой pure операции: наличие структурных issues → INVALID_INPUT; иначе наличие семантических несовместимостей помимо конфликтов адресов → DEPENDENCY_MISMATCH; иначе только конфликты адресов → IDENTITY_CONFLICT. Все независимые issues сохраняются, в том числе duplicate вместе с format/provenance mismatch. При отсутствии issues ошибки нет. Это явное правило операции, а не утверждение, что существующий helper уже автоматически выбирает такой приоритет. Отказ не возвращает частичный state и не меняет вход. Inherited/new admission не ослабляется; batch не удостоверяет inherited origin самостоятельно.
 
 ## Граница реализации и приёмка
 
@@ -84,7 +84,7 @@ DAG передаёт итоговый state в `describe_metadata`, направ
 - ограниченное число проходов по базе/результату, отсутствие K полных обходов tile/state; стоимость O(B+U+R) с отдельно предъявленным sorting basis и owning checks; reuse adapters не превращается в cache доверия;
 - describe/bind и финальный DAG transport проверяются в своих последующих срезах. Бенчмарк batch сам по себе их не принимает.
 
-Остаётся принять именно предложенные детали: named carriers, empty batch, порядок результата и grouped status/provenance equivalence. Четыре принципа соблюдены как требования к проекту; runtime evidence ещё отсутствует.
+Пользовательские решения по форме и семантике зафиксированы; остаётся техническая проверка конкретных declarations, dependencies и ошибок. Четыре принципа сохраняются как требования к проекту; runtime evidence ещё отсутствует.
 
 ## Проверка 2026-11-16: результат и границы доказательства
 
@@ -96,7 +96,7 @@ DAG передаёт итоговый state в `describe_metadata`, направ
 
 Unique replacements сохраняют последние предъявленные ref/provenance/refine_role каждого адреса независимо от группировки. При принятом порядке flat parts replacements сохраняют позиции, additions следуют порядку entries. Никакой вывод об эквивалентности metadata usage из этой алгебры **не следует**: несколько chunks одного tile разделяют tile metadata, поэтому unique addresses не означают независимость metadata updates. Требуется отдельное правило переноса IDENTITY и WILDERNESS_REFINE_STATUS usage, включая повторное обращение к уже pending группе.
 
-### Обязательные критерии проекта
+### Обязательные критерии проекта — первоначальная проверка до согласования четырёх рекомендаций
 
 | Критерий | Основание в этом документе | Результат |
 |---|---|---|
@@ -111,8 +111,10 @@ Unique replacements сохраняют последние предъявленн
 
 ### Остаток именно batch-контракта
 
-1. Согласовать добавленное размещение `metadata_inputs` и сопоставить его single input без дублирующего объявления полей.
-2. Предъявить точный reducer dependencies по затронутым группам: retained attribution, уже pending usage, evidence текущих entries, stale bindings и whole-row refusal. Доказать равенство single/batch либо явно ограничить применимость batch; не молча обходить отказ промежуточного single write.
-3. Завершить поимённый class/POJO inventory и mapping ошибок. В частности, текущая таблица даёт IDENTITY_CONFLICT для duplicate и DEPENDENCY_MISMATCH для format: при их одновременном наличии нужен один явно выбранный reason без потери issues. Existing helper выбирает INVALID_INPUT для structural issues, но не выбирает приоритет между semantic reasons автоматически.
+После явного согласия пользователя по пунктам 1–4 повторное согласование этих решений не требуется. Остались технические результаты:
+
+1. Предъявить общую декларацию single/batch с уже согласованным item-local `metadata_inputs` и поимённый class/POJO inventory.
+2. Конкретизировать последовательное применение dependencies по группам: retained attribution, уже pending usage, evidence текущих entries, stale bindings и whole-row refusal. Проверить эквивалентность, включая отказы промежуточных writes, без повторной полной сборки state/basis.
+3. Завершить code/path mapping диагностик и проверить комбинации ошибок по уже согласованному приоритету INVALID_INPUT → DEPENDENCY_MISMATCH → IDENTITY_CONFLICT. Приоритет больше не OPEN; existing helper сам его не реализует.
 
 Это локальные вопросы Pack, а не требование доработать генератор или повторно согласовать SourceDurableProof. После закрытия — повторная проверка только данного дополнения; затем отдельный implementation-план и измерения. Тесты runtime в этом документальном проходе не запускались.
