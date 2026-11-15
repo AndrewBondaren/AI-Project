@@ -1,8 +1,10 @@
 """Application exception carrying the Pack-owned preparation refusal."""
 
-from typing import TypeVar
+from typing import TypeVar, get_args
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, TypeAdapter, ValidationError
+from app.dataModel.fields.fieldBinding import bind_field
+from app.dataModel.fields.fieldRef import FieldRef
 
 from app.application.jsonValidation.resolution.diagnostics import ResolveContext
 from app.application.jsonValidation.resolution.wireIssues import pydantic_issues
@@ -20,6 +22,38 @@ from app.dataModel.worldPack.preparation.errors import (
 )
 
 InputT = TypeVar("InputT", bound=BaseModel)
+ValueT = TypeVar("ValueT")
+
+
+def valid_preparation_field(value: object, ref: FieldRef[InputT, ValueT]) -> ValueT | None:
+    """Validate one independent branch after root diagnostics have been collected."""
+    binding = bind_field(ref)
+    if not isinstance(value, binding.model) or binding.field not in vars(value):
+        return None
+    try:
+        return TypeAdapter[ValueT](binding.model.model_fields[binding.field].rebuild_annotation()).validate_python(
+            vars(value)[binding.field], strict=True)
+    except ValidationError:
+        return None
+
+
+def valid_preparation_items(value: object, ref: FieldRef[InputT, tuple[ValueT, ...]]) -> tuple[tuple[int, ValueT], ...]:
+    """Keep valid tuple elements and their original indices after schema admission."""
+    binding = bind_field(ref)
+    if not isinstance(value, binding.model):
+        return ()
+    raw = vars(value).get(binding.field)
+    if not isinstance(raw, tuple):
+        return ()
+    annotation = binding.model.model_fields[binding.field].annotation
+    adapter = TypeAdapter[ValueT](get_args(annotation)[0])
+    accepted: list[tuple[int, ValueT]] = []
+    for index, item in enumerate(raw):
+        try:
+            accepted.append((index, adapter.validate_python(item, strict=True)))
+        except ValidationError:
+            continue
+    return tuple(accepted)
 
 
 class PackPreparationFailure(Exception):

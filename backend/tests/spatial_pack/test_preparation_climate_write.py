@@ -11,6 +11,7 @@ from app.dataModel.worldPack.preparation.assembly import PackAssemblyInput, Pack
 from app.dataModel.worldPack.preparation.operations import PackCoarseClimateInput
 from app.dataModel.worldPack.preparation.parts import PackCoarseClimatePartInput
 from app.dataModel.worldPack.preparation.provenance import PackNewPartProvenance, PackStoredProvenance
+from app.dataModel.worldPack.preparation.provenance import PackInheritedPartProvenance
 from app.dataModel.worldPack.preparation.state import PackPreparationState
 from app.dataModel.worldPack.preparation.errors import PackPreparationIssueCode
 from app.dataModel.worldPack.wire.climateFieldWire import CLIMATE_FIELD_FORMAT_KEY, CLIMATE_FIELD_FORMAT_VERSION
@@ -22,6 +23,100 @@ from app.dataModel.worldPack.meta.locationsIndexStorageFormat import LOCATIONS_I
 
 
 class PreparationClimateWriteTests(unittest.TestCase):
+    def test_bad_element_does_not_hide_other_parts_duplicates(self):
+        from app.application.worldData.pack.preparation.packPreparationValidator import PackPreparationValidator
+        bad = self.fine.model_copy(update={"artifact": self.fine.artifact.model_copy(update={"nbytes": "bad"})})
+        for elements, malformed_index, duplicate_index in (
+            ((self.fine, self.fine, bad), 2, 1), ((bad, self.fine, self.fine), 0, 2),
+            ((self.fine, bad, self.fine), 1, 2),
+        ):
+            state = self.state.model_copy(update={"parts": elements})
+            for method, model, part in self._writes():
+                with self.subTest(method=method.__name__, malformed_index=malformed_index):
+                    with self.assertRaises(PackPreparationFailure) as caught:
+                        method(model.model_construct(state=state, part=part))
+                    self.assertEqual([issue.path.projection() for issue in caught.exception.error.issues], [
+                        ("state", "parts", malformed_index, "artifact", "nbytes"),
+                        ("state", "parts", duplicate_index, "address")])
+                    self.assertIs(caught.exception.error.issues[1].code, PackPreparationIssueCode.DUPLICATE_ADDRESS)
+            with self.assertRaises(PackPreparationFailure) as caught:
+                PackPreparationValidator().validate_state(state)
+            self.assertEqual(caught.exception.error.issues[1].path.projection(), ("parts", duplicate_index, "address"))
+
+    def test_bad_assembly_does_not_hide_incoming_proof_world(self):
+        state = self.state.model_copy(update={"assembly": self.state.assembly.model_copy(update={"fine_cell_size": "bad"})})
+        for method, model, part in self._writes():
+            origin = part.provenance.provenance
+            foreign = part.model_copy(update={"provenance": PackNewPartProvenance(kind="new", provenance=origin.model_copy(
+                update={"source_proof": origin.source_proof.model_copy(update={"world_uid": "foreign"})}))})
+            with self.subTest(method=method.__name__), self.assertRaises(PackPreparationFailure) as caught:
+                method(model.model_construct(state=state, part=foreign))
+            self.assertEqual([issue.path.projection() for issue in caught.exception.error.issues], [
+                ("state", "assembly", "fine_cell_size"), ("part", "provenance")])
+            self.assertIs(caught.exception.error.issues[1].code, PackPreparationIssueCode.SOURCE_PROOF_MISMATCH)
+
+    def test_bad_assembly_does_not_hide_duplicate_parts(self):
+        from app.application.worldData.pack.preparation.packPreparationValidator import PackPreparationValidator
+        state = self.state.model_copy(update={"parts": (self.fine, self.fine),
+            "assembly": self.state.assembly.model_copy(update={"fine_cell_size": "bad"})})
+        for method, model, part in self._writes():
+            with self.subTest(method=method.__name__), self.assertRaises(PackPreparationFailure) as caught:
+                method(model.model_construct(state=state, part=part))
+            self.assertEqual([issue.path.projection() for issue in caught.exception.error.issues], [
+                ("state", "assembly", "fine_cell_size"), ("state", "parts", 1, "address")])
+            self.assertIs(caught.exception.error.issues[1].code, PackPreparationIssueCode.DUPLICATE_ADDRESS)
+        with self.assertRaises(PackPreparationFailure) as caught:
+            PackPreparationValidator().validate_state(state)
+        self.assertEqual([issue.path.projection() for issue in caught.exception.error.issues], [
+            ("assembly", "fine_cell_size"), ("parts", 1, "address")])
+        self.assertEqual(state.parts, (self.fine, self.fine))
+
+    def _writes(self):
+        index = PackLocationsIndexPartInput(address=PackLocationsIndexAddress(kind="locations_index"),
+            artifact=self.part.artifact.model_copy(update={"format_key": LOCATIONS_INDEX_FORMAT_KEY,
+                                                           "format_version": LOCATIONS_INDEX_FORMAT_VERSION}),
+            provenance=self.part.provenance)
+        return ((self.service.write_coarse_climate, PackCoarseClimateInput, self.part),
+                (self.service.replace_locations_index, PackLocationsIndexInput, index))
+
+    def test_inherited_is_not_erased_without_verified_base_admission(self):
+        for method, model, part in self._writes():
+            for pack_hash in (None, "d" * 64):
+                with self.subTest(method=method.__name__, pack_hash=pack_hash):
+                    state = self.state.model_copy(update={"base_publication": self.state.base_publication.model_copy(
+                        update={"pack_hash": pack_hash})})
+                    inherited = part.model_copy(update={"provenance": PackInheritedPartProvenance(
+                        kind="inherited", provenance=part.provenance.provenance)})
+                    with self.assertRaises(PackPreparationFailure) as caught:
+                        method(model(state=state, part=inherited))
+                    issue, = caught.exception.error.issues
+                    self.assertIs(issue.code, PackPreparationIssueCode.SOURCE_PROOF_MISMATCH)
+                    self.assertEqual(issue.path.projection(), ("part", "provenance"))
+                    self.assertEqual(state.parts, (self.fine,))
+
+    def test_bad_part_schema_does_not_hide_duplicate_state(self):
+        for method, model, part in self._writes():
+            with self.subTest(method=method.__name__):
+                state = self.state.model_copy(update={"parts": (self.fine, self.fine)})
+                malformed = part.model_copy(update={"artifact": part.artifact.model_copy(update={"nbytes": "bad"})})
+                with self.assertRaises(PackPreparationFailure) as caught:
+                    method(model.model_construct(state=state, part=malformed))
+                issues = caught.exception.error.issues
+                self.assertEqual(len(issues), 2)
+                self.assertEqual(issues[0].path.projection(), ("part", "artifact", "nbytes"))
+                self.assertIs(issues[1].code, PackPreparationIssueCode.DUPLICATE_ADDRESS)
+                self.assertEqual(issues[1].path.projection(), ("state", "parts", 1, "address"))
+
+    def test_bad_state_schema_does_not_hide_part_format_error(self):
+        for method, model, part in self._writes():
+            with self.subTest(method=method.__name__):
+                state = self.state.model_copy(update={"parts": []})
+                bad = part.model_copy(update={"artifact": part.artifact.model_copy(update={"format_version": 100})})
+                with self.assertRaises(PackPreparationFailure) as caught:
+                    method(model.model_construct(state=state, part=bad))
+                self.assertEqual(len(caught.exception.error.issues), 2)
+                self.assertIs(caught.exception.error.issues[1].code, PackPreparationIssueCode.FORMAT_MISMATCH)
+
     def setUp(self):
         provenance = PackStoredProvenance(source_proof=SourceDurableProof(schema_version=1, world_uid="world", uses=()), planning=())
         ref = ArtifactRef(kind=ArtifactKind.BLOB, format_key=CLIMATE_FIELD_FORMAT_KEY,

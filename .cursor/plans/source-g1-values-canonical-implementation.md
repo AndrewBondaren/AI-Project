@@ -4,6 +4,10 @@
 
 ## 1. Источники и проверенное состояние
 
+**Уточнение интеграционных gates 2026-11-15:** неизвестные/переделываемые внешние контракты оформляются техдолгом по основному плану. Прежний общий G1-BIND не блокирует архитектуру ядра и доказанно независимые срезы. Для зависимой интеграции сохраняются её конкретные prerequisites; их отсутствие не заменяется заглушками и не расширяет Source scope. Реализация ядра по-прежнему требует принятого конкретного архитектурного и implementation-среза.
+
+**Дополнительный gate 2026-11-15:** первый пункт — архитектура ядра Source; последующими отдельными шагами — архитектура интеграций, согласно разделу «Приоритет архитектуры домена» основного world-source-versioning.md. Конкретный G1-BIND не подменяет проектирование ядра и не является основанием сначала заниматься чужими контрактами. Одна ответственность — одна реализация; один метод — одна функция; классы с множественной ответственностью запрещены. Перед зависимым кодом принимаются архитектура ядра и необходимые для среза интеграции. Поставленные G1.1/G1.2 сохраняются.
+
 Нормативная форма — source-proof-v2-contract-spec.md §6.A–H, §9.2, §10.1–3, §11.3–4, §13; принятая S1/S2 редакция source-pack-s1-s2-contract.md. Обязательная приёмка — dag-generator-interface.mdc. Применимые shared SoT: docs/tz_json_validation.md (strict validation/RegistryKey), docs/tz_world_snapshot.md (shared ArtifactRef/identity), docs/tz_world_pack_storage.md (consumer provenance). Перед реализацией прочитать план/skill и нормативные источники, сверить конкретные shared declarations. Алгоритмы и таблицы IDs не переопределять в этом плане.
 
 Факты preflight: Source runtime directories отсутствуют; existing shared dependencies присутствуют. RegistryKey — backend/app/dataModel/registryKey.py, EntityUid — dataModel/identity/uid.py, RevisionHex — dataModel/validation/diagnostics/runtimeIssueContext.py, ArtifactRef/Kind — dataModel/artifacts/references.py. EntityUid не гарантирует canonical UUID. CanonicalSchemaManifest/RegisteredTypeEntry — dataModel/encoding/schemaManifest.py; encoder/digest/merge — app/encoding/canonicalCodec.py. Актуальный aggregation helper — dataModel/validation/diagnostics/validatorAggregationHelper.py, а не исторический app.core import.
@@ -64,7 +68,7 @@ Pure responsibilities уже приняты: validator проверяет гот
 
 **G1-BIND OPEN:** §10.1 задаёт semantics owning key validation, но exact application adapter declarations/registration ещё нужно предъявить и принять. Ни G1.1/G1.2, ни тестовая stub registry не закрывают этот gate. После API sheet сверить актуальные owning key contracts; если нужна новая внешняя операция/изменение другого домена — остановка и конкретная зависимость пользователю. Не переносить эту дыру в реализацию S1.
 
-Owning сверка Terrain обновлена 2026-11-15 в [API sheet §3.1](source-g1-pure-api-sheet.md#31-ответ-владельца-terrain--2026-11-14) и [binding proposal §5–6](source-g1-terrain-binding-proposal.md). Exact-key signatures/rules согласованы отдельно, реализация ещё не принята. Body layout, semantic policy, membership SET, concrete format registration и полная Source composition остаются открытыми. Старые TerrainSourceAdapter/TerrainSourceError/integration signatures отозваны; использовать их для закрытия gate запрещено. Это конкретный остаток G1-BIND, не новый блокер импортов Pack.
+Owning сверка Terrain обновлена 2026-11-15 в [API sheet §3.1](source-g1-pure-api-sheet.md#31-ответ-владельца-terrain--2026-11-14) и [binding proposal](source-g1-terrain-binding-proposal.md). Exact-key signatures/rules и SET membership согласованы отдельно, реализация ещё не принята. Body/projector contract, layout, concrete format registration и полная Source composition остаются открытыми. Судьба полей Terrain/Hydrology не определяется Source; morph_hydrology_role выведен за scope Source с вопросом в GEO (§7 proposal). Старые TerrainSourceAdapter/TerrainSourceError/integration signatures отозваны; использовать их для закрытия gate запрещено. Это конкретный остаток G1-BIND, не новый блокер импортов Pack.
 
 ## 6. Проверки и outputs
 
@@ -93,18 +97,18 @@ Typing files: backend/tests/typing/sourceVersioning/valid.py, invalid.py и pyri
 1. G1.1 — завершить values/structural validation по §3, включая SourceProofReadInput(world_uid, proof) и настоящие transitive типы полного persisted roster. Сохранить чужие незавершённые edits; не создавать mirrors или permissive adapters. Проверить strict/frozen/revalidation/negative cases и typing. Семантический admission, descriptor-aware ordering и closure не переносить в POJO.
 2. G1.2 — полный immutable SOURCE_PROOF_SCHEMA_V1 по §4 и accepted spec §11.4; exact IDs/bytes/версия неизменны. Подтвердить прежние literal V0/V1, round-trip настоящих types, negative cases и collision checks. Не ограничивать manifest заглушкой под один consumer. Обозначить результат как G1.1/G1.2 evidence, не G1 complete.
 3. После подтверждённой поставки G1.1/G1.2 — отдельный Source 2 registration-срез: request ID71201, owning request manifest/composition и адресные tests по его отдельному proposal. Не включать request в SOURCE_PROOF_SCHEMA_V1 и не менять proof wire. G1-BIND не prerequisite этого pure encoding-среза; собственная contract/implementation проверка registration обязательна.
-4. G1.3 — exact API sheet/owning adapters/composition принять и закрыть G1-BIND до реализации соответствующего pure/semantic слоя; затем его checks и общий review G1. Отсутствующие adapters не заменять stub.
+4. G1.3 — сначала принять архитектуру ядра и выделить конкретный независимый pure-срез. Его exact API, ответственность и проверки принять до кода. Concrete owning adapters/composition относятся к отдельной интеграции G1-BIND; отсутствие внешнего контракта откладывает зависимую интеграцию, а не независимое ядро. Независимость среза доказать, отсутствующий adapter не заменять production stub.
 
 Scope не расширяется до runtime IO, semantic admission/S1, finalizer, adoption или DAG. Прежний Source чат этим документальным изменением не затрагивается. Запись переданного решения не заявляет, что G1.1/G1.2 уже реализованы или приняты по tests.
 
-Definition of Done G1: все exact imports доступны, проверки values/canonical/pure и typing выполнены, G1-BIND закрыт принятой конкретной dependency composition; ни public durable API, ни финализация/holds не обещаются. Только после этого слой A S1 может начинаться по source-pack-s1-s2-implementation.md. Наличие файлов без pure adapter evidence — PARTIAL, не G1 complete.
+Definition of Done ядра G1: принята архитектура ядра, доступны exact imports принятого среза, выполнены values/canonical/pure и typing проверки и отдельная независимая приёмка. Готовность G1-BIND учитывается отдельно: принята и проверена конкретная внешняя composition. Завершение ядра не обещает public durable API, финализацию/holds или готовность S1; для них проверяются собственные prerequisites. Незакрытый G1-BIND не отменяет приёмку независимого ядра.
 
 | Обязательный критерий | Проверка |
 |---|---|
 | Три запрета DAG | Pure library, без pipeline/IO/public domain calls; ноды/ветвление/HTTP не добавляются |
-| Ответственность всех классов | G1.1 table и existing schema/codec/shared helpers достаточны для разрешённого G1.1/G1.2 среза; concrete G1.3 composition ещё OPEN и блокирует приёмку G1.3/полного G1, но не values/schema |
+| Ответственность всех классов | G1.1/G1.2 evidence сохраняется; декомпозиция G1.3 требует архитектурной приёмки ядра. Внешняя composition принимается отдельно и не заменяет эту проверку |
 | Public/internal | Public value imports только; application helpers internal; не вводить public ADMIT/READ stubs |
-| Утверждённый порядок | По решению §7: G1.1 values → G1.2 schema/vectors → отдельный Source 2 request encoding; G1.3 после собственного G1-BIND → общий G1 review → A. Storage/finalize/integration позже по основному плану |
+| Утверждённый порядок | Поставленные G1.1/G1.2 сохраняются; далее архитектура ядра → принятый независимый срез → реализация/отдельная приёмка; архитектура и реализация интеграций — последующими отдельными шагами с собственными prerequisites |
 | Data C/R/U/D | Новых public операций нет; construction/validation value не durable C/U; R storage отсутствует; D отсутствует |
 | Settings C/R/U/D | Immutable descriptor configuration, без mutable registry CRUD и runtime discovery |
 | Междоменные зависимости | Shared leaves/codecs existing; owning key adapters требуют точного принятого API. Нет импорта Terrain registry в Source identity |

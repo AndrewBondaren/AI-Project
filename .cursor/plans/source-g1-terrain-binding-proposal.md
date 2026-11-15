@@ -4,6 +4,10 @@
 
 ## 1. Exact key
 
+**Актуальные решения пользователя (2026-11-15), приоритет над историей предложений ниже:** для `SCH-WORLD-TERRAIN/membership` принято SET («Давай Set»). `members` уникальны по full SourceObjectId и упорядочены по canonical bytes согласно spec §10.2; перестановка исходных unique members не меняет canonical body/hash состава. Duplicate identities отвергаются, а не молча удаляются. Порядок nested Terrain collections этим не меняется. Это принятие semantics Source collection, не приёмка реализации или всех Terrain consumers.
+
+Пользователь вывел вопрос `glossary_ref` за scope плана. Уточнение Terrain: stub относится к target body Lore (`loreRegistryEntry.py`), само nullable поле существует и связано в ТЗ с lore_registry. Source не решает удаление поля из Terrain body или новую policy owning projector; рекомендации автоматически включить либо исключить его не приняты. Повторное решение пользователя не запрашивается. `morph_hydrology_role` также выведен из scope Source по §7. Эти поля не являются задачами Source на доработку чужих доменов.
+
 2026-11-15: пользователь ответил «Ок» на рекомендацию принять exact-key контракт отдельно от остального пакета. Согласованы signatures и правила этого раздела; реализация и её приёмка ещё не выполнены. Для semantic representation принято направление: явная версия и existing canonical codec без ambient reads, но не весь набор предложенных body semantics.
 
 Предлагаемый owning модуль `app.application.worldData.generators.terrain.source.terrainKeyValidator`:
@@ -56,7 +60,7 @@ Owning ответ указывает: existing BLOB ArtifactFormatContract тр�
 | Exact key API §1 | Terrain, Source для boundary mapping | Design согласован отдельно; реализация и negative/round-trip проверки ещё не выполнены |
 | Strict full19/nested body | Terrain | Полный exact roster/validation/callers compatibility, три hills presence состояния, no repair |
 | All19 semantic/tuple/tag/version | Terrain; принятие пользователем | Зафиксировать semantic policy и literal vectors; показать изменение bytes для каждого влияющего поля/presence |
-| SET membership / duplicate refusal — новое предложение §5 | Terrain semantics, Source collection contract | Принять после evidence; прежняя рекомендация SEQUENCE отозвана владельцем |
+| SET membership / duplicate refusal | Source collection contract, решение пользователя | Design принят; реализация и permutation/duplicate/canonical-order проверки ещё не выполнены |
 | Reuse manifest IDs/layout | Terrain, владельцы enclosing encodings | Проверить совместимость ID17 и остальных записей; не переназначать старый layout автоматически |
 | BLOB bytes format registration | Artifacts совместно с Terrain | Подтвердить exact existing binding/backend, unsupported-version/collision/vector checks |
 | Concrete Source composition | Source после owning подтверждений | Связать принятые contracts без permissive adapters и fake registration |
@@ -95,7 +99,7 @@ ID17 используется через terrain surfaceBindings → SURFACE_MAN
 
 Новая owning альтернатива reuse17: existing CanonicalCodec кодирует `("terrain.source-entry.body", 1, (19 значений в фиксированном порядке))`; owning decoder проверяет tag/version/arity/slot types, создаёт строгий existing entry и проверяет exact re-encode. Top-level ID17 не используется; nested18–23 переиспользуются только при неизменных layouts. Semantic projection также кодирует выбранные slots под отдельным fixed tag/version, а не body model с ID17. Это предложение нового versioned layout, не новый DTO/TLV engine и не адаптация старых bytes. Оно заменяет рекомендацию вложить body model в semantic tuple, если пользователь выберет этот вариант. Изменение shared POJO в SURFACE_MANIFEST всё равно требует отдельной compatibility проверки.
 
-Остаток решений: SET; политика glossary/morph (консервативное включение либо обоснованное исключение); выбор tuple-based layout без17 либо доказанное reuse; фиксированные body/semantic vectors и format registration. До этого Source composition и G1-BIND не принимаются.
+Актуальный остаток: подтверждённый владельцем body/projector контракт и выбор layout; фиксированные body/semantic vectors; format registration; полный Source binding API/composition. SET уже принят пользователем (§1). Судьба полей не решается Source; morph-вопрос передан в GEO и исключён из Source scope (§7). До подтверждения конкретных зависимостей Source composition и G1-BIND не принимаются.
 
 ## 6. Проверка решений и схем — 2026-11-15
 
@@ -142,7 +146,7 @@ Nested manifest-кандидат: ID18 EligibilityRule RECORD `(fact, op, lo, hi
 | Элемент | Владелец / необходимая конкретизация |
 |---|---|
 | member descriptor | Source: SCH-WORLD-TERRAIN/member, WORLD, REGISTRY_MEMBER, TEXT; concrete immutable definition и registration |
-| membership descriptor | Source: SCH-WORLD-TERRAIN/membership, WORLD, COLLECTION, NONE; member_descriptors и принятый SET/SEQUENCE; для SET canonical bytes order по spec §10.2, duplicate identities reject |
+| membership descriptor | Source: SCH-WORLD-TERRAIN/membership, WORLD, COLLECTION, NONE; member_descriptors=(SCH-WORLD-TERRAIN/member,); принято SET, canonical bytes order по spec §10.2, duplicate identities reject |
 | key binding | Source concrete adapter к согласованному TerrainKeyValidator; exact round-trip и INVALID_IDENTITY с исходным operation/path; без latest lookup |
 | body binding | Terrain codec/manifest/format выбранной схемы; Source связывает descriptor с допустимыми format/version и проверкой identity↔system_terrain |
 | semantic binding | Terrain projector с принятыми slots/exclusions/version; Source digest не подменяет ArtifactRef.content_hash |
@@ -150,3 +154,21 @@ Nested manifest-кандидат: ID18 EligibilityRule RECORD `(fact, op, lo, hi
 | исторические bindings | Source: удерживаемые версии не переназначаются на latest; смена format не меняет object identity |
 
 Эта таблица задаёт остаток design, а не готовые signatures отсутствующего полного binding. Key-only registry из API sheet не закрывает body/projector composition. Source proof validator не вызывает projector/IO. Pack, DAG, CRUD, writer/storage/finalizer и миграция Terrain не добавляются в scope; их реализация не нужна для исправления этих документов. Порядок остаётся G1.1/G1.2 (поставлены) → принятие G1-BIND/API → G1.3 → независимая приёмка G1.
+
+## 7. Граница ответственности по morph_hydrology_role — 2026-11-15
+
+**Передача owning-зависимости:** 2026-11-15 в существующий видимый чат Terrain `01a1d6e7-7dc4-71c0-a570-5abda0bffe62` отправлен запрос подтвердить/исправить §6.1 slots/manifest, предъявить exact body/projector/format imports, signatures, errors и версии, проверить identity↔system_terrain и назвать остаток ID17 compatibility. SET передан как принятое решение. Запрос не разрешает реализацию или решения по чужим полям. До ответа полная Source composition не объявляется конкретизированной; Source key-facing API не подменяет отсутствующие owning contracts.
+
+Решение пользователя: ничего не менять по этому полю, закрыть его дальнейшую проработку в текущем Source-плане как OUT OF SCOPE и оставить вопрос владельцу Hydrology в [GEO-1](geo-1-designed-water.md#входящий-вопрос-от-source--2026-11-15). Прежние рекомендации Source включить либо исключить поле не являются решениями контракта и не используются как основание реализации. Source не принимает решения о полях Terrain/Hydrology, их удалении или целевой семантике.
+
+Подтверждена передача existing Terrain entry внутри Regions MaterializeSignal; принадлежность поля новому Hydrology execution/DAG контракту не подтверждена. Запрос владельцу: требуется ли поле в целевом GEO/Hydrology, какой принятый контракт и потребитель определяют его смысл? Ответ и решение принадлежат владельцам, не Source. POJO, body slots, projector и текущая реализация не изменены. OUT OF SCOPE закрывает работу Source по этому вопросу, но не означает принятия неподтверждённой semantic policy или автоматического закрытия всего G1-BIND.
+
+## 8. Ответ Terrain на запрос composition — 2026-11-15
+
+Получен ответ из видимого owning чата: §6.1 (19 slots, nested IDs18–23) подтверждён как body proposal, не accepted full contract. Рекомендован envelope `("terrain.source-entry.body", 1, slots)` без IDs16/17. Imports TerrainBodyCodecV1 и TerrainSemanticProjectorV1 из §2 остаются предложенными signatures; implementation и общая приёмка не заявлены. Отказ codec/projector — existing CanonicalEncodingError; ValidationError key validator сохраняется как cause.
+
+Предложенный модуль `app.application.worldData.generators.terrain.source.encoding.terrainSourceFormatV1`: `encode_content(payload: bytes) -> bytes`, `decode_content(payload: bytes, version: FormatVersion) -> bytes`, `TERRAIN_SOURCE_ENTRY_FORMAT: ArtifactFormatContract[bytes]` с key terrain.source-entry, BLOB, versions={1}, content_model=bytes, row_count=None. Wrappers валидируют через body decoder и возвращают exact bytes. Strict tag/version/type/19 slots/nested/full roster/reencode обязательны; latest/defaults/resolved_shapes не читаются. Source отдельно проверяет exact decoded system_terrain против identity.member_key. Registry и backend используют один contract instance; реальная registration требует Artifacts подтверждения.
+
+Tuple layout изолирует новые Source bytes от ID17, но shared POJO change в SURFACE_MANIFEST всё ещё требует ограниченной проверки поддерживаемых full-entry paths и nested/projection vectors. Это не разрешение legacy adaptation. Projector signature не определяет сама по себе окончательную semantic policy; Source не достраивает её решениями о полях вне scope. Ответ не закрывает G1-BIND и не разрешает зависимую реализацию.
+
+Ответ также уточняет ownership morph_hydrology_role: Terrain владеет metadata/representation/validation, Regions передаёт entry в MaterializeSignal.target, Hydrology владеет lake role/bed carve. Отсутствие подключённого materializer не доказывает несемантичность. Scope решения §7 сохраняется без новых задач владельцам.

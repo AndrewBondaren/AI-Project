@@ -11,6 +11,14 @@
 
 ## Контракт исходных фактов Hydrology — нормативное место
 
+### Входящий вопрос от Source — 2026-11-15
+
+По поручению пользователя зафиксирован вопрос владельцу Hydrology: относится ли `TerrainRegistryEntry.morph_hydrology_role` к целевому контракту GEO/Hydrology, и если да — какой принятый input/result и потребитель используют его смысл? В существующем Regions state-change поле передаётся внутри `MaterializeSignal.target`; `docs/tz_map_light_bake.md` описывает LAKE для морфинга региона. Это evidence прежнего пути, не подтверждение нового контракта GEO или DAG.
+
+Source не определяет судьбу этого поля: сохранение, исключение, удаление, semantic projection и изменение Terrain POJO требуют решений соответствующих владельцев. Пользователь вывел исследование/разработку этого вопроса за scope текущего Source-плана. Запись является входящим вопросом, не изменением принятого freeze GEO, не новым implementation-шагом и не разрешением на миграцию. Ответ владельца следует связать с [Source binding proposal §7](source-g1-terrain-binding-proposal.md#7-граница-ответственности-по-morph_hydrology_role--2026-11-15).
+
+### Статус нормативного контракта
+
 Статус: **документальный exact freeze принят пользователем в scope EF-1.12**;
 source implementation и production evidence остаются OPEN (актуальная запись EF-1.14).
 Этот раздел владеет доменным output Hydrology. Generic read, представление и
