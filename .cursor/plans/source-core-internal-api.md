@@ -1,6 +1,6 @@
 # Source core — внутренние методы и зависимости
 
-2026-11-15. DRAFT. Продолжение согласованной декомпозиции, без изменения кода/публичных POJO. Ниже точные кандидаты pure algorithm API и карта зависимостей; полный validation API ещё требует typed diagnostic location-контракта (§3). Не объявлять архитектуру или implementation-план принятыми при этом пробеле.
+2026-11-15. DRAFT. Продолжение согласованной декомпозиции, без изменения кода/публичных POJO. Typed diagnostic location подход согласован (§3); exact checkers — source-core-checker-signatures.md; request composition — source-core-request-composition.md. Ниже pure algorithm API и dependencies на review, не принятая реализация.
 
 ## 1. Алгоритмы: одна реализация каждой функции
 

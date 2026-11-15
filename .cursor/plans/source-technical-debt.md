@@ -17,6 +17,12 @@
 
 ## Evidence INT-ARTIFACTS-TERMINAL
 
+### Дополнение INT-ARTIFACTS-RETENTION: usage/prune boundary
+
+Основной план §GC ревизий относит reachability к sourceUsage, выполнение explicit prune — к revisionPrune. Exact accepted typed binding этих участников с Source root/Artifact holders не предъявлен. Владельца конкретного usage/prune implementation уточнить при возврате к интеграции, не назначать им Source по умолчанию. Условие возврата: typed preview/confirm контракт, authoritative repeat check под согласованным scope, latest protection и отсутствие окна с concurrent capture/holds. Pure Source models не импортируют holders; bool free в caller input не заменяет evidence. Подробный разбор — [границы ядра](source-core-capture-prune-configuration.md#2-prune-не-присваивать-source-чужой-reachability).
+
+### Evidence terminal registration
+
 Проверено чтением кода 2026-11-15: [OperationRecord](../../backend/app/dataModel/artifacts/lifecycle/operation/record.py) допускает в terminal SnapshotApplyResult, PackActivationResult, GameplayStarted, OperationCancelled либо None. SourceMutationApplied/SourceMutationRefused не зарегистрированы. Сами Source outcomes пока proposals; отсутствие регистрации не основание самостоятельно менять shared union.
 
 Точный Source design — [mutation contract §8.1–8.2](source-core-mutation-contract.md). Пока интеграция открыта, нельзя объявлять Source mutation/recovery runtime готовыми или сохранять outcomes через обходной ledger. Pure revision и архитектура ядра продолжаются независимо.

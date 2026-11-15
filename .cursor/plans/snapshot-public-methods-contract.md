@@ -10,6 +10,8 @@ Contract changes R1–R3 предъявлены отдельно: [snapshot-rete
 
 ## 1. Concrete owner и три метода текущего среза
 
+**Дополнение 2026-11-15:** пользователь принял отдельный current-read по ARCH-DEC-3A: read_current_publication(world_uid) → SnapshotCurrentPublicationResult через owning current-reader port. Поэтому исходный список трёх методов ниже дополнен четвёртым, а запрет implicit latest внутри exact reads сохраняется. Новый result/port определены в ARCH-DEC-3A. Базовый timeline создаётся и активируется при первом gameplay start по актуальному ARCH-0.1 owning-плана; расширения branch/attach вне scope, только TODO. Time preparation вызывается через DAG, exact initial-state/start contract ещё уточняется. Settings C/R/U/D=N/A в текущем scope; restore decomposition принята без разрешения переключения timeline.
+
 **Разделение принято 2026-11-15 («Ок»):** ARCH-DEC-1/2 owning-плана фиксирует IWorldSnapshotApply → WorldSnapshotService и IWorldSnapshotRead → SnapshotReadService с указанными ниже exact путями и методами. Имя read owner/port больше не OPEN; прежние proposed формулировки ниже — история. Public error transport и полная архитектурная/реализационная приёмка остаются отдельными gates.
 
 Актуальное exact предложение владельцев — ARCH-DEC-1 owning-плана: `IWorldSnapshotApply` / `WorldSnapshotService` оставляют apply; `IWorldSnapshotRead` в application/worldSnapshot/contracts/readPort.py и `SnapshotReadService` в application/worldSnapshot/service/snapshotReadService.py получают два exact reads. DTO и signatures этого документа сохраняются. Статус разделения — предложено для приёмки, не existing runtime. Исходный объединённый класс в код-блоке ниже — только историческая форма предъявления signatures.

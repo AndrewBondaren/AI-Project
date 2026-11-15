@@ -52,13 +52,17 @@ Identity/revision, fingerprint, pinning и retention переиспользую�
 
 ## Актуальные следующие шаги (2026-11-15)
 
+**Актуальная карта ядра и статусов:** [source-core-architecture.md](source-core-architecture.md). Это единая точка навигации по архитектуре: согласованные направления, конкретные proposals, собственный остаток и отдельный реестр интеграций. При чтении ранних таблиц учитывать перечисленные там дельты; полная архитектура ещё не принята.
+
+Оставшиеся границы ядра — [capture/prune/configuration](source-core-capture-prune-configuration.md): construction без лишнего assembler, отдельная usage/prune ownership граница и незакрытый settings lifecycle. DRAFT, без назначения Source владельцем чужого reachability и без CRUD acceptance.
+
 Консолидация revision/mutation/recovery — [Source core mutation contract](source-core-mutation-contract.md), PROPOSAL: единый input roster, pure revision rule, отдельные provisional/committed/unknown, reuse existing outcome/error proposals. Public mutation/recovery signatures и интеграционный transport ещё не приняты.
 
 Пункт 1 — [декомпозиция ответственности ядра](source-core-responsibility-decomposition.md). Пользователь согласовал разделение обязанностей 2026-11-15. Следующий пункт — точные signatures и публичные границы; имена классов ещё кандидаты, существующий API не изменён. Полная архитектура и реализация ещё не приняты.
 
 Пункт 2 — [публичные границы и методы](source-core-public-boundaries.md), DRAFT: отдельные concrete proof operation owners с существующими POJO; обнаруженные отдельные обязанности check_coverage и adoption preflight; явный остаток собственных контрактов ядра. Предложение ещё не заменяет принятые публичные/S1/S2 signatures.
 
-Продолжение ядра — [внутренние API и dependencies](source-core-internal-api.md): pure signatures, constructor graph и preconditions; отдельно отмечен незавершённый typed diagnostic location API и reuse существующих mutation proposals. Это конкретные собственные задачи Source, не внешний техдолг и не готовая реализация.
+Продолжение ядра — [внутренние API и dependencies](source-core-internal-api.md): pure signatures, constructor graph и preconditions; CheckedPath approach согласован, concrete checker signatures предъявлены отдельно. Request-specific composition и mutation proposals ещё требуют завершения. Это собственные задачи Source, не внешний техдолг и не готовая реализация.
 
 Шаг 1 детализации checkers — [точные signatures и constructors](source-core-checker-signatures.md): existing typed paths/issues, original indices, отдельная world проверка, пределы decoded membership evidence. DRAFT без кода и без независимой приёмки.
 
