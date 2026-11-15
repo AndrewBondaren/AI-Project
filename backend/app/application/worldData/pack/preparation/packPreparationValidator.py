@@ -6,7 +6,7 @@ from typing import TypeVar
 from pydantic import BaseModel
 
 from app.application.worldData.pack.preparation.errors import preparation_errors, raise_preparation_errors, validate_preparation_input
-from app.application.worldData.pack.preparation.errors import valid_preparation_field, valid_preparation_items, preparation_field_value
+from app.application.worldData.pack.preparation.errors import valid_preparation_field, preparation_field_value
 from app.dataModel.fields.checkedPath import CheckedPath
 from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.sourceVersioning.sourceDurableProof import SourceDurableProof
@@ -19,6 +19,8 @@ from app.dataModel.worldPack.meta.metadataAttribution import (
 from app.dataModel.worldPack.preparation.addresses import PackAssemblyAddress, PackTileMetadataAddress
 from app.dataModel.worldPack.meta.parts import PackStoredPart
 from app.dataModel.worldPack.preparation.assembly import PackAssemblyInput, PackTileAssembly, PackChunkAssembly
+from app.dataModel.worldPack.preparation.assembly import PackLocationAssembly, PackSettlementAssembly
+from app.dataModel.worldPack.meta.wildernessRegionEntry import WildernessRegionEntry
 from app.dataModel.worldPack.preparation.errors import PackPreparationDiagnostic, PackPreparationFailureReason, PackPreparationIssue, PackPreparationIssueCode
 from app.dataModel.worldPack.preparation.metadataDependencies import PackMetadataDependencyUse, PackMetadataDescription
 from app.dataModel.worldPack.preparation.metadataSubject import PackMetadataSubject
@@ -287,20 +289,26 @@ class PackPreparationValidator:
                 _issue(errors, PackPreparationIssueCode.DUPLICATE_ADDRESS,
                        tiles_path.item(index).field(chunks_field).item(duplicate), "duplicate chunk in tile")
         locations_field = FieldRef(lambda: PackAssemblyInput, lambda value: value.locations)
-        locations = valid_preparation_items(assembly, locations_field)
-        for position in _duplicates(row.location_uid for _, row in locations):
+        location_uid = FieldRef(lambda: PackLocationAssembly, lambda value: value.location_uid)
+        locations = tuple((index, uid) for index, row in _raw_items(assembly, locations_field)
+                          if (uid := valid_preparation_field(row, location_uid)) is not None)
+        for position in _duplicates(uid for _, uid in locations):
             index = locations[position][0]
             _issue(errors, PackPreparationIssueCode.DUPLICATE_ADDRESS,
                    assembly_path.field(locations_field).item(index), "duplicate location")
         settlements_field = FieldRef(lambda: PackAssemblyInput, lambda value: value.settlements)
-        settlements = valid_preparation_items(assembly, settlements_field)
-        for position in _duplicates(row.location_uid for _, row in settlements):
+        settlement_uid = FieldRef(lambda: PackSettlementAssembly, lambda value: value.location_uid)
+        settlements = tuple((index, uid) for index, row in _raw_items(assembly, settlements_field)
+                            if (uid := valid_preparation_field(row, settlement_uid)) is not None)
+        for position in _duplicates(uid for _, uid in settlements):
             index = settlements[position][0]
             _issue(errors, PackPreparationIssueCode.DUPLICATE_ADDRESS,
                    assembly_path.field(settlements_field).item(index), "duplicate settlement")
         regions_field = FieldRef(lambda: PackAssemblyInput, lambda value: value.wilderness_regions)
-        regions = valid_preparation_items(assembly, regions_field)
-        for position in _duplicates(row.region_uid for _, row in regions):
+        region_uid = FieldRef(lambda: WildernessRegionEntry, lambda value: value.region_uid)
+        regions = tuple((index, uid) for index, row in _raw_items(assembly, regions_field)
+                        if (uid := valid_preparation_field(row, region_uid)) is not None)
+        for position in _duplicates(uid for _, uid in regions):
             index = regions[position][0]
             _issue(errors, PackPreparationIssueCode.DUPLICATE_ADDRESS,
                    assembly_path.field(regions_field).item(index), "duplicate region")

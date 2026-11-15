@@ -19,6 +19,9 @@ from app.dataModel.worldPack.preparation.errors import (
     PackPreparationError,
     PackPreparationFailureReason,
     PackPreparationIssue,
+    PackPreparationArtifactIssue,
+    PackPreparationRetentionLimitIssue,
+    is_structural_preparation_issue,
 )
 
 InputT = TypeVar("InputT", bound=BaseModel)
@@ -70,7 +73,8 @@ class PackPreparationFailure(Exception):
 def preparation_errors() -> ValidatorAggregationHelper[PackPreparationDiagnostic]:
     """Create the shared collector for one Pack admission stage."""
     return ValidatorAggregationHelper[PackPreparationDiagnostic](
-        (JsonFieldError, WireShapeIssue, PackPreparationIssue)
+        (JsonFieldError, WireShapeIssue, PackPreparationIssue,
+         PackPreparationArtifactIssue, PackPreparationRetentionLimitIssue)
     )
 
 
@@ -94,11 +98,13 @@ def raise_preparation_errors(
     errors: ValidatorAggregationHelper[PackPreparationDiagnostic],
     reason: PackPreparationFailureReason,
 ) -> None:
-    effective_reason = (
-        PackPreparationFailureReason.INVALID_INPUT
-        if any(type(issue) in (JsonFieldError, WireShapeIssue) for issue in errors.snapshot())
-        else reason
-    )
+    issues = errors.snapshot()
+    if any(isinstance(issue, PackPreparationRetentionLimitIssue) for issue in issues):
+        effective_reason = PackPreparationFailureReason.RESOURCE_LIMIT
+    elif any(is_structural_preparation_issue(issue) for issue in issues):
+        effective_reason = PackPreparationFailureReason.INVALID_INPUT
+    else:
+        effective_reason = reason
     errors.raise_if_any(lambda issues: PackPreparationFailure(
         PackPreparationError(reason=effective_reason, issues=issues)
     ))

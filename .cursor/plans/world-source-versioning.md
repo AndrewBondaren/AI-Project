@@ -56,6 +56,8 @@ Identity/revision, fingerprint, pinning и retention переиспользую�
 
 Пункт 2 — [публичные границы и методы](source-core-public-boundaries.md), DRAFT: отдельные concrete proof operation owners с существующими POJO; обнаруженные отдельные обязанности check_coverage и adoption preflight; явный остаток собственных контрактов ядра. Предложение ещё не заменяет принятые публичные/S1/S2 signatures.
 
+Продолжение ядра — [внутренние API и dependencies](source-core-internal-api.md): pure signatures, constructor graph и preconditions; отдельно отмечен незавершённый typed diagnostic location API и reuse существующих mutation proposals. Это конкретные собственные задачи Source, не внешний техдолг и не готовая реализация.
+
 1. Предъявить архитектуру ядра Source: папки, классы с единственной ответственностью, методы с одной функцией, POJO, внутренние зависимости и публичные границы. Проверить прежнюю группировку proof-операций, validation, reads, finalize и mutation/recovery; неподтверждённую декомпозицию не считать принятой.
 2. Принять конкретный срез ядра и его implementation-план; реализовать через implement-plan и предъявить отдельно на независимую приёмку. Подтверждать отсутствие зависимости от отложенных интеграций, не заменять их production stubs.
 3. Отдельными шагами предъявлять архитектуру подтверждённых интеграций, затем соответствующие implementation-срезы. Неизвестные/меняющиеся внешние связи остаются в реестре техдолга ниже.

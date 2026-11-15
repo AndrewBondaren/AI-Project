@@ -1,9 +1,11 @@
 """Diagnostics of Pack preparation, separate from storage and read refusals."""
 
 from enum import StrEnum
-from typing import Self
+from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
+
+from app.dataModel.artifacts.references import ArtifactRef
 
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.validation.immutableValue import validate_immutable
@@ -19,6 +21,7 @@ class PackPreparationFailureReason(StrEnum):
     ARTIFACT_UNAVAILABLE = "artifact_unavailable"
     MANIFEST_OVERSIZE = "manifest_oversize"
     OPERATION_CLOSED = "operation_closed"
+    RESOURCE_LIMIT = "resource_limit"
 
 
 class PackPreparationIssueCode(StrEnum):
@@ -42,13 +45,60 @@ class PackPreparationIssueCode(StrEnum):
     METADATA_ATTRIBUTION_UNAVAILABLE = "metadata_attribution_unavailable"
     METADATA_INPUT_MISMATCH = "metadata_input_mismatch"
     METADATA_BASIS_MISMATCH = "metadata_basis_mismatch"
+    RETENTION_LIMIT_EXCEEDED = "retention_limit_exceeded"
 
 
 class PackPreparationIssue(FieldPathError[PackPreparationIssueCode]):
     pass
 
 
-PackPreparationDiagnostic = JsonFieldError | WireShapeIssue | PackPreparationIssue
+PackPreparationLeafDiagnostic = JsonFieldError | WireShapeIssue | PackPreparationIssue
+
+
+class PackPreparationArtifactIssue(BaseModel):
+    """Locate an owning payload diagnostic without rewriting its field path."""
+
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
+
+    artifact: ArtifactRef
+    issue: PackPreparationLeafDiagnostic
+
+
+class PackRetentionResource(StrEnum):
+    READ_BYTES = "read_bytes"
+    ARTIFACTS = "artifacts"
+
+
+class PackPreparationRetentionLimitIssue(BaseModel):
+    """An admission reservation refused before the attempted action starts."""
+
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
+
+    code: Literal[PackPreparationIssueCode.RETENTION_LIMIT_EXCEEDED]
+    resource: PackRetentionResource
+    limit: Annotated[StrictInt, Field(gt=0)]
+    consumed: Annotated[StrictInt, Field(ge=0)]
+    requested: Annotated[StrictInt, Field(gt=0)]
+    artifact: ArtifactRef
+
+    @model_validator(mode="after")
+    def reservation(self) -> Self:
+        if self.consumed > self.limit or self.consumed + self.requested <= self.limit:
+            raise ValueError("reservation must exceed the remaining budget")
+        expected = self.artifact.nbytes if self.resource is PackRetentionResource.READ_BYTES else 1
+        if self.requested != expected:
+            raise ValueError("reservation must match the attempted artifact action")
+        return self
+
+
+PackPreparationDiagnostic = (
+    PackPreparationLeafDiagnostic | PackPreparationArtifactIssue | PackPreparationRetentionLimitIssue
+)
+
+
+def is_structural_preparation_issue(issue: PackPreparationDiagnostic) -> bool:
+    leaf = issue.issue if isinstance(issue, PackPreparationArtifactIssue) else issue
+    return isinstance(leaf, (JsonFieldError, WireShapeIssue))
 
 
 class PackPreparationError(BaseModel):
@@ -61,8 +111,16 @@ class PackPreparationError(BaseModel):
     def diagnostic_shape(self) -> Self:
         if not self.issues and self.reason is not PackPreparationFailureReason.MANIFEST_OVERSIZE:
             raise ValueError("preparation refusal requires diagnostics")
-        if any(isinstance(issue, (JsonFieldError, WireShapeIssue)) for issue in self.issues):
-            if self.reason is not PackPreparationFailureReason.INVALID_INPUT:
+        limits = tuple(i for i, issue in enumerate(self.issues)
+                       if isinstance(issue, PackPreparationRetentionLimitIssue))
+        if self.reason is PackPreparationFailureReason.RESOURCE_LIMIT:
+            if limits != (len(self.issues) - 1,):
+                raise ValueError("resource interruption requires exactly one final limit diagnostic")
+        elif limits:
+            raise ValueError("limit diagnostics require resource_limit")
+        if any(is_structural_preparation_issue(issue) for issue in self.issues):
+            if self.reason not in (PackPreparationFailureReason.INVALID_INPUT,
+                                   PackPreparationFailureReason.RESOURCE_LIMIT):
                 raise ValueError("structural diagnostics require invalid_input")
         validate_immutable(self)
         return self

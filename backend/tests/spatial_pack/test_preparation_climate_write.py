@@ -212,8 +212,8 @@ class PreparationClimateWriteTests(unittest.TestCase):
         )
         for field, row, bad_field, in_assembly, suffix in cases:
             bad = row.model_copy(update={bad_field: "bad"})
-            for position in (0, 2):
-                rows = (bad, row, row) if position == 0 else (row, row, bad)
+            for position in (0, 1, 2):
+                rows = (bad, row, row) if position == 0 else ((row, bad) if position == 1 else (row, row, bad))
                 duplicate_index = 2 if position == 0 else 1
                 state = (self.state.model_copy(update={"assembly": self.state.assembly.model_copy(update={field: rows})})
                          if in_assembly else self.state.model_copy(update={field: rows}))
@@ -224,9 +224,15 @@ class PreparationClimateWriteTests(unittest.TestCase):
                             method(model.model_construct(state=state, part=part))
                         duplicates = [issue.path.projection() for issue in caught.exception.error.issues
                                       if issue.code == PackPreparationIssueCode.DUPLICATE_ADDRESS]
-                        expected_duplicates = ([('state', field, i, 'address') for i in (1, 2)]
-                                               if field == "assembly_provenance" else [expected])
+                        identity_survives = field in ("locations", "settlements", "wilderness_regions", "assembly_provenance")
+                        expected_duplicates = (
+                            [("state",) + (("assembly",) if in_assembly else ()) + (field, i) + suffix
+                             for i in range(1, len(rows))] if identity_survives
+                            else ([] if position == 1 else [expected]))
                         self.assertEqual(duplicates, expected_duplicates)
+                        structural_path = ("state",) + (("assembly",) if in_assembly else ()) + (field, position, bad_field)
+                        self.assertEqual(caught.exception.error.issues[0].path.projection(), structural_path)
+                        self.assertEqual(caught.exception.error.issues[0].code, "SCHEMA_VIOLATION")
 
     def test_bad_element_does_not_hide_other_parts_duplicates(self):
         from app.application.worldData.pack.preparation.packPreparationValidator import PackPreparationValidator
