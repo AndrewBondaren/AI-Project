@@ -922,6 +922,57 @@ DAG → Pack public preparation/activation → accepted internal publication mec
 
 #### ARCH-0.6. Актуальные статусы, остатки и последовательность
 
+##### ARCH-DEC-1/2. Exact предложение read/apply и handler/codec — 2026-11-15
+
+По следующему «Далее» сверены actual WorldSnapshotService, DomainSectionHandler, SectionRegistry/BoundSectionHandler, PatchSetCodec и SnapshotEnvelopeCodec. Ниже конкретная дельта **для приёмки**, только документы. Она заполняет имена и методы прежних OPEN, но не объявляет новые ports принятыми и не разрешает код до ARCH-0.
+
+**ARCH-DEC-1: exact metadata reads отдельно от write lifecycle.**
+
+| Контракт / реализация | Точный файл относительно backend/app/ | Одна ответственность |
+|---|---|---|
+| IWorldSnapshotApply (existing) | application/worldSnapshot/contracts/applyPort.py | Публикация подготовленного PatchSet |
+| WorldSnapshotService (existing, public apply ещё отсутствует) | application/worldSnapshot/service/worldSnapshotService.py | Реализация Snapshot apply lifecycle; не public read/restore/branch facade |
+| IWorldSnapshotRead (proposed) | application/worldSnapshot/contracts/readPort.py | Exact чтение Snapshot metadata/publication, без payload других доменов |
+| SnapshotReadService (proposed) | application/worldSnapshot/service/snapshotReadService.py | Реализовать exact read contract в собственном read scope |
+| ISnapshotReadScopeFactory (existing proposal) | application/worldSnapshot/storage/readScopeFactory.py | Выдать read transaction capability через existing coordinator |
+
+Exact методы IWorldSnapshotRead и SnapshotReadService:
+
+```python
+async def read_snapshot(self, snapshot: SnapshotRef) -> SnapshotReadResult: ...
+async def read_publication(self, request: SnapshotPublicationReadInput) -> SnapshotPublicationReadResult: ...
+```
+
+Первый метод читает metadata exact world/player snapshot; второй — exact historical publication по world_uid/publication_id. Это два вида адреса одной ответственности exact metadata read, а не read+write+restore. Ни один не выполняет implicit current lookup. DTO/поля/отказы переиспользуются из принятой карты POJO и public-methods §2–4; новых request/result wrappers не добавляется. Constructor SnapshotReadService получает `scopes: ISnapshotReadScopeFactory`, `history: ISnapshotHistoryStore`, `publications: IExactWorldPublicationReader` и согласованный public input/error boundary; не получает writer port, holders, leases, SectionRegistry, Pack/Source reader или Container. Exact constructor error helper API остаётся в public-error freeze, не изобретается callback.
+
+Трасса read: strict admission → один read_scope → один exact port lookup → проверка result identity → успешное закрытие scope → result. Отказ/cancellation не выдаёт provisional result. Ошибка read rollback отображается по принятому public-methods proposal как infrastructure, не неизвестная write operation. Public SnapshotPublicError roster остаётся отдельной неприёмленной частью предложения; этот design не подменяет его generic ValueError. DAG получает только immutable result, без scope или права чтения blob. Existing AcceptedStateReader остаётся internal section-state resolver для scoped consumers и не является вторым public read service. SnapshotReadService не оборачивает его ради получения целого envelope: обращается к уже существующим history/publication ports.
+
+Приёмка DEC-1: у read service нет write deps/effects, current fallback и вызова WorldSnapshotService; existing exact lookup semantics сохранены, input/result refs не дублируются. Поддельный scope из публичного input невозможен. Для реализации нужны exact read negative/identity/corruption/cancellation tests; этот проход их не выполняет. Создавать отдельные классы для каждого из двух reads не требуется: reason-to-change общий exact metadata read, виды адреса различаются методами.
+
+**ARCH-DEC-2: semantic section behavior отдельно от representation.**
+
+Actual DomainSectionHandler объявляет validate/apply/encode/decode, а BoundSectionHandler держит четыре closure и объединяет manifest. PatchSetCodec вызывает encode/decode через behavioral binding; вследствие этого fingerprint зависит от объекта handler, хотя IO или apply ему не нужны. Это конкретная причина split, не требование по размеру класса.
+
+| Класс / файл | Целевые методы | Единственная ответственность и зависимости |
+|---|---|---|
+| DomainSectionHandler[S], application/patch/contracts/sectionHandler.py | contract property; async validate(section:S, context:SnapshotValidationContext) → SectionValidation; async apply(section:S, context:SnapshotApplyContext) → SectionApplyReceipt \| SectionRefused | Semantic admission/application одной prepared секции. validate read-only, apply append только через bound storage; не encode/decode, не commit/materialization |
+| SectionCodec[S], application/patch/contracts/sectionCodec.py (proposed ABC) | contract property; encode(section:S) → bytes; decode(payload:bytes, version:FormatVersion) → S | Canonical representation одной native section. Только immutable schema/typed data, без scope/storage/handler |
+| SectionContract[S], existing sectionHandler.py | existing fields и __post_init__ | Одна общая immutable declaration key/model/version/schema; codec и handler объявляют один exact instance. Не создаётся второй codec-specific section DTO |
+| BoundSectionHandler, existing application/patch/registry/sectionRegistry.py | metadata/section_model properties; validate/apply | Checked typed-erasure boundary semantic behavior; exact type/key/version admission перед вызовом handler, без codec methods/manifest merge |
+| BoundSectionCodec, proposed application/patch/registry/boundSectionCodec.py | metadata/section_model/manifest properties; encode/decode | Checked typed-erasure boundary representation; exact type/key/version/bytes validation, без semantic validate/apply |
+| SectionRegistry, existing application/patch/registry/sectionRegistry.py | register(contract, handler, codec); resolve(section), require(key); resolve_codec(section), require_codec(key); manifest property | Единственная atomic registration/lookup identity для обеих capabilities, не два независимых registry |
+| PatchSetCodec, existing application/patch/encoding/patchSetCodec.py | existing encode/decode/fingerprint/fingerprint_bytes | Canonical request representation. Переключить только selection representation на resolve_codec/require_codec; semantic handlers не вызываются |
+
+Exact register proposal: `register[S: DomainSection](contract: SectionContract[S], handler: DomainSectionHandler[S], codec: SectionCodec[S]) -> None`. Register проверяет exact declaration identity всех трёх, uniqueness key/model и schema collisions **до** добавления обеих bindings. Нельзя оставить частично зарегистрированный codec/handler. resolve/require сохраняют existing return BoundSectionHandler; новые resolve_codec/require_codec возвращают BoundSectionCodec. Общий registry нужен для единого association, а не для algorithm selection. Registry ничего не сортирует и не выполняет domain IO. Strict section admission использует одну declaration/model schema, не два набора ручных field rules.
+
+Прямой semantic validate/apply caller — WorldSnapshotService внутри одной атомарной операции; прямой codec caller — PatchSetCodec. Это internal invocation, не публичная pipeline-нода. Concrete domain implementation разрешается только после проверки native binding/междоменных границ ARCH-0.5; добавление SectionCodec не разрешает подключать v1 через adapter.
+
+Ошибки representation — existing CanonicalEncodingError/strict schema failures с причиной; configuration/type/key mismatch — existing registration/admission boundary, не fake SectionRefused. Semantic return сохраняется как SectionValidation/SectionRefused/SectionApplyReceipt; storage infrastructure не превращается в malformed bytes. Public error transport решается на owning outer boundary. Обновление native callers/tests после отдельного code-go выполняется напрямую: без compatibility reexports, handler codec shim, dual-read или legacy adapter.
+
+Приёмка DEC-2: encode/decode/fingerprint возможны без вызова handler validation/apply; handler не получает codec IO; failed registration оставляет registry прежним; wrong exact type/key/version отклоняется до dispatch; existing canonical bytes/fingerprints неизменны для поддержанного native формата. Исторические read-upgrade tests не объявляются target requirement автоматически: их disposition сверить с запретом legacy decoder, без тихого удаления ранее принятого evidence. Runtime tests/code в этом design проходе не менялись.
+
+**Остаток после этих предложений:** DEC-1/DEC-2 ждут пользовательской приёмки; public error transport, restore/branch/settings/gameplay-start, staging/registry SRP и private completion issuer остаются отдельными OPEN. Одобрение POJO не считать одобрением этих новых ports/изменения DomainSectionHandler. Последовательность неизменна: завершить ARCH-0 → приёмка → implementation plan → код.
+
 ##### Повторная сверка с архитектурой и принятой картой POJO — 2026-11-15
 
 Проверены owning ARCH-0, public-methods, public-contracts-dag-integration, pinned-origin §13 и actual declarations core ports/retention/diagnostics. Это document/contract consistency review, не runtime audit всех callers. Пользовательская приёмка POJO сохраняется; ниже устранены пропуски карты, без изменения кода или автоматического принятия новых public errors.

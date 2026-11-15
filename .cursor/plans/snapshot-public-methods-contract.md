@@ -10,6 +10,8 @@ Contract changes R1–R3 предъявлены отдельно: [snapshot-rete
 
 ## 1. Concrete owner и три метода текущего среза
 
+Актуальное exact предложение владельцев — ARCH-DEC-1 owning-плана: `IWorldSnapshotApply` / `WorldSnapshotService` оставляют apply; `IWorldSnapshotRead` в application/worldSnapshot/contracts/readPort.py и `SnapshotReadService` в application/worldSnapshot/service/snapshotReadService.py получают два exact reads. DTO и signatures этого документа сохраняются. Статус разделения — предложено для приёмки, не existing runtime. Исходный объединённый класс в код-блоке ниже — только историческая форма предъявления signatures.
+
 Историческое предложение объединяло три метода в WorldSnapshotService. Текущий ARCH-0 оставляет за ним apply lifecycle и предъявляет отдельного exact-read owner; имя read port/class ещё OPEN. Код-блок ниже сохраняет исходные signatures, но не является утверждённым размещением всех методов в одном классе. Public caller каждого метода — непосредственно согласуемая нода DAG. API/debug/worker не вызывает сервис напрямую. Разделение read/write нод и их имена определяются позднее чатом DAG.
 
 ```python
