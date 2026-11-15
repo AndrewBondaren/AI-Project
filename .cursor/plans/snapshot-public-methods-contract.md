@@ -10,7 +10,7 @@ Contract changes R1–R3 предъявлены отдельно: [snapshot-rete
 
 ## 1. Concrete owner и три метода текущего среза
 
-Единственный public class — WorldSnapshotService, backend/app/application/worldSnapshot/service/worldSnapshotService.py. Public caller каждого метода — непосредственно согласуемая нода DAG. API/debug/worker не вызывает сервис напрямую. Разделение read/write нод и их имена определяются позднее чатом DAG.
+Историческое предложение объединяло три метода в WorldSnapshotService. Текущий ARCH-0 оставляет за ним apply lifecycle и предъявляет отдельного exact-read owner; имя read port/class ещё OPEN. Код-блок ниже сохраняет исходные signatures, но не является утверждённым размещением всех методов в одном классе. Public caller каждого метода — непосредственно согласуемая нода DAG. API/debug/worker не вызывает сервис напрямую. Разделение read/write нод и их имена определяются позднее чатом DAG.
 
 ```python
 class WorldSnapshotService:

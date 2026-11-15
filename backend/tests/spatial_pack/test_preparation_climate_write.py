@@ -23,6 +23,60 @@ from app.dataModel.worldPack.meta.locationsIndexStorageFormat import LOCATIONS_I
 
 
 class PreparationClimateWriteTests(unittest.TestCase):
+    def _spatial_part(self):
+        from app.dataModel.worldPack.preparation.parts import PackSpatialRootPartInput
+        from app.dataModel.worldPack.preparation.addresses import PackSpatialRootAddress
+        from app.dataModel.worldPack.meta.spatial.domainRoot import SpatialDatasetKind
+        from app.dataModel.hydrology.pack.profile import ROOT_V1, FORMAT_VERSION
+        return PackSpatialRootPartInput(address=PackSpatialRootAddress(kind="spatial_root",
+            domain=SpatialDatasetKind.HYDROLOGY_OPEN_WATER),
+            artifact=self.part.artifact.model_copy(update={"format_key": ROOT_V1.key, "format_version": FORMAT_VERSION}),
+            provenance=self.part.provenance)
+
+    def test_spatial_root_add_replace_preserves_composition(self):
+        from app.dataModel.worldPack.preparation.operations import PackSpatialRootInput
+        part = self._spatial_part()
+        for state in (self.state, self.state.model_copy(update={"parts": ()})):
+            first = self.service.write_spatial_root(PackSpatialRootInput(state=state, part=part))
+            replacement = part.model_copy(update={"artifact": part.artifact.model_copy(update={"content_hash": "b" * 64})})
+            second = self.service.write_spatial_root(PackSpatialRootInput(state=first, part=replacement))
+            self.assertEqual(second.parts[:-1], state.parts)
+            self.assertEqual(second.parts[-1].artifact, replacement.artifact)
+            self.assertEqual(first.parts[-1].artifact, part.artifact)
+            self.assertEqual(second.assembly, state.assembly)
+            self.assertEqual(second.assembly_provenance, state.assembly_provenance)
+            self.assertEqual(second.metadata_dependencies, state.metadata_dependencies)
+            self.assertEqual(second.base_publication, state.base_publication)
+
+    def test_spatial_root_aggregates_schema_duplicate_and_descriptor(self):
+        from app.dataModel.worldPack.preparation.operations import PackSpatialRootInput
+        from app.dataModel.hydrology.pack.profile import SHARD_V1
+        part = self._spatial_part()
+        bad = part.model_copy(update={"address": part.address.model_copy(update={"kind": "bad"}),
+                                      "artifact": part.artifact.model_copy(update={"format_key": SHARD_V1.key})})
+        state = self.state.model_copy(update={"parts": (self.fine, self.fine)})
+        for value in (bad, dict(vars(bad))):
+            with self.assertRaises(PackPreparationFailure) as caught:
+                self.service.write_spatial_root(PackSpatialRootInput.model_construct(state=state, part=value))
+            self.assertEqual([(issue.code, issue.path.projection()) for issue in caught.exception.error.issues], [
+                ("SCHEMA_VIOLATION", ("part", "address", "kind")),
+                (PackPreparationIssueCode.DUPLICATE_ADDRESS, ("state", "parts", 1, "address")),
+                (PackPreparationIssueCode.FORMAT_MISMATCH, ("part", "artifact")),
+            ])
+
+    def test_spatial_root_rejects_foreign_and_inherited_provenance(self):
+        from app.dataModel.worldPack.preparation.operations import PackSpatialRootInput
+        part = self._spatial_part()
+        foreign = part.provenance.provenance.model_copy(update={"source_proof":
+            part.provenance.provenance.source_proof.model_copy(update={"world_uid": "foreign"})})
+        for provenance in (PackNewPartProvenance(kind="new", provenance=foreign),
+                           PackInheritedPartProvenance(kind="inherited", provenance=part.provenance.provenance)):
+            with self.assertRaises(PackPreparationFailure) as caught:
+                self.service.write_spatial_root(PackSpatialRootInput(state=self.state,
+                    part=part.model_copy(update={"provenance": provenance})))
+            self.assertEqual([(issue.code, issue.path.projection()) for issue in caught.exception.error.issues],
+                             [(PackPreparationIssueCode.SOURCE_PROOF_MISMATCH, ("part", "provenance"))])
+
     def test_start_empty_preserves_explicit_header(self):
         from app.dataModel.worldPack.preparation.operations import PackPreparationEmptyInput
         assembly = self.state.assembly.model_copy(update={"tiles": ()})
@@ -46,6 +100,23 @@ class PreparationClimateWriteTests(unittest.TestCase):
             (PackPreparationIssueCode.BASE_PUBLICATION_MISMATCH, ("base_publication",)),
             (PackPreparationIssueCode.METADATA_INPUT_MISMATCH, ("initial_assembly", "tiles")),
         ])
+
+    def test_start_empty_checks_pack_hash_independently(self):
+        from app.dataModel.worldPack.preparation.operations import PackPreparationEmptyInput
+        assembly = self.state.assembly.model_copy(update={"tiles": ()})
+        for pack_hash in ("a" * 64, None, "bad"):
+            base = self.state.base_publication.model_copy(update={"pack_hash": pack_hash, "publication_id": 123})
+            for value in (base, dict(vars(base))):
+                with self.subTest(pack_hash=pack_hash, representation=type(value).__name__):
+                    request = PackPreparationEmptyInput.model_construct(base_publication=value, initial_assembly=assembly)
+                    with self.assertRaises(PackPreparationFailure) as caught:
+                        self.service.start_empty(request)
+                    expected = [("SCHEMA_VIOLATION", ("base_publication", "publication_id"))]
+                    if pack_hash == "bad":
+                        expected.append(("SCHEMA_VIOLATION", ("base_publication", "pack_hash")))
+                    elif pack_hash is not None:
+                        expected.append((PackPreparationIssueCode.BASE_PUBLICATION_MISMATCH, ("base_publication",)))
+                    self.assertEqual([(issue.code, issue.path.projection()) for issue in caught.exception.error.issues], expected)
 
     def test_missing_basis_is_distinct_from_explicit_null(self):
         from app.dataModel.sourceVersioning.sourceProofSelection import SourceProofSelection

@@ -58,6 +58,8 @@ Identity/revision, fingerprint, pinning и retention переиспользую�
 
 Продолжение ядра — [внутренние API и dependencies](source-core-internal-api.md): pure signatures, constructor graph и preconditions; отдельно отмечен незавершённый typed diagnostic location API и reuse существующих mutation proposals. Это конкретные собственные задачи Source, не внешний техдолг и не готовая реализация.
 
+Шаг 1 детализации checkers — [точные signatures и constructors](source-core-checker-signatures.md): existing typed paths/issues, original indices, отдельная world проверка, пределы decoded membership evidence. DRAFT без кода и без независимой приёмки.
+
 1. Предъявить архитектуру ядра Source: папки, классы с единственной ответственностью, методы с одной функцией, POJO, внутренние зависимости и публичные границы. Проверить прежнюю группировку proof-операций, validation, reads, finalize и mutation/recovery; неподтверждённую декомпозицию не считать принятой.
 2. Принять конкретный срез ядра и его implementation-план; реализовать через implement-plan и предъявить отдельно на независимую приёмку. Подтверждать отсутствие зависимости от отложенных интеграций, не заменять их production stubs.
 3. Отдельными шагами предъявлять архитектуру подтверждённых интеграций, затем соответствующие implementation-срезы. Неизвестные/меняющиеся внешние связи остаются в реестре техдолга ниже.

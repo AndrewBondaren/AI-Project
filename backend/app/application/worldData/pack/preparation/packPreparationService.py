@@ -2,7 +2,7 @@
 
 from typing import TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from app.dataModel.fields.fieldBinding import bind_field
 from app.dataModel.worldPack.preparation.provenance import PackInheritedPartProvenance
 from app.dataModel.artifacts.references import ArtifactKind
@@ -29,6 +29,11 @@ from app.dataModel.worldPack.preparation.addresses import (
 )
 from app.dataModel.worldPack.preparation.assembly import PackAssemblyInput
 from app.dataModel.worldPack.preparation.state import PackPreparationState
+from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
+from app.dataModel.worldPack.preparation.operations import PackSpatialRootInput
+from app.dataModel.worldPack.preparation.parts import PackSpatialRootPartInput
+from app.dataModel.worldPack.preparation.addresses import PackSpatialRootAddress
+from app.dataModel.worldPack.meta.spatial.domainRoot import SpatialDomainRootRef
 
 RequestT = TypeVar("RequestT", bound=BaseModel)
 CollectionItemT = TypeVar("CollectionItemT")
@@ -61,6 +66,52 @@ def _without_representation(state: PackPreparationState, address: PackPartAddres
 
 
 class PackPreparationService:
+    def write_spatial_root(self, request: PackSpatialRootInput) -> PackPreparationState:
+        errors = preparation_errors()
+        checked = validate_preparation_input(PackSpatialRootInput, request, errors)
+        admitted = checked if checked is not None else request
+        path = CheckedPath.root(PackSpatialRootInput)
+        state_ref = FieldRef(lambda: PackSpatialRootInput, lambda value: value.state)
+        part_ref = FieldRef(lambda: PackSpatialRootInput, lambda value: value.part)
+        state = preparation_field_value(admitted, state_ref)
+        part = preparation_field_value(admitted, part_ref)
+        validator = PackPreparationValidator()
+        validator.check_state_identities(state, path.field(state_ref), errors)
+        validator.check_metadata_groups(state, path.field(state_ref), errors)
+        address_ref = FieldRef(lambda: PackSpatialRootPartInput, lambda value: value.address)
+        address = preparation_field_value(part, address_ref)
+        domain = valid_preparation_field(address, FieldRef(lambda: PackSpatialRootAddress, lambda value: value.domain))
+        artifact_ref = FieldRef(lambda: PackSpatialRootPartInput, lambda value: value.artifact)
+        artifact = valid_preparation_field(part, artifact_ref)
+        if domain is not None and artifact is not None:
+            try:
+                SpatialDomainRootRef(domain=domain, root=artifact)
+            except ValidationError:
+                errors.add(PackPreparationIssue(code=PackPreparationIssueCode.FORMAT_MISMATCH,
+                    path=path.field(part_ref).field(artifact_ref).freeze(), message="unsupported spatial root descriptor"))
+        provenance_ref = FieldRef(lambda: PackSpatialRootPartInput, lambda value: value.provenance)
+        provenance = valid_preparation_field(part, provenance_ref)
+        base = preparation_field_value(state, FieldRef(lambda: PackPreparationState, lambda value: value.base_publication))
+        world = valid_preparation_field(base, FieldRef(lambda: WorldPublicationRef, lambda value: value.world_uid))
+        if isinstance(provenance, PackInheritedPartProvenance):
+            errors.add(PackPreparationIssue(code=PackPreparationIssueCode.SOURCE_PROOF_MISMATCH,
+                path=path.field(part_ref).field(provenance_ref).freeze(),
+                message="inherited input requires verified pinned-base admission; unavailable in this pure write"))
+        elif provenance is not None and world is not None and provenance.provenance.source_proof.world_uid != world:
+            errors.add(PackPreparationIssue(code=PackPreparationIssueCode.SOURCE_PROOF_MISMATCH,
+                path=path.field(part_ref).field(provenance_ref).freeze(), message="spatial proof belongs to another world"))
+        raise_preparation_errors(errors, PackPreparationFailureReason.DEPENDENCY_MISMATCH)
+        assert checked is not None
+        stored = PackStoredPart(address=checked.part.address, artifact=checked.part.artifact,
+                                provenance=checked.part.provenance.provenance)
+        parts = tuple(stored if row.address == stored.address else row for row in checked.state.parts)
+        if not any(row.address == stored.address for row in checked.state.parts):
+            parts = (*parts, stored)
+        result = PackPreparationState(base_publication=checked.state.base_publication, parts=parts,
+            assembly=checked.state.assembly, assembly_provenance=checked.state.assembly_provenance,
+            metadata_dependencies=checked.state.metadata_dependencies)
+        return validator.validate_state(result)
+
     def start_empty(self, request: PackPreparationEmptyInput) -> PackPreparationState:
         errors = preparation_errors()
         checked = validate_preparation_input(PackPreparationEmptyInput, request, errors)
@@ -68,8 +119,9 @@ class PackPreparationService:
         path = CheckedPath.root(PackPreparationEmptyInput)
         base_ref = FieldRef(lambda: PackPreparationEmptyInput, lambda value: value.base_publication)
         assembly_ref = FieldRef(lambda: PackPreparationEmptyInput, lambda value: value.initial_assembly)
-        base = valid_preparation_field(admitted, base_ref)
-        if base is not None and base.pack_hash is not None:
+        base = preparation_field_value(admitted, base_ref)
+        pack_hash = valid_preparation_field(base, FieldRef(lambda: WorldPublicationRef, lambda value: value.pack_hash))
+        if pack_hash is not None:
             errors.add(PackPreparationIssue(code=PackPreparationIssueCode.BASE_PUBLICATION_MISMATCH,
                 path=path.field(base_ref).freeze(), message="empty preparation requires a publication without Pack"))
         assembly = preparation_field_value(admitted, assembly_ref)

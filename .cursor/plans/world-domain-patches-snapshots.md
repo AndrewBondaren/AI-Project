@@ -868,6 +868,31 @@ Owning adapters остаются в `db/repositories/sqlite/snapshotCore/{operat
 
 #### ARCH-0.5. Контракты данных, внешние owners и вызовы
 
+**Приёмка POJO пользователем — 2026-11-15: «Принимаю pojo».** Принята представленная в чате карта владельцев, ответственности и конкретных папок ниже, включая переиспользование existing моделей без зеркал. Приёмка структуры POJO не означает завершённого actual caller audit, приёмки всей ARCH-0 или новых полей ещё не предъявленных restore/branch/settings. Код этой фиксацией не меняется.
+
+| Точная папка относительно backend/app/ | Принятые модели/размещение | Соотношение с existing |
+|---|---|---|
+| dataModel/patch/request/ | PatchSet в patchSet.py | Переиспользовать как apply input; SnapshotWriteInput не создавать |
+| dataModel/patch/changes/ | PatchRef, PatchHeader в header.py | Сохранить identity/header prepared изменения |
+| dataModel/patch/sections/ | DomainSection, SectionHeader в section.py; dependencies в dependency.py | Сохранить typed section и явные зависимости |
+| dataModel/patch/preconditions/ | TargetAbsent, TargetVersionExpected и runtime target versions в runtime.py | Сохранить ожидание исходного состояния, не заменить общим head |
+| dataModel/patch/results/ | SectionAccepted, SectionRefused, SectionApplyReceipt в sectionResult.py | Сохранить результаты проверки/применения, не хранить callbacks |
+| dataModel/worldSnapshot/identity/ | SnapshotRef world/player union в refs.py; WorldPublicationRef, PlayerHeadExpectation в publication.py | Переиспользовать existing refs без второго identity DTO |
+| dataModel/worldSnapshot/sections/ | SectionStateRef, SectionHistoryRef в refs.py; SectionStateRetention, SectionHistoryRetention в retention.py | Сохранить provenance и явное удержание по принятой R1–R3 семантике |
+| dataModel/worldSnapshot/metadata/ | WorldSnapshotMetadata, PlayerSnapshotMetadata, SnapshotEnvelope в envelope.py; diagnostics в metadataIssues.py | Metadata не является полным payload мира |
+| dataModel/worldSnapshot/results/ | SnapshotApplyResult, SnapshotCommitRefs в apply.py; CAS/publication results в publication.py; issues в applyIssues.py | Переиспользовать outcomes и typed причины, не смешивать business отказ с unknown |
+| dataModel/publication/ | PreparationSourceBinding, PinnedManifestSourceOrigin в preparationSourceAuthority.py; diagnostics в preparationSourceBindingIssue.py и operationBindingMismatch.py | Existing binding, не новый completion receipt |
+| dataModel/artifacts/ | ArtifactRef и format metadata в references.py | Общий artifact owner, не Snapshot-specific копия |
+| dataModel/artifacts/lifecycle/ | Lease/reservation в lease.py, holders в holders.py, operation values в operation/ | Сохранить common lifecycle ownership |
+| dataModel/worldSnapshot/requests/ | SnapshotPublicationReadInput в publicationRead.py | Принято целевое размещение нового public read request; implementation отсутствует |
+| dataModel/worldSnapshot/results/ | SnapshotReadResult, SnapshotPublicationReadResult в read.py | Принято целевое размещение новых read results с reuse existing refs/envelope; implementation отсутствует |
+| dataModel/worldPack/preparation/ | PackRetentionCollectInput, PackRetentionBudget в retentionGraph.py; ошибки Pack в errors.py | Остаются Pack-owned, не переносятся в Snapshot |
+| dataModel/sourceVersioning/ | Owning Source POJO | Использовать owning contracts, не создавать зеркальные source модели |
+
+Все POJO представляют данные и проверяют собственные инварианты; IO, transaction control, pipeline dispatch и repositories в них запрещены. SQL row models в db/models/snapshotCore и db/models/artifacts остаются physical storage representation, не публичными DTO. Restore/branch/settings не получили вымышленных моделей этой приёмкой.
+
+Принятое правило сопоставления старых POJO: reuse без изменения при совпадении семантики; согласованная delta existing контракта при доказанном пробеле; новый тип только при отсутствии эквивалента; отложенный внешний v1 сохраняется без адаптера; удаление только после caller inventory и отдельного разрешения. Полная поимённая проверка полей/callers/дублирования остаётся обязательной работой ARCH-0, не объявляется выполненной этой записью. Численные budget defaults, legacy decoders и миграции не добавлены.
+
 | Группа / папки dataModel | Ответственность и граница |
 |---|---|
 | patch/{changes,sections,request,preconditions,results} | PatchHeader/DomainSection/PatchSet — frozen prepared changes и порядок; runtime expectation — точная исходная версия; SectionValidation/SectionApplyReceipt — owning проверка/результат, не callback/SQL |
@@ -896,6 +921,44 @@ DAG → Pack public preparation/activation → accepted internal publication mec
 **Handler boundary не объявляется решённой переименованием.** Для native Snapshot extension возможно validate/apply под Snapshot transaction без публичного pipeline другого домена. Для concrete handler, зависящего от внешнего контракта вне Source/Pack/Cache, прямой допуск запрещён до отдельного решения пользователя. Не переносить запись в DAG вне transaction, не строить legacy adapter. Сохраняемые generator v1 остаются disconnected/deferred с SNAPSHOT-V1 пометками. Общий handler abstraction можно описать сейчас, но ни один неподтверждённый concrete маршрут не объявляется accepted.
 
 #### ARCH-0.6. Актуальные статусы, остатки и последовательность
+
+##### Повторная сверка с архитектурой и принятой картой POJO — 2026-11-15
+
+Проверены owning ARCH-0, public-methods, public-contracts-dag-integration, pinned-origin §13 и actual declarations core ports/retention/diagnostics. Это document/contract consistency review, не runtime audit всех callers. Пользовательская приёмка POJO сохраняется; ниже устранены пропуски карты, без изменения кода или автоматического принятия новых public errors.
+
+**Дополнение exact inventory (обязательная часть ARCH-0.2–0.5):**
+
+| Класс/контракт и путь относительно backend/app/ | Ответственность и граница | Статус |
+|---|---|---|
+| ISnapshotReadScopeFactory → application/worldSnapshot/storage/readScopeFactory.py | read_scope() → AbstractAsyncContextManager[CommitReadScope], одна функция — выдать read scope. Использовать existing SqlitePublicationCommitStore.read_scope; не создавать второй coordinator/connection factory | Proposed port из public-methods §4; отсутствовал в сводной карте, implementation механизма existing |
+| SnapshotPublicFault / SnapshotPublicOperation / SnapshotPublicFailureKind → dataModel/worldSnapshot/errors/publicFault.py | Public transport отказ и binding проверенного request, не business outcome и не internal D1 | Existing proposal public-methods §3; не включать молча в принятую таблицу POJO — эти types отдельно ещё не предъявлены/приняты как часть её списка |
+| SnapshotPublicError → application/worldSnapshot/errors.py | Перенести public fault с исходным cause | Proposed; не заменяет PublicationInfrastructureError/UnknownCommitOutcome глобально |
+| MissingPersistedSnapshotBase → application/worldSnapshot/validation/missingPersistedSnapshotBase.py | Internal факт неудачного exact persisted-parent lookup, code/ref/player index; не публичная модель domain state | Existing scoped D1 с ранее принятой ответственностью. Это application diagnostic record; фраза «все POJO только dataModel» не должна означать запрет уже принятой внутренней записи |
+| SnapshotMetadataFailure → application/worldSnapshot/service/snapshotMetadataBuilder.py | Exception transport tuple причин builder | Existing; не POJO и не новый public result |
+| StateReadFailure / PublicationMismatch → application/worldSnapshot/service/acceptedStateReader.py | Internal resolution outcome/observed publication | Existing enum/dataclass, не public read DTO. При public read не экспортировать их вместо согласованного result/error |
+| PublicationGuard → application/publication/service/publicationGuard.py | Проверить publication transition и expected heads | Proposed в §8.3, файл отсутствует; exact methods/error freeze OPEN, не объявлять готовым |
+| PreparedPackActivation → application/publication/service/packActivation.py | Транзакционная часть pregame activation | Proposed §8.3/4D3; публичный вход принадлежит Pack, не новый Snapshot public pipeline |
+| GameplayStart → application/publication/service/gameplayStart.py | Переход в gameplay через общий publication CAS | Proposed §8.3/4D3; exact публичный request/error/caller контракт ещё требует включения в public inventory; наличие одноимённого result POJO не означает service implementation |
+| PackPreparationSourceAuthority → application/publication/service/packPreparationSourceAuthority.py | Internal authority admission/register/resolve по pinned-origin, не Source proof evaluator | Proposed pinned-origin §3; exact trusted issuer/evidence API OPEN |
+
+Граница размещения уточнена: public/domain value POJO — в dataModel owning домена; opaque scopes, runtime contexts, internal application outcomes/diagnostics и exception carriers не переносятся туда автоматически. SQL rows — db/models. Перенос existing D1 в dataModel либо изменение его полей потребует собственной обоснованной дельты; этой сверкой не выполняется.
+
+**Матрица согласованности:**
+
+| Проверка | Результат | Основание / остаток |
+|---|---|---|
+| Папки/owners принятой таблицы POJO и actual файлы | Согласованы в проверенном roster | Existing retention.py имеет SectionStateRetention/SectionHistoryRetention; requests/publicationRead.py и results/read.py обозначены target, не existing |
+| Повторное создание PatchSet/refs/envelope | Запрещено последовательно | public-methods §2 переиспользует exact owners, SnapshotWriteInput не вводится |
+| Internal records против public dataModel | Уточнено этой записью | MissingPersistedSnapshotBase и AcceptedStateReader outcomes не ошибочно объявляются public POJO либо отсутствующими |
+| Read transaction ownership | Согласовано как proposal, implementation port OPEN | Один existing coordinator; scopes не уходят DAG, stores не создают nested UOW |
+| Один класс — одна ответственность | OPEN | Разделение public read/apply, handler/codec и аудит staging/registry ещё не приняты; считать полный SRP PASS нельзя |
+| Один метод — одна функция | OPEN | Existing ports описаны; exact restore/branch/settings/gameplay-start/issuer methods не завершены |
+| DAG / допустимые internal междоменные contracts | Правила согласованы, concrete routes OPEN | Native handler не объявляется допустимым только по названию; внешние v1 без adapters |
+| RESOURCE_LIMIT и сохранение diagnostics | Согласовано текущей accepted редакцией | Приоритет — запись «Принято и реализовано» pinned-origin §13: accumulated issues + один final limit. Ранний owner proposal «только limit issues» исторический, не действующий контракт |
+| POJO acceptance против architecture acceptance | Разделено | Принята карта POJO; остальные OPEN не закрыты этим согласием |
+| Общая готовность к дальнейшему коду | НЕ ГОТОВ | ARCH-0 остаётся OPEN; устранённые editorial gaps не заменяют решения пользователя |
+
+Команды проверки: rg class/method/owner declarations и чтение actual files/public proposals; git diff --check по изменённым планам. Tests не запускались: production/test code не менялся. Незавершённые чужие Pack изменения сохранены. Эта матрица уточняет границы доказанного, не повторяет runtime PASS прежних срезов.
 
 | Область | Contract / реализация / evidence | Следующее действие после архитектурной приёмки |
 |---|---|---|

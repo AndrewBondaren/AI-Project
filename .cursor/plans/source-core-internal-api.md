@@ -49,6 +49,8 @@ SourceProofGroupProjection остаётся единственным ранее 
 
 ## 2. Preconditions и зависимости проверки
 
+Точные checker signatures/constructors предъявлены отдельно в [source-core-checker-signatures.md](source-core-checker-signatures.md). Они уточняют таблицу ниже: world comparison выделено в SourceWorldChecker; identity checker не дублирует world checks; membership получает уже проверенные decoded values и возвращает logic issues. Статус — DRAFT, не implementation acceptance.
+
 | Algorithm | Обязательные проверки до вызова | Что не делает |
 |---|---|---|
 | normalize | Structural validation; world/descriptor/key; full capture identity conflicts и конфликт revisions внутри capture по всем uses | Не исправляет READ, не вызывает key adapter/projector и не доказывает existence |

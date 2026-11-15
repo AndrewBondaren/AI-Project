@@ -43,7 +43,7 @@
 
 ## 4. Публичные операции — порядок проектирования
 
-Concrete public owner предлагается сохранить WorldSnapshotService в application/worldSnapshot/service/worldSnapshotService.py согласно ТЗ. Не вводить второй фасад поверх него. Ниже baseline и обязательные результаты проектирования, а не вымышленные принятые signatures.
+WorldSnapshotService в application/worldSnapshot/service/worldSnapshotService.py остаётся целевым owner apply lifecycle. Прежнее предложение назначить его owner всех reads/restore/branch пересматривается в ARCH-0: отдельный exact-read owner и прочие операции требуют точной приёмки. Второй фасад поверх сервиса не вводится. Ниже baseline операций и обязательные результаты проектирования, не утверждённая единая реализация этих операций.
 
 | Операция | Основа | Что предъявить до приёмки |
 |---|---|---|
