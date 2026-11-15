@@ -1,5 +1,8 @@
 import json
 import unittest
+import hashlib
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from app.application.worldData.pack.encoding.gradeSlotsFormat import (
@@ -9,6 +12,48 @@ from app.application.worldData.pack.encoding.jsonDecodeErrors import JsonDecodeI
 from app.dataModel.encoding.decodeLimits import DecodeLimits
 from app.dataModel.terrain.relief.gradeSlot import GradeSlotSidecar, GradeCellSlots, GRADE_SLOT_SCHEMA_ID
 from app.dataModel.worldPack.meta.gradeSlotsStorageFormat import GRADE_SLOTS_STORAGE_VERSION
+
+
+class GradeSlotsStorageTests(unittest.TestCase):
+    def test_registered_format_stages_reopens_and_refuses_before_reservation(self):
+        from tests.snapshotCore.support.fixtures import run_async
+        run_async(self._check_registered_storage())
+
+    async def _check_registered_storage(self):
+        from app.core.container.packs import PacksWiring
+        from app.application.artifacts.staging.artifactStaging import TypedArtifactStager
+        from tests.snapshotCore.storage.artifacts.test_staging import SqliteBlobFixture
+        from tests.snapshotCore.support.fixtures import live_database
+        temporary_root = Path(__file__).resolve().parents[1] / ".tmp_snapshot_core"
+        temporary_root.mkdir(exist_ok=True)
+        directory = Path(self.enterContext(TemporaryDirectory(dir=temporary_root)))
+        database = str(directory / "pack.db")
+        payload = json.dumps(dict(schema_id=GRADE_SLOT_SCHEMA_ID, cells=[])).encode()
+        limits = DecodeLimits(max_bytes=len(payload), max_nodes=10, max_depth=2, max_items=8)
+        async with live_database(database) as bundle:
+            fixture = SqliteBlobFixture(bundle)
+            registry = fixture.service._registry
+            backend = PacksWiring.register_grade_slots_format(registry, directory / "artifacts", fixture.leases, limits=limits)
+            self.assertIs(registry.resolve(backend.contract), backend)
+            stager = TypedArtifactStager(backend.contract, GRADE_SLOTS_STORAGE_VERSION, registry, fixture.service)
+            lease = await fixture.open("grade")
+            ref = await stager.stage(lease, payload)
+            self.assertEqual(ref.content_hash, hashlib.sha256(payload).hexdigest())
+            with patch.object(fixture.service, "reserve", side_effect=AssertionError("unexpected reservation")):
+                with self.assertRaises(JsonDecodeLimitError):
+                    await stager.stage(lease, payload + b' ')
+                with self.assertRaises(GradeSlotsValidationError):
+                    await stager.stage(lease, b'{}')
+                with self.assertRaises(JsonDecodeInputError):
+                    await stager.stage(lease, b'{')
+            await fixture.service.finish_preparation(lease, (ref,))
+        async with live_database(database, seed=False) as bundle:
+            fixture = SqliteBlobFixture(bundle)
+            registry = fixture.service._registry
+            backend = PacksWiring.register_grade_slots_format(registry, directory / "artifacts", fixture.leases, limits=limits)
+            await registry.verify(ref)
+            restored = await backend.read_verified(ref, max_bytes=len(payload))
+            self.assertEqual(registry.decode(backend.contract, restored, ref.format_version), payload)
 
 
 class GradeSlotsFormatTests(unittest.TestCase):

@@ -90,3 +90,11 @@ Tests meaningful: проверяют отказ и invariants, а не повт�
 ## 6. Результат и следующий gate
 
 После реализации — точный список imports/файлов, commands/results, пределы evidence и отдельный запрос независимой проверки в видимом чате по указанию пользователя. Полный request validation и остальные архитектурные вопросы Source не объявляются закрытыми. До реализации требуется завершить pre-code проверку применимых SoT и разрешить обнаруженные конкретные расхождения; сам этот документ не evidence выполненных tests.
+
+### Evidence реализации 2026-11-16 (не независимая приёмка)
+
+Пять компонентов §2 реализованы; порядок A→B→C→D сохранён. Согласованное уточнение A: SourceCaptureRef не содержит capture_uid, поэтому здесь только revision conflicts exact capture; witness/finalization не реализованы. AtomIndex требует canonical prerequisite от caller, не выполняет скрытую нормализацию. Selection checker возвращает field issues до logic issues и сохраняет независимую проверку bounds при чужом fingerprint.
+
+Собственные проверки §4: адресные tests — 13 PASS; regression Source — 53 PASS (включая эти 13); shared canonical/UUID — 13 PASS. Core-positive pyright — 0 errors; core-negative — ровно 4 ожидаемые ошибки: неверный тип path, неверный proof value, неверный world argument и несовместимый root path. Исходные typing fixtures не изменялись. Производственные imports ограничены Source values/encoding и shared validation/fields; IO, owning adapters и public operations не добавлены.
+
+Статус: реализация среза предъявлена для отдельного независимого ревью; independent PASS отсутствует. Полный G1, request traversal/aggregation, POJO TODO typed-errors и интеграционный техдолг остаются открытыми. Следующий gate — независимая приёмка этого среза по §5, не расширение реализации на интеграции.

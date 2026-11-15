@@ -6,6 +6,8 @@ from pathlib import Path
 from app.application.artifacts.registry.artifactRegistry import ArtifactFormatRegistryBinding
 from app.application.artifacts.storage.artifactLeases import IArtifactLeases
 from app.application.worldData.pack.encoding.climateFieldFormat import CLIMATE_FIELD_FORMAT
+from app.application.worldData.pack.encoding.gradeSlotsFormat import grade_slots_format
+from app.dataModel.encoding.decodeLimits import DecodeLimits
 from app.storage.artifacts.blobBackend import ContentAddressedBlobBackend
 from app.storage.artifacts.manifestBlobBackend import ManifestBlobBackend
 
@@ -54,6 +56,14 @@ class PacksWiring:
     def register_climate_field_format(registry: ArtifactFormatRegistryBinding, artifact_root: Path,
                                       leases: IArtifactLeases) -> None:
         registry.register(CLIMATE_FIELD_FORMAT, ContentAddressedBlobBackend(artifact_root, CLIMATE_FIELD_FORMAT, leases))
+
+    @staticmethod
+    def register_grade_slots_format(registry: ArtifactFormatRegistryBinding, artifact_root: Path,
+                                    leases: IArtifactLeases, *, limits: DecodeLimits) -> ContentAddressedBlobBackend:
+        contract = grade_slots_format(limits)
+        backend = ContentAddressedBlobBackend(artifact_root, contract, leases)
+        registry.register(contract, backend)
+        return backend
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
