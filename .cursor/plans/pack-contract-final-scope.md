@@ -26,6 +26,8 @@ Pack принимает готовые типизированные резуль
 
 ## Зафиксированный Pack-контракт
 
+**Правила массовых операций:** [четыре принципа Pack и проверка решений](pack-bulk-write-principles.md). Документ явно различает принятый batch-подход, существующие single writes и недоказанные implementation свойства; локальные mutable контейнеры допустимы, public state остаётся immutable. Оценка сложности включает metadata/provenance. Это не изменение границ DAG или чужих доменов.
+
 **Массовые writes, решение 2026-11-15:** пользователь выбрал однотипные пакетные операции с одним input-state admission и одним итоговым immutable state; duplicate addresses отвергаются, errors агрегируются, порядок пакетов задаёт DAG. [Точные границы решения и следующей конкретизации](pack-v2-public-write-operations.md#стоимость-последовательных-writes--отдельная-проверка-масштабирования). Первое семейство — chunks; named batch contract ещё предстоит предъявить до кода. [Замеры старого replacement](pack-write-scaling-measurement-2026-11-15.md) частичные, массовая реализация не принята. Существующие pure методы этим решением не переписываются автоматически.
 
 1. Единственный immutable состав: parts, assembly, assembly_provenance; transient metadata dependencies не дублируют значения assembly. Один сохраняемый manifest, без отдельного contents artifact. Partial state ослабляет полноту состава, но не strict types, uniqueness и immutable вложения.

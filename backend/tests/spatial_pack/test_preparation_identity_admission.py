@@ -72,17 +72,17 @@ class PreparationIdentityAdmissionTests(unittest.TestCase):
         self.assertEqual([issue.code for issue in issues], [
             PackPreparationIssueCode.DUPLICATE_ADDRESS, PackPreparationIssueCode.SOURCE_PROOF_MISMATCH,
             PackPreparationIssueCode.SOURCE_PROOF_MISMATCH, PackPreparationIssueCode.BASE_PUBLICATION_MISMATCH,
-            PackPreparationIssueCode.METADATA_GROUP_MISMATCH, PackPreparationIssueCode.SOURCE_PROOF_MISMATCH,
-            PackPreparationIssueCode.SOURCE_PROOF_MISMATCH,
+            PackPreparationIssueCode.SOURCE_PROOF_MISMATCH, PackPreparationIssueCode.SOURCE_PROOF_MISMATCH,
+            PackPreparationIssueCode.METADATA_GROUP_MISMATCH,
             PackPreparationIssueCode.METADATA_GROUP_MISMATCH,
         ])
         self.assertEqual([issue.path.projection() for issue in issues], [
             ("parts", 1, "address"), ("parts", 1, "provenance", "source_proof", "world_uid"),
             ("assembly_provenance", 0, "provenance", "source_proof", "world_uid"),
             ("metadata_dependencies", 0, "subject", "base_publication"),
-            ("metadata_dependencies", 0, "dependencies", 1, "group"),
             ("metadata_dependencies", 0, "dependencies", 0, "source_usage", "world_uid"),
             ("metadata_dependencies", 0, "dependencies", 1, "source_usage", "world_uid"),
+            ("metadata_dependencies", 0, "dependencies", 1, "group"),
             ("metadata_dependencies", 0, "dependencies"),
         ])
         self.assertEqual(self.state.parts, (self.part,))

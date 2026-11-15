@@ -23,6 +23,113 @@ from app.dataModel.worldPack.meta.locationsIndexStorageFormat import LOCATIONS_I
 
 
 class PreparationClimateWriteTests(unittest.TestCase):
+    def test_semantic_predicates_ignore_unrelated_invalid_fields(self):
+        from app.dataModel.worldPack.meta.metadataAttribution import (
+            PackStoredAssemblyProvenance, PackMetadataAttribution, PackMetadataGroupAdmission, PackMetadataGroup as G)
+        from app.dataModel.worldPack.preparation.addresses import PackTileMetadataAddress
+        from app.dataModel.worldPack.preparation.assembly import PackChunkAssembly
+        from app.dataModel.worldPack.preparation.metadataDependencies import PackMetadataDescription, PackMetadataDependencyUse
+        from app.dataModel.worldPack.preparation.metadataSubject import PackMetadataSubject
+        address = PackTileMetadataAddress(kind="tile", gx=0, gy=0)
+        group = PackMetadataGroupAdmission.model_construct(group=G.WILDERNESS_REFINE_STATUS, basis=None, selection="bad")
+        stored = PackStoredAssemblyProvenance.model_construct(address=address, provenance=self.part.provenance.provenance,
+            attribution=PackMetadataAttribution.model_construct(groups=(group,)))
+        plain = PackStoredAssemblyProvenance(address=address, provenance=self.part.provenance.provenance, attribution=None)
+        subject = PackMetadataSubject(base_publication=self.state.base_publication.model_copy(update={"publication_id": "other"}),
+                                      address=address, value_fingerprint="b" * 64)
+        description = PackMetadataDescription.model_construct(subject=subject, dependencies=(
+            PackMetadataDependencyUse.model_construct(group=G.IDENTITY, basis=None, source_usage="bad"),))
+        tile = self.state.assembly.tiles[0]
+        chunk = PackChunkAssembly(cx=0, cy=0, refine_role=None)
+        cases = (
+            ({"assembly_provenance": (stored,)}, PackPreparationIssueCode.METADATA_BASIS_MISMATCH,
+             ("assembly_provenance", 0, "attribution", "groups", 0, "basis")),
+            ({"assembly_provenance": (plain, plain.model_copy(update={"attribution": "bad"}))},
+             PackPreparationIssueCode.DUPLICATE_ADDRESS, ("assembly_provenance", 1, "address")),
+            ({"metadata_dependencies": (description,)}, PackPreparationIssueCode.BASE_PUBLICATION_MISMATCH,
+             ("metadata_dependencies", 0, "subject", "base_publication")),
+            ({"assembly": self.state.assembly.model_copy(update={"tiles": (tile, tile.model_copy(update={"climate_status": "bad"}))})},
+             PackPreparationIssueCode.DUPLICATE_ADDRESS, ("assembly", "tiles", 1)),
+            ({"assembly": self.state.assembly.model_copy(update={"tiles": (tile.model_copy(update={
+                "chunks": (chunk, chunk.model_copy(update={"refine_role": "bad"}))}),)})},
+             PackPreparationIssueCode.DUPLICATE_ADDRESS, ("assembly", "tiles", 0, "chunks", 1)),
+        )
+        for update, code, path in cases:
+            state = self.state.model_copy(update=update)
+            for method, model, part in self._writes():
+                with self.subTest(path=path, method=method.__name__), self.assertRaises(PackPreparationFailure) as caught:
+                    method(model.model_construct(state=state, part=part))
+                matches = [issue for issue in caught.exception.error.issues
+                           if hasattr(issue, "path") and issue.path.projection() == ("state", *path) and issue.code == code]
+                self.assertEqual(len(matches), 1)
+
+    def test_bad_artifact_does_not_hide_duplicate_address(self):
+        bad = self.fine.model_copy(update={"artifact": self.fine.artifact.model_copy(update={"nbytes": "bad"})})
+        state = self.state.model_copy(update={"parts": (self.fine, bad)})
+        for method, model, part in self._writes():
+            with self.subTest(method=method.__name__), self.assertRaises(PackPreparationFailure) as caught:
+                method(model.model_construct(state=state, part=part))
+            self.assertEqual([issue.path.projection() for issue in caught.exception.error.issues], [
+                ("state", "parts", 1, "artifact", "nbytes"), ("state", "parts", 1, "address")])
+
+    def test_bad_selection_does_not_hide_disallowed_group(self):
+        from app.dataModel.sourceVersioning.sourceProofSelection import SourceProofSelection
+        from app.dataModel.worldPack.meta.metadataAttribution import (
+            PackMetadataGroup as G, PackMetadataGroupAdmission, PackMetadataAttribution, PackStoredAssemblyProvenance)
+        from app.dataModel.worldPack.preparation.addresses import PackAssemblyHeaderAddress
+        selection = SourceProofSelection(proof_fingerprint="b" * 64, dependency_indices=())
+        groups = tuple(PackMetadataGroupAdmission(group=group, selection=selection, basis=None) for group in (
+            G.LAST_L0_MODE, G.FINE_CELLS_PER_MAP_CELL, G.WORLD_MAP_CELLS_PER_TILE,
+            G.FINE_CELL_SIZE, G.MAP_SUBSURFACE_DEPTH, G.TERRAIN_CHUNK_COLUMNS))
+        bad = PackMetadataGroupAdmission.model_construct(group=G.STRUCTURE_STATUS, selection="bad", basis=None)
+        stored = PackStoredAssemblyProvenance.model_construct(address=PackAssemblyHeaderAddress(kind="header"),
+            provenance=self.part.provenance.provenance,
+            attribution=PackMetadataAttribution.model_construct(groups=(*groups, bad)))
+        state = self.state.model_copy(update={"assembly_provenance": (stored,)})
+        for method, model, part in self._writes():
+            with self.subTest(method=method.__name__), self.assertRaises(PackPreparationFailure) as caught:
+                method(model.model_construct(state=state, part=part))
+            self.assertEqual([issue.path.projection() for issue in caught.exception.error.issues], [
+                ("state", "assembly_provenance", 0, "attribution", "groups", 6, "selection"),
+                ("state", "assembly_provenance", 0, "attribution", "groups", 6, "group")])
+
+    def test_invalid_metadata_group_keeps_sibling_duplicates(self):
+        from app.dataModel.sourceVersioning.sourceProofSelection import SourceProofSelection
+        from app.dataModel.sourceVersioning.sourceProofInput import SourceProofInput
+        from app.dataModel.worldPack.meta.metadataAttribution import (
+            PackMetadataGroup, PackMetadataGroupAdmission, PackMetadataAttribution, PackStoredAssemblyProvenance)
+        from app.dataModel.worldPack.preparation.addresses import PackAssemblyHeaderAddress
+        from app.dataModel.worldPack.preparation.metadataDependencies import PackMetadataDescription, PackMetadataDependencyUse
+        from app.dataModel.worldPack.preparation.metadataSubject import PackMetadataSubject
+        header = PackAssemblyHeaderAddress(kind="header")
+        group = PackMetadataGroupAdmission(group=PackMetadataGroup.LAST_L0_MODE,
+            selection=SourceProofSelection(proof_fingerprint="b" * 64, dependency_indices=()), basis=None)
+        bad = group.model_copy(update={"group": PackMetadataGroup.FINE_CELL_SIZE, "selection": "bad"})
+        usage = PackMetadataDependencyUse(group=PackMetadataGroup.LAST_L0_MODE,
+            source_usage=SourceProofInput(world_uid="world", uses=()), basis=None)
+        bad_use = usage.model_copy(update={"group": PackMetadataGroup.FINE_CELL_SIZE, "source_usage": "bad"})
+        for bad_first in (False, True):
+            groups = (bad, group, group) if bad_first else (group, group, bad)
+            uses = (bad_use, usage, usage) if bad_first else (usage, usage, bad_use)
+            stored = PackStoredAssemblyProvenance.model_construct(address=header, provenance=self.part.provenance.provenance,
+                attribution=PackMetadataAttribution.model_construct(groups=groups))
+            description = PackMetadataDescription.model_construct(subject=PackMetadataSubject(
+                base_publication=self.state.base_publication, address=header, value_fingerprint="c" * 64), dependencies=uses)
+            for field, entry, suffix in (
+                ("assembly_provenance", stored, ("attribution", "groups")),
+                ("metadata_dependencies", description, ("dependencies",)),
+            ):
+                state = self.state.model_copy(update={field: (entry,)})
+                for method, model, part in self._writes():
+                    with self.subTest(field=field, method=method.__name__, bad_first=bad_first):
+                        with self.assertRaises(PackPreparationFailure) as caught:
+                            method(model.model_construct(state=state, part=part))
+                        expected = ("state", field, 0, *suffix, 2 if bad_first else 1, "group")
+                        matching = [issue for issue in caught.exception.error.issues
+                                    if hasattr(issue, "path") and issue.path.projection() == expected]
+                        self.assertEqual(len(matching), 1)
+                        self.assertIs(matching[0].code, PackPreparationIssueCode.METADATA_GROUP_MISMATCH)
+
     def test_forged_mapping_part_cannot_bypass_format_admission(self):
         for method, model, part in self._writes():
             for mapping in (dict(vars(part)), part.model_dump(mode="python")):
@@ -117,11 +224,14 @@ class PreparationClimateWriteTests(unittest.TestCase):
                             method(model.model_construct(state=state, part=part))
                         duplicates = [issue.path.projection() for issue in caught.exception.error.issues
                                       if issue.code == PackPreparationIssueCode.DUPLICATE_ADDRESS]
-                        self.assertEqual(duplicates, [expected])
+                        expected_duplicates = ([('state', field, i, 'address') for i in (1, 2)]
+                                               if field == "assembly_provenance" else [expected])
+                        self.assertEqual(duplicates, expected_duplicates)
 
     def test_bad_element_does_not_hide_other_parts_duplicates(self):
         from app.application.worldData.pack.preparation.packPreparationValidator import PackPreparationValidator
-        bad = self.fine.model_copy(update={"artifact": self.fine.artifact.model_copy(update={"nbytes": "bad"})})
+        bad = self.fine.model_copy(update={"address": self.fine.address.model_copy(update={"gx": 9}),
+                                          "artifact": self.fine.artifact.model_copy(update={"nbytes": "bad"})})
         for elements, malformed_index, duplicate_index in (
             ((self.fine, self.fine, bad), 2, 1), ((bad, self.fine, self.fine), 0, 2),
             ((self.fine, bad, self.fine), 1, 2),
