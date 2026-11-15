@@ -8,6 +8,7 @@ from app.application.worldData.generators.coordinates.worldTile import (
     fine_bbox_for_tile,
 )
 from app.application.worldData.generators.terrain.types import ColumnRect
+from app.dataModel.spatial.grid.gridBBox import GridBBox
 from app.application.worldData.generators.terrain.worldMapSettings import terrain_chunk_columns
 from app.db.models.world import World
 
@@ -22,7 +23,7 @@ def distance_sq(ax: float, ay: float, bx: float, by: float) -> float:
 
 def tile_local_chunk_indices(
     rect: ColumnRect,
-    fine_bbox: ColumnRect,
+    fine_bbox: GridBBox | ColumnRect,
     chunk_size: int,
 ) -> tuple[int, int]:
     return (
@@ -32,7 +33,7 @@ def tile_local_chunk_indices(
 
 
 def wilderness_chunk_origin(
-    fine_bbox: ColumnRect,
+    fine_bbox: GridBBox | ColumnRect,
     cx: int,
     cy: int,
     chunk_size: int,

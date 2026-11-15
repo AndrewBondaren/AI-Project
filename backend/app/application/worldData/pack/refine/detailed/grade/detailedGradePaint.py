@@ -17,9 +17,6 @@ from app.application.worldData.generators.terrain.relief.discover.types import (
     Coord,
     DiscoveredFront,
 )
-from app.application.worldData.generators.terrain.relief.pick.ribbonGrade import (
-    RibbonGradeResult,
-)
 from app.application.worldData.generators.terrain.relief.sample.ribbonSegmentize import (
     RibbonSegment,
 )
@@ -97,13 +94,9 @@ def apply_grade_paint_spec(
         site_id=front.site_id,
         cell_coords=tuple(front.rim),
     )
-    result = RibbonGradeResult(
-        segment=segment,
-        decision=decision,
-        template_uid=front.template_uid,
-    )
     canal = canal_for_seed(
-        result,
+        segment,
+        decision,
         requested=max(0, int(decision.requested_length)),
         L_eff=int(plan.L),
         policy_rules=tuple(relief_pick_policy(world).canal_obstacle_policy),

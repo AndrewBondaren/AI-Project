@@ -88,12 +88,12 @@ class LocationTerrainEntry(ClimateBakeStatusMixin):
     bytes: int | None = None
 
 
-class _ManifestFields(BaseModel):
+class _ManifestFields[VersionT: str](BaseModel):
     SCHEMA_ID: ClassVar[str] = "SCH-WORLD-PACK-MANIFEST"
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
-    pack_version: str
+    pack_version: VersionT
     spatial_roots: tuple[SpatialDomainRootRef, ...]
     world_uid: str
     climate_coarse_ref: ClimateBlobRef = Field(default=None, exclude_if=lambda ref: ref is None)
@@ -124,12 +124,15 @@ class _ManifestFields(BaseModel):
 
     @model_validator(mode="after")
     def validate_climate_addresses(self):
+        self.require_climate_addresses()
+        return self
+
+    def require_climate_addresses(self) -> None:
         fine_tiles = {(tile.gx, tile.gy) for tile in self.tiles if tile.climate_fine_ref is not None}
         if self.pack_version == PACK_WIRE_VERSION and (self.climate_coarse_ref is not None or fine_tiles):
             raise ValueError("climate artifact refs require V2")
         if fine_tiles and sum((tile.gx, tile.gy) in fine_tiles for tile in self.tiles) != len(fine_tiles):
             raise ValueError("ambiguous climate tile address")
-        return self
 
     @field_validator("spatial_roots")
     @classmethod
@@ -183,7 +186,7 @@ class _ManifestFields(BaseModel):
         return None
 
 
-class WorldPackManifest(_ManifestFields):
+class WorldPackManifest(_ManifestFields[str]):
     # LEGACY REMOVE(SP-P-V1-REMOVE/V1-01) Remove implicit V1 creation.
     pack_version: str = PACK_WIRE_VERSION
     spatial_roots: tuple[SpatialDomainRootRef, ...] = Field(default=(), strict=True)
@@ -210,7 +213,7 @@ class WorldPackManifest(_ManifestFields):
         return data
 
 
-class WorldPackManifestV2(_ManifestFields):
+class WorldPackManifestV2(_ManifestFields[Literal["2.0.0"]]):
     """Strict JSON admission using the shared manifest field declarations."""
 
     model_config = ConfigDict(strict=True, extra="forbid")

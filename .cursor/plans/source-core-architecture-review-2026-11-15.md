@@ -1,5 +1,7 @@
 # Source core architecture — review 2026-11-15
 
+**Обновление реализации после принятия A0→D пользователем:** общие правила вынесены и переиспользованы, selection bounds агрегируется один раз. Evidence автора: 56 Source tests, 13 shared tests, core-positive typing без ошибок, core-negative четыре ожидаемых отказа. Исторические findings ниже не являются результатом ревью исправленного кода; нужна отдельная независимая приёмка. Внешние normative/phase gates остаются открытыми.
+
 **Verdict: CHANGES REQUIRED.** Собственное архитектурное ревью автора плана, не независимая приёмка. Scope: checker signatures, request traversal/aggregation, pure algorithm prerequisites и выбор независимого среза. Код/ТЗ/внешние контракты не изменены; runtime/typing tests не выполнялись. Проверены проектные документы и existing Source values/shared diagnostics.
 
 ## R1 — P1: partial structural failure теряет проверяемые dependencies

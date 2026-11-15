@@ -265,7 +265,7 @@ class PackRenderReadFacade:
             if not reader.chunk_exists(gx, gy, ref.cx, ref.cy):
                 continue
             chunks.append(reader.read_wilderness_chunk(gx, gy, ref.cx, ref.cy))
-            status = None if tile is None else str(tile.wilderness_refine_status)
+        status = None if tile is None else str(tile.wilderness_refine_status)
         logger.info(
             "pack render wilderness tile | world=%s gx=%d gy=%d listed=%d loaded=%d status=%s",
             world.world_uid,

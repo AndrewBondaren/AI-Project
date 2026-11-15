@@ -92,7 +92,7 @@ def build_region_index(regions: list[ResolvedRegion], scale: LightGridScale, *,
                 coord = ctx.fine_topology().canonicalize(*sub.seed_xy)
                 if coord is None:
                     raise ValueError("sublocation seed is outside world topology")
-                sub_bbox = _bounds([coord])
+                sub_bbox = RegionIndexBounds(x_min=coord[0], y_min=coord[1], x_max=coord[0], y_max=coord[1])
             entries.append(WildernessRegionEntry(region_uid=sub.region_uid, entry_type=region.entry_type,
                 current_type=region.current_type, bbox=sub_bbox, status=WildernessRegionStatus.SUBLOCATION,
                 parent_region_uid=region.region_uid, spec_fingerprint=fingerprint))

@@ -39,6 +39,7 @@ def location_anchor_tiles(
     return {
         macro_tile_of(loc.map_x, loc.map_y, tile_macro)
         for loc in static_map_anchors(locations)
+        if loc.map_x is not None and loc.map_y is not None
     }
 
 

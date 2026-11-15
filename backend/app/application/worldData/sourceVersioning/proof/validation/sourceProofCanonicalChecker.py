@@ -5,6 +5,10 @@ from pydantic import BaseModel
 from app.application.worldData.sourceVersioning.encoding.sourceProofSchemaV1 import SOURCE_PROOF_SCHEMA_V1
 from app.dataModel.fields.checkedPath import CheckedPath
 from app.dataModel.fields.fieldRef import FieldRef
+from app.dataModel.sourceVersioning._proofValueRules import (
+    duplicate_capture_positions, has_dependencies,
+    has_unique_collection_identities, has_unique_object_identities,
+)
 from app.dataModel.sourceVersioning.sourceCaptureUsage import SourceCaptureUsage
 from app.dataModel.sourceVersioning.sourceDependencies import SourceDependencySet
 from app.dataModel.sourceVersioning.sourceDurableProof import SourceDurableProof
@@ -36,7 +40,8 @@ class SourceProofCanonicalChecker:
         errors = ValidatorAggregationHelper[SourceFieldIssue]((SourceFieldIssue,))
         uses_path = path.field(_USES)
         capture_keys = tuple(codec.encode(use.capture) for use in uses)
-        if any(left >= right for left, right in zip(capture_keys, capture_keys[1:])):
+        if duplicate_capture_positions(uses) or any(
+                left > right for left, right in zip(capture_keys, capture_keys[1:])):
             errors.add(SourceFieldIssue(code=SourceFieldCode.NON_CANONICAL_PROOF,
                 path=uses_path.freeze(), message="capture refs must be unique and canonically ordered"))
         for index, use in enumerate(uses):
@@ -47,23 +52,21 @@ class SourceProofCanonicalChecker:
             objects, collections = _OBJECTS.select(dependencies), _COLLECTIONS.select(dependencies)
             if type(objects) is not tuple or type(collections) is not tuple:
                 raise TypeError("dependencies must be tuples")
-            if not objects and not collections:
+            if not has_dependencies(dependencies):
                 errors.add(SourceFieldIssue(code=SourceFieldCode.NON_CANONICAL_PROOF,
                     path=dep_path.freeze(), message="persisted usage cannot be empty"))
-            if not self._canonical(objects, codec):
+            if not has_unique_object_identities(objects) or not self._ordered(objects, codec):
                 errors.add(SourceFieldIssue(code=SourceFieldCode.NON_CANONICAL_PROOF,
                     path=dep_path.field(_OBJECTS).freeze(),
                     message="object refs must have unique identities and canonical order"))
-            if not self._canonical(collections, codec):
+            if not has_unique_collection_identities(collections) or not self._ordered(collections, codec):
                 errors.add(SourceFieldIssue(code=SourceFieldCode.NON_CANONICAL_PROOF,
                     path=dep_path.field(_COLLECTIONS).freeze(),
                     message="collection refs must have unique identities and canonical order"))
         return errors.snapshot()
 
     @staticmethod
-    def _canonical(refs: tuple[SourceVersionRef, ...] | tuple[SourceCollectionVersionRef, ...],
+    def _ordered(refs: tuple[SourceVersionRef, ...] | tuple[SourceCollectionVersionRef, ...],
                    codec: CanonicalCodec) -> bool:
         keys = tuple(codec.encode(ref) for ref in refs)
-        identities = tuple(ref.object_id if isinstance(ref, SourceVersionRef) else ref.collection_id for ref in refs)
-        return len(set(identities)) == len(identities) and all(
-            left < right for left, right in zip(keys, keys[1:]))
+        return all(left <= right for left, right in zip(keys, keys[1:]))

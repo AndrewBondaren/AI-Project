@@ -11,6 +11,10 @@ from pydantic import field_validator, model_validator
 
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.sourceVersioning._value import SourceValue
+from app.dataModel.sourceVersioning._proofValueRules import (
+    duplicate_capture_positions, has_dependencies,
+    has_unique_collection_identities, has_unique_object_identities,
+)
 from app.dataModel.sourceVersioning.sourceCaptureUsage import SourceCaptureUsage
 
 
@@ -28,18 +32,17 @@ class SourceDurableProof(SourceValue, frozen=True):
 
     @model_validator(mode="after")
     def persisted_shape(self) -> Self:
-        captures = set()
-        for use in self.uses:
+        duplicates = set(duplicate_capture_positions(self.uses))
+        for index, use in enumerate(self.uses):
             if use.capture.world_uid != self.world_uid:
                 raise ValueError("capture world differs from proof world")
-            if use.capture in captures:
+            if index in duplicates:
                 raise ValueError("persisted proof contains duplicate capture")
-            captures.add(use.capture)
             deps = use.dependencies
-            if not deps.objects and not deps.collections:
+            if not has_dependencies(deps):
                 raise ValueError("persisted proof cannot contain empty usage")
-            if len({ref.object_id for ref in deps.objects}) != len(deps.objects):
+            if not has_unique_object_identities(deps.objects):
                 raise ValueError("persisted usage requires one revision per object identity")
-            if len({ref.collection_id for ref in deps.collections}) != len(deps.collections):
+            if not has_unique_collection_identities(deps.collections):
                 raise ValueError("persisted usage requires one revision per collection identity")
         return self

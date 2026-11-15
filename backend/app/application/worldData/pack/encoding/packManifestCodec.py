@@ -51,7 +51,7 @@ def require_legacy_manifest(manifest: WorldPackManifest, *, world_uid: str | Non
         raise ValueError("legacy World Pack writer requires V1 without spatial roots")
     if world_uid is not None and manifest.world_uid != world_uid:
         raise ValueError("foreign World Pack manifest")
-    manifest.validate_climate_addresses()
+    manifest.require_climate_addresses()
 
 
 # LEGACY REMOVE(SP-P-V1-REMOVE/V1-02) Remove the V1 JSON encoder after writer cutover.

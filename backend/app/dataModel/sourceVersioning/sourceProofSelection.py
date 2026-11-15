@@ -10,6 +10,7 @@ from typing import Annotated, Self
 from pydantic import Field, StrictInt, field_validator, model_validator
 
 from app.dataModel.sourceVersioning._value import SourceValue
+from app.dataModel.sourceVersioning._proofValueRules import invalid_selection_order_positions
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.sourceVersioning.sourceDurableProof import SourceDurableProof
 from app.dataModel.validation.diagnostics.runtimeIssueContext import RevisionHex
@@ -22,7 +23,7 @@ class SourceProofSelection(SourceValue, frozen=True):
     @field_validator("dependency_indices")
     @classmethod
     def increasing_indices(cls, value: tuple[int, ...]) -> tuple[int, ...]:
-        if any(left >= right for left, right in zip(value, value[1:])):
+        if invalid_selection_order_positions(value):
             raise ValueError("dependency indices must be strictly increasing and unique")
         return value
 

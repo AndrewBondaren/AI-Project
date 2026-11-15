@@ -14,6 +14,7 @@ from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
     LocationTypeKey, WorldLocationTypeRegistry,
 )
 from app.dataModel.worldPack.wire.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
+from app.dataModel.registryKey import RegistryKey
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
@@ -48,7 +49,7 @@ def build_locations_index(
                 map_y=loc.map_y,
                 map_z=0 if loc.map_z is None else loc.map_z,
                 display_name=loc.display_name,
-                system_location_type=loc.system_location_type,
+                system_location_type=RegistryKey[WorldLocationTypeRegistry](loc.system_location_type),
                 system_location_subtype=loc.system_location_subtype,
                 system_city_size=settlement_payload(loc).system_city_size,
             ),

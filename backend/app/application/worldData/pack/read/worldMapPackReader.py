@@ -63,7 +63,7 @@ class WorldMapPackReader:
         if cell is None:
             return None
         registry = terrain(world)
-        terrain_set = {entry.system_terrain for entry in registry.root}
+        terrain_set: set[str] = {entry.system_terrain for entry in registry.root}
         surface_z = cell.surface_z
         depth = n_base(world)
         if z == surface_z:

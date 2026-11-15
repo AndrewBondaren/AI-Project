@@ -46,7 +46,7 @@ async def finalize_pack_on_world(
                 read_context.invalidate_pack_root(root)
     log_pack_finalize(
         world.world_uid,
-        pack_path=updated.terrain_pack_path,
+        pack_path=path,
         content_hash=manifest.content_hash,
     )
     return updated

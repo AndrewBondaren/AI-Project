@@ -2,6 +2,8 @@
 
 import unittest
 
+from pydantic import ValidationError
+
 from app.application.worldData.sourceVersioning.encoding.sourceProofSchemaV1 import SOURCE_PROOF_SCHEMA_V1
 from app.application.worldData.sourceVersioning.proof.atomIndex import SourceProofAtomIndex
 from app.application.worldData.sourceVersioning.proof.validation.sourceProofCanonicalChecker import SourceProofCanonicalChecker
@@ -96,6 +98,28 @@ class AtomTests(unittest.TestCase):
         self.assertEqual(len(issues), 2)
         self.assertTrue(all(i.code == SourceFieldCode.NON_CANONICAL_PROOF for i in issues))
 
+    def test_pojo_and_checker_reject_same_persisted_value_violations(self):
+        proof = mixed_proof()
+        use = proof.uses[0]
+        obj = use.dependencies.objects[0]
+        collection = use.dependencies.collections[0]
+        revision = SourceRevision(seq=2, content_hash="2" * 64)
+        cases = (
+            (use, use),
+            (use.model_copy(update={"dependencies": SourceDependencySet(objects=(), collections=())}),),
+            (use.model_copy(update={"dependencies": SourceDependencySet(
+                objects=(obj, obj.model_copy(update={"revision": revision})), collections=())}),),
+            (use.model_copy(update={"dependencies": SourceDependencySet(objects=(),
+                collections=(collection, collection.model_copy(update={"revision": revision})))}),),
+        )
+        for uses in cases:
+            with self.subTest(uses=uses):
+                forged = proof.model_copy(update={"uses": uses})
+                with self.assertRaises(ValidationError):
+                    SourceDurableProof.model_validate(forged, strict=True)
+                issues = SourceProofCanonicalChecker().check(forged, path=proof_path())
+                self.assertEqual(tuple(i.code for i in issues), (SourceFieldCode.NON_CANONICAL_PROOF,))
+
 
 class SelectionTests(unittest.TestCase):
     def setUp(self):
@@ -131,3 +155,31 @@ class SelectionTests(unittest.TestCase):
         path = selection_path().field(FieldRef(lambda: SourceProofSelection, lambda s: s.dependency_indices))
         self.assertEqual(tuple(i.path for i in issues[:4]), tuple(path.item(i).freeze() for i in (0, 1, 3, 4)))
         self.assertEqual(selection.dependency_indices, (True, -1, 2, 2, 0, 9))
+
+    def test_multiple_bounds_failures_are_one_issue_per_selection(self):
+        for group in (None, 3):
+            for correct_fingerprint in (True, False):
+                with self.subTest(group=group, correct_fingerprint=correct_fingerprint):
+                    selection = SourceProofSelection(proof_fingerprint=(fingerprint(self.proof)
+                        if correct_fingerprint else "0" * 64), dependency_indices=(4, 5))
+                    issues = self.checker.check(selection, proof=self.proof,
+                        path=selection_path(), selection_index=group)
+                    expected = (() if correct_fingerprint else (SourceLogicCode.SELECTION_PROOF_MISMATCH,))
+                    self.assertEqual(tuple(i.code for i in issues), expected + (SourceLogicCode.SELECTION_OUT_OF_RANGE,))
+                    self.assertTrue(all(i.group_index == group and i.use_index is None
+                        and i.source is None and i.artifact is None for i in issues))
+        self.assertEqual(self.check(SourceProofSelection(proof_fingerprint=fingerprint(self.proof),
+            dependency_indices=(0,))), ())
+
+    def test_pojo_and_checker_share_shape_and_order_rules(self):
+        path = selection_path().field(FieldRef(lambda: SourceProofSelection, lambda s: s.dependency_indices))
+        for indices, positions in (((0, 0), (1,)), ((2, 0, 2), (1, 2)),
+                ((True, -1, 1.0, "1", 0), (0, 1, 2, 3)), ((2, True, 0, 2), (1, 2, 3))):
+            with self.subTest(indices=indices):
+                with self.assertRaises(ValidationError):
+                    SourceProofSelection(proof_fingerprint=fingerprint(self.proof), dependency_indices=indices)
+                forged = SourceProofSelection.model_construct(proof_fingerprint=fingerprint(self.proof),
+                    dependency_indices=indices)
+                issues = self.check(forged)
+                self.assertEqual(tuple(i.code for i in issues), (SourceFieldCode.INVALID_SELECTION,) * len(positions))
+                self.assertEqual(tuple(i.path for i in issues), tuple(path.item(i).freeze() for i in positions))

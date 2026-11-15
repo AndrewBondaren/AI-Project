@@ -10,10 +10,14 @@ from app.dataModel.worldPack.bake.pathHeadingPolicy import PathHeadingPolicy
 
 
 class _RectLike(Protocol):
-    x_min: int
-    x_max: int
-    y_min: int
-    y_max: int
+    @property
+    def x_min(self) -> int: ...
+    @property
+    def x_max(self) -> int: ...
+    @property
+    def y_min(self) -> int: ...
+    @property
+    def y_max(self) -> int: ...
 
 
 @dataclass(frozen=True)
@@ -167,15 +171,15 @@ def chunk_in_path_corridor(
     return lateral <= half_width_fine
 
 
-def filter_corridor_rects(
-    rects: list[_RectLike],
+def filter_corridor_rects[RectT: _RectLike](
+    rects: list[RectT],
     anchor_x: float,
     anchor_y: float,
     heading: PathHeading,
     *,
     depth_fine: float,
     half_width_fine: float,
-) -> list[_RectLike]:
+) -> list[RectT]:
     return [
         rect for rect in rects
         if chunk_in_path_corridor(
