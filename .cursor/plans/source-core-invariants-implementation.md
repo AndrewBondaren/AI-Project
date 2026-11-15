@@ -82,6 +82,10 @@ Canonical prerequisite обеспечивает caller. `enumerate` не про�
 
 Logic selection_index → existing group_index, use_index=None; single SELECT index=None. Чужой fingerprint → SELECTION_PROOF_MISMATCH; out-of-range → SELECTION_OUT_OF_RANGE. Existing diagnostics roster не расширяется. Слой не извлекает subset и не проверяет matching группы.
 
+Уточнение по замечанию другого агента: SELECTION_OUT_OF_RANGE агрегируется **ровно один раз на selection**, если любой пригодный индекс вне bounds. Все четыре context поля сохраняют существующий смысл; index не помещается в use_index/source/artifact. Это selection-level diagnostic, точная локализация элемента для этого logic code не обещается. Field INVALID_SELECTION по-прежнему относится к исходному элементу. Wrong fingerprint и bounds дают две разные logic issues в этом порядке. Shared aggregator не меняется; кратность обеспечивает владелец selection check.
+
+Обязательный regression: proof из трёх atoms, indices=(4, 5), правильный fingerprint → ровно один SELECTION_OUT_OF_RANGE; чужой fingerprint → SELECTION_PROOF_MISMATCH и один SELECTION_OUT_OF_RANGE. Повторить с selection_index=None и конкретным group index, проверить context и отсутствие утечки между calls. Текущий код воспроизведённо даёт два равных issues; исправление кода остаётся в D после принятия плана и A0, не объявлено выполненным правкой документа.
+
 Слой закрывается wrong fingerprint+out-of-range одним входом, duplicate/bool/negative/unsorted, empty selection/empty proof, точные original paths и повторные calls без state leakage.
 
 ## 4. Проверки всего среза

@@ -698,7 +698,7 @@ Internal `SourceCaptureRetentionBinding.adopt` получает exact proof че
 | Несортированный persisted proof, duplicate canonical atoms | NON_CANONICAL_PROOF / field | proof.uses либо конкретная nested коллекция; CHECK_COVERAGE — от named input через request/available | READ/SELECT/VERIFY_GROUPS/CHECK_COVERAGE |
 | Duplicate definition/member identity при registration | DUPLICATE_IDENTITY / field | entries[i].key либо members[i] | Descriptor/collection validation |
 | Bool/negative/duplicate/unsorted selection index | INVALID_SELECTION / field | selection.dependency_indices[j] либо result.selections[i]... | SELECT/VERIFY_GROUPS |
-| Валидный int вне atom bounds | SELECTION_OUT_OF_RANGE / logic | group_index=selection position, use_index=None | SELECT/VERIFY_GROUPS |
+| Хотя бы один пригодный int вне atom bounds | SELECTION_OUT_OF_RANGE / logic, ровно один на selection | group_index=selection position, use_index=None, source=None, artifact=None | SELECT/VERIFY_GROUPS |
 | Чужой fingerprint | SELECTION_PROOF_MISMATCH / logic | selection position | SELECT/VERIFY_GROUPS |
 | Неверное число selections | GROUP_COUNT_MISMATCH / field | result.selections | VERIFY_GROUPS |
 | Неверный union / неверный subset одной группы | PROOF_MISMATCH / SELECTION_USAGE_MISMATCH, logic | whole result / group_index | VERIFY_GROUPS |

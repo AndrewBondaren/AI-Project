@@ -17,6 +17,14 @@
 
 ## Evidence INT-ARTIFACTS-TERMINAL
 
+### INT-DAG-SCOPED — нормативная граница atomic composition (OPEN)
+
+Владельцы: пользователь/владелец правил DAG и Snapshot; Source предоставляет точный контракт своих calls. Зависимость: §5 source-pack-s1-s2-contract.md содержит Snapshot→Source check_coverage/collect_for_adoption/adopt при абсолютном запрете прямых междоменных calls. Акт проверял только public calls, чего недостаточно. Затронутый срез — S1/S2 scoped integration; независимые Source invariants не блокируются. Условие закрытия: явное решение по допустимости, согласованный ограниченный перечень calls/effects/transaction ownership и синхронизация normative rules/design/акта. Если composition запрещена — совместимый маршрут предъявляют владельцы, без самостоятельного изменения Source порядка/транзакции. Запрос подготовлен в §5; отправка владельцам и ответ не заявляются.
+
+### Дополнение INT-WRITER / INT-DAG — authoritative phase boundary (OPEN)
+
+Snapshot/Artifacts-publication должны подтвердить exact reader/guard фазы мира и атомарность с переходом gameplay, typed refusal и включение Source changes в Snapshot-owned apply. Source-owned pregame apply/recover ограничения перечислены в source-core-mutation-contract.md §8.1. Условие возврата: согласованы phase authority/serialization/refusal и сценарии concurrent gameplay start, terminal replay после старта и запрет нового pregame attempt после старта. Source не создаёт второй commit owner; неизвестный phase отказ не подменяется proof error. Это детализация существующих долгов, не задание реализовать внешнюю инфраструктуру.
+
 ### Дополнение INT-ARTIFACTS-RETENTION: usage/prune boundary
 
 Основной план §GC ревизий относит reachability к sourceUsage, выполнение explicit prune — к revisionPrune. Exact accepted typed binding этих участников с Source root/Artifact holders не предъявлен. Владельца конкретного usage/prune implementation уточнить при возврате к интеграции, не назначать им Source по умолчанию. Условие возврата: typed preview/confirm контракт, authoritative repeat check под согласованным scope, latest protection и отсутствие окна с concurrent capture/holds. Pure Source models не импортируют holders; bool free в caller input не заменяет evidence. Подробный разбор — [границы ядра](source-core-capture-prune-configuration.md#2-prune-не-присваивать-source-чужой-reachability).

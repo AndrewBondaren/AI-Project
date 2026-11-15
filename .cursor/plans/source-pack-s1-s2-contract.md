@@ -91,6 +91,10 @@ Private evidence принадлежит Snapshot: exact outer scope object ident
 
 ## 5. Неизменный порядок composition
 
+**Стоп для реализации, замечание 2026-11-16:** действующее dag-generator-interface.mdc запрещает прямые междоменные вызовы, а нижеследующий принятый design содержит Snapshot→Source internal scoped calls. Прежняя проверка только public calls недостаточна. ACCEPTED DESIGN редакции 2 — исторический факт, не исключение из правила и не текущий допуск scoped composition. До решения пользователя и подтверждения владельцев DAG/Snapshot зависимая реализация остановлена. Запрос: допустима ли именно эта внутренняя atomic composition; если да — назвать исчерпывающие calls, effect/transaction ownership и границу запрета самостоятельных операций; если нет — владельцы предъявляют совместимый маршрут с сохранением атомарности. Source не изменяет правило, не разбивает транзакцию и не назначает новый DAG-протокол самостоятельно. Учёт — INT-DAG-SCOPED в source-technical-debt.md.
+
+Отдельная адресная дельта размещения S1/S2 предложена в source-core-public-boundaries.md §4: coverage owner и adoption preflight owner. Старые signatures ниже сохраняются как принятая редакция 2 до принятия этой дельты; одновременно реализовывать оба варианта или compatibility facade запрещено. Отсутствие решения этой дельты блокирует соответствующие компоненты, не независимые proof invariants.
+
 Outer owner — Snapshot PackPreparationRetention.adopt_and_finish, application/publication/service/packPreparationRetention.py. Это internal atomic storage operation внутри Pack prepare; новая public operation или DAG-нода не добавляется.
 
 1. Открыть одну target writer transaction; target/fingerprint/phase и READY replay проверить owning Snapshot. Helper unbound. READY replay проверяет exact candidate и target holds, не требует старого живого origin.

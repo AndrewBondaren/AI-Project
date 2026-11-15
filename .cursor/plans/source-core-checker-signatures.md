@@ -89,6 +89,8 @@ Selection checker получает canonical proof; его own validation не �
 
 Число selections проверяет request-specific VERIFY_GROUPS стадия: единственный GROUP_COUNT_MISMATCH на result.selections. Это relation двух полей конкретного request, не отдельный универсальный service. Не создавать SourceSelectionCountChecker без иной самостоятельной ответственности.
 
+Уточнение кратности bounds: один SELECTION_OUT_OF_RANGE на selection при наличии хотя бы одного пригодного int вне bounds. Два индекса (4, 5) при трёх atoms не создают два одинаковых logic issues. Точная позиция dependency_indices[j] этим logic carrier не передаётся; добавление такой локализации потребовало бы отдельной контрактной дельты. INVALID_SELECTION остаётся field diagnostic с точным путём. Проверки fingerprint и bounds независимы; расширение SourceLogicIssue не требуется.
+
 ## 5. Membership предъявленного capture
 
 ```python

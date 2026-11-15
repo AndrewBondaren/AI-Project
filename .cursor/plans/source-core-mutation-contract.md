@@ -110,6 +110,18 @@ Logging requirement сохраняется: причина и исходные d
 
 ### 8.1. Публичные методы — конкретное предложение
 
+**Фазовая граница предложения (уточнение ревью 2026-11-16):** `apply` является исключительно pregame entry для исполнения новой mutation. После gameplay отдельный Source commit запрещён: Source готовит свои данные/ревизии, а применение входит в Snapshot-owned atomic apply с единственным commit owner Snapshot. Предложение ниже не разрешает Snapshot вызывать этот публичный pregame apply и не назначает новый DAG/scoped маршрут.
+
+| Сценарий | Требуемое поведение |
+|---|---|
+| Новая попытка apply до gameplay | Проверка authoritative фазы и права попытки в общей с переходом gameplay границе сериализации, до writes; затем исполнение |
+| Новая попытка apply после gameplay | Отказ без Source writes/новой terminal записи; не перенаправлять автоматически в Snapshot |
+| Recover или exact replay, terminal уже существует | Проверить immutable binding и вернуть сохранённый outcome; изменение фазы само по себе не отменяет исторический terminal |
+| Recover без terminal требует исполняющей попытки | Owning recovery grant необходим, но недостаточен: повторная authoritative проверка разрешённой фазы обязательна; после gameplay новую pregame попытку не выполнять |
+| Фаза меняется конкурентно | Проверка и исполнение не разделяются окном TOCTOU; неподтверждённый outcome остаётся unknown, не маскируется фазовым отказом |
+
+Source владеет этими ограничениями своего API и не доверяет caller-флагу pregame. Конкретный authoritative phase reader, владелец guard перехода gameplay, exact отказ/Input/Result/Error и borrowed transaction binding должны быть подтверждены Snapshot/Artifacts-publication (INT-WRITER, INT-DAG); Source не назначает их за другой домен. До подтверждения §8.1 **NOT READY**: ни один существующий proof code не переименовывается в phase refusal и новый error DTO не выдумывается. Проверки перечисленных сценариев обязательны при приёмке будущего mutation среза. Это конкретная незакрытая зависимость, не разрешение расширить текущий pure-срез её реализацией.
+
 Модули под `app.application.worldData.sourceVersioning.operations`, один публичный класс и одна операция в каждом:
 
 ```python

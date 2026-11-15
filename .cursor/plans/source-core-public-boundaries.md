@@ -68,6 +68,8 @@ Closure evaluation — общий internal алгоритм из spec, а не �
 
 Эти обнаруженные границы уточняют декомпозицию пункта 1. Они не разрешают менять код Pack/Snapshot/DAG или начинать S1/S2 runtime.
 
+Адресная дельта S1/S2 для следующего согласования: Source предлагает `SourceProofCoverageChecker.check_coverage` вместо `SourceProofSelector.check_coverage`; `SourceAdoptionPreflight.collect_for_adoption` вместо одноимённого метода retention binding; `SourceCaptureRetentionBinding.adopt` остаётся владельцем acquire. Input/Result/Error и proof semantics прежние, holder authority не передаётся pure checker. Sequence collect/reset → register/resolve → повторные bind/collect/check/acquire/reset в adopt сохраняется. Общие read/check алгоритмы переиспользуются, второй collector не создаётся. Snapshot подтверждает constructor/scoped lifetime и calls; Pack — совместимость consumer результата. Перенос не считается принятым до этих подтверждений; forwarding facade не вводится. Разрешение междоменных scoped calls — отдельный обязательный INT-DAG-SCOPED gate, который SRP-перенос не закрывает.
+
 ## 5. Остальные операции ядра: точная граница дальнейшей работы
 
 | Область | Что уже известно | Что предъявить до её реализации |

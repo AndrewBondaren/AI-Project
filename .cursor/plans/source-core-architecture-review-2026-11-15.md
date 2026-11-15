@@ -53,6 +53,14 @@ Normalizer объявлен вызываемым только после world/d
 
 ## Последующее ревью implementation-плана и правки — 2026-11-16
 
+### Дополнение по замечаниям другого агента
+
+Проверены текущие документы и выполнен read-only reproducer selection: три atoms, indices=(4, 5), корректный fingerprint → два равных SELECTION_OUT_OF_RANGE. Документировано исправление: ровно один logic issue на selection; код пока не исправлен, обязательные regression cases добавлены в слой D implementation-плана. Новые поля SourceLogicIssue не вводятся.
+
+S1/S2: подтверждены нормативный разрыв DAG и незавершённая SRP-дельта. В contract/acceptance/implementation добавлены явные ограничения исторического verdict и запрет зависимой реализации; точный запрос DAG/Snapshot записан как INT-DAG-SCOPED. Исключение из правила не принято, запрос не объявлен отправленным. Source предложил exact relocation coverage/preflight без изменения semantics/атомарного порядка, согласование потребителей остаётся открытым.
+
+Mutation proposal: закреплены pregame-only execution, отдельный historical terminal replay и запрет новой pregame попытки после gameplay. Authoritative phase guard/typed refusal/borrowed apply требуют подтверждения Snapshot/Artifacts-publication; запись INT-WRITER/INT-DAG уточнена. Runtime phase protection не заявляется. Замечание об устаревших статусах уже устранено предыдущей правкой. Все изменения этого прохода документальные; это не закрытие реализации и не независимый PASS.
+
 Вердикт последующего собственного ревью: **CHANGES REQUIRED**. Он относится к source-core-invariants-implementation.md и его обязательным ссылкам; предыдущая запись о R1/R2 не является допуском новой реализации.
 
 | Замечание | Исправление документа / предел статуса |
