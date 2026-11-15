@@ -514,3 +514,7 @@ Source статически не нашёл противоречия P3.4 с э�
 ## Статус текущего прохода
 
 Выполнен read-only trace pregame staging; предъявлены concrete SourceMutationApplied и SourceRegistryMutationInput/варианты, optimistic membership rules и label-only mapping policy (P1.1–P1.4). Устранена циклическая зависимость request fingerprint от stage: refs вычисляются до lease. В P2.1 определён кандидат mutation manifest/IDs/field order; в P2.2 подготовлен точный запрос владельцу Artifacts/publication. Owning projector/codec, golden vectors реальных POJO, новые diagnostic conditions, terminal registration и root binding ещё требуют проработки и review. P1–P4 не объявлены завершёнными; принятая схема SourceDurableProof и закрытые R1/R2 от этого не меняются.
+
+## Консолидация Source core — 2026-11-15
+
+Актуальное предложение сведения revision/mutation/recovery: [source-core-mutation-contract.md](source-core-mutation-contract.md). Оно явно выделяет дельты к этому staging-проекту: provisional не SourceMutationApplied; terminal refusal отделён от preflight; один pure revision builder; existing outcome/receipt переиспользуются. Это PROPOSAL до приёмки, не изменение внешних publication/Snapshot контрактов и не разрешение реализации. Исторические signatures выше не применять вместо согласования этой дельты.

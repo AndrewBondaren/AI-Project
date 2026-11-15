@@ -52,6 +52,8 @@ Identity/revision, fingerprint, pinning и retention переиспользую�
 
 ## Актуальные следующие шаги (2026-11-15)
 
+Консолидация revision/mutation/recovery — [Source core mutation contract](source-core-mutation-contract.md), PROPOSAL: единый input roster, pure revision rule, отдельные provisional/committed/unknown, reuse existing outcome/error proposals. Public mutation/recovery signatures и интеграционный transport ещё не приняты.
+
 Пункт 1 — [декомпозиция ответственности ядра](source-core-responsibility-decomposition.md). Пользователь согласовал разделение обязанностей 2026-11-15. Следующий пункт — точные signatures и публичные границы; имена классов ещё кандидаты, существующий API не изменён. Полная архитектура и реализация ещё не приняты.
 
 Пункт 2 — [публичные границы и методы](source-core-public-boundaries.md), DRAFT: отдельные concrete proof operation owners с существующими POJO; обнаруженные отдельные обязанности check_coverage и adoption preflight; явный остаток собственных контрактов ядра. Предложение ещё не заменяет принятые публичные/S1/S2 signatures.
@@ -66,6 +68,8 @@ Identity/revision, fingerprint, pinning и retention переиспользую�
 4. Проверять готовность ядра отдельно от каждой интеграции. Незавершённые связи не объявлять работающими; общий runtime Source не объявлять готовым по результату pure-среза.
 
 ### Интеграционный техдолг Source
+
+Единый актуальный реестр статусов вынесен в [source-technical-debt.md](source-technical-debt.md), включая отдельный INT-ARTIFACTS-TERMINAL. Таблица ниже — навигационная сводка границ; новые evidence/статусы фиксируются в отдельном файле, а не в конкурирующих списках.
 
 | Долг | Владелец / недостающий контракт | Затронутая интеграция / условие возврата |
 |---|---|---|

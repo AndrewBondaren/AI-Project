@@ -5,6 +5,8 @@ from typing import TypeVar
 from pydantic import BaseModel, ValidationError
 from app.dataModel.fields.fieldBinding import bind_field
 from app.dataModel.worldPack.preparation.provenance import PackInheritedPartProvenance
+from app.dataModel.worldPack.preparation.provenance import PackNewPartProvenance, PackStoredProvenance
+from app.dataModel.sourceVersioning.sourceDurableProof import SourceDurableProof
 from app.dataModel.artifacts.references import ArtifactKind
 from app.dataModel.worldPack.meta.parts import PackStoredPart
 from app.dataModel.worldPack.preparation.parts import PackCoarseClimatePartInput, PackLocationsIndexPartInput
@@ -90,16 +92,26 @@ class PackPreparationService:
                 errors.add(PackPreparationIssue(code=PackPreparationIssueCode.FORMAT_MISMATCH,
                     path=path.field(part_ref).field(artifact_ref).freeze(), message="unsupported spatial root descriptor"))
         provenance_ref = FieldRef(lambda: PackSpatialRootPartInput, lambda value: value.provenance)
-        provenance = valid_preparation_field(part, provenance_ref)
+        provenance = preparation_field_value(part, provenance_ref)
+        inherited_kind = valid_preparation_field(provenance,
+            FieldRef(lambda: PackInheritedPartProvenance, lambda value: value.kind))
+        new_kind = valid_preparation_field(provenance,
+            FieldRef(lambda: PackNewPartProvenance, lambda value: value.kind))
         base = preparation_field_value(state, FieldRef(lambda: PackPreparationState, lambda value: value.base_publication))
         world = valid_preparation_field(base, FieldRef(lambda: WorldPublicationRef, lambda value: value.world_uid))
-        if isinstance(provenance, PackInheritedPartProvenance):
+        if inherited_kind is not None:
             errors.add(PackPreparationIssue(code=PackPreparationIssueCode.SOURCE_PROOF_MISMATCH,
                 path=path.field(part_ref).field(provenance_ref).freeze(),
                 message="inherited input requires verified pinned-base admission; unavailable in this pure write"))
-        elif provenance is not None and world is not None and provenance.provenance.source_proof.world_uid != world:
-            errors.add(PackPreparationIssue(code=PackPreparationIssueCode.SOURCE_PROOF_MISMATCH,
-                path=path.field(part_ref).field(provenance_ref).freeze(), message="spatial proof belongs to another world"))
+        elif new_kind is not None:
+            stored_provenance = preparation_field_value(provenance,
+                FieldRef(lambda: PackNewPartProvenance, lambda value: value.provenance))
+            proof = preparation_field_value(stored_provenance,
+                FieldRef(lambda: PackStoredProvenance, lambda value: value.source_proof))
+            proof_world = valid_preparation_field(proof, FieldRef(lambda: SourceDurableProof, lambda value: value.world_uid))
+            if world is not None and proof_world is not None and proof_world != world:
+                errors.add(PackPreparationIssue(code=PackPreparationIssueCode.SOURCE_PROOF_MISMATCH,
+                    path=path.field(part_ref).field(provenance_ref).freeze(), message="spatial proof belongs to another world"))
         raise_preparation_errors(errors, PackPreparationFailureReason.DEPENDENCY_MISMATCH)
         assert checked is not None
         stored = PackStoredPart(address=checked.part.address, artifact=checked.part.artifact,

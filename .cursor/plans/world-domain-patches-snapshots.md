@@ -924,6 +924,8 @@ DAG → Pack public preparation/activation → accepted internal publication mec
 
 ##### ARCH-DEC-1/2. Exact предложение read/apply и handler/codec — 2026-11-15
 
+**ПРИНЯТО пользователем 2026-11-15: «Ок» после подробного предъявления пункта 1.** Приняты владельцы, конкретные файлы, границы методов и единая atomic registration handler/codec: IWorldSnapshotApply → WorldSnapshotService; IWorldSnapshotRead → SnapshotReadService; DomainSectionHandler.validate/apply отдельно от SectionCodec.encode/decode; SectionContract общий; SectionRegistry связывает обе capabilities, BoundSectionHandler и BoundSectionCodec обеспечивают checked dispatch. DTO переиспользуются по принятой карте. Пометки proposed/OPEN о самом разделении и его именах ниже теперь исторические; реализация новых типов ещё не выполнена. Приёмка не распространяется на public error transport, restore/branch/settings/gameplay-start, private completion issuer, DAG-ноды или всю ARCH-0. До завершения общей архитектурной приёмки code-go не выдан; legacy adapters и смена canonical bytes не разрешены.
+
 По следующему «Далее» сверены actual WorldSnapshotService, DomainSectionHandler, SectionRegistry/BoundSectionHandler, PatchSetCodec и SnapshotEnvelopeCodec. Ниже конкретная дельта **для приёмки**, только документы. Она заполняет имена и методы прежних OPEN, но не объявляет новые ports принятыми и не разрешает код до ARCH-0.
 
 **ARCH-DEC-1: exact metadata reads отдельно от write lifecycle.**

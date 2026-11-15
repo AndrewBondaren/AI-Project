@@ -77,6 +77,30 @@ class PreparationClimateWriteTests(unittest.TestCase):
             self.assertEqual([(issue.code, issue.path.projection()) for issue in caught.exception.error.issues],
                              [(PackPreparationIssueCode.SOURCE_PROOF_MISMATCH, ("part", "provenance"))])
 
+    def test_spatial_planning_error_does_not_hide_proof_world(self):
+        from app.dataModel.worldPack.preparation.operations import PackSpatialRootInput
+        part = self._spatial_part()
+        for world in ("foreign", "world", 123):
+            origin = part.provenance.provenance.model_copy(update={"planning": [],
+                "source_proof": part.provenance.provenance.source_proof.model_copy(update={"world_uid": world})})
+            wrapper = part.provenance.model_copy(update={"provenance": origin})
+            mapping = dict(vars(wrapper))
+            mapping["provenance"] = dict(vars(origin))
+            mapping["provenance"]["source_proof"] = dict(vars(origin.source_proof))
+            for value in (wrapper, mapping):
+                with self.subTest(world=world, representation=type(value).__name__):
+                    bad = part.model_copy(update={"provenance": value})
+                    with self.assertRaises(PackPreparationFailure) as caught:
+                        self.service.write_spatial_root(PackSpatialRootInput.model_construct(state=self.state, part=bad))
+                    expected = []
+                    if world == 123:
+                        expected.append(("SCHEMA_VIOLATION", ("part", "provenance", "new", "provenance", "source_proof", "world_uid")))
+                    expected.append(("SCHEMA_VIOLATION", ("part", "provenance", "new", "provenance", "planning")))
+                    if world == "foreign":
+                        expected.append((PackPreparationIssueCode.SOURCE_PROOF_MISMATCH, ("part", "provenance")))
+                    self.assertEqual([(issue.code, issue.path.projection() if hasattr(issue, "path") else issue.location.parts)
+                                      for issue in caught.exception.error.issues], expected)
+
     def test_start_empty_preserves_explicit_header(self):
         from app.dataModel.worldPack.preparation.operations import PackPreparationEmptyInput
         assembly = self.state.assembly.model_copy(update={"tiles": ()})
