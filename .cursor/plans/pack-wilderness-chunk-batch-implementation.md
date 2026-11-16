@@ -1,6 +1,6 @@
 # Pack: реализация single и batch wilderness chunk writes
 
-2026-11-16. Статус: **план подготовлен, независимая приёмка implementation-плана не проведена; код по нему не изменён**. Основание — PASS контрактного дополнения, подтверждённый независимым чатом `01a1e4f2-bf85-73c3-81dd-7a1137ac6e27`. Этот вердикт не является приёмкой настоящего плана или будущего runtime.
+2026-11-16. Статус: **PASS независимой приёмки implementation-плана B1–B5, включая технические решения §3.1–3.2; код по нему не изменён**. Результат зафиксирован по прямому поручению пользователя после независимого ревью в текущем чате. Это отдельный вердикт, не автоматическое распространение прежнего PASS контрактного дополнения из чата `01a1e4f2-bf85-73c3-81dd-7a1137ac6e27`. B6 остаётся отдельной последней интеграцией; реализация, весь Pack и production end-to-end этим вердиктом не приняты. Формулировки ниже о предстоящей приёмке плана сохраняют историю подготовки и заменены настоящим статусом.
 
 ## 1. Источники и предел работы
 
@@ -223,4 +223,24 @@ Stale provenance проверяется по output invalidation и изменё
 | Payload roster | §3.2 конкретизирует ровно предложенный shared fine-terrain descriptor; не создаёт отдельный wilderness codec/формат |
 | Bulk principles | B3 — последовательные transitions, итоговая материализация один раз; B5 учитывает constructor/nested стоимость, sorting и retained data |
 
-Статическая сверка не обнаружила необходимости менять согласованную семантику batch или порядок DAG. Новые IDs, domain-separated fingerprint формулы и точный basis order остаются явно предъявленными техническими предложениями этого плана до его приёмки. Независимый PASS контракта на них автоматически не распространяется. Код, runtime composition и benchmark в этом документальном проходе не проверялись исполнением.
+Статическая сверка не обнаружила необходимости менять согласованную семантику batch или порядок DAG. IDs, domain-separated fingerprint формулы, точный basis order и descriptor admission §3.1–3.2 приняты отдельным независимым ревью настоящего implementation-плана. Независимый PASS контракта на них автоматически не распространялся. Код, runtime composition и benchmark в этом документальном проходе не проверялись исполнением.
+
+### Независимая приёмка implementation-плана — 2026-11-16
+
+**Вердикт: PASS B1–B5. Блокирующих findings не выявлено.**
+
+| Обязательный критерий | Основание приёмки |
+|---|---|
+| Три запрета DAG | §1/§3/B3/B6: DAG выбирает операции и границы пакета; Pack выполняет локальный переход без междоменных вызовов, callbacks или скрытого запуска публичных стадий |
+| Ответственность классов и inventory | §3 включает принятый roster нормативной ссылкой и дополняет canonical-классами, полями, dependencies/effects и DoD; обязательный inventory не отложен до реализации |
+| Public/internal boundary | Два named request, existing state/error; индексы и функции применения внутренние; single не создаёт batch request, batch не вызывает публичный single |
+| Утверждённый порядок | B1 identity/schema → B2 admission → B3 общий переход → B4 функциональная приёмка → B5 измерения; B6 последним. B3 сохраняет tuple-order, промежуточные отказы и принятые transitions |
+| CRUD данных и настроек | Create/update конкретизированы; read/describe/delete сохраняют отдельные контракты. C/R/U/D настроек не меняются; новых defaults/лимитов нет |
+| Междоменные контракты | Owning POJO без вызовов сервисов владельцев; historical usage поступает заранее через DAG; отсутствие evidence вызывает отказ; Snapshot identity не capability |
+| POJO и типизированные ошибки | Общие declarations без зеркальных carriers; existing field/semantic diagnostics, исходные индексы и согласованный reason priority; ошибки регистрации не маскируются пользовательским metadata mismatch |
+
+Отдельно проверены §3.1–3.2: конфликтующих назначений IDs 20401–20415 в проверенных production declarations и планах не найдено; reachable graph заявленных fingerprint-формул покрыт. Nullable REFINE_ROLE и Literal aliases используют scalar encoding; SourceProofInput не входит в value fingerprint, usage/basis проверяются отдельно. Projection fields/order соответствуют owning declarations и write-контракту; tile исключает chunks. Численный basis order `(gx, gy, cx, cy)` соответствует status-dependencies и не переставляет writes/parts. BLOB / `world_pack.fine_terrain.zstd` / storage version 1 соответствует проекту payload roster; descriptor check отделён от decoder/storage/seal/hold/READY.
+
+B2 явно требует дополнить текущий validator subject/basis и независимыми checks, не объявляя существующий admission полным. B4 требует независимых ожидаемых результатов помимо single/batch equality. B5 задаёт counters, B/U/R, constructor validation, sorting, peak memory и условия отказа при повторных полных обходах.
+
+Фактически выполнены: чтение плана, сверка обязательного правила и принятого batch/transitions, связанных metadata/write/serialization/payload контрактов; проверка canonical kernel/schema manifest, registrations, address/assembly/metadata/provenance/error declarations и текущего validator; поиск IDs по production-коду и планам. Runtime vectors, tests, Pyright и benchmarks не выполнялись: они остаются свидетельствами поставки B1–B5. Реализация и коммиты в рамках ревью не выполнялись.

@@ -2,7 +2,32 @@
 
 **Межплановые зависимости:** [WORLD-PLAN-GRAPH-1](./world-generation-plan-dependency-graph.md) — навигационный граф gates GEO/SPATIAL/GEN-DAG/Patches/DAG-TYPING/PHYSICS; нормативные контракты и статусы остаются в этом owning-плане.
 
-**Текущий статус — 2026-11-15: TARGET ARCHITECTURE REVIEW REQUIRED.** По указанию пользователя целевая архитектура всего Snapshot является первым обязательным этапом выполнения плана. До её явной приёмки дальнейшая реализация приостановлена; действующий порядок и deliverables заданы в §8, этап ARCH-0. Локальные contract freezes, tests и review PASS не заменяют эту приёмку. Исторические решения и результаты ниже сохранены; прежние разрешения продолжать разработку читаются с учётом этого нового gate.
+**Текущий статус — 2026-11-16: TARGET ARCHITECTURE REVIEW REQUIRED.** По указанию пользователя целевая архитектура всего Snapshot является первым обязательным этапом выполнения плана. До её явной приёмки дальнейшая реализация приостановлена; действующий порядок и deliverables заданы в §8, этап ARCH-0. Локальные contract freezes, tests и review PASS не заменяют эту приёмку. Исторические решения и результаты ниже сохранены; прежние разрешения продолжать разработку читаются с учётом этого нового gate.
+
+### Актуальная карта публичных методов — сводка 2026-11-16
+
+Это единый индекс действующих решений, а не дополнительный набор API. Подробные поля/гарантии/папки — в названных owning разделах. При чтении исторических предложений приоритет имеют эта сводка и последние явные решения пользователя. Public вызовы только DAG; внутреннее устройство и порядок нод здесь не задаются.
+
+| Владелец / публичный метод | Input → Output | Статус дизайна |
+|---|---|---|
+| Snapshot: IGameplayStartPreparation.prepare_timeline_identity | GameplayStartPreparationInput → GameplayStartPreparationResult | START-ID/START-ERRORS-B приняты, имя принято; planned, не реализован |
+| Shared Publication/Artifacts: IInitialStateRegistration.register | InitialStateRegistrationInput → PreparedInitialTimeStateRef или InitialStateRegistrationRefused | INITIAL-REGISTER принят; отдельный preparation kind и publication retention приняты на уровне дизайна |
+| Snapshot: IGameplayStart.start | GameplayStartInput(identity, expected_publication, prepared_initial) → GameplayStarted или GameplayStartNotAdmitted или GameplayStartRefused | Основные outcome/identity решения приняты; reference-specific input/reasons и полный binding freeze требуют финализации |
+| Snapshot: IWorldSnapshotApply.apply | PatchSet[S] → SnapshotApplyResult | Existing port; public concrete lifecycle не завершён; GameplayStartIdentity не требуется |
+| Snapshot: IWorldSnapshotRead.read_snapshot | SnapshotRef → SnapshotReadResult | Read split/POJO приняты; отдельная public реализация planned |
+| Snapshot: IWorldSnapshotRead.read_publication | SnapshotPublicationReadInput → SnapshotPublicationReadResult | Exact read принят; implicit latest запрещён |
+| Snapshot: IWorldSnapshotRead.read_current_publication | EntityUid → SnapshotCurrentPublicationResult | Current-read дизайн принят |
+| Snapshot: IWorldSnapshotRead.read_initial_binding | SnapshotPublicationReadInput → SnapshotInitialBindingReadResult | Новый initial binding read предложен, отдельно ещё не принят |
+
+Таким образом, карта включает семь Snapshot методов (один из них — новый read proposal) и один shared registration метод. Time preparation/encode/decode не являются методами Snapshot и в это число не входят. Runtime метод apply не требует повторного start. Session resume/branch/attach публичные методы не добавляются.
+
+**Канонический состав prepared пути:** единственный World settings DTO — existing PreparedInitialSettings; InitialSettingsCandidate отклонён как дубль. Time success/payload — InitialTimeStatePayload; raw TimeClockState допустим внутри payload, не как весь public start contract. Результат регистрации — PreparedInitialTimeStateRef; accepted start input принимает эту ссылку после необходимых checks, а не caller утверждение о сохранении raw POJO. Здесь «принимает» описывает target поведение, не объявляет reference-specific input уже отдельно одобренным. Дополнительные completion proof/issuer tokens не требуются; доверенная передача successful owning результата — обязанность проверенного DAG binding.
+
+**Принятые решения больше не задаются повторно как вопросы:** stable timeline identity/storage; B-ошибки и start terminal delta; register/lifecycle/PublicationHolder с явным cleanup; TIME-ZERO выбранного календаря; отказ дублирующему World settings DTO; запрет прямых междоменных вызовов. Все предложенные foreign acceptance/writers внутри Snapshot отклонены.
+
+**Следующий собственный контракт для приёмки — read_initial_binding.** Он выдаёт `AcceptedInitialStateBinding(publication: WorldPublicationRef, prepared_initial: PreparedInitialTimeStateRef)` внутри `SnapshotInitialBindingReadResult(request, binding|None)`. Source — exact immutable Q→registration, без чтения/декодирования Time payload и без обращения к Time/World. None допустим при отсутствии exact Q или у Q, которая не является initial-start publication; потерянная обязательная связь initial-start Q — infrastructure. Чтение старта, сменившегося runtime публикациями, по exact ID остаётся доступным; current-head resolution не подменяет запрос. После передачи результата DAG сам определяет дальнейший owning read. Это контракт данных, не новый pipeline оркестрации.
+
+**Оставшиеся работы до общего ARCH-0 review:** предъявить reference-specific start/read delta; завершить собственные physical rows/triggers/scoped ports и public error transport без смены уже принятых гарантий; получить owning format/canonical schema freeze Time; затем сверить все обязательные критерии архитектуры. Это детализация двух существующих prepared-input/binding тем, не новые продуктовые функции. Общий gate не закрывается наличием этой таблицы. Исторические записи/evidence сохранены, code/DDL не менялись.
 
 Исторический статус: ARCHITECTURE BASELINE ACCEPTED / READY FOR CORE DEVELOPMENT
 (решение мастера 2026-10-30).
@@ -861,6 +886,8 @@ TimeClockState содержит только elapsed clock. Календарны
 ###### START-CALENDAR — конкретное предложение reuse, 2026-11-16
 
 ###### START-PREPARED-CONTRACT — актуальная reference-based сигнатура, proposal 2026-11-16
+
+**WORLD-INITIAL-POJO — решение пользователя 2026-11-16.** Пользователь подтвердил, что предложенный Time InitialSettingsCandidate дублирует existing PreparedInitialSettings; новый DTO отклонён. Используется один owning record с полями operation_id/world_uid/settings/captured_utc. До отдельно согласованного прямого rename — existing `dataModel/world/settings/timeOperations/initial.py::PreparedInitialSettings`; `PrepareInitialTimeState.settings` и `InitialTimeStatePayload.settings` ссылаются на этот же тип. Гарантии World формирования и Time semantic validation/zero projection задаются публичными методами, не копией POJO и не его названием. Candidate-класс/alias/re-export/legacy adapter не добавлять. Исторические упоминания InitialSettingsCandidate ниже не являются действующим target contract. Нейтральное переименование здесь не объявляется принятым. Пользователь сообщил «Я уже передал» — повторное сообщение Time из Snapshot не отправлялось. Это снимает вопрос необходимости второго settings DTO, но не разрешает менять World-код этим проходом.
 
 **TIME-ZERO — ACCEPTED пользователем 2026-11-16: «Ок».** Принята гарантия successful zero projection выбранного settings.selected календаря при успешном TimeInitialStatePipelineOpenPipeline.prepare. Принят уточнённый result roster: InitialTimeStatePayload | InitialTimeInputMismatch | SettingsInvalid | CalendarBudgetExceeded. Ранее предложенный InitialCalendarProjectionFailed **отозван владельцем**: отдельная достижимая причина такого отказа в existing алгоритме не доказана. Ниже исторические signatures с этим типом читать с приоритетом настоящей записи; тип не создавать. CalendarTimeOverflow для initial zero также не добавляется без доказанного контрпримера.
 

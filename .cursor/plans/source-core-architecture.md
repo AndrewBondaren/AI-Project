@@ -1,5 +1,61 @@
 # Source — актуальная карта архитектуры ядра
 
+## Консолидированная архитектура — текущая работа, 2026-11-16
+
+**Статус: DRAFT целого ядра; не принято для новой реализации.** Пользователь запретил локальные срезы и потребовал архитектуру первым этапом. Этот раздел задаёт актуальную архитектурную очередь; прежние рекомендации ниже выбрать независимый subset больше не исполняются. G1.1/G1.2 и A0→D учитываются как поставленные части. Наличие части кода не завершает архитектуру остальных обязанностей.
+
+### Папки, владельцы и допустимые эффекты
+
+Все пути относительно `backend/app`. Source владеет своими values, proof semantics и revision history. Значения чужих объектов, их semantic projection и запись принадлежат owning-доменам. Новые имена в таблице — proposals; exact signatures берутся только из указанных контрактов, не из догадок по названию.
+
+| Папка | Компоненты и единственная функция | Разрешённые зависимости / эффекты | Отказ в приёмке |
+|---|---|---|---|
+| dataModel/sourceVersioning | Existing identities, revisions, capture/proof, inputs/results/errors; `_proofValueRules` — общие локальные правила | Только values/shared validation; без IO и application imports | Второй DTO того же смысла, mutable nested value, повтор правила в checker |
+| application/worldData/sourceVersioning/encoding | Source proof/request manifests | Existing CanonicalCodec/content_digest; pure | Второй codec/hash, случайные type IDs, caller-supplied schema |
+| …/contracts | SourceDescriptorLookup.definition(key); SourceIdentityKeyAdapter — отдельная проверка owning key | Immutable registry; подтверждённый key contract; no writes | Lookup создаёт definition либо permissive fallback заменяет отсутствующий adapter |
+| …/proof/validation | World, identity, usage conflict, canonical, selection, membership checkers — каждый свой инвариант | Existing values, shared rules/paths/issues; no IO | Normalization/lookup latest/holds внутри checker, дублирование правил |
+| …/proof/validation/requests | Пять request checkers: check(request) → SourceFailure либо None | Общие checkers; original root и indices; no transformation/IO | Mode dispatcher, потеря независимых diagnostics, запуск преобразования после refusal |
+| …/proof | SourceProofNormalizer.normalize; AtomIndex.enumerate; GroupUnionBuilder.build; SelectionExtractor.extract; GroupMatcher.match | Проверенные inputs; shared алгоритмы; pure | Несколько implementations union/atom order, synthetic durable refs |
+| …/proof/closure и read bindings | SourceProofClosureCollector — полный exact durable closure; read binding — проверенное чтение | Подтверждённые Source/Artifacts read ports; read IO | Latest вместо exact, неполный closure, public READ как вложенный вызов |
+| …/revision | SourceRevisionTransitionBuilder — вычисление revision по previous и semantic evidence | Existing revision/hash values; pure | Commit, projector или самостоятельный выбор latest |
+| …/mutation | Batch validation/preparation, scoped apply, outcome resolution — отдельные владельцы | Typed prepared changes; подтверждённые writer/terminal ports | Один service скрывает preparation/apply/recovery; provisional выдаётся как committed |
+| …/capture | Candidate relation checks; SourceCaptureFinalizer.finalize — atomic witness finalization | Общие relation checks, exact read/retention binding | Constructor объявлен finalization; второй mapping validator; fabricated witness |
+| …/capture/adoptionPreflight.py (proposal) | SourceAdoptionPreflight.collect_for_adoption — read-only preflight | Borrowed scope/collector, bind/reset | Acquire или собственный commit в preflight |
+| …/capture/retentionBinding.py (design) | SourceCaptureRetentionBinding.adopt — acquire после повторной проверки | Подтверждённый borrowed scope; acquire, без outer commit | Пропущенная repeat check, отдельный UOW; scoped call без принятого DAG решения |
+| …/operations | Отдельный public owner каждой операции | Собственные internal collaborators; прямой DAG caller после согласования | Public→public вызовы, mode switch, внешняя оркестрация |
+| db/repositories/sqlite/sourceVersioning (proposal) | Exact revision/witness persistence adapters | Принятые scoped DB ports; только оговорённые effects | Новый transaction/receipt/holder engine, обход owning writer |
+
+Это не окончательный roster mutation/prune/configuration классов: их exact gaps перечислены ниже. Пока хотя бы один такой gap остаётся, вся архитектура не принимается.
+
+### Публичные границы и последовательности
+
+Proof public owners — пять отдельных классов и signatures из source-core-public-boundaries.md §1: admit(SourceProofInput), read(SourceProofReadInput), admit_groups(SourceProofGroupsInput), verify_groups(SourceProofGroupsVerifyInput), select(SourceProofSelectInput). Results — existing SourceProofResult/SourceProofGroupsResult либо SourceFailure. Все read-only; scope/codec/operation flags в public input не вводятся. Разделение старого общего pipeline требует явной финальной контрактной дельты; оба варианта одновременно не реализуются.
+
+Вложенные цепочки: request validation → соответствующий pure algorithm (для read отсутствует) → exact capture/closure evaluation → result. Отказ отменяет только зависимые стадии; доступные независимые checks агрегируются. VERIFY дополнительно сверяет exact union, selections и предъявленный closure. ADMIT не создаёт capture. Shared collector не вызывает public READ. Точные request constructors и порядок diagnostics — source-core-request-composition.md §§1–4; будущие private traversal функции не заменяют эти контракты универсальным context.
+
+Mutation public proposals — отдельные apply и recover из source-core-mutation-contract.md §8.1. Preparation возвращает provisional changes, только подтверждённый terminal даёт Applied/Refused. Новая исполняющая попытка — pregame-only; historical terminal replay после gameplay допустим по immutable binding. После gameplay commit принадлежит Snapshot. Source не проектирует новый scoped маршрут для обхода DAG-запрета.
+
+Capture finalize остаётся internal `finalize(SourceCaptureWitness, *, lease: OperationLeaseRef) → SourceCaptureRef | SourceFailure` по spec. Публичный capture acquisition этим не определён. Coverage/preflight SRP relocation — отдельная принимаемая дельта S1/S2, не разрешение междоменных calls. Ни одного нового DAG NodeId эта архитектура не назначает.
+
+### Открытые решения целой архитектуры и порядок их завершения
+
+**Прогресс АР-1:** в source-core-public-boundaries.md §2 добавлены обязательные pure constructor dependencies пяти owners и таблица error boundaries. При сверке с spec §12.1 выявлены три незакрытые архитектурные связи: public read lifetime при scope-free API; единый владелец request/persisted проверки без duplicate diagnostics; typed original-request provenance после normalization/union при входе collector через SourceProofReadInput. АР-1 остаётся открытым именно по этим пунктам, а не по общему статусу чужих доменов. Следующее действие — конкретизировать эти связи в архитектуре до перехода к реализации. Таблица dependency с OPEN read binding не является готовым constructor contract.
+
+| Порядок | Собственное решение Source, которое нужно предъявить | Что уже есть / внешний предел |
+|---|---|---|
+| АР-1 | Завершить единую таблицу public/internal owners, exact constructors и error boundary; свести proof operation delta и request traversal | Proof POJO и A0→D приняты; public/request signatures предложены. Owning key binding — INT-TERRAIN, не fake success |
+| АР-2 | Довести revision/mutation/recovery до полного roster классов, методов, prepared values и единого error contract | SourceRevisionChanges/outcomes и apply/recover proposals есть; terminal/phase/writer ports — INT-ARTIFACTS-TERMINAL/INT-WRITER |
+| АР-3 | Определить Source capture acquisition boundary и relation/finalization ownership без дублирования | Internal finalize принят как design; внешний acquisition authority не назначать Source без согласования |
+| АР-4 | Определить собственные revision/prune candidate inputs/results/errors, отделить eligibility от авторитетного освобождения | Exact usage/prune owner и root/hold binding — INT-ARTIFACTS-RETENTION; bool free не authority |
+| АР-5 | Определить lifecycle Source configuration и отдельно все C/R/U/D данных и настроек; назвать concrete owners/methods/POJO либо предъявить исключение пользователю | Immutable registry не является автоматически принятым CRUD исключением |
+| АР-6 | Свести все решения в единую актуальную редакцию, проверить обязательную матрицу и последовательность реализации целого ядра | Не объявлять PASS по одному наличию таблиц или tests принятых частей |
+
+АР-1…АР-6 — работа над одной архитектурой, не локальные implementation-срезы. Следующее действие — завершать АР-1, не реализовывать ещё один checker. Отсутствие final public signatures или constructor/error facts — конкретное основание отказа в архитектурной приёмке, а не повод заполнить их placeholders.
+
+### Условия приёмки и перехода к коду
+
+Для каждого класса, включая используемые existing классы, должны быть указаны exact signature/вход/выход/ошибка, единственная обязанность, dependencies/effects и отрицательный критерий. Сверяются все три запрета DAG, public/internal и вложенные calls, POJO/error ownership без дублей, C/R/U/D отдельно для данных и настроек и принятый порядок. Внешний неизвестный binding описывается как точная зависимость с владельцем, но собственная незавершённая операция не скрывается внешним долгом. Только после приёмки целого архитектурного результата детализация implementation-порядка из основного плана становится исполнимой. Неизвестный контракт на зависимом шаге останавливает его; новые локальные срезы вместо него запрещены.
+
 **Актуальный итог A0→D, 2026-11-16: независимый PASS, findings отсутствуют.** Evidence и ограничение проверки Git зафиксированы в source-core-invariants-implementation.md. Следующие записи о предстоящем ревью этого среза исторические. Полный G1, production traversal, CRUD и внешние интеграции остаются открытыми.
 
 **Обновление среза A0→D:** после явного принятия пользователем scope/порядка реализованы общие POJO/checker rules и одна bounds-ошибка на selection. Собственные tests/typing прошли; независимая приёмка ещё не выполнена. Предшествующие замечания о непринятой дельте A0 ниже — история до этого решения. Приёмка всей архитектуры и интеграций этим не объявляется.

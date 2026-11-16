@@ -34,6 +34,40 @@ Public метод не принимает SourceOperation, codec/manifest, backe
 
 ## 2. Точные существующие импорты POJO
 
+### АР-1: зависимости владельцев и незакрытая read boundary (2026-11-16)
+
+Это детализация целой архитектуры, не локальный implementation-срез. Предлагаемый обязательный набор constructor dependencies пяти concrete owners:
+
+| Public owner | Pure dependencies (каждый отдельный параметр конструктора) | Durable dependency |
+|---|---|---|
+| SourceProofAdmissionPipelineOpenPipeline | validation: SourceAdmissionRequestChecker; normalizer: SourceProofNormalizer | closure: SourceProofClosureCollector; read lifetime binding — OPEN ниже |
+| SourceProofReadPipelineOpenPipeline | validation: SourceReadRequestChecker | тот же closure и read lifetime binding |
+| SourceProofGroupAdmissionPipelineOpenPipeline | validation: SourceGroupAdmissionRequestChecker; union: SourceProofGroupUnionBuilder | тот же closure и read lifetime binding |
+| SourceProofGroupVerificationPipelineOpenPipeline | validation: SourceGroupVerificationRequestChecker; matcher: SourceProofGroupMatcher | тот же closure и read lifetime binding |
+| SourceProofSelectionPipelineOpenPipeline | validation: SourceSelectionRequestChecker; extractor: SourceProofSelectionExtractor | тот же closure и read lifetime binding |
+
+Все параметры обязательны, без fallback/service locator/режимов. Operation фиксирована конкретным public owner, не constructor flag. Exact тип read lifetime binding пока не определён: таблица **не является полной готовой сигнатурой конструктора**. Не создавать пустой Protocol или private implementation, чтобы скрыть этот пробел. Общие pure dependencies имеют собственные constructors в source-core-internal-api.md и source-core-request-composition.md; никакого второго набора validators для public owner не вводится.
+
+**Обнаруженные конкретные разрывы до принятия АР-1:**
+
+1. Spec §12.1 требует `SourceProofClosureCollector.collect(scope: CommitReadScope, request: SourceProofReadInput, *, operation: SourceOperation)`. Public методы не принимают scope. Для обычных admit/read/groups/select ещё нужно определить, кто открывает read lifetime, кто выполняет bind/reset, какой scope допускается и кто гарантирует его освобождение. Borrowed writer scope adoption не является автоматическим решением public read. Это Source-owned требование к boundary; exact infrastructure contract подтверждает владелец, не Source.
+2. Collector по принятому design повторно запускает SourceProofValidator для persisted proof. Request checker уже проверил исходный request. Нужно явно разделить structural/canonical validation нового normalized proof и проверки original request, чтобы не получить второй алгоритм либо повторные diagnostics. Повторная проверка security/authority после IO не отменяется оптимизацией pure checks.
+3. Collector принимает SourceProofReadInput, тогда как ADMIT_GROUPS/VERIFY_GROUPS требуют diagnostics с исходными group/use positions. Синтетический read request может быть транспортом canonical proof, но не diagnostic root. Exact механизм передачи происхождения и отображения logic issues должен быть Source-owned, typed и без нового универсального context/Any. Сейчас он не задан; один operation enum его не обеспечивает. До решения нельзя обещать сохранение original paths всего pipeline.
+
+Это не задача создать ещё один facade. Требуемый выход — одна конкретная Source read-lifetime boundary и один provenance-preserving internal contract closure, согласованные с §11.3/12.1 спецификации. Если нужна дельта collector signature, сначала предъявить её явно; существующую принятую signature молча не менять. Запрет прямых междоменных calls также применим к выбранной infrastructure composition; scoped lifetime не является исключением сам по себе.
+
+### АР-1: ошибки и завершение публичной операции
+
+| Граница | Результат / отказ | Что запрещено |
+|---|---|---|
+| Некорректный root без представимого field path | Предусмотренный Pydantic structural отказ | Фиктивный path, пустой SourceFailure |
+| Представимые ошибки исходного request | Existing SourceFieldIssue/SourceLogicIssue → SourceFailure с фиксированной operation | Разбор текста ValueError, сокращение исходных indices, прекращение независимых checks |
+| Pure преобразование | Internal value после успешной validation | SourceProofResult с fake/пустыми refs вместо collector |
+| Exact read/closure | Полный SourceProofResult либо SourceFailure по принятой mapping | Latest fallback, read failure как отсутствие без evidence, потеря original diagnostic context |
+| Infrastructure/cancel/invalid scope | Existing infrastructure exception/cancellation | Превращение в MISSING_BODY или успешный domain result |
+
+Обязательные архитектурные сценарии: original group error после union; selection из historical capture; empty foreign-world proof; noncanonical input без вызова transform; отказ read после открытия scope с обязательным cleanup; несколько независимых issues до IO; отсутствие nested public calls. Это будущие критерии проверки границ, не выполненные runtime tests.
+
 Все пути под `app.dataModel.sourceVersioning`:
 
 | Модуль | Используемые типы |
