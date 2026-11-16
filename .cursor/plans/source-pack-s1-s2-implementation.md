@@ -38,15 +38,15 @@ Scope Source: pure coverage input/selector/error applicability; read-only adopti
 
 ## 3. Слой A — Source logical coverage
 
-Входной gate: G1 закрыт конкретной реализацией и evidence, принята текущая ревизия этого плана. Разрешённые production paths (относительно backend/app):
+Входные gates: G1 закрыт конкретной реализацией и evidence; приняты адресная SRP-дельта S1 и текущая ревизия этого плана. Ниже целевые paths предложения (относительно backend/app), не разрешение кода. Прежний proof/selector.py::SourceProofSelector.check_coverage — историческое размещение редакции 2, не исполняемая инструкция.
 
 - application/worldData/sourceVersioning/proof/coverageCheckInput.py — новый internal named concrete BaseModel с двумя существующими Source fields; exact module/qualname diagnostic root.
-- application/worldData/sourceVersioning/proof/selector.py — check_coverage по единой редакции §2. Переиспользовать существующие Source validators/canonical enumeration; не создавать второй engine.
+- application/worldData/sourceVersioning/proof/coverageChecker.py — предлагаемый SourceProofCoverageChecker.check_coverage с прежним input/result/semantics единой редакции §2. Exact import входит в принимаемую SRP-дельту. Переиспользовать existing validators/canonical enumeration; не создавать второй engine или forwarding selector.
 - dataModel/sourceVersioning/sourceErrors.py — existing CHECK_COVERAGE из полного G1 error roster и его applicability; не добавлять значение повторно и не создавать enum-дубли.
 
 Сначала контракт input/operation/diagnostic root, затем complete pure implementation и прямой internal caller contract. Никаких публичных endpoint/DAG/Pack import. Если existing pure helper нуждается в изменении вне этих путей, назвать exact path/роль и согласовать изменение плана до записи; не создавать новый helper по догадке.
 
-Responsibility: input хранит relation/diagnostic context без IO; selector валидирует и сравнивает exact atoms без authority; sourceErrors задаёт единые typed diagnostics без policy. Refusal criteria — violation strict/canonical/world/conflict/subset; infrastructure к pure алгоритму не подключается. Public values не дублируются. Independent field errors агрегировать штатным ValidatorAggregationHelper; typed paths FieldRef/CheckedPath. Root invalid input не фабриковать пустым path.
+Responsibility: input хранит relation/diagnostic context без IO; coverage checker валидирует и сравнивает exact atoms без authority; sourceErrors задаёт единые typed diagnostics без policy. Refusal criteria — violation strict/canonical/world/conflict/subset; infrastructure к pure алгоритму не подключается. Public values не дублируются. Independent field errors агрегировать штатным ValidatorAggregationHelper; typed paths FieldRef/CheckedPath. Root invalid input не фабриковать пустым path.
 
 Тестовый файл: backend/tests/sourceVersioning/test_coverage.py (новый после G1). Cases: multi-capture historical coverage; same-capture revision conflict; same closure/extra atom; foreign empty world; empty/empty и nonempty/empty; repeated valid available proof; inner duplicates/noncanonical; several independent diagnostics с исходными indexes/paths; неизменность входов. Проверить отсутствие storage calls, сравнивать с literal expected atoms/results, не копировать implementation в tests.
 
@@ -54,9 +54,9 @@ Responsibility: input хранит relation/diagnostic context без IO; select
 
 ## 4. Слой B — Source preflight
 
-Входные gates: G1/G2 закрыты, A принят. Production path: application/worldData/sourceVersioning/capture/retentionBinding.py. Добавить collect_for_adoption по спецификации §13, используя уже поставленный collector и существующий artifact bind. Accepted adopt не ослаблять, signature/error/result не менять. Нет собственного UOW/commit/holder acquisition или origin lookup.
+Входные gates: G1/G2 закрыты, A принят; приняты адресная SRP-дельта S2, exact constructor/scoped lifetime и текущая ревизия этого плана. Предлагаемый production path: application/worldData/sourceVersioning/capture/adoptionPreflight.py, SourceAdoptionPreflight.collect_for_adoption. Exact import входит в принимаемую дельту. Использовать уже поставленный collector и существующий artifact bind. Прежнее добавление collect_for_adoption в capture/retentionBinding.py — историческое размещение редакции 2, не исполняемая инструкция. SourceCaptureRetentionBinding.adopt остаётся владельцем acquire и повторной проверки; signature/error/result не ослаблять. У preflight нет собственного UOW/commit/holder acquisition или origin lookup. INT-DAG-SCOPED остаётся отдельным gate интеграции.
 
-Responsibility binding — проверить capability/unbound, один lexical bind, передать read facet и ADOPT_CLOSURE collector, гарантировать reset. Collector сохраняет own read/closure ответственность. Foreign/task/revoked/read-only/already-bound scope — infrastructure refusal до IO, SourceFailure возвращается без writes. Body errors/closure semantics переиспользуются, не переписываются.
+Responsibility preflight — проверить capability/unbound, один lexical bind, передать read facet и ADOPT_CLOSURE collector, гарантировать reset. Collector сохраняет own read/closure ответственность. Foreign/task/revoked/read-only/already-bound scope — infrastructure refusal до IO, SourceFailure возвращается без writes. Body errors/closure semantics переиспользуются, не переписываются.
 
 Тестовый файл: backend/tests/sourceVersioning/test_retention_preflight.py. Использовать новые Source-owned fixtures из support/finalizedFixtures.py, принятые в G2-fixtures: exact result/closure, no acquired/released/appended events именно во время preflight (setup finalization имеет собственные предусмотренные writes), sequential preflight→adopt в одном scope, nested binding rejection, foreign DB/task/read-only/revoked scope, cleanup on SourceFailure/exception/cancellation, повторные adopt checks при изменённом own transaction hold. Не использовать fabricated proof authority/placeholder collector или адаптацию старых fixtures вместо G2.
 

@@ -862,6 +862,68 @@ TimeClockState содержит только elapsed clock. Календарны
 
 ###### START-PREPARED-CONTRACT — актуальная reference-based сигнатура, proposal 2026-11-16
 
+###### INITIAL-REGISTER — публичный метод и retention ACCEPTED, 2026-11-16
+
+**ACCEPTED пользователем 2026-11-16: «Ок» после предъявления register и retention-дельты.** Приняты public register Input/Result/перечисленные причины отказа, отдельный INITIAL_STATE_PREPARATION lifecycle в existing ledger, immutable registration persistence, PublicationHolder/scoped acquire и сохранение source operation hold до explicit cleanup. Это приёмка port/POJO/DDL design, не evidence реализации и не автоматическая приёмка всей ARCH-0. Регистратор вызывается только DAG и не вызывает Time/World. Подготовка semantics и canonical encode принадлежат Time, durable registration — этому методу. Не возвращать отвергнутый Time.prepare_registered или generic attestation framework. Migration scripts и legacy adapters не разрешены.
+
+**Публичный порт:** `backend/app/application/publication/contracts/initialStateRegistrationPort.py::IInitialStateRegistration`:
+
+```python
+async def register(
+    self, request: InitialStateRegistrationInput,
+) -> InitialStateRegistrationResult: ...
+```
+
+Реализация: `backend/app/application/publication/service/initialStateRegistrationService.py::InitialStateRegistrationService`, одна ответственность — durable регистрация готовых initial-state bytes. Использует existing shared staging/catalog/blob/operation mechanisms и новый узкий registration store; не владеет календарём, start CAS или DAG routing.
+
+**Input** — `backend/app/dataModel/publication/initialStateRegistration/input.py::InitialStateRegistrationInput`:
+
+| Поле | Тип | Значение |
+|---|---|---|
+| preparation_id | EntityUid | Стабильный ID регистрации, отличный от start_identity.operation_id |
+| start_identity | GameplayStartIdentity | Ранее выданная Snapshot identity целевого старта |
+| format_key | ArtifactFormatKey | Согласованный owning Time initial-state format; произвольные registered formats не принимаются |
+| format_version | FormatVersion | Поддерживаемая версия выбранного формата |
+| payload | bytes | Точные immutable bytes successful Time payload encode; не raw dict/TimeClockState |
+
+Все поля обязательны, strict/frozen/extra=forbid/revalidate_instances=always. Допустимый размер задаёт trusted composition policy; превышение не запускает storage writes. Input не содержит caller hash, lease, grant, SQL scope, proof или engine metadata. Descriptor вычисляет registrar: BLOB, переданные format/version, content_hash по existing content digest, nbytes=len(payload), row_count=None. Preparation fingerprint — canonical request binding identity+format+content descriptor; байты привязаны content hash. Не использовать runtime repr/JSON serialization или новый hash algorithm. Caller обязан передавать encode именно successful Time результата с той же identity через контролируемый DAG binding; registrar не декодирует чужой payload для semantic проверки. Это явное trusted application предусловие, не разрешение прямого внешнего JSON endpoint.
+
+**Success** — existing proposal `PreparedInitialTimeStateRef(preparation_id,start_identity,preparation_fingerprint,artifact)`; единственный success record, без второго RegistrationReceipt. Time ref по-прежнему proposed в `dataModel/time/preparation/initialStateRef.py`; общий registrar здесь специализирован на этом initial-state результате, не generic all-domain registry. Result alias и wrapper → `backend/app/dataModel/publication/initialStateRegistration/result.py`:
+
+```text
+InitialStateRegistrationResult = PreparedInitialTimeStateRef | InitialStateRegistrationRefused
+InitialStateRegistrationRefused
+  preparation_id: EntityUid
+  reason: InitialStateRegistrationReason
+```
+
+**Exact причины (вариант B)** — `backend/app/dataModel/publication/initialStateRegistration/issues.py`, каждый leaf с fixed Literal code:
+
+| Тип | Поля кроме code | Code |
+|---|---|---|
+| InitialRegistrationTargetMissing | requested: GameplayStartIdentity | `publication.initial_registration.target_missing` |
+| InitialRegistrationTargetMismatch | requested, stored: GameplayStartIdentity | `publication.initial_registration.target_mismatch`; одинаковый operation_id, requested != stored |
+| InitialRegistrationFormatUnsupported | format_key: ArtifactFormatKey; format_version: FormatVersion | `publication.initial_registration.format_unsupported` |
+| InitialRegistrationPayloadTooLarge | actual_bytes: StrictInt >=0; limit_bytes: StrictInt >0 | `publication.initial_registration.payload_too_large`; actual > limit |
+| InitialRegistrationBindingConflict | preparation_id: EntityUid; requested_fingerprint: RevisionHex; stored_fingerprint: RevisionHex; stored_kind: OperationKind | `publication.initial_registration.binding_conflict`; другой kind либо fingerprint |
+| InitialRegistrationCancelled | preparation_id: EntityUid | `publication.initial_registration.cancelled` |
+
+`InitialStateRegistrationReason` — ровно union этих шести типов, не arbitrary Exception/BaseModel. Отказ не перезаписывает existing operation terminal; это результат текущего вызова registration. Malformed input (включая preparation_id == start operation_id) — typed admission до writes, existing JsonFieldError/WireShapeIssue для structural errors; cross-field identity equality — отдельная проверка admission с typed field path, не фиктивный hash. Infrastructure/unknown/cancellation не входят в business union. В public transport требуется отдельное значение REGISTER_INITIAL_STATE existing proposed Snapshot/publication boundary operation roster; exact расположение общего carrier не дублировать новым exception framework. Незавершённая конкурирующая registration получает BUSY, а не false binding conflict. Lost ACK после confirmed registration → повтор возвращает тот же success.
+
+**Lifecycle delta:** добавить `OperationKind.INITIAL_STATE_PREPARATION = 'initial_state_preparation'` в existing ledger enum/SQL allowed kinds, не использовать GAMEPLAY_START или PACK_ACTIVATION для другой роли. preparation_id является operation_id отдельного staging lifecycle; start_identity.operation_id остаётся стартовой операцией. Reuse PREPARING/READY, fence/writers/closed admission/OperationCancelled, без новых фаз. Identity START-ID уже READY и не используется как staging lease. Новый immutable registration row хранит preparation_id, target start operation/world/timeline, fingerprint и exact ArtifactRef descriptor identity. FK/guards сверяют target reservation и owning operation kind/world; PUT/replace несовпадающих facts запрещён. Таблица не копирует phase/fence/sealed/holder chains.
+
+Success выдаётся только когда registration, READY, sealed artifact и exact operation hold подтверждены durable state. Регистрация не публикует Q и не создаёт timeline. Storage writes/staging могут предшествовать финальной короткой transaction; при failure частичный PREPARING state не выдаётся как success и не перезаписывается автоматически новым запросом. Exact registration+READY completion needs scoped native store/coordinator integration: existing standalone finish_preparation не объявляется атомарным с отдельным registration append. Это обязательная проверка реализации, не допуск foreign callbacks. Полные native row/trigger definitions предъявляются перед SQL-кодом; migration scripts не разрешены.
+
+**Retention delta:** proposed `PublicationHolder` добавить в existing `dataModel/artifacts/lifecycle/holders.py`: kind Literal[ArtifactHolderKind.PUBLICATION], publication: WorldPublicationRef. Расширить существующие holder union/row/DDL/GC guards, а не заводить отдельный GC. Public acquire/release, открывающие свою transaction, нельзя вызвать внутри start как замену scoped записи. Новый внутренний `IArtifactHolders.acquire_publication(scope: CommitScope, publication: WorldPublicationRef, retained_refs: tuple[ArtifactRef,...]) -> None` устанавливает exact publication holds в caller transaction, проверяет существующую Q и sealed/защищённые refs. Ref selection берётся из checked registration, не из domain callback.
+
+**Выбранная политика cleanup:** start атомарно добавляет publication hold, но не снимает source preparation operation hold. Текущий snapshot-only handoff для этого не расширяется/не переиспользуется фиктивным snapshot. Source hold позднее снимается существующим explicit cancel/drain lifecycle подготовки; он не удаляет publication holder и не отменяет успешный start. До такой очистки допустимы две защиты, orphan/unbounded automatic TTL не вводится. Повтор register после явного cancellation возвращает InitialRegistrationCancelled, а accepted publication продолжает читать artifact под своей защитой. Exact start replay определяется start terminal и не зависит от живости source hold после принятия. Требование lifetime publication holders и их будущего освобождения при удалении принятой истории остаётся publication retention policy; public delete/GC timeline в этот срез не добавляется.
+
+**Гонка cleanup/start:** проверка registration/current fence/source hold и acquire_publication/Q-binding/terminal выполняются под одним writer serialization. Cleanup победил до acceptance → typed unavailable/refusal, без Q и success. Start победил → publication hold durable прежде release source hold; cleanup не делает artifact collectible. При rollback start отсутствуют Q/binding/publication hold/success terminal; source hold сохраняется, если независимый cleanup не завершился после rollback. Unknown не обещает один из этих исходов. Тесты — два независимых соединения одной временной SQLite, barrier перед admission/cleanup/commit, плюс restart/read/replay; пока не запускались.
+
+**Чтение:** proposed read_initial_binding возвращает exact AcceptedInitialStateBinding; artifact bytes выдаёт публичный общий verified-read contract под publication protection, owning decode читает только переданные bytes. Public результат не заставляет Time/World напрямую вызывать Snapshot/Artifacts. Binding/ref equality не заменяет hash/size verification; decoder failure после checked bytes — persisted format/corruption infrastructure, не «clock ещё не синхронизирован».
+
+**Граница приёмки:** описанная register/retention дельта принята; пометки proposed внутри её обоснования означают отсутствие реализации, а не необходимость повторно согласовывать то же решение. Accepted START-ID/START-ERRORS-B сохраняются; reference-specific start reasons, не входящие в перечисленный registration result, и общий public transport вне точного roster не считаются автоматически принятыми. Окончательный Time format/World candidate и точные physical row/trigger definitions остаются prerequisites. Общая ARCH-0 проверка ещё необходима. Код/DDL/tests не менялись; документальный diff-check не является эксплуатационным evidence.
+
 **Ответы DAG и Time проверены 2026-11-16 — дополнительное proof не требуется.** Оба владельца подтвердили достаточность method-level гарантии в доверенном application-вызове: successful Time preparation передаётся контролируемым DAG binding без подмены, replay использует trusted execution storage. Требование обязательного completion proof/issuer token отозвано Time и здесь снимается как необоснованное. Это не отменяет durable artifact registration/retention; runtime binding конкретного Time→registrar ещё не реализован и не принят.
 
 DAG указал existing NodeRunner (output validation), InvocationCoordinator (child terminal → CallSuccess), CallResults.get (key/target/output type), CheckpointCodec (identity/lineage/structure). Эти механизмы не доказывают автоматически вызов Time внутри произвольной ноды и не обеспечивают автоматически equality output/input разных нод: это обязательства проверенного binding/mapping. Произвольный внешний JSON или импортированный checkpoint не становятся trusted success после одной structural/hash проверки. Domain POJO не получает engine invocation fields/token.
