@@ -39,6 +39,12 @@ Capture finalize остаётся internal `finalize(SourceCaptureWitness, *, le
 
 ### Открытые решения целой архитектуры и порядок их завершения
 
+**Детализация SRC-AR-04:** source-core-request-composition.md содержит exact proposal пяти private inspect-функций с immutable tuples и RootT/path, правилами частичного отказа и nested trace. Проверка existing POJO выявила конкретный остаток: semantic UUID/descriptor/witness validators нельзя исполнять внутри structural traversal или обходить model_construct; нужны exact leaf facts/admission и root/group wrappers. Structurally доступный record не является допущенным ref для conflict/codec. Этот остаток не отложен до реализации и не считается закрытым signatures верхнего обхода.
+
+**Принята форма результата traversal:** immutable facts + existing diagnostics, без callbacks/event stream. Traversal не запускает semantic checks; request checker не дублирует обход и отвечает за порядок проверок/SourceFailure. Решение закреплено в source-core-request-composition.md §2; exact signatures и structural leaf boundary ещё нужны до закрытия SRC-AR-04.
+
+**Решение по traversal 2026-11-16:** пользователь выбрал вариант 2 — strict root boundary и typed обход известных ветвей с сохранением пригодных leaves/исходных indices. Полная предварительная semantic validation и универсальный recursive engine не выбираются. Разделение traversal/checkers/request aggregation/operation owner зафиксировано в source-core-request-composition.md §1. SRC-AR-04 остаётся открытым до exact function contracts; их нельзя откладывать до кода. Это решение внутри целой архитектуры, не новый локальный срез.
+
 **Прогресс АР-1:** в source-core-public-boundaries.md §2 добавлены обязательные pure constructor dependencies пяти owners и таблица error boundaries. При сверке с spec §12.1 выявлены три незакрытые архитектурные связи: public read lifetime при scope-free API; единый владелец request/persisted проверки без duplicate diagnostics; typed original-request provenance после normalization/union при входе collector через SourceProofReadInput. АР-1 остаётся открытым именно по этим пунктам, а не по общему статусу чужих доменов. Следующее действие — конкретизировать эти связи в архитектуре до перехода к реализации. Таблица dependency с OPEN read binding не является готовым constructor contract.
 
 | Порядок | Собственное решение Source, которое нужно предъявить | Что уже есть / внешний предел |

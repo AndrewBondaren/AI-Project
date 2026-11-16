@@ -24,18 +24,32 @@
 Существующие POJO: `WaterGenerationSettings` → `WorldWaterGenerationSettings` / `CategoryWaterGenerationSettings` / `BodyWaterGenerationSettings` (`dataModel/hydrology/generation/waterGenerationSettings.py`); `HydrologyCategoryPolicy` (`dataModel/hydrology/category.py`).
 **Решение 2026-11-16:** отдельный публичный класс `HydrologySettingsService` с `create/read/update/delete` для world / category / body уровня. OPEN: модуль, сигнатуры, POJO ошибки; граница с cascade (G1/G2) — каскад остаётся механизмом resolve, CRUD настроек — через этот сервис.
 
-## 3. Открытые линейные pipeline (без ветвления; суффикс `Pipeline`)
+## 3. Кандидаты в открытые линейные pipelines (суффикс `OpenPipeline`)
 
-Каждый — одна доменная операция, единый Input/Output/Error, вызывается напрямую из DAG. Источник порядка — утверждённый в GEO-1 порядок terrain↔water (G10-A «terrain/water order — AGREED 2026-10-31»).
+Каждый принятый открытый pipeline — одна доменная операция, единый Input/Output/Error, вызывается напрямую из DAG. Выбор самостоятельных операций и маршрута — в DAG; локальные алгоритмические ветвления, циклы и cache остаются внутри реализации операции. Источник порядка — утверждённый в GEO-1 порядок terrain↔water (G10-A «terrain/water order — AGREED 2026-10-31»).
+
+**Номенклатура при freeze:** по §«Публичные Pipeline» правила [dag-generator-interface.mdc](../rules/dag-generator-interface.mdc) к полному имени открытого класса, его интерфейса и Python-модуля перед `.py` добавляется `OpenPipeline`; существующая часть `Pipeline` сохраняется. Например, рабочая тройка: `FineWaterFillPipelineOpenPipeline`, `IFineWaterFillPipelineOpenPipeline`, `fineWaterFillPipelineOpenPipeline.py`. Точные пути модулей, интерфейсы и методы фиксируются вместе с контрактами. Имена ниже приведены к этому правилу, но остаются рабочими; это исправление документа, не ошибка реализации и не приёмка публичных границ. Суффикс не распространяется на внутренние вычислительные классы и CRUD-сервисы §1–§2.
 
 | # | Pipeline (рабочее имя) | Операция | Из чего собирается (существующий код) | Выход |
 |---|---|---|---|---|
-| P1 | `HydrologyPlacementUniversePipeline` | подготовка placement universe | G8 / G8-A | universe + candidates |
-| P2a–P2e | по одному на стратегию (решение 2026-11-16): `AuthoredRegionWaterPipeline` (G5), `CoastlineWaterSourcePipeline` (G5-C2/C3, I11.1–I11.3, `design_native_coastline`), `ContinentalNoiseWaterPipeline` (G6), `PlateWaterPipeline` (G7), `PlateNoiseWaterPipeline` (G7-C) — имена рабочие | draft одного source одной стратегией | G4-C + код стратегии | `FineProceduralWaterDesignDraft` (общий тип результата — OPEN) |
-| P3 | `FinePlacementPreparationPipeline` | fine placement preparation (следующий шаг после I11.3) | план, не начат | admitted fine candidates |
-| P4 | `FineWaterFillPipeline` | fine fill по frozen terrain window | G10-A «frozen window → accepted fine water», decision-driven fill | materialized fine water |
-| P5 | `CanonicalWaterPublicationPipeline` | сборка source R1+G1 | I2 (bed), I3.1 (wet runs), I4.1 (assemble) | `CanonicalOpenWaterSource` |
-| P6 | `FineRiverRoutingPipeline` | fine routing рек | G10-A native fine river routing | river facts |
+| P1 | `HydrologyPlacementUniversePipelineOpenPipeline` | подготовка placement universe | G8 / G8-A | universe + candidates |
+| P2a–P2e | по одному на стратегию (решение 2026-11-16): `AuthoredRegionWaterPipelineOpenPipeline` (G5), `CoastlineWaterSourcePipelineOpenPipeline` (G5-C2/C3, I11.1–I11.3, `design_native_coastline`), `ContinentalNoiseWaterPipelineOpenPipeline` (G6), `PlateWaterPipelineOpenPipeline` (G7), `PlateNoiseWaterPipelineOpenPipeline` (G7-C) — имена рабочие | draft одного source одной стратегией | G4-C + код стратегии | `FineProceduralWaterDesignDraft` (общий тип результата — OPEN) |
+| P3 | `FinePlacementPreparationPipelineOpenPipeline` | fine placement preparation (следующий шаг после I11.3) | план, не начат | admitted fine candidates |
+| P4 | `FineWaterFillPipelineOpenPipeline` | fine fill по frozen terrain window | G10-A «frozen window → accepted fine water», decision-driven fill | materialized fine water |
+| P5 | `CanonicalWaterPublicationPipelineOpenPipeline` | сборка source R1+G1 | I2 (bed), I3.1 (wet runs), I4.1 (assemble) | `CanonicalOpenWaterSource` |
+| P6 | `FineRiverRoutingPipelineOpenPipeline` | fine routing рек | G10-A native fine river routing | river facts |
+
+### 3.1. Публичные границы и внутренние вычисления — до freeze
+
+| Позиция | Что уже определено | Что требуется для freeze |
+|---|---|---|
+| P2a–P2e | Принят отдельный публичный pipeline на стратегию; выбор стратегии и fail/continue — DAG (§4.2–§4.3). | Точные интерфейсы/модули/методы и Input/Output/Error; состав внутренних классов каждой стратегии и трасса вложенных вызовов. |
+| P1, P3 | Кандидаты в самостоятельные операции; публичная граница OPEN. | Обосновать отдельный контракт и разделить обязанности GEO/Placement; concrete междоменные входы и передача через DAG пока OPEN (§5). |
+| P4, P6 | Кандидаты в самостоятельные операции fill/routing; публичная граница OPEN. | Обосновать отдельный Input/Output/Error/DoD и зависимости в принятом порядке G10-A; отделить внутренние алгоритмы от выбора самостоятельных операций. |
+| P5 | Кандидат в операцию сборки canonical source; публичная граница OPEN. | Зафиксировать owning результат по S1–S5. Слово Publication в рабочем имени не даёт GEO права выполнять commit Snapshot/активацию Pack. |
+| G4-C и вычисления стратегии; I2 bed, I3.1 wet runs, I4.1 assemble; локальные стадии fill/routing | Состав реализации кандидатов из таблицы §3, не отдельные публичные контракты. | При freeze указать owning операцию и внутренние классы. Наличие отдельного шага плана/функции само по себе не основание выделять публичный pipeline или ноду. |
+
+Для каждого кандидата совместная приёмка фиксирует keep/split/remove с обоснованием; ранее принятое разделение P2a–P2e не пересматривается без нового решения пользователя. До freeze предъявить владельца интерфейса, точные модули и сигнатуры, POJO входа/результата/ошибки без дублей, внутренние классы и вложенные вызовы. Для каждого класса нужны ответственность, допустимые зависимости/эффекты, проверяемая приёмка и признак её нарушения. Для каждой операции — прямой вызов из DAG, владелец выбора маршрута и путь каждого междоменного входа/результата; скрытая оркестрация и прямые междоменные вызовы запрещены. Сверка с G10-A включает вложенные стадии, условия и зависимости без изменения утверждённого порядка. Недостаток этих сведений означает отказ в приёмке, а не автоматический freeze по корректному имени. Ноды и bindings остаются на отдельное согласование с пользователем.
 
 ## 4. Точки ветвления — выносятся в DAG (сейчас внутри домена)
 
