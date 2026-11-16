@@ -1,21 +1,23 @@
 # GEO-1 (Hydrology / designed water) · открытые контракты для DAG — черновик на согласование (2026-11-16)
 
-**Статус:** DRAFT. Приняты решения пользователя 2026-11-16: представление source R1 + G1 (G2/R3 отложены); выбор стратегии — операция DAG, отдельный pipeline на стратегию; настройки — отдельный `HydrologySettingsService`. Остальное OPEN. Ноды GEO в DAG согласуются только с пользователем.
+**Статус:** DRAFT. Приняты решения пользователя 2026-11-16: представление source R1 + G1 (G2/R3 отложены); выбор стратегии — операция DAG, отдельный pipeline на стратегию; настройки — отдельный `HydrologySettingsService`. CRUD данных — отдельные сервисы body / union / river (вариант B, целевой; пустые места — STUB). Ожидаемый отказ source — типизированный результат pipeline, решение о продолжении — в DAG. Остальное OPEN. Ноды GEO в DAG согласуются только с пользователем.
+
+**Целевое требование (пользователь, 2026-11-16):** прямые междоменные взаимодействия запрещены. Оркестрация и передача данных между доменами — строго через DAG: домен возвращает результат DAG, DAG передаёт его в публичную операцию другого домена (см. `dag-generator-interface.mdc`, запрет №3). Существующие прямые вызовы GEO ↔ Terrain / Placement / Spatial / Planning — legacy, удаляются при cutover соответствующей операции.
 
 Нормы: `.cursor/rules/dag-generator-interface.mdc` — §«Обязательная приёмка плана любого домена», §«Публичные Pipeline», §«Критерий приёмки: доменные CRUD API → DAG», §«Конкретность публичного CRUD-контракта». Ноды DAG пишет пользователь; этот документ **не** предлагает NodeId и bindings — только доменные контракты. Всё ниже — **предложение**, имена новых классов — рабочие (OPEN).
 Представление source: R1 + G1 (решение 2026-11-16).
 
-## 1. CRUD данных домена — canonical hydrology source
+## 1. CRUD данных домена — по сущностям canonical source (решение 2026-11-16: вариант B, целевой)
 
-Существующий POJO результата: `CanonicalOpenWaterSource` (`dataModel/hydrology/query/source.py`, runs `WaterMembershipRun`, ошибки `WaterSourceIssueCode`).
-Предлагаемый публичный класс: `HydrologySourceService` (новый, OPEN модуль `application/worldData/generators/hydrology/query/`).
+Источник сущностей: `CanonicalOpenWaterSource` (`dataModel/hydrology/query/source.py`; runs `WaterMembershipRun`; ошибки `WaterSourceIssueCode`), `PhysicalWaterUnion` (`dataModel/hydrology/physicalWaterUnion.py`), реки (`dataModel/hydrology/rivers.py`). Каждая сущность — свой публичный класс с отдельными методами create/read/update/delete. Неизвестное до точных контрактов — **STUB** (явная заглушка; в коде — тип/метод объявлен, реализация отсутствует и это видно, без fallback и без молчаливых дефолтов).
 
-| Операция | Метод (предложение) | Вход | Результат | Ошибка | Статус |
-|---|---|---|---|---|---|
-| Create | `create(request: HydrologySourceCreate) -> CanonicalOpenWaterSource` | готовые результаты pipeline §3 (P5) | source + revision | `HydrologySourceError` (новый, FieldPathError[WaterSourceIssueCode]) | OPEN: нужен ли Create отдельно от P5 |
-| Read | `read_window(ref: HydrologySourceRef, window: …) -> BoundedWaterRead` | ref + окно (Spatial contract) | membership/level/bed окна | та же | OPEN: POJO окна — от SPATIAL-1 |
-| Update | `update(ref, edit: HydrologySourceEdit) -> CanonicalOpenWaterSource` | worldEdit body overrides (G3) | новая revision | та же | OPEN: update = пересборка через pipeline или точечный patch |
-| Delete | `delete(ref) -> HydrologySourceTombstone` | ref | tombstone | та же | OPEN |
+| Сервис (рабочее имя) | Сущность | Create | Read | Update | Delete | Инвариант после операции |
+|---|---|---|---|---|---|---|
+| `WaterBodyService` | физический водоём: UID, liquid, level, wet runs (R1), bed (G1) | STUB | STUB (в т.ч. bounded window — по контракту SPATIAL-1) | STUB | STUB | union membership и связность пересчитаны; revision source увеличена |
+| `WaterUnionService` | `PhysicalWaterUnion`: состав тел, общий уровень, связность | STUB | STUB | STUB | STUB | все члены существуют; одно тело — в одном union |
+| `RiverService` | реки: трасса, связь с телами (mouth/drainage) | STUB | STUB | STUB | STUB | ссылки на тела валидны |
+
+Общее для всех сервисов (OPEN до точных контрактов): POJO входа/результата в `dataModel/hydrology/`, конкретный подкласс `FieldPathError[...]` для ошибок, правило revision, проверка целостности source после операции. Пересборка source целиком — не CRUD, а pipeline P5.
 
 ## 2. CRUD настроек домена
 
@@ -39,7 +41,7 @@
 
 1. Решение генерации `HydrologyGenerationDecision` / `HydrologyExecutionMode` (запускать ли генерацию категории) — DAG выбирает, запускать ли P2–P5.
 2. Диспатч стратегии — **решено 2026-11-16:** выбор операции в DAG, pipeline P2a–P2e. Существующий strategy dispatch в домене подлежит выносу при cutover.
-3. Per-source fail/continue в `designPreparation` (`session.fail`) — **OPEN:** остаётся ли это локальной политикой P2 или решением DAG.
+3. Per-source fail/continue — **решено 2026-11-16 (вариант a):** pipeline стратегии возвращает типизированный результат «draft | отказ с причинами» без исключения для ожидаемого отказа; DAG собирает результаты, передаёт успешные drafts в P3, отказы — в отчёт. Терминальные ошибки (`diagnostics`) остаются исключением и останавливают build. Цикл с `session.fail` в `designPreparation` подлежит выносу при cutover.
 4. Порядок terrain → water → relief — порядок узлов DAG, без изменения.
 
 ## 5. Междоменные входы (протокол CRUD; все OPEN до согласования нод)
@@ -53,7 +55,7 @@
 
 ## 6. Вопросы к пользователю
 
-1. Гранулярность CRUD данных: один `HydrologySourceService` на canonical source или отдельные сервисы на body / union / river — OPEN.
+1. ~~Гранулярность CRUD данных~~ — решено: отдельные сервисы (B), STUB до точных контрактов.
 2. ~~Диспатч стратегии~~ — решено: DAG.
-3. Per-source fail/continue — домен или DAG — OPEN.
+3. ~~Per-source fail/continue~~ — решено: (a), DAG.
 4. ~~Настройки~~ — решено: `HydrologySettingsService`.
