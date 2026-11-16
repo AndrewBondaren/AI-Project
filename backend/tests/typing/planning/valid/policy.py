@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, StrictBool
 
 from app.application.policy.declarations.compiler import compile_admission_policy, compile_value_policy
 from app.application.policy.policyResolver import PolicyResolver
+from app.application.worldData.generators.hydrology.policy.hydrologyGenerationBinding import HydrologyGenerationBinding
 from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.hydrology.enums.planning.hydrologyExecutionMode import HydrologyExecutionMode
 from app.dataModel.hydrology.generation.generationContext import WaterGenerationContext
@@ -109,7 +110,9 @@ def valid_hydrology_generation(root: WorldHydrologyGenerationFields, context: Wa
     decision = PolicyResolver().resolve(spec, sources, PolicyObservations(),
         mode=ResolutionMode.VALIDATE_ONLY)
     assert_type(decision, ValueSelectionDecision[HydrologyExecutionMode, WaterPolicyReason])
-    typed: HydrologyGenerationDecision = decision
+    binding = HydrologyGenerationBinding(spec=spec, inputs=sources, facts=PolicyObservations(), context=context)
+    typed = binding.resolve(PolicyResolver(), mode=ResolutionMode.VALIDATE_ONLY)
+    assert_type(typed, HydrologyGenerationDecision)
     assert_type(typed.require_behavior(), HydrologyExecutionMode)
 
 

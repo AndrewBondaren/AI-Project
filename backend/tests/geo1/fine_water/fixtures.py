@@ -24,8 +24,7 @@ def physical_inputs(topology):
 
 
 def decisions(physical, auto=False, enabled=True):
-    return tuple((category, PolicyResolver().resolve(binding.spec, binding.inputs, binding.facts,
-        mode=physical.resolution_mode)) for category in sorted(Category, key=lambda c: c.value)
+    return tuple((category, binding.resolve(PolicyResolver(), mode=physical.resolution_mode)) for category in sorted(Category, key=lambda c: c.value)
         for binding in (bind_hydrology_generation_policy(enabled=enabled,
             generation=WorldWaterGenerationSettings(autoresolve=auto), defaults=physical.defaults,
             category=getattr(physical, category.value + "_generation"), root_path=("hydrology",),

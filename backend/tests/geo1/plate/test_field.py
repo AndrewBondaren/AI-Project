@@ -142,5 +142,5 @@ class PlateFieldTests(TestCase):
                        {"centers":tuple(reversed(layout.centers))}):
             with self.assertRaises(ValidationError):PlateLayout.model_validate(layout.model_copy(update=update))
         for x in (float("nan"),float("inf"),True):
-            with self.assertRaises(PlanBuildFailure):generator.sample(layout,x=x,y=.5)
+            with self.assertRaises(ValueError):generator.sample(layout,x=x,y=.5)
         with self.assertRaises(TypeError):generator.layout({})

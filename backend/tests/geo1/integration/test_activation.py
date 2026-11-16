@@ -13,10 +13,10 @@ from app.application.worldData.planning.encoding.surfaceManifest import SURFACE_
 from app.dataModel.hydrology.planning.hydrologyPlan import HydrologyPlan, GeoHydrologyPlan
 from app.dataModel.hydrology.planning.inputs.hydrologyPlanInput import HydrologyFinalInput
 from app.dataModel.hydrology.planning.sourceBodyMapping import SourceBodyMapping, SourceBodyMappingEntry
-from app.dataModel.hydrology.policy.hydrologyGenerationDecision import WaterPolicyReason
+from app.dataModel.hydrology.policy.hydrologyGenerationDecision import HydrologyGenerationDecision, WaterPolicyReason
 from app.dataModel.hydrology.enums.planning.hydrologyExecutionMode import HydrologyExecutionMode
 from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationCategory
-from app.dataModel.policy.policyDecision import PolicyReason, ValueSelectionDecision
+from app.dataModel.policy.policyDecision import PolicyReason
 from app.dataModel.policy.policyEnums import PolicyOperation, PolicyState, PolicyDisableReason
 from app.dataModel.planning.contracts.planDependency import PlanDependency
 from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
@@ -87,7 +87,7 @@ class BindingSeamTests(TestCase):
         self.assertFalse(declared.accepts(dependency))
 
     def test_geo_final_codec_closure_and_metadata_independence(self):
-        decision = ValueSelectionDecision[HydrologyExecutionMode, WaterPolicyReason](operation=PolicyOperation.VALUE_SELECTION, state=PolicyState.READY,
+        decision = HydrologyGenerationDecision(operation=PolicyOperation.VALUE_SELECTION, state=PolicyState.READY,
             effective_priority=None, behavior=HydrologyExecutionMode.DECLARED_ONLY,
             reasons=(PolicyReason[WaterPolicyReason](domain_reason=WaterPolicyReason.DECLARED_ONLY,
                 common_reason=PolicyDisableReason.DOMAIN_RULE),), waiting_supports=(), provenance=(), issues=())
@@ -365,8 +365,7 @@ class GeoWaterDecisionConsumerTests(TestCase):
                 generation=WorldWaterGenerationSettings(autoresolve=autoresolve), defaults=self.inputs.defaults,
                 category=getattr(self.inputs, category.value+"_generation"), root_path=("hydrology",),
                 context_path=("classification", category.value))
-            values.append((category, PolicyResolver().resolve(binding.spec, binding.inputs, binding.facts,
-                mode=self.inputs.resolution_mode)))
+            values.append((category, binding.resolve(PolicyResolver(), mode=self.inputs.resolution_mode)))
         return tuple(values)
 
     def fill(self, *, inputs=None, surface=None, placement=None, decisions=None):
@@ -506,8 +505,7 @@ class GeoRouteAssemblyTests(TestCase):
                 generation=self.inputs.generation, defaults=self.inputs.defaults,
                 category=getattr(self.inputs, category.value+"_generation"), root_path=("hydrology",),
                 context_path=("classification", category.value))
-            values.append((category, PolicyResolver().resolve(binding.spec, binding.inputs, binding.facts,
-                mode=self.inputs.resolution_mode)))
+            values.append((category, binding.resolve(PolicyResolver(), mode=self.inputs.resolution_mode)))
         return tuple(values)
 
     def assemble(self, **updates):

@@ -20,8 +20,8 @@ from app.dataModel.hydrology.planning.inputs.hydrologyPlanInput import Hydrology
 from app.dataModel.hydrology.planning.inputs.geoHydrologyPlanInput import GeoHydrologyPlanInput
 from app.dataModel.hydrology.enums.planning.hydrologyExecutionMode import HydrologyExecutionMode
 from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationCategory
-from app.dataModel.hydrology.policy.hydrologyGenerationDecision import WaterPolicyReason
-from app.dataModel.policy.policyDecision import ValueSelectionDecision, PolicyReason
+from app.dataModel.hydrology.policy.hydrologyGenerationDecision import HydrologyGenerationDecision, WaterPolicyReason
+from app.dataModel.policy.policyDecision import PolicyReason
 from app.dataModel.policy.policyEnums import PolicyOperation, PolicyState, PolicyDisableReason
 from app.dataModel.planning.contracts.planDependency import PlanDependency
 from app.dataModel.planning.contracts.planRequest import PlanRequest
@@ -145,7 +145,7 @@ class GeoFinalProviderTests(TestCase):
 
     def test_final_carries_route_classification_without_resolving_it_again(self):
         before = self.build()
-        decision = ValueSelectionDecision[HydrologyExecutionMode, WaterPolicyReason](
+        decision = HydrologyGenerationDecision(
             operation=PolicyOperation.VALUE_SELECTION, state=PolicyState.DISABLED,
             effective_priority=None, behavior=HydrologyExecutionMode.DISABLED,
             reasons=(PolicyReason[WaterPolicyReason](domain_reason=None, common_reason=PolicyDisableReason.ENABLED_FALSE),),
@@ -237,7 +237,7 @@ class GeoReliefProviderTests(TestCase):
 
     def test_geo_only_route_metadata_changes_refs_without_changing_terrain(self):
         from app.dataModel.hydrology.planning.sourceBodyMapping import SourceBodyMapping, SourceBodyMappingEntry
-        decision = ValueSelectionDecision[HydrologyExecutionMode, WaterPolicyReason](
+        decision = HydrologyGenerationDecision(
             operation=PolicyOperation.VALUE_SELECTION, state=PolicyState.READY, effective_priority=None,
             behavior=HydrologyExecutionMode.DECLARED_ONLY, reasons=(), waiting_supports=(), provenance=(), issues=())
         first = self.river(self.routes())

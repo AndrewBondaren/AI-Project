@@ -14,5 +14,8 @@ class WaterPolicyReason(StrEnum):
     EMPTY_GENERATION_TARGET = "empty_generation_target"
 
 
-type HydrologyGenerationDecision = ValueSelectionDecision[HydrologyExecutionMode, WaterPolicyReason]
+class HydrologyGenerationDecision(ValueSelectionDecision[HydrologyExecutionMode, WaterPolicyReason], frozen=True):
+    pass
+
+
 type WaterDesignDecision = ObjectAdmissionDecision[DesignedWaterStrategyKind, WaterPolicyReason]

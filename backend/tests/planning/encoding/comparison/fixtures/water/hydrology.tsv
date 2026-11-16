@@ -48,7 +48,7 @@ app.dataModel.hydrology.encoding.surfaceBindings
 228	enum	app.dataModel.hydrology.enums.planning.waterGenerationScope.WaterGenerationCategory
 229	enum	app.dataModel.hydrology.enums.planning.hydrologyExecutionMode.HydrologyExecutionMode
 230	enum	app.dataModel.hydrology.policy.hydrologyGenerationDecision.WaterPolicyReason
-231	record	app.dataModel.policy.policyDecision.ValueSelectionDecision[HydrologyExecutionMode, WaterPolicyReason]
+231	record	app.dataModel.hydrology.policy.hydrologyGenerationDecision.HydrologyGenerationDecision
 232	record	app.dataModel.policy.policyDecision.PolicyReason[WaterPolicyReason]
 233	record	app.dataModel.planning.contracts.planEnvelope.PlanEnvelope[GeoHydrologyPlan]
 241	record	app.dataModel.hydrology.generation.waterGenerationSettings.WorldWaterGenerationSettings

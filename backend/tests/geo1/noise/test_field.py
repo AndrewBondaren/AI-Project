@@ -122,7 +122,7 @@ class NoiseFieldTests(TestCase):
         generator=NoiseFieldGenerator()
         input=case()
         for x in (float("nan"),float("inf"),True):
-            with self.assertRaises(PlanBuildFailure):generator.sample(input.field_policy,x=x,y=0.0)
+            with self.assertRaises(ValueError):generator.sample(input.field_policy,x=x,y=0.0)
         overflow=case(policy=ContinentalNoisePolicy(lacunarity=1e300))
         with self.assertRaises(PlanBuildFailure) as caught:generator.build(overflow)
         self.assertEqual(caught.exception.issues[0].code,WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value)

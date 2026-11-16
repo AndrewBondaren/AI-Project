@@ -285,6 +285,6 @@ class SurfaceContractTests(TestCase):
             bound = bind_hydrology_generation_policy(enabled=inputs.enabled, generation=inputs.generation,
                 defaults=inputs.defaults, category=getattr(inputs, name), root_path=("hydrology",),
                 context_path=("classification", name))
-            decision = PolicyResolver().resolve(bound.spec, bound.inputs, bound.facts, mode=inputs.resolution_mode)
+            decision = bound.resolve(PolicyResolver(), mode=inputs.resolution_mode)
             self.assertIs(decision.require_behavior(), expected)
             self.assertEqual(bound.context.water_fraction, fraction)

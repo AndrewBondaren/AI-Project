@@ -68,7 +68,7 @@ class ProceduralSourceAdmissionJob:
             binding = bind_hydrology_generation_policy(enabled=inputs.enabled, generation=inputs.generation,
                 defaults=inputs.defaults, category=settings, body=source.value.generation,
                 root_path=(), context_path=source_path)
-            generation = resolver.resolve(binding.spec, binding.inputs, binding.facts, mode=inputs.resolution_mode)
+            generation = binding.resolve(resolver, mode=inputs.resolution_mode)
             context = freeze_resolved_context(binding.context, ResolvedWaterGenerationContext)
             extent = HydrologyProceduralExtentFacts(world_extent=(KnownFact[bool](value=True)
                 if inputs.declared_world_bounds is not None else UnknownFact(issue=FieldPathError(

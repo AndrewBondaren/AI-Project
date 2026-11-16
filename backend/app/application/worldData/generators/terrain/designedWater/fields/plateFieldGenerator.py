@@ -4,6 +4,8 @@ from collections.abc import Iterator
 from math import exp, fsum, gcd, isfinite
 from typing import Literal
 
+from pydantic import ValidationError
+
 from app.application.planning.service.planningService import PlanBuildFailure
 from app.dataModel.spatial.grid.coordinateTypes import FineX, FineY
 from app.dataModel.terrain.designedWater.fields.field import (
@@ -12,6 +14,7 @@ from app.dataModel.terrain.designedWater.fields.field import (
 from app.dataModel.terrain.designedWater.fields.plateLayout import PlateCenter, PlateLayout
 from app.dataModel.terrain.designedWater.input import PlateWaterDesignInput, PlateNoiseWaterDesignInput
 from app.dataModel.terrain.designedWater.strategyKind import WaterDesignIssueCode
+from app.dataModel.terrain.designedWater.waterDesignTypeError import WaterDesignTypeError
 from app.dataModel.terrain.sampling.fineSurfaceWindow import SurfaceSamples
 from app.dataModel.topology.topologyGeometry import dist2
 from app.dataModel.terrain.designedWater.fields.plateCountAdjustedNotice import PlateCountAdjustedNotice
@@ -27,35 +30,35 @@ class PlateFieldGenerator:
             raise TypeError("plate layout requires a typed plate recipe")
         try:
             recipe = PlateRecipe.model_validate(recipe, strict=True)
-            bounds = recipe.topology.bounds
-            size = bounds.width * bounds.height
-            requested = recipe.plate_policy.plate_count
-            count = min(requested, size)
-            multiplier, offset = 1, 0
-            if size > 1:
-                draw = seeded_u01(recipe.seed_root, UidKind.WATER_FIELD, channel=FieldChannel.PLATE_CENTER,
-                    coefficient=AffinePermutationCoefficient.MULTIPLIER, cell_count=size)
-                numerator, denominator = draw.as_integer_ratio()
-                multiplier = 1 + numerator * (size - 1) // denominator
-                while gcd(multiplier, size) != 1:
-                    multiplier = multiplier % (size - 1) + 1
-                draw = seeded_u01(recipe.seed_root, UidKind.WATER_FIELD, channel=FieldChannel.PLATE_CENTER,
-                    coefficient=AffinePermutationCoefficient.OFFSET, cell_count=size)
-                numerator, denominator = draw.as_integer_ratio()
-                offset = numerator * size // denominator
-            centers = []
-            for index in range(count):
-                position = (multiplier * index + offset) % size
-                centers.append(PlateCenter(index=index,
-                    cell=(FineX(bounds.x_min + position % bounds.width), FineY(bounds.y_min + position // bounds.width)),
-                    buoyancy=2.0 * seeded_u01(recipe.seed_root, UidKind.WATER_FIELD,
-                        channel=FieldChannel.PLATE_BUOYANCY, plate_index=index) - 1.0))
-            notices = ()
-            if count != requested:
-                notices = (PlateCountAdjustedNotice(requested=requested, effective=count),)
-            return PlateLayout(recipe=recipe, multiplier=multiplier, offset=offset, centers=tuple(centers), notices=notices)
-        except (ValueError, OverflowError) as error:
-            raise self._failure("layout", error) from error
+        except ValidationError as error:
+            raise PlanBuildFailure(WaterDesignTypeError.from_validation(PlateRecipe, error, operation="continental_field")) from error
+        bounds = recipe.topology.bounds
+        size = bounds.width * bounds.height
+        requested = recipe.plate_policy.plate_count
+        count = min(requested, size)
+        multiplier, offset = 1, 0
+        if size > 1:
+            draw = seeded_u01(recipe.seed_root, UidKind.WATER_FIELD, channel=FieldChannel.PLATE_CENTER,
+                coefficient=AffinePermutationCoefficient.MULTIPLIER, cell_count=size)
+            numerator, denominator = draw.as_integer_ratio()
+            multiplier = 1 + numerator * (size - 1) // denominator
+            while gcd(multiplier, size) != 1:
+                multiplier = multiplier % (size - 1) + 1
+            draw = seeded_u01(recipe.seed_root, UidKind.WATER_FIELD, channel=FieldChannel.PLATE_CENTER,
+                coefficient=AffinePermutationCoefficient.OFFSET, cell_count=size)
+            numerator, denominator = draw.as_integer_ratio()
+            offset = numerator * size // denominator
+        centers = []
+        for index in range(count):
+            position = (multiplier * index + offset) % size
+            centers.append(PlateCenter(index=index,
+                cell=(FineX(bounds.x_min + position % bounds.width), FineY(bounds.y_min + position // bounds.width)),
+                buoyancy=2.0 * seeded_u01(recipe.seed_root, UidKind.WATER_FIELD,
+                    channel=FieldChannel.PLATE_BUOYANCY, plate_index=index) - 1.0))
+        notices = ()
+        if count != requested:
+            notices = (PlateCountAdjustedNotice(requested=requested, effective=count),)
+        return PlateLayout(recipe=recipe, multiplier=multiplier, offset=offset, centers=tuple(centers), notices=notices)
 
     # GEO-LEGACY-57: Replace coarse cell centers with fine W coordinates; keep layout and sample.
     def build(self, input: PlateWaterDesignInput | PlateNoiseWaterDesignInput) -> ContinentalField:
@@ -80,11 +83,17 @@ class PlateFieldGenerator:
         """Sample a real fine position using an explicitly captured immutable layout."""
         if not isinstance(layout, PlateLayout):
             raise TypeError("plate sampling requires a typed plate layout")
+        if type(x) not in (int, float) or type(y) not in (int, float) or not isfinite(x) or not isfinite(y):
+            raise ValueError("plate position requires finite world-fine coordinates")
         try:
             layout = PlateLayout.model_validate(layout, strict=True)
+        except ValidationError as error:
+            raise PlanBuildFailure(WaterDesignTypeError.from_validation(PlateLayout, error, operation="continental_field")) from error
+        try:
             return self._sample(layout, x, y)
         except (ValueError, OverflowError) as error:
-            raise self._failure("sample", error) from error
+            raise PlanBuildFailure((WaterDesignTypeError.at(PlateRecipe, ("plate_policy",), str(error),
+                                                            operation="continental_field"),)) from error
 
     @staticmethod
     def _sample(layout: PlateLayout, x: float, y: float) -> ContinentalFieldValue:
@@ -108,6 +117,6 @@ class PlateFieldGenerator:
         return max(-1.0, min(1.0, value))
 
     @staticmethod
-    def _failure(operation: Literal["layout", "build", "sample"], error: Exception) -> PlanBuildFailure:
+    def _failure(operation: Literal["build"], error: Exception) -> PlanBuildFailure:
         return PlanBuildFailure((FieldPathError(("plate_field", operation), str(error),
             code=WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value),))

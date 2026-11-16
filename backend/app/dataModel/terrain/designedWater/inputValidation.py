@@ -120,11 +120,14 @@ def check_native_recipe(data: NativeCoastlineStrategyContext, issues: InputIssue
         issues.report(data.context, lambda c: c.autoresolve, "native coastline requires autoresolve", "context")
     recipe = data.field_policy
     if recipe.strategy != data.strategy:
-        issues.report(recipe, lambda r: r.strategy, "recipe must match the admitted strategy", "field_policy")
+        issues.report(recipe, lambda r: r.strategy, "recipe must match the admitted strategy", "field_policy",
+                      type(recipe).__name__)
     if recipe.seed_root != data.seed_root:
-        issues.report(recipe, lambda r: r.seed_root, "recipe must match the captured seed", "field_policy")
+        issues.report(recipe, lambda r: r.seed_root, "recipe must match the captured seed", "field_policy",
+                      type(recipe).__name__)
     if recipe.topology != data.topology:
-        issues.report(recipe, lambda r: r.topology, "recipe must use the captured fine topology", "field_policy")
+        issues.report(recipe, lambda r: r.topology, "recipe must use the captured fine topology", "field_policy",
+                      type(recipe).__name__)
     if data.metadata.level <= data.z_min:
         issues.report(data.metadata, lambda m: m.level, "water level must exceed the lower bound", "metadata")
     if any(z < data.z_min for _, z in data.pre_hydrology.payload.surface_z):

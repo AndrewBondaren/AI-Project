@@ -171,7 +171,7 @@ class ProceduralSourceJoinTests(TestCase):
             generation=WorldWaterGenerationSettings(autoresolve=True, strategy=kind, water_fraction=0.5),
             defaults=WaterGenerationDefaults(), category=CategoryWaterGenerationSettings(),
             body=BodyWaterGenerationSettings(), root_path=("hydrology",), context_path=("resolved",))
-        generation = PolicyResolver().resolve(binding.spec, binding.inputs, binding.facts, mode=ResolutionMode.RUNTIME)
+        generation = binding.resolve(PolicyResolver(), mode=ResolutionMode.RUNTIME)
         values = {name: getattr(ready, name) for name in WaterDesignInput.model_fields}
         values["context"] = freeze_resolved_context(binding.context, ResolvedWaterGenerationContext)
         shared = WaterDesignInput[ProceduralSource](**values)
@@ -281,7 +281,7 @@ class AuthoredSourceJoinTests(TestCase):
             generation=WorldWaterGenerationSettings(autoresolve=auto, strategy=Strategy.AUTHORED_REGION),
             defaults=WaterGenerationDefaults(), category=CategoryWaterGenerationSettings(), body=BodyWaterGenerationSettings(),
             root_path=("hydrology",), context_path=("resolved",))
-        generation = PolicyResolver().resolve(binding.spec, binding.inputs, binding.facts, mode=ResolutionMode.RUNTIME)
+        generation = binding.resolve(PolicyResolver(), mode=ResolutionMode.RUNTIME)
         values = {name: getattr(ready, name) for name in WaterDesignInput.model_fields}
         values.update(context=freeze_resolved_context(binding.context, ResolvedWaterGenerationContext), metadata=metadata)
         shared = WaterDesignInput[AuthoredBasinSource | AuthoredLakeSource](**values)

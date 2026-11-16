@@ -32,6 +32,11 @@ class HydrologyGenerationBinding:
     facts: PolicyFacts
     context: WaterGenerationContext
 
+    def resolve(self, resolver: PolicyResolver, *, mode: ResolutionMode) -> HydrologyGenerationDecision:
+        decision = resolver.resolve(self.spec, self.inputs, self.facts, mode=mode)
+        return HydrologyGenerationDecision.model_validate(
+            {name: getattr(decision, name) for name in HydrologyGenerationDecision.model_fields}, strict=True)
+
 
 def resolve_hydrology_category_policies(
     *, categories: HydrologyCategoryFields, enabled: bool, generation: WorldWaterGenerationSettings,
@@ -44,7 +49,7 @@ def resolve_hydrology_category_policies(
         binding = bind_hydrology_generation_policy(enabled=enabled, generation=generation,
             defaults=defaults, category=source.generation.select(categories), root_path=(),
             context_path=(bind_field(source.generation).field,))
-        decisions.append((source.category, resolver.resolve(binding.spec, binding.inputs, binding.facts, mode=mode)))
+        decisions.append((source.category, binding.resolve(resolver, mode=mode)))
     return tuple(decisions)
 
 

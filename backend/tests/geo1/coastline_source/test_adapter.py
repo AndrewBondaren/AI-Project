@@ -67,8 +67,8 @@ class CoastlineSourceAdapterTests(TestCase):
                 CoastlineWaterSourceAdapter().prepare_native(**args)
         geometry.assert_not_called()
         self.assertEqual([(issue.diagnostic_path(), issue.code) for issue in caught.exception.issues], [
-            (("water_source", value.source.location_uid, "admission", "decision", "behavior"),
-             "WATER_DESIGN_INVALID_PREPARATION_INPUT")])
+            (("water_source", value.source.location_uid, "admission", "decision"),
+             "WATER_DESIGN_ADMISSION_STRATEGY_MISMATCH")])
 
     def test_native_recipe_reports_all_independent_mismatches_before_geometry(self):
         window, _, topology = fine_window(hills=False)
@@ -106,9 +106,9 @@ class CoastlineSourceAdapterTests(TestCase):
                     "expected_window": window.ref.model_copy(update={"output_fingerprint": b"0" * 32}),
                     "metadata": value.metadata.model_copy(update={"source_kind": WaterDesignSourceKind.LAKE})}))
             self.assertEqual([(i.diagnostic_path(), i.code) for i in joined.exception.issues],
-                             [(prefix + path, "WATER_DESIGN_INVALID_PREPARATION_INPUT") for path in (
-                                 ("geometry_request","pre_hydrology","ref"), ("metadata", "source_kind"), ("budget", "source_uid"),
-                                 ("region_coverage", "region_uid"))])
+                             [(prefix + ("geometry_request", "pre_hydrology"), "WATER_DESIGN_WINDOW_REVISION_MISMATCH")]
+                             + [(prefix + path, "WATER_DESIGN_INVALID_PREPARATION_INPUT") for path in (
+                                 ("metadata", "source_kind"), ("budget", "source_uid"), ("region_coverage", "region_uid"))])
             # Independent upstream and context causes at one displayed path both survive.
             from app.dataModel.terrain.designedWater.waterDesignTypeError import WaterDesignTypeError
             other = WaterDesignTypeError.at(type(value.metadata), ("source_kind",), "upstream refusal",
@@ -215,8 +215,9 @@ class CoastlineSourceAdapterTests(TestCase):
                                 metadata=value.metadata.model_copy(update={"source_kind": WaterDesignSourceKind.LAKE})))
         prefix = ("water_source", value.source.location_uid)
         self.assertEqual([(issue.diagnostic_path(), issue.code) for issue in caught.exception.issues],
-                         [(prefix + suffix, "WATER_DESIGN_INVALID_PREPARATION_INPUT") for suffix in (
-                             ("admission", "decision", "state"), ("generation", "state"),
+                         [(prefix + ("admission", "decision"), "WATER_DESIGN_ADMISSION_NOT_READY")]
+                         + [(prefix + suffix, "WATER_DESIGN_INVALID_PREPARATION_INPUT") for suffix in (
+                             ("generation", "state"),
                              ("admission", "header", "identity", "source_uid"),
                              ("admission", "header", "identity", "world_uid"), ("admission", "header", "mode"),
                              ("metadata", "source_kind"))])

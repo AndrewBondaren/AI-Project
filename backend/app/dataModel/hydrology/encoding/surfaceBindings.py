@@ -64,7 +64,7 @@ from app.dataModel.hydrology.planning.stages.openWaterPlan import (
     MaterializedWater,
 )
 from app.dataModel.hydrology.planning.stages.riverRoutePlans import CoarseRiverPlan, FineRiverPlan
-from app.dataModel.hydrology.policy.hydrologyGenerationDecision import WaterPolicyReason
+from app.dataModel.hydrology.policy.hydrologyGenerationDecision import HydrologyGenerationDecision, WaterPolicyReason
 from app.dataModel.hydrology.policy.hydrologyPlacementPolicy import (
     HydrologyPlacementBehaviorInputs,
     HydrologyPlacementGateInputs,
@@ -94,7 +94,7 @@ from app.dataModel.hydrology.sources.waterSourceMetadata import WaterSourceMetad
 from app.dataModel.hydrology.waterBody import WaterBody
 from app.dataModel.hydrology.waterKindMismatchIssue import HydrologyMaterializationCode, WaterKindMismatchIssue
 from app.dataModel.planning.contracts.planEnvelope import PlanEnvelope
-from app.dataModel.policy.policyDecision import ObjectAdmissionDecision, PolicyReason, ValueSelectionDecision
+from app.dataModel.policy.policyDecision import ObjectAdmissionDecision, PolicyReason
 from app.dataModel.spatial.grid.coordinateTypes import FineXY, SurfaceGridCoord
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind
 
@@ -149,7 +149,7 @@ BINDINGS: tuple[tuple[int, type, CanonicalTypeKind], ...] = (
     (228, WaterGenerationCategory, CanonicalTypeKind.ENUM),
     (229, HydrologyExecutionMode, CanonicalTypeKind.ENUM),
     (230, WaterPolicyReason, CanonicalTypeKind.ENUM),
-    (231, ValueSelectionDecision[HydrologyExecutionMode, WaterPolicyReason], CanonicalTypeKind.RECORD),
+    (231, HydrologyGenerationDecision, CanonicalTypeKind.RECORD),
     (232, PolicyReason[WaterPolicyReason], CanonicalTypeKind.RECORD),
     (233, PlanEnvelope[GeoHydrologyPlan], CanonicalTypeKind.RECORD),
     (241, WorldWaterGenerationSettings, CanonicalTypeKind.RECORD),

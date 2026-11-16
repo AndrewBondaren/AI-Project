@@ -240,7 +240,7 @@ class ProceduralPreparationTests(TestCase):
         binding = bind_hydrology_generation_policy(enabled=True, generation=scene.generation,
             defaults=scene.defaults, category=scene.sea_generation, body=scene.sources[0].value.generation,
             root_path=("hydrology",), context_path=("context",))
-        generation = PolicyResolver().resolve(binding.spec, binding.inputs, binding.facts, mode=scene.resolution_mode)
+        generation = binding.resolve(PolicyResolver(), mode=scene.resolution_mode)
         kwargs = dict(category=scene.seas, gates=HydrologyPlacementGateInputs(world_enabled=True, category_enabled=True),
             behavior=HydrologyPlacementBehaviorInputs(strategy=Strategy.CONTINENTAL_NOISE),
             snapshot=HydrologyPolicySnapshot(world_uid="world", supports=(), hydrology=None, source_mapping=None, mapping_hydrology_ref=None),

@@ -4,10 +4,13 @@ from collections.abc import Iterator
 from itertools import product
 from math import cos, floor, fsum, isfinite, pi, prod, sin
 
+from pydantic import ValidationError
+
 from app.application.planning.service.planningService import PlanBuildFailure
 from app.dataModel.terrain.designedWater.fields.field import ContinentalField, ContinentalFieldValue, FieldChannel, NoiseRecipe
 from app.dataModel.terrain.designedWater.input import NoiseWaterDesignInput, PlateNoiseWaterDesignInput
 from app.dataModel.terrain.designedWater.strategyKind import WaterDesignIssueCode
+from app.dataModel.terrain.designedWater.waterDesignTypeError import WaterDesignTypeError
 from app.dataModel.terrain.sampling.fineSurfaceWindow import SurfaceSamples
 from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode
 from app.dataModel.topology.worldTopology import WorldTopology
@@ -58,12 +61,17 @@ class NoiseFieldGenerator:
         """Sample a real world-fine position; callers supply centers, including fine cells."""
         if not isinstance(recipe, NoiseRecipe):
             raise TypeError("noise sampling requires a typed noise recipe")
+        if type(x) not in (int, float) or type(y) not in (int, float) or not isfinite(x) or not isfinite(y):
+            raise ValueError("noise position requires finite world-fine coordinates")
         try:
             recipe = NoiseRecipe.model_validate(recipe, strict=True)
+        except ValidationError as error:
+            raise PlanBuildFailure(WaterDesignTypeError.from_validation(NoiseRecipe, error, operation="continental_field")) from error
+        try:
             return self._sample(recipe, x, y, {})
         except (ValueError, OverflowError) as error:
-            raise PlanBuildFailure((FieldPathError(("noise_field", "sample"), str(error),
-                code=WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value),)) from error
+            raise PlanBuildFailure((WaterDesignTypeError.at(NoiseRecipe, ("noise_policy",), str(error),
+                                                            operation="continental_field"),)) from error
 
     def _sample(self, recipe: NoiseRecipe, x: float, y: float, memo: _LatticeMemo) -> ContinentalFieldValue:
         if type(x) not in (int, float) or type(y) not in (int, float) or not isfinite(x) or not isfinite(y):

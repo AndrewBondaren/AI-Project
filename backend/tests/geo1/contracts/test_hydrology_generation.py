@@ -15,7 +15,9 @@ from app.application.cascade.contextResolver import extend
 from app.application.jsonValidation.resolve import ResolveContext, UnresolvedModelError, resolve_model
 from app.application.policy.policyResolver import PolicyResolver
 from app.application.policy.declarations.compiler import compile_value_policy
-from app.application.worldData.generators.hydrology.policy.hydrologyGenerationBinding import bind_hydrology_generation_policy
+from app.application.worldData.generators.hydrology.policy.hydrologyGenerationBinding import (
+    HydrologyGenerationBinding, bind_hydrology_generation_policy,
+)
 from app.dataModel.hydrology.enums.planning.hydrologyExecutionMode import HydrologyExecutionMode as Mode
 from app.dataModel.hydrology.enums.planning.hydrologyScope import HydrologyScope
 from app.dataModel.hydrology.enums.planning.waterGenerationScope import WaterGenerationScope as Scope
@@ -46,10 +48,10 @@ def context_for(root, category=None, body=None):
 
 
 def resolve(root, context, mode=ResolutionMode.VALIDATE_ONLY):
-    return PolicyResolver().resolve(_SPEC, PolicyInputs(models=(
+    return HydrologyGenerationBinding(spec=_SPEC, inputs=PolicyInputs(models=(
         PolicySource(WorldHydrologyGenerationFields, root, ("hydrology",)),
         PolicySource(WaterGenerationContext, context, ("resolved",)),
-    )), PolicyFacts(), mode=mode)
+    )), facts=PolicyFacts(), context=context).resolve(PolicyResolver(), mode=mode)
 
 
 class HydrologyGenerationTests(TestCase):
@@ -207,7 +209,7 @@ class GenerationBindingTests(TestCase):
             body=body, root_path=("hydrology",), context_path=("hydrology", "resolved_generation"))
 
     def decision(self, binding, mode=ResolutionMode.RUNTIME):
-        return PolicyResolver().resolve(binding.spec, binding.inputs, binding.facts, mode=mode)
+        return binding.resolve(PolicyResolver(), mode=mode)
 
     def test_actual_binding_preserves_full_override_truth_table(self):
         for enabled, world, category, body in product((False, True), *((None, False, True),) * 3):

@@ -1,7 +1,7 @@
 """Field cause with operation context for water preparation."""
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app.dataModel.fields.checkedPath import CheckedPath, CheckedPathError
 from app.dataModel.planning.identity.planRef import PlanRef
@@ -23,9 +23,16 @@ class WaterDesignTypeError(FieldPathError[WaterDesignIssueCode]):
     @classmethod
     def at(cls, model: type[BaseModel], loc: tuple[str | int, ...], message: str, *,
            operation: Literal["continental_field", "water_source"], source_uid: EntityUid | None = None,
-           prefix: tuple[str, ...] = (), expected_window: PlanRef | None = None) -> "WaterDesignTypeError":
+           prefix: tuple[str, ...] = (), expected_window: PlanRef | None = None,
+           code: WaterDesignIssueCode = WaterDesignIssueCode.INVALID_PREPARATION_INPUT) -> "WaterDesignTypeError":
         path = CheckedPath.from_pydantic_loc(model, loc)
         if path is None:
             raise CheckedPathError(f"{model.__name__} has no field at {loc!r}")
-        return cls(code=WaterDesignIssueCode.INVALID_PREPARATION_INPUT, message=message, path=path,
+        return cls(code=code, message=message, path=path,
                    operation=operation, source_uid=source_uid, prefix=prefix, expected_window=expected_window)
+
+    @classmethod
+    def from_validation(cls, model: type[BaseModel], error: ValidationError, *,
+                        operation: Literal["continental_field", "water_source"]) -> tuple["WaterDesignTypeError", ...]:
+        return tuple(cls.at(model, detail["loc"], detail["msg"], operation=operation)
+                     for detail in error.errors(include_input=False, include_context=False, include_url=False))

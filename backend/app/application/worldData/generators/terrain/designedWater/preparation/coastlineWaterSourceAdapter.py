@@ -76,9 +76,12 @@ def _ready_mode(source: DeclaredCoastline, request: AuthoredWaterGeometryRequest
         errors.add(WaterDesignTypeError.at(root, loc, message, operation="water_source", source_uid=uid, prefix=prefix))
 
     if decision.state is not PolicyState.READY:
-        report(decision, lambda d: d.state, "coastline requires ready admission", "admission", "decision")
+        errors.add(WaterDesignTypeError.at(PlacementAdmissionInput, ("decision",), "coastline requires ready admission",
+            operation="water_source", source_uid=uid, prefix=("admission",), code=WaterDesignIssueCode.ADMISSION_NOT_READY))
     elif decision.behavior is not context.strategy:
-        report(decision, lambda d: d.behavior, "admission strategy must match the resolved context", "admission", "decision")
+        errors.add(WaterDesignTypeError.at(PlacementAdmissionInput, ("decision",),
+            "admission strategy must match the resolved context", operation="water_source", source_uid=uid,
+            prefix=("admission",), code=WaterDesignIssueCode.ADMISSION_STRATEGY_MISMATCH))
     if generation.state is not PolicyState.READY:
         report(generation, lambda g: g.state, "coastline requires ready generation", "generation")
     else:
@@ -131,9 +134,10 @@ class CoastlineWaterSourceAdapter:
                                                    source_uid=uid, prefix=("expected_window",)))
         else:
             if request.pre_hydrology.ref != expected_window:
-                errors.add(WaterDesignTypeError.at(type(request), ("pre_hydrology", "ref"),
+                errors.add(WaterDesignTypeError.at(type(request), ("pre_hydrology",),
                     "coastline request must match the expected fine window revision", operation="water_source",
-                    source_uid=uid, prefix=("geometry_request",), expected_window=expected_window))
+                    source_uid=uid, prefix=("geometry_request",), expected_window=expected_window,
+                    code=WaterDesignIssueCode.WINDOW_REVISION_MISMATCH))
 
         with _validation_path(uid, CoastlineWaterSource, "source"):
             wrapped = CoastlineWaterSource(value=source)

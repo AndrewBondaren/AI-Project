@@ -1,5 +1,6 @@
 """Pure composition of aligned signed fields; no selection or height writes."""
 
+from math import isfinite
 from typing import Literal
 
 from pydantic import ValidationError
@@ -53,7 +54,8 @@ class ContinentalFieldComposer:
             return FineContinentalField(pre_hydrology_ref=input.pre_hydrology_ref, recipe=recipe,
                                         samples=samples, notices=notices)
         except (ValueError, OverflowError) as error:
-            raise self._failure("build_native", error) from error
+            raise PlanBuildFailure((WaterDesignTypeError.at(NativeCoastlineStrategyInput, ("field_policy",), str(error),
+                                                            operation="continental_field"),)) from error
 
     # GEO-LEGACY-57: Remove coarse component composition when PlateNoiseStrategy.design migrates.
     def combine(self, plate: ContinentalField, noise: ContinentalField | None,
@@ -88,19 +90,26 @@ class ContinentalFieldComposer:
         """Fine evaluation uses the same captured layout and existing component samplers."""
         if not isinstance(recipe, PlateNoiseRecipe) or not isinstance(layout, PlateLayout):
             raise TypeError("composition sampling requires typed recipe and plate layout")
+        if type(x) not in (int, float) or type(y) not in (int, float) or not isfinite(x) or not isfinite(y):
+            raise ValueError("composition position requires finite world-fine coordinates")
+        for model, value in ((PlateNoiseRecipe, recipe), (PlateLayout, layout)):
+            try:
+                model.model_validate(value, strict=True)
+            except ValidationError as error:
+                raise PlanBuildFailure(WaterDesignTypeError.from_validation(model, error, operation="continental_field")) from error
         try:
-            recipe = PlateNoiseRecipe.model_validate(recipe, strict=True)
-            layout = PlateLayout.model_validate(layout, strict=True)
             weight = self._weight(recipe)
-            if layout.recipe != recipe.plate_recipe:
-                raise ValueError("plate layout does not match the captured component recipe")
-            base = PlateFieldGenerator().sample(layout, x=x, y=y)
-            if weight == 0.0:
-                return base
-            detail = NoiseFieldGenerator().sample(recipe.noise_recipe, x=x, y=y)
-            return self._value(base, detail, weight)
         except ValueError as error:
-            raise self._failure("sample", error) from error
+            raise PlanBuildFailure((WaterDesignTypeError.at(PlateNoiseRecipe, ("composition_policy",), str(error),
+                                                            operation="continental_field"),)) from error
+        if layout.recipe != recipe.plate_recipe:
+            raise PlanBuildFailure((WaterDesignTypeError.at(PlateLayout, ("recipe",),
+                "plate layout does not match the captured component recipe", operation="continental_field"),))
+        base = PlateFieldGenerator().sample(layout, x=x, y=y)
+        if weight == 0.0:
+            return base
+        detail = NoiseFieldGenerator().sample(recipe.noise_recipe, x=x, y=y)
+        return self._value(base, detail, weight)
 
     @staticmethod
     def _weight(recipe: PlateNoiseRecipe) -> float:
@@ -113,6 +122,6 @@ class ContinentalFieldComposer:
         return max(-1.0, min(1.0, base + weight * detail))
 
     @staticmethod
-    def _failure(operation: Literal["combine", "sample", "build_native"], error: Exception) -> PlanBuildFailure:
+    def _failure(operation: Literal["combine"], error: Exception) -> PlanBuildFailure:
         return PlanBuildFailure((FieldPathError(("continental_field_composition", operation), str(error),
             code=WaterDesignIssueCode.INVALID_PREPARATION_INPUT.value),))
