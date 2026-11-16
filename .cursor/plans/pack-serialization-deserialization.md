@@ -14,6 +14,8 @@
 
 ## Подзадача 1. Сериализация
 
+**Инвентаризация 2026-11-16:** [prepare/manifest canonical graph](pack-prepare-canonical-inventory.md) фиксирует проверенные типы, владельцев и IDs, отсутствие конкретных Pack registrations и точные следующие решения. Состав owning proof graph уже известен; незавершёнными остаются Pack root/reachable declarations и semantic inclusion policy. Таблица не является PASS полного merge или runtime round-trip.
+
 **Разделение приёмки плана и реализации, 2026-11-14:** выбор shape/fields/identity/registration и READY port — контрактная работа. Вычисленные vectors и runtime round-trip/GC/перезапуск — свидетельства реализации, не требование написать код в текущем контрактном проходе. Для плана обязателен точный набор проверок и ожидаемых свойств; для поставки — фактические результаты. Незаполненные Pack canonical declarations остаются реальным контрактным остатком, отсутствие ещё не выполненного runtime-теста само по себе им не является.
 
 - [ ] Свести конкретный состав Pack manifest и semantic prepare body с owning типами, без дублирования state/proof.
