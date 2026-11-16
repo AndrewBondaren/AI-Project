@@ -139,7 +139,10 @@ class PinnedClimateRetentionTests(ExecutionPinFixture):
         self.assertEqual((await cold.service.collect("gc-climate", candidates)).retained, candidates)
         pin = ManifestPinRead(**asdict(intent), max_bytes=ref_a.nbytes)
         address = await self.manifest_reader.resolve(pin)
+        from app.dataModel.worldPack.read.pinnedManifest import ManifestAddress, VerifiedManifestBytes
+        assert isinstance(address, ManifestAddress)
         result = await self.manifest_reader.read_verified(ManifestStorageRead(pin=pin, address=address))
+        assert isinstance(result, VerifiedManifestBytes)
         self.assertEqual(result.ref, ref_a)
         manifest = decode_manifest(result.payload)
         self.assertEqual(manifest.climate_artifacts(), tuple(fields_a))

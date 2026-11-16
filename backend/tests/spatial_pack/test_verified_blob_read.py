@@ -33,7 +33,7 @@ class RunnerShutdownTests(TestCase):
         observed = []
 
         class Blocking(io.BytesIO):
-            def read(stream, size):
+            def read(self, size):
                 entered.set()
                 if not release.wait(5):
                     raise AssertionError("worker did not receive release")
@@ -96,8 +96,8 @@ class VerifiedReadTests(IsolatedAsyncioTestCase):
 
     async def test_bounded_single_open_and_close(self):
         class Counted(io.BytesIO):
-            def close(stream):
-                stream.consumed = stream.tell()
+            def close(self):
+                self.consumed = self.tell()
                 super().close()
 
         ref = descriptor(ROOT_FORMAT, b"ab")
@@ -116,7 +116,7 @@ class VerifiedReadTests(IsolatedAsyncioTestCase):
         entered, release = threading.Event(), threading.Event()
 
         class Blocking(io.BytesIO):
-            def read(stream, size):
+            def read(self, size):
                 entered.set()
                 if not release.wait(5):
                     raise TimeoutError("test did not release reader")

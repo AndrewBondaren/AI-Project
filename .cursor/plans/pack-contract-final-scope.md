@@ -28,6 +28,10 @@ Pack принимает готовые типизированные резуль
 
 ## Зафиксированный Pack-контракт
 
+**2026-11-16 — массовые writes: контрактный вопрос CLOSED / independent PASS.** [Batch-контракт](pack-wilderness-chunk-batch-contract.md#актуальный-статус--2026-11-16) и metadata transitions прошли независимую техническую приёмку. Предыдущая строка о ещё не предъявленном named batch устарела. Реализация и benchmark остаются отдельными delivery gates; результаты existing runtime проверок не заменяют их.
+
+**Следующий контрактный вопрос для проработки:** итоговая Pack canonical composition/IDs для semantic prepare body и manifest — строка Serialization/read ниже, в ранее выделенном [плане сериализации](pack-serialization-deserialization.md). Сначала сверить актуальные declarations/registrations: не выбирать повторно wire/storage версии, не дублировать Source schema и не возвращать READY recovery к реконструкции. Это отдельный serialization-срез, не новый общий blocker независимого Pack и не перенос DAG-интеграции вперёд.
+
 **Правила массовых операций:** [четыре принципа Pack и проверка решений](pack-bulk-write-principles.md). Документ явно различает принятый batch-подход, существующие single writes и недоказанные implementation свойства; локальные mutable контейнеры допустимы, public state остаётся immutable. Оценка сложности включает metadata/provenance. Это не изменение границ DAG или чужих доменов.
 
 **Массовые writes, решение 2026-11-15:** пользователь выбрал однотипные пакетные операции с одним input-state admission и одним итоговым immutable state; duplicate addresses отвергаются, errors агрегируются, порядок пакетов задаёт DAG. [Точные границы решения и следующей конкретизации](pack-v2-public-write-operations.md#стоимость-последовательных-writes--отдельная-проверка-масштабирования). Первое семейство — chunks; named batch contract ещё предстоит предъявить до кода. [Замеры старого replacement](pack-write-scaling-measurement-2026-11-15.md) частичные, массовая реализация не принята. Существующие pure методы этим решением не переписываются автоматически.

@@ -44,7 +44,8 @@ class StructuralLimitsTests(TestCase):
     def test_field_contract_rejects_wrong_container_and_nested_item(self):
         for expected in (frozenset[HydrologyShardRef], tuple[PlanRef, ...], tuple[HydrologyShardRef]):
             with self.subTest(expected=expected), self.assertRaisesRegex(ValueError, "collection type mismatch"):
-                CollectionLimit(expected, ref=FieldRef(lambda: HydrologyPackRoot, lambda root: root.shards), maximum=1)
+                # Deliberately violate the static contract to exercise runtime rejection.
+                CollectionLimit(expected, ref=FieldRef(lambda: HydrologyPackRoot, lambda root: root.shards), maximum=1)  # pyright: ignore[reportArgumentType]
 
     def test_depth_counts_top_as_one(self):
         data, annotation = encode(True, MANIFEST), bool

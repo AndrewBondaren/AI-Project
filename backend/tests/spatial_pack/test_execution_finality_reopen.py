@@ -6,6 +6,7 @@ from contextlib import closing, contextmanager
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
+from typing import TypedDict
 
 from app.application.engine.contracts.invocation.inputWait import Failed
 from app.application.worldData.pack.spatial.openWaterBlobReader import OpenWaterBlobReader
@@ -15,6 +16,11 @@ from tests.dag_typing.invocations import test_world_calls as dag
 
 from app.db.repositories.sqlite.dagExecutions.executionStore import SQLiteExecutionStore
 from tests.spatial_pack.test_execution_pins import ExecutionPinFixture
+
+
+class RunOptions(TypedDict):
+    max_passes: int
+    options: dag.LLMExecutionOptions
 
 
 class ExecutionFinalityReopenTests(ExecutionPinFixture):
@@ -55,13 +61,15 @@ class ExecutionFinalityReopenTests(ExecutionPinFixture):
                 yield stream
             events.append("stream closed")
 
+        test_case = self
+
         class Children(dag.Transform):
-            async def execute(child, input):
+            async def execute(self, input):
                 if input.value == "ok":
                     await pins.acquire(second)
-                    self.assertEqual(await self.spatial_reader.read_shard(second, shard), expected_bytes)
+                    test_case.assertEqual(await test_case.spatial_reader.read_shard(second, shard), expected_bytes)
                 if failed and input.value == "failed":
-                    self.assertTrue(await asyncio.to_thread(opened.wait, 10))
+                    test_case.assertTrue(await asyncio.to_thread(opened.wait, 10))
                     try:
                         return await super().execute(input)
                     except dag.PythonNodeError:
@@ -81,9 +89,11 @@ class ExecutionFinalityReopenTests(ExecutionPinFixture):
             return result
 
         def engine():
-            return dag.runtime(dag.Group, store=self.dag, pack_closer=self.pins, transform=Children, workers=3)
+            result = dag.runtime(dag.Group, store=self.dag, pack_closer=self.pins, transform=Children, workers=3)
+            assert isinstance(result, dag.DAGEngine)
+            return result
 
-        options = dict(max_passes=1, options=dag.LLMExecutionOptions(
+        options = RunOptions(max_passes=1, options=dag.LLMExecutionOptions(
             player_message="", language="ru", repair_iterations=0, repair_mode=dag.RepairMode.MAXIMUM))
         with (patch.object(dag.Group, "resume", join), patch.object(Path, "open", physical_open),
               patch.object(self.dag, "record_stop_intent", side_effect=dag.Crash), self.assertRaises(dag.Crash)):
@@ -105,6 +115,7 @@ class ExecutionFinalityReopenTests(ExecutionPinFixture):
               self.assertRaises(dag.Crash)):
             await engine().resume(key, **options)
         intent = (await self.dag.load(key)).stop_intent
+        assert intent is not None
         self.assertIsInstance(intent.outcome, dag.FailedOutcome if failed else dag.CompletedOutcome)
         self.assertIsNone(await pins.read_closed(intent))
         await self.reopen_stores()
@@ -140,8 +151,13 @@ class ExecutionFinalityReopenTests(ExecutionPinFixture):
             final = await self.dag.load(key)
             self.assertEqual((final.stop_intent, final.final_revision, final.revision),
                              (intent, intent.stop_revision + 1, intent.stop_revision + 1))
-            expected = (Failed(intent.outcome.diagnostic) if failed else
-                        dag.TypeAdapter(dag.ResolveResult[dag.Text]).validate_json(intent.outcome.result_json))
+            if isinstance(intent.outcome, dag.FailedOutcome):
+                self.assertTrue(failed)
+                expected = Failed(intent.outcome.diagnostic)
+            else:
+                assert isinstance(intent.outcome, dag.CompletedOutcome)
+                self.assertFalse(failed)
+                expected = dag.TypeAdapter(dag.ResolveResult[dag.Text]).validate_json(intent.outcome.result_json)
             self.assertEqual(await engine().resume(key, **options), expected)
             release = self.fixture.holders._release_pin
 
