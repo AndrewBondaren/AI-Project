@@ -4,6 +4,10 @@
 
 ## Публичный контракт
 
+**Актуальная конкретизация собственных переходов Pack:** [chunk metadata transition contract](pack-chunk-metadata-transition-contract.md). В нём закрыты прежние OPEN new-tile/status usage: coarse и provisional status используют явно обоснованный empty usage; chunk item требует ADDRESS и REFINE_ROLE evidence. Прежние условные формулировки и остатки ниже читаются как история до этой конкретизации. Техническая приёмка/реализация отдельно.
+
+Требования к входам, точные границы Source/Snapshot/Cache и ограничение остальных производителей уровнем POJO зафиксированы в [контрактах владельцев для batch](pack-batch-owner-contract-requirements.md). Правила происхождения собственных status/defaults обязан завершить Pack; их нельзя целиком переносить в неопределённый внешний mapping.
+
 Владелец — Pack. Предлагаемые объявления в `backend/app/dataModel/worldPack/preparation/operations.py`:
 
 ```python

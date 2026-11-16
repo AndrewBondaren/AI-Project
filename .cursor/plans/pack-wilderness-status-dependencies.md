@@ -4,6 +4,8 @@
 
 ## 1. Что читает действующий алгоритм
 
+Уточнение 2026-11-16 для single/batch chunk write с expected=None: [точный Pack transition](pack-chunk-metadata-transition-contract.md) закрепляет status как характеристику записанного состава, empty Source usage и обязательный final membership basis. Прежний открытый mapping этого конкретного provisional перехода закрыт; правила explicit expected других операций этим не определяются.
+
 1. [WorldPackWriter.commit_chunk](../../backend/app/application/worldData/pack/io/worldPackWriter.py) заменяет запись по cx/cy и вызывает recalc_wilderness_status с expected_chunks=None. Меняются состав и provisional status; не выполняется чтение Source или анализ содержимого chunks.
 2. recalc_wilderness_status берёт len(tile.chunks). [Pure policy](../../backend/app/dataModel/worldPack/bake/wildernessRefineStatus.py): без expected — partial при положительном количестве, иначе absent; с expected — absent при baked<=0, complete при expected>0 и baked>=expected, иначе partial. Новые bounds для expected не вводятся.
 3. [DetailedRefine](../../backend/app/application/worldData/pack/bake/detailed/detailedBakeRefine.py) вызывает финальный пересчёт после обработки tile только при наличии plan.expected_chunks_for_status. При пустом rects обработка tile пропускается. Порядок и условие вызова сохраняются.
