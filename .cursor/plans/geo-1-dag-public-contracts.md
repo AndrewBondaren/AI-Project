@@ -59,3 +59,29 @@
 2. ~~Диспатч стратегии~~ — решено: DAG.
 3. ~~Per-source fail/continue~~ — решено: (a), DAG.
 4. ~~Настройки~~ — решено: `HydrologySettingsService`.
+
+## 7. Требования к DAG-контрактам GEO из принятых контрактов Snapshot (2026-11-16)
+
+Основания: [snapshot-public-contracts-dag-integration.md](snapshot-public-contracts-dag-integration.md) §3–§7, [gen-dag-snapshot-node-contracts.md](gen-dag-snapshot-node-contracts.md) §1–§4, `docs/tz_world_snapshot.md` § «Staged artifacts», § «ArtifactRef, staging и domain SQL rows». Здесь только требования к контрактам GEO; NodeId, bindings и состав нод не назначаются (§0).
+
+| # | Требование к GEO | Основание в Snapshot |
+|---|---|---|
+| S1 | Запись: GEO не пишет в Snapshot и не импортирует его stores/commit scope. Мутирующие операции §1 (create/update/delete body/union/river) и P5 возвращают typed результат в DAG; DAG передаёт его в `apply_snapshot` (`ApplySnapshotInput.patch_set: PatchSet[S]`). | integration §3, §9; nodes §1 |
+| S2 | Для apply GEO поставляет собственный concrete `DomainSection[P]` (header + `patches: tuple[P, ...]`) с owning patch DTO `P`; без подстановки `DomainSection`/`BaseModel` как универсальной секции. Concrete hydrology section в `app` сейчас отсутствует — **OPEN**, отдельный contract freeze. | nodes §1 «Конкретизация apply»; integration §5 |
+| S3 | **Решено 2026-11-16:** `PatchSet` собирает оркестратор DAG из результатов доменных операций; нода сборки пока не определена. GEO не генерирует operation_id и не выбирает expected heads; контракт GEO — только своя `DomainSection` и её patches (S2), его можно фиксировать до ноды. | nodes §3; integration §5 |
+| S4 | CRUD над immutable историей: update/delete = новый patch в новой публикации, не перезапись строки и не физическое удаление истории. Невозможность выразить операцию через patch предъявляется пользователю. | integration §4 «CRUD данных» |
+| S5 | **Решено 2026-11-16:** хранение R1/G1 — по принятому SP-PACK-V1-B ([spatial-distribution-domain.md](spatial-distribution-domain.md) §7): initial bake — immutable Hydrology root `ArtifactRef` в `WorldPackManifest`; runtime — staged immutable refs Snapshot поверх базового pack. Малые typed факты (UID, liquid, level, links) — в patch/section. **PROPOSAL (формат):** переиспользовать существующий `OPEN_WATER_PACK_SCHEMA_V1` (`HydrologyPackRoot` + шарды `HydrologyPackShard` 64×64 с `bed`/`wet_runs`/`shore_rows`, ключи `hydrology.open_water.root.tlv` / `shard.tlv`) поверх общего проектного `CanonicalCodec` TLV v1; новый формат не вводить. Runtime-правка = новые ref только изменённых шардов + новый root. Сжатие поверх TLV — оптимизация после измерений. | tz_world_snapshot § Staged artifacts, § ArtifactRef; SP-PACK-V1-B |
+| S6 | Чтение: Read-методы §1 принимают exact ref (`SnapshotRef` / `WorldPublicationRef`), полученный DAG из `read_snapshot`; без latest/head fallback, без repair; missing → явный found/missing, corrupt → ошибка, не `None`. Read — наблюдение, не pin/hold. Snapshot не выдаёт hydrology payload — его читает GEO по ref (**OPEN**: точный state-reference read). | integration §4, §9; nodes §1 |
+| S7 | Public Input/Output: strict, frozen, `extra="forbid"`, `revalidate_instances="always"`, все поля обязательны; без Any/dict/services/scope/lease/SQL/callbacks/registry. Для регистрации — named nongeneric классы, union не передаётся как input_type. | nodes §1, §2; integration §3 |
+| S8 | Ошибки: один owning public fault на сервис/pipeline; node error оборачивает его без перекодирования и без дубля field errors. Structural ошибки POJO — existing engine validation. Бизнес-отказ — в typed результате (как `SnapshotApplyResult` и решение §4.3), не исключение. Любые исключения не превращаются в success/refusal. | nodes §3 |
+| S9 | Отмена/повтор: `asyncio.CancelledError` не перехватывается и не превращается в fault; скрытых retry нет; операции детерминированы по входу, чтобы engine replay не давал новых эффектов. | nodes §3 |
+| S10 | Нет прямых вызовов GEO → Snapshot/Source/Pack/Cache; каждая стрелка между доменами — DAG. Существующие прямые пути помечаются legacy и удаляются при cutover (как `SNAPSHOT-V1` маркеры). | integration §3, §7, §9 |
+
+Следствие для §1: STUB-сигнатуры body/union/river должны иметь вид «exact ref + typed команда → typed результат с section patch / `ArtifactRef` | owning fault». Точные поля — при freeze каждого сервиса.
+
+### 7.1. PROPOSAL: полный CRUD от клетки до объектов L0 (на согласовании, 2026-11-16)
+
+- **A. По пространству** (`WaterSpatialService`, рабочее имя). Read — existing `SpatialReadRequest` (`request_id`, `window: SpatialWindow`, `revision: PlanRef | WorldPublicationRef`, `mode`); одна клетка = окно из одного box. Create/Update/Delete — typed команда над окном (wet↔dry с привязкой к body, уровень, bed) → section patch (дельта R1 runs + G1) | отказ. Путь runtime — принятый SP-H3: Physics → DAG → Hydrology → patch → Snapshot.
+- **B. По объектам** — `WaterBodyService` / `WaterUnionService` / `RiverService` (§1). Для больших объектов read отдаёт метаданные, bbox, coverage; runs — через A по окнам.
+- **L0** — только read-проекция canonical facts (роль, `z_water_level` на light cell); прямой записи нет. Владелец перевода `LightCellRef` → `SpatialWindow` — OPEN.
+- **Пересыхание водоёма** — не delete B. Physics возвращает typed запрос на изменение membership (A); Hydrology получает body без wet cells. OPEN: (а) body сохраняется с явным состоянием «сухой» (identity для повторного наполнения и истории; новое поле `WaterBody` — отдельный freeze) или (б) Hydrology формирует delete body в том же patch. Разрез водоёма на части — OPEN: новый детерминированный UID или отказ с явной операцией B.
