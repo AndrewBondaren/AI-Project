@@ -171,6 +171,14 @@ class NativeFieldTests(TestCase):
             with self.assertRaises(ValidationError):
                 FineContinentalField.model_validate(field.model_copy(update={"samples": invalid}))
 
+    def test_unrepresentable_field_reports_field_policy(self):
+        admitted = self.admitted(Strategy.PLATE)
+        with patch.object(PlateFieldGenerator, "fine_values", side_effect=ValueError("probe")):
+            with self.assertRaises(PlanBuildFailure) as caught:
+                ContinentalFieldComposer().build_native(admitted)
+        self.assertEqual([(type(i), i.diagnostic_path(), i.code) for i in caught.exception.issues], [
+            (WaterDesignTypeError, ("continental_field", "field_policy"), "WATER_DESIGN_INVALID_PREPARATION_INPUT")])
+
     def test_stale_constraints_rejected_before_sampling(self):
         admitted = self.admitted(Strategy.CONTINENTAL_NOISE)
         stale = self.window.ref.model_copy(update={"output_fingerprint": bytes(32)})

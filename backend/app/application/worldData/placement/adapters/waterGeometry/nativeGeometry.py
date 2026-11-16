@@ -15,6 +15,7 @@ from app.dataModel.terrain.designedWater.geometry.authoredGeometry import (
     AuthoredWaterGeometry, AuthoredWaterGeometryRequest, LegacyAuthoredWaterGeometryRequest,
 )
 from app.dataModel.placement.coastlineCapNotice import CoastlineCapNotice
+from app.dataModel.placement.waterPreparationTypeError import WaterPreparationTypeError
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 
@@ -56,5 +57,5 @@ def prepare_native_water_geometry(request: AuthoredWaterGeometryRequest) -> Auth
     try:
         return rasterize_authored_geometry(request, request.source.value, view)
     except ValueError as error:
-        raise PlanBuildFailure((FieldPathError(("authored_geometry", request.source.value.location_uid), str(error),
-            code=WaterPreparationCode.GEOMETRY.value),)) from error
+        raise PlanBuildFailure((WaterPreparationTypeError.at(AuthoredWaterGeometryRequest, ("source",), str(error),
+            source_uid=request.source.value.location_uid, code=WaterPreparationCode.GEOMETRY),)) from error

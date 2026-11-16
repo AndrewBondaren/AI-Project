@@ -12,6 +12,7 @@ from app.dataModel.terrain.designedWater.fields.field import AffinePermutationCo
 from app.dataModel.terrain.designedWater.fields.plateLayout import PlateLayout
 from app.dataModel.terrain.designedWater.settings.plateGenerationPolicy import PlateGenerationPolicy
 from app.dataModel.terrain.designedWater.strategyKind import WaterDesignIssueCode as Code
+from app.dataModel.terrain.designedWater.waterDesignTypeError import WaterDesignTypeError
 from app.dataModel.topology.worldTopology import WorldTopology
 from app.dataModel.topology.worldBounds import WorldBounds
 from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode as Mode
@@ -144,3 +145,16 @@ class PlateFieldTests(TestCase):
         for x in (float("nan"),float("inf"),True):
             with self.assertRaises(ValueError):generator.sample(layout,x=x,y=.5)
         with self.assertRaises(TypeError):generator.layout({})
+
+    def test_tampered_recipe_reports_exact_recipe_path(self):
+        valid=recipe(4,3,12);bounds=valid.topology.bounds
+        for update,path in (
+            ({"plate_policy":valid.plate_policy.model_copy(update={"plate_count":0})},("plate_policy","plate_count")),
+            ({"plate_policy":valid.plate_policy.model_copy(update={"blend_length_fraction":float("inf")})},
+             ("plate_policy","blend_length_fraction")),
+            ({"topology":valid.topology.model_copy(update={"bounds":bounds.model_copy(update={"x_max":bounds.x_min-1})})},
+             ("topology","bounds"))):
+            with self.subTest(path=path),self.assertRaises(PlanBuildFailure) as caught:
+                PlateFieldGenerator().layout(valid.model_copy(update=update))
+            self.assertEqual([(type(i),i.diagnostic_path(),i.code) for i in caught.exception.issues],
+                [(WaterDesignTypeError,("continental_field",*path),Code.INVALID_PREPARATION_INPUT.value)])

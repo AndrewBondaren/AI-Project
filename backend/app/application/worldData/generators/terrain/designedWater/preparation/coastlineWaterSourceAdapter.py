@@ -61,8 +61,14 @@ def _ready_mode(source: DeclaredCoastline, request: AuthoredWaterGeometryRequest
         context = ResolvedWaterGenerationContext.model_validate(context, strict=True)
     with _validation_path(uid, PlacementAdmissionInput, "admission"):
         admission = PlacementAdmissionInput.model_validate(admission, strict=True)
-    with _validation_path(uid, type(admission.decision), "admission", "decision"):
+    try:
         decision = ObjectAdmissionDecision[Strategy, WaterPolicyReason].model_validate(admission.decision, strict=True)
+    except ValidationError as error:
+        raise PlanBuildFailure(tuple(
+            WaterDesignTypeError.at(PlacementAdmissionInput, ("decision",), detail["msg"], operation="water_source",
+                                    source_uid=uid, prefix=("admission",))
+            for detail in error.errors(include_input=False, include_context=False, include_url=False)
+        )) from error
     with _validation_path(uid, type(generation), "generation"):
         generation = _GENERATION.validate_python(generation, strict=True)
     errors = ValidatorAggregationHelper((WaterDesignTypeError,))

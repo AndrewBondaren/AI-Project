@@ -21,6 +21,9 @@ from app.dataModel.terrain.designedWater.input import CoastlineWaterDesignInput,
 from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind as Strategy
 from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode
 from app.dataModel.validation.enums.resolutionMode import ResolutionMode
+from app.dataModel.hydrology.policy.hydrologyGenerationDecision import WaterPolicyReason
+from app.dataModel.policy.policyDecision import ObjectAdmissionDecision
+from app.dataModel.terrain.designedWater.waterDesignTypeError import WaterDesignTypeError
 from tests.geo1.coastline_source.fixtures import capture, prepare
 
 TARGET = "app.application.worldData.generators.terrain.designedWater.preparation.coastlineWaterSourceAdapter"
@@ -69,6 +72,27 @@ class CoastlineSourceAdapterTests(TestCase):
         self.assertEqual([(issue.diagnostic_path(), issue.code) for issue in caught.exception.issues], [
             (("water_source", value.source.location_uid, "admission", "decision"),
              "WATER_DESIGN_ADMISSION_STRATEGY_MISMATCH")])
+
+    def test_foreign_admission_decision_reports_decision_path(self):
+        window, _, topology = fine_window(hills=False)
+        value = capture()
+        legacy = value.geometry_request
+        request = AuthoredWaterGeometryRequest(source=legacy.source, pre_hydrology=window, topology=topology,
+            grid=physical_inputs(topology).grid, seed_root=legacy.seed_root, anchors=(), seas=legacy.seas,
+            z_min=legacy.z_min)
+        decision = value.admission.decision
+        foreign = ObjectAdmissionDecision[WorldTopologyMode, WaterPolicyReason](**dict(vars(decision),
+            behavior=WorldTopologyMode.PLANAR))
+        args = dict(vars(value), geometry_request=request, expected_window=window.ref,
+                    field_policy=value.field_policy.model_copy(update={"topology": topology}),
+                    admission=value.admission.model_copy(update={"decision": foreign}))
+        with patch.object(CoastlineConstraintPreparer, "prepare_native") as geometry:
+            with self.assertRaises(PlanBuildFailure) as caught:
+                CoastlineWaterSourceAdapter().prepare_native(**args)
+        geometry.assert_not_called()
+        self.assertEqual([(type(issue), issue.diagnostic_path(), issue.code) for issue in caught.exception.issues], [
+            (WaterDesignTypeError, ("water_source", value.source.location_uid, "admission", "decision"),
+             "WATER_DESIGN_INVALID_PREPARATION_INPUT")])
 
     def test_native_recipe_reports_all_independent_mismatches_before_geometry(self):
         window, _, topology = fine_window(hills=False)

@@ -1,5 +1,7 @@
 """Turn an authored water-source line into captured terrain constraints."""
 
+from pydantic import BaseModel
+
 from app.application.planning.service.planningService import PlanBuildFailure
 from app.application.worldData.generators.hydrology.geom.polylineRasterize import rasterize_segments
 from app.application.worldData.placement.adapters.coastlineShape import EmptyCoastlineWaterSide, coastline_segments
@@ -12,8 +14,8 @@ from app.dataModel.spatial.grid.coordinateTypes import FineX, FineY
 from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometryRequest, LegacyAuthoredWaterGeometryRequest
 from app.dataModel.terrain.designedWater.geometry.waterDesignConstraints import FineWaterDesignConstraints, WaterDesignConstraints
 from app.dataModel.terrain.designedWater.strategyKind import WaterDesignIssueCode
+from app.dataModel.terrain.designedWater.waterDesignTypeError import WaterDesignTypeError
 from app.dataModel.topology.worldTopology import Coord, WorldTopology
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 
 
 class CoastlineConstraintPreparer:
@@ -34,7 +36,7 @@ class CoastlineConstraintPreparer:
         source = project_water_source(request.source.value, request.grid.fine_span)
         allowed = frozenset(cell for part in geometry.footprints for cell in part)
         return WaterDesignConstraints(source=request.source, pre_hydrology_ref=request.pre_hydrology.ref,
-            grid=request.grid, allowed_cells=allowed, required_cells=self._strip(source, request.topology, allowed),
+            grid=request.grid, allowed_cells=allowed, required_cells=self._strip(type(request), source, request.topology, allowed),
             notices=geometry.notices)
 
     def prepare_native(self, request: AuthoredWaterGeometryRequest) -> FineWaterDesignConstraints:
@@ -50,17 +52,18 @@ class CoastlineConstraintPreparer:
                 raise
             if not isinstance(error.__cause__, EmptyCoastlineWaterSide):
                 raise
-            raise PlanBuildFailure((FieldPathError(("coastline_constraints", request.source.value.location_uid),
-                str(error.__cause__), code=WaterDesignIssueCode.CONSTRAINT_CONFLICT.value),)) from error
+            raise PlanBuildFailure((WaterDesignTypeError.at(AuthoredWaterGeometryRequest, ("source",),
+                str(error.__cause__), operation="water_source", source_uid=request.source.value.location_uid,
+                code=WaterDesignIssueCode.CONSTRAINT_CONFLICT),)) from error
         allowed = frozenset(cell for part in geometry.footprints for cell in part)
-        required = self._strip(request.source.value, request.pre_hydrology.payload.topology, allowed)
+        required = self._strip(AuthoredWaterGeometryRequest, request.source.value, request.pre_hydrology.payload.topology, allowed)
         return FineWaterDesignConstraints(source=request.source, pre_hydrology_ref=geometry.pre_hydrology_ref,
             coordinate_space=CoordinateSpace.WORLD_FINE_GRID, grid=request.grid, notices=geometry.notices,
             allowed_cells=frozenset((FineX(x), FineY(y)) for x, y in allowed),
             required_cells=frozenset((FineX(x), FineY(y)) for x, y in required))
 
     @staticmethod
-    def _strip(source: DeclaredCoastline, topology: WorldTopology, allowed: frozenset[Coord]) -> frozenset[Coord]:
+    def _strip(model: type[BaseModel], source: DeclaredCoastline, topology: WorldTopology, allowed: frozenset[Coord]) -> frozenset[Coord]:
         required: set[Coord] = set()
         for cell in rasterize_segments(list(coastline_segments(source))):
             coast = topology.canonicalize(*cell)
@@ -68,8 +71,8 @@ class CoastlineConstraintPreparer:
                 if (dx or dy) and (canonical := topology.canonicalize(cell[0] + dx, cell[1] + dy)) is not None)
             wet = neighbors & allowed
             if coast is None or not wet:
-                raise PlanBuildFailure((FieldPathError(("coastline_constraints", source.location_uid),
-                    f"authored coastline cell {cell} has no available water-side neighbor",
-                    code=WaterDesignIssueCode.CONSTRAINT_CONFLICT.value),))
+                raise PlanBuildFailure((WaterDesignTypeError.at(model, ("source",),
+                    f"authored coastline cell {cell} has no available water-side neighbor", operation="water_source",
+                    source_uid=source.location_uid, code=WaterDesignIssueCode.CONSTRAINT_CONFLICT),))
             required.update(wet)
         return frozenset(required)

@@ -15,9 +15,11 @@ from app.dataModel.hydrology.hydrologyWaypoint import HydrologyWaypoint
 from app.dataModel.hydrology.sources.waterDesignSource import AuthoredLakeSource, CoastlineWaterSource
 from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
 from app.dataModel.placement.coastlineCapNotice import CoastlineCapNotice
+from app.dataModel.placement.waterPreparationTypeError import WaterPreparationTypeError
 from app.dataModel.spatial.regionShape import AnchorRadiusShape, BboxShape
 from app.dataModel.terrain.designedWater.geometry.authoredGeometry import AuthoredWaterGeometryRequest
 from app.dataModel.terrain.planning.inputs.waterPlacementInput import WaterAnchorInput
+from app.dataModel.terrain.designedWater.waterDesignTypeError import WaterDesignTypeError
 from tests.geo1.authored.fixtures import request
 from tests.geo1.authored.test_geometry import ring
 from tests.geo1.fine_water.fixtures import physical_inputs
@@ -113,11 +115,13 @@ class NativeAuthoredGeometryTests(TestCase):
         line = CoastlineWaterSource(value=DeclaredCoastline(location_uid="probe", kind=BasinKind.SEA,
             path=(HydrologyWaypoint(x=4, y=0), HydrologyWaypoint(x=5, y=0))))
         req = AuthoredWaterGeometryRequest(**(self.args | {"source": line}))
-        for operation, path, code in (
-            (prepare_native_water_geometry, "authored_geometry", "WATER_PLACEMENT_GEOMETRY"),
-            (CoastlineConstraintPreparer().prepare_native, "coastline_constraints", "WATER_DESIGN_CONSTRAINT_CONFLICT"),
+        for operation, kind, path, code in (
+            (prepare_native_water_geometry, WaterPreparationTypeError, ("authored_geometry", "probe", "source"),
+             "WATER_PLACEMENT_GEOMETRY"),
+            (CoastlineConstraintPreparer().prepare_native, WaterDesignTypeError, ("water_source", "probe", "source"),
+             "WATER_DESIGN_CONSTRAINT_CONFLICT"),
         ):
             with self.subTest(operation=operation), self.assertRaises(PlanBuildFailure) as caught:
                 operation(req)
             issue, = caught.exception.issues
-            self.assertEqual((issue.path, issue.code), ((path, "probe"), code))
+            self.assertEqual((type(issue), issue.diagnostic_path(), issue.code), (kind, path, code))
