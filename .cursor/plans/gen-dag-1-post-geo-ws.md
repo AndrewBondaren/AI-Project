@@ -4,6 +4,7 @@
 
 **Статус:** DRAFT / DEFERRED. Только фиксация архитектурного намерения; не разрешение на имплементацию.
 **Входные gates:** завершён и принят GEO-1; принята архитектура `.cursor/plans/world-domain-patches-snapshots.md` и согласованы необходимые для DAG интеграции Patch/PatchSet/Snapshot контракты; архивный WS не является gate; отдельное согласование с мастером перед изменениями DAG.
+**DAG-first ревизия gates (пользователь, 2026-11-16):** прямые междоменные взаимодействия запрещены; оркестрация и передача данных — только через DAG. Gate «принят GEO-1» разделён: (а) контракты узлов GEO / GEN-PORTS требуют принятого доменного контракта canonical source и публичных CRUD/pipeline контрактов GEO (GEO-SOURCE-CONTRACT, см. [GEO-1 DAG public contracts](./geo-1-dag-public-contracts.md)); (б) production cutover требует GEO-ACCEPTED. G10 и cutover-часть G10-A GEO-1 переносятся в этот план. Узлы GEO согласуются только с пользователем.
 **Типизация engine DAG:** самостоятельный план `.cursor/plans/dag-typing-1.md`; настоящая задача включает генераторную интеграцию и конкретные контракты всех рабочих DAG-нод; общая типизированная инфраструктура остаётся в DAG-TYPING-1.
 **Preflight 2026-10-31:** аудит готовности выполнен ниже. A1–A3 DAG-TYPING-1 завершены; production cutover GEN-DAG-1 остаётся закрыт внешними gates и конкретными contract gaps. Это результат анализа, не приёмка GEO-1/Patch/Snapshot и не разрешение на production cutover.
 

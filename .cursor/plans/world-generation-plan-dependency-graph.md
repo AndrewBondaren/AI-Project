@@ -113,6 +113,7 @@ SP-1, GEO EF-1 и GEO-SPATIAL-CONTRACT явно приняты пользова�
 flowchart TD
     A["DAG-TYPING A1–A3"] --> GEN["GEN-DAG: конкретные ноды и cutover"]
     G["GEO-ACCEPTED"] --> GEN
+    GSC["GEO-SOURCE-CONTRACT: R1+G1 + GEO public CRUD/pipelines"] --> GP
     GP["GEN-PORTS: accepted public operations + required ports"] --> GEN
     SN["SN-RUNTIME: accepted apply path"] --> S["SP-3S: pinned water overlay"]
     BASE["SP-P3 / SP-3"] --> S
@@ -275,6 +276,7 @@ SP-1 + SP-M разрешают проектирование SP-R0; совмес�
 | GEO-ACCEPTED | GEN-CUTOVER |
 | GEN-CONTRACTS | GEN-CUTOVER |
 | GEN-PORTS | GEN-CUTOVER |
+| GEO-SOURCE-CONTRACT | GEN-PORTS |
 | GEN-CUTOVER | DT-B1 |
 | DT-B1 | DT-B2 |
 | DT-B2 | DT-B3 |
@@ -360,6 +362,7 @@ SP-1 + SP-M разрешают проектирование SP-R0; совмес�
 | GEN-CUTOVER | DT-A, GEO-ACCEPTED, GEN-CONTRACTS, GEN-PORTS | НЕ УТОЧНЁН | BLOCKED | GEO, concrete node contracts, реальные domain public bindings/ports, Q07/Q13 и legacy closure OPEN; дополнительно условие §4.1. [GEN-P0 / production gates](./gen-dag-1-post-geo-ws.md) |
 | GEN-PORTS | Внешние условия / критерии owning-плана | НЕ УТОЧНЁН | BLOCKED | Не предъявлены все **применимые выбранным нодам** public domain read/prepare/CRUD implementations и verification, Patch/Snapshot ports/handlers и решение Q01. GEN-BAKE-READ R1–R5 и GEN-SURFACE-PLAN §7 OPEN по своим локальным срезам; один generic Snapshot.apply или AS-IS метод не закрывает gate. [GEN-P0 / production gates](./gen-dag-1-post-geo-ws.md) |
 | GEO-SPATIAL-CONTRACT | SP-1 | ПРИНЯТ документально | Независимый producer/storage design | Явная отдельная приёмка GEO EF-1.14 / Spatial §14.14; не реализация/cutover. [GEO](./geo-1-designed-water.md) / [Spatial](./spatial-distribution-domain.md) |
+| GEO-SOURCE-CONTRACT | Решение R1+G1 (2026-11-16), публичные CRUD/pipeline контракты GEO | НЕ УТОЧНЁН | OPEN | Черновик [GEO-1 DAG public contracts](./geo-1-dag-public-contracts.md): сервисы STUB, сигнатуры/POJO OPEN. DAG-first ревизия 2026-11-16 |
 | GEO-ACCEPTED | Внешние условия / критерии owning-плана | НЕ УТОЧНЁН | BLOCKED | Полная приёмка GEO OPEN; G10-A не равен автоматически завершению GEO. [GEO Task11 / G10-A](./geo-1-designed-water.md) |
 | PACK-ENTRY-CONTRACT | Внешние условия / критерии owning-плана | OPEN | Владелец, линейность входа и срок жизни READY_INACTIVE приняты 2026-11-09 | DAG вызывает линейный OpenPipeline World Pack; 4D3 обеспечивает транзакцию. V2 codec, CAS, ledger и holder handoff реализованы. Pack отвечает за неактивный кандидат до подтверждённой передачи владения или явного отказа DAG; Artifacts обеспечивает удержание. SP-P3W ждёт полной приёмки контракта и проверки вызова из DAG. [Контракт и граница готовности](../../docs/tz_world_pack_storage.md#публичная-операция-активации-world-pack-v2) |
 | PH-0 | Внешние условия / критерии owning-плана | ПРИНЯТ: статический scope | Документальный PH-ARCH разрешён | Owning PH-ARCH P1 явно фиксирует приёмку PH-0 пользователем. Runtime guarantees не приняты. [PHYSICS PH-0/P1](./physics-spatial-dynamics.md) |

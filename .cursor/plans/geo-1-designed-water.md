@@ -97,6 +97,8 @@ retained source, окна и зависимостей; узкие протоки
 «разворачивать footprint до или после P2» не принимается как исходная предпосылка:
 сначала определить source/coverage и bounded materialization, затем проверить
 достаточность coarse placement. Текущий full-world fine fill — существующий путь,
+**Решение пользователя 2026-11-16 (представление):** принят R1 (exact row runs membership + observation spans) + G1 (exact bed samples/runs); G2 и R3 отложены как оптимизации. Coarse-vs-fine P2 этим не решён. См. [GEO-1 DAG public contracts](./geo-1-dag-public-contracts.md).
+
 не обязательная целевая модель. Контракт OPEN; G10-A не закрывать до согласования
 и фактического cutover. Прежняя design closure этот открытый вопрос не закрывает.
 
@@ -12919,6 +12921,7 @@ publication/production entry остаются OPEN; старый coarse snapshot
 как fine-bound placement. Новых SQL/engine DAG edits/backend/commit/push не было.
 
 ### G10-A — атомарное включение GEO-1 production path
+**DAG-first ревизия 2026-11-16:** оркестрационные части G10-A (route assembly, routes provider, session runner, captured-view/bundle assembly, transport между стадиями) и атомарный production cutover переносятся в GEN-DAG (единый GEN-CUTOVER). В GEO остаются доменные producers/bindings и production evidence доменных операций. Междоменные вызовы — только через DAG. См. [GEO-1 DAG public contracts](./geo-1-dag-public-contracts.md).
 Цель: включить согласованные контракты без промежуточной потери объектов.
 ТЗ: §6.29-J/M, G0 normative sections и tz_map_light_bake §Placement.
 Файлы: owning seas/lakes/worldHydrology/source POJO, worldRow normalization,
@@ -12943,6 +12946,7 @@ Done: единственный новый production path активен, rollba
 behavior явное; не остаётся временного legacy switch/fallback chain.
 
 ### G10 — pipeline и доставка высот
+**DAG-first ревизия 2026-11-16:** шаг целиком — оркестрация; переносится в GEN-DAG. Узлы и bindings согласуются только с пользователем. См. [GEO-1 DAG public contracts](./geo-1-dag-public-contracts.md).
 Цель: встроить подготовку/resolve/relief до HY-12 и провести высоты в L0/L2.
 ТЗ: GEO-1, tz_map_light_bake §Coarse planning ↔ light compose,
 tz_terrain_hydrology §HY-12. Файлы: application/worldData/planning/composition/
@@ -12960,6 +12964,7 @@ natural-only regression; одинаковый результат full/partial и
 offline L0/L2 evidence. Done: новые океаны видны на продуктовых путях.
 
 ### G10-R — отчёт целевой и фактической доли воды
+**DAG-first ревизия 2026-11-16:** расчёт отчёта — GEO; доставка — через DAG.
 Цель: показать фактическую площадь после fill без коррекции мира ради процента.
 ТЗ: GEO-1 G0, Q-TARGET, §5.2-J.
 Файлы: terrain/designedWater/coverage/coverageReport.py и existing diagnostics/result
@@ -12970,6 +12975,7 @@ full/partial одинаковый полный report, immutable heights/placeme
 Done: отчёт показывает отклонение, не запускает повторный carve/placement.
 
 ### G11 — итоговая приёмка и downstream seam
+**DAG-first ревизия 2026-11-16:** доменная приёмка — GEO (GEO-ACCEPTED = доменная часть G11 + полный набор публичных CRUD/pipeline контрактов по [GEO-1 DAG public contracts](./geo-1-dag-public-contracts.md)); downstream seam — GEN-DAG.
 Цель: подтвердить весь GEO-1 и описать вход HY-RIV-1 без реализации рек.
 ТЗ: GEO-1, HY-12, Placement P1/P2, cascade §8.
 Файлы: acceptance evidence и план, downstream interface documentation.
