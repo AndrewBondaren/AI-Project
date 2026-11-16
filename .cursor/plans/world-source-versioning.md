@@ -52,6 +52,8 @@ Identity/revision, fingerprint, pinning и retention переиспользую�
 
 ## Актуальные следующие шаги (2026-11-15)
 
+**Независимый PASS A0→D (2026-11-16):** пользователь передал итог отдельного reviewer: findings отсутствуют, 56 Source + 13 shared tests, оба positive typing 0 errors, core-negative четыре ожидаемые ошибки. Ограничение Git и дополнительная проверка автора записаны в source-core-invariants-implementation.md. Этот срез принят; последующие записи об ожидании его ревью — история. Общий G1, production traversal, CRUD, S1/S2, INT-DAG-SCOPED и mutation phase authority остаются открытыми.
+
 **Обновление после явного «Ок» на исправленный срез A0→D:** пользователь принял scope и порядок. Корректировка independent invariants реализована; собственные проверки — 56 Source tests, 13 shared tests, positive/negative typing по ожидаемой матрице. Следующий шаг среза — независимое ревью кода. Полный G1, S1/S2 scoped integration и mutation остаются открытыми. Следующие два абзаца сохраняют историю замечаний и прежнего допуска, не текущий статус этого среза.
 
 Конкретный implementation-кандидат независимого ядра: [source-core-invariants-implementation.md](source-core-invariants-implementation.md), исправленная редакция 2026-11-16. Пять application-компонентов уже написаны, но **не приняты**. Ревью обнаружило дублирование POJO-правил и несогласованные границы/статусы. Предложен A0 (общие Source dataModel rules и делегирование из двух POJO) перед A→D; это изменение scope и порядка требует принятия. Текущая команда пользователя «Правь» разрешает исправление документов, не продолжение реализации. Остальные открытые области Source не включаются в срез.

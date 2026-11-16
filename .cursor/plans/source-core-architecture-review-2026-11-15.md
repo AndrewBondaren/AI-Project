@@ -1,5 +1,7 @@
 # Source core architecture — review 2026-11-15
 
+**Независимый итог A0→D, 2026-11-16: PASS, findings отсутствуют.** Источник — переданный пользователем результат отдельного reviewer-чата 01a1e52c-33af-7983-a540-6da6a9be6bcc. Его проверки: 56 Source + 13 shared tests, оба positive typing без ошибок, core-negative четыре ожидаемых отказа; обязательные критерии соблюдены внутри среза. Ограничение reviewer: git diff --check не завершён из-за Git/доступа. Дополнительная адресная проверка автора по файлам среза завершилась exit 0; не приписывать её reviewer. Полный G1, traversal, CRUD и внешние интеграции не приняты. Нижеследующие CHANGES REQUIRED и ожидание ревью — история, не текущий verdict A0→D.
+
 **Обновление реализации после принятия A0→D пользователем:** общие правила вынесены и переиспользованы, selection bounds агрегируется один раз. Evidence автора: 56 Source tests, 13 shared tests, core-positive typing без ошибок, core-negative четыре ожидаемых отказа. Исторические findings ниже не являются результатом ревью исправленного кода; нужна отдельная независимая приёмка. Внешние normative/phase gates остаются открытыми.
 
 **Verdict: CHANGES REQUIRED.** Собственное архитектурное ревью автора плана, не независимая приёмка. Scope: checker signatures, request traversal/aggregation, pure algorithm prerequisites и выбор независимого среза. Код/ТЗ/внешние контракты не изменены; runtime/typing tests не выполнялись. Проверены проектные документы и existing Source values/shared diagnostics.
