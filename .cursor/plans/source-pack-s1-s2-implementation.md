@@ -6,7 +6,7 @@
 
 ## 1. Основания и граница
 
-Семантика: source-proof-v2-contract-spec.md §6, §10–13; единый принятый source-pack-s1-s2-contract.md, редакция 2; акт source-pack-s1-s2-acceptance-2026-11-14.md. Порядок общего перехода — world-source-versioning.md: inventory → owning contracts/projector → revisions/history/retention → capture finalize → integrations. Этот план — дельта, не обход prerequisites общего плана.
+Семантика: source-proof-v2-contract-spec.md §6, §10–13; source-pack-s1-s2-contract.md, редакция 2 с открытыми design gates; акт source-pack-s1-s2-acceptance-2026-11-14.md. Единственный источник очереди — раздел «Действующий порядок: сначала архитектура целиком» world-source-versioning.md. Прежняя inventory→projector→history→finalize очередь не является альтернативным порядком ядра. Этот документ описывает зависимости S1/S2, не разрешает локальную поставку в обход целой архитектуры и последовательных шагов.
 
 Перед кодом прочитать эти документы и применимые разделы доменных docs/tz_*.md, указанные основным планом, целиком в пределах их нормативных ссылок; сверить с текущими POJO/callers. Расхождение — остановка, не правка семантики на ходу. Нынешний проход создаёт документацию, runtime tests не запускались.
 
@@ -14,13 +14,15 @@ Scope Source: pure coverage input/selector/error applicability; read-only adopti
 
 ## 2. Проверенная готовность и порядок prerequisites
 
-Конкретизация первой поставки G1 — [source-g1-values-canonical-implementation.md](source-g1-values-canonical-implementation.md). Файлы values/schema/tests и порядок заданы; до приёмки остаётся Source-owned G1-BIND: exact pure/key-adapter API и constructor composition. Ссылку на роль descriptor registry нельзя считать готовой сигнатурой. G1 пока не закрыт; Source runtime не создан.
+G1 определён единственным образом в [owning-плане](source-g1-values-canonical-implementation.md): values + encoding + полная Source-owned pure composition. G1-BIND — внешние concrete adapters отдельно. G1 не закрыт; G1.1/G1.2 и A0→D существуют и приняты. S1 требует полного G1 и конкретного key-validation binding, если принятой coverage validation он необходим; пока exact binding и его необходимость не подтверждены, зависимость не считать закрытой и не заменять adapter заглушкой. Это отдельный consumer gate, не расширение значения G1. S2 дополнительно требует своих read/format/retention bindings G2.
+
+Соответствие основной очереди: G1 — шаги 1–4 (модель/encoding/validation/proof algorithms); G2-read и настоящий finalizer для G2-fixtures — шаги 6–7 (history/read/capture/closure); G3 — отдельная consumer integration после соответствующих возможностей ядра и архитектурного согласования. Операционный порядок coverage→preflight→adopt остаётся прежним; A→B→C здесь задаёт зависимости приёмки, а не разрешение перескочить основной шаг.
 
 Проверка filesystem 2026-11-14: backend/app/dataModel/sourceVersioning и backend/app/application/worldData/sourceVersioning отсутствуют. Поэтому ни SourceProofReadInput/SourceDurableProof/SourceFailure, ни selector/collector/retention binding не доступны как runtime imports. Совпадающие слова Source в существующих Geo1/Pack тестах не доказывают наличие этих контрактов.
 
 | Gate | Что должно быть реально поставлено | Проверка / влияние |
 |---|---|---|
-| G1: Source base values/pure | Полный transitive roster §10/11.4: identity/revision/ref/dependencies/capture/proof/input/result/errors; strict validators, immutable descriptor bindings, Source-owned schema и canonical atom enumeration | Точные accepted imports, strict/canonical tests и отсутствие mirror/legacy; блокирует S1 и S2 |
+| G1: Source base values/pure | Полный G1.1/G1.2/G1.3 по owning-плану, включая immutable descriptor values и pure port contracts; внешняя concrete registration учитывается отдельно | Точные accepted imports и независимая приёмка полного G1; блокирует S1/S2, но сам по себе не закрывает consumer-specific bindings |
 | G2-read: Source durable read/adopt | Existing-design SourceProofClosureCollector, accepted read bindings/formats/committed witness verification, §12.1 adoption и реальные hold checks | Exact/historical/full closure и missing/corrupt/hold tests на реальном storage; блокирует S2. Не заменять fake success collector |
 | G2-fixtures: новые Source-owned finalized fixtures | Созданная заново тестовая подготовка по строгим Source-контрактам через настоящий SourceCaptureFinalizer, его storage bindings и подтверждённый commit; необходимые внешние данные — по актуальным контрактам владельцев | Проверенные witness/seal/holds и воспроизводимое получение capture без старой формы, прямой подстановки finalized row или fabricated authority. Блокирует B; старые fixtures gate не закрывают |
 | G3: scoped consumer composition | Snapshot/Artifacts реализуют принятые scoped readers/private evidence и outer rollback boundary; Pack реализует verified all-provenance reader | No nested UOW/bind/guard, exact request/target evidence, typed pin/manifest refusal, rollback/unknown tests; блокирует integration acceptance, но не pure S1 |

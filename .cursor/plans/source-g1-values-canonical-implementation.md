@@ -1,6 +1,6 @@
 # Source G1 — базовые значения, canonical schema и pure validation
 
-2026-11-14. **G1.1 → G1.2 разрешены пользователем до закрытия G1-BIND; полный G1 остаётся незавершённым.** Решение передано через Source 2 и зафиксировано в §7; оно расширяет прежнее исключение POJO для Pack 3a. G1.3/pure semantic composition требует собственного закрытия G1-BIND. Основной план world-source-versioning.md сохраняет порядок inventory → owning contracts/projector → revisions/history/retention → finalize → integrations. Наличие POJO/manifest не означает завершения G1 или разрешения S1/runtime.
+**Актуальное определение G1 (исправление SRC-AR-01/02):** G1 — Source values (G1.1), canonical encoding (G1.2) и полная Source-owned pure validation/algorithms composition (G1.3), с конкретными контрактами и независимой приёмкой. G1-BIND — отдельная готовность внешних owning adapters, не составная часть gate G1. Pure key-port API и его caller contract принадлежат G1.3; реальная регистрация owning key/body/projector binding — G1-BIND. Отсутствие binding запрещает зависимую production admission, но не заменяется stub и не переименовывается в незавершённую модель. Полный G1 остаётся открытым: G1.1/G1.2 и A0→D приняты, request traversal и остальные pure algorithms не завершены. Единственный порядок дальнейшей работы — раздел «Действующий порядок: сначала архитектура целиком» world-source-versioning.md; новые локальные срезы запрещены.
 
 ## 1. Источники и проверенное состояние
 
@@ -97,11 +97,11 @@ Typing files: backend/tests/typing/sourceVersioning/valid.py, invalid.py и pyri
 1. G1.1 — завершить values/structural validation по §3, включая SourceProofReadInput(world_uid, proof) и настоящие transitive типы полного persisted roster. Сохранить чужие незавершённые edits; не создавать mirrors или permissive adapters. Проверить strict/frozen/revalidation/negative cases и typing. Семантический admission, descriptor-aware ordering и closure не переносить в POJO.
 2. G1.2 — полный immutable SOURCE_PROOF_SCHEMA_V1 по §4 и accepted spec §11.4; exact IDs/bytes/версия неизменны. Подтвердить прежние literal V0/V1, round-trip настоящих types, negative cases и collision checks. Не ограничивать manifest заглушкой под один consumer. Обозначить результат как G1.1/G1.2 evidence, не G1 complete.
 3. После подтверждённой поставки G1.1/G1.2 — отдельный Source 2 registration-срез: request ID71201, owning request manifest/composition и адресные tests по его отдельному proposal. Не включать request в SOURCE_PROOF_SCHEMA_V1 и не менять proof wire. G1-BIND не prerequisite этого pure encoding-среза; собственная contract/implementation проверка registration обязательна.
-4. G1.3 — сначала принять архитектуру ядра и выделить конкретный независимый pure-срез. Его exact API, ответственность и проверки принять до кода. Concrete owning adapters/composition относятся к отдельной интеграции G1-BIND; отсутствие внешнего контракта откладывает зависимую интеграцию, а не независимое ядро. Независимость среза доказать, отсутствующий adapter не заменять production stub.
+4. G1.3 — после приёмки целой архитектуры ядра выполнить соответствующие последовательные шаги основного плана (validation и proof algorithms). Новые независимые срезы не выделять. Pure key-port API входит в G1.3; concrete owning adapters/composition относятся к G1-BIND. Отсутствующий adapter не заменять production stub; зависимая production admission не принимается без него.
 
 Scope не расширяется до runtime IO, semantic admission/S1, finalizer, adoption или DAG. Прежний Source чат этим документальным изменением не затрагивается. Запись переданного решения не заявляет, что G1.1/G1.2 уже реализованы или приняты по tests.
 
-Definition of Done ядра G1: принята архитектура ядра, доступны exact imports принятого среза, выполнены values/canonical/pure и typing проверки и отдельная независимая приёмка. Готовность G1-BIND учитывается отдельно: принята и проверена конкретная внешняя composition. Завершение ядра не обещает public durable API, финализацию/holds или готовность S1; для них проверяются собственные prerequisites. Незакрытый G1-BIND не отменяет приёмку независимого ядра.
+Definition of Done G1: принята целая архитектура ядра, поставлен весь состав G1.1/G1.2/G1.3, выполнены предусмотренные values/canonical/pure и typing проверки и независимая приёмка. Частичный PASS не закрывает G1. G1-BIND принимается отдельно для конкретной внешней composition. Завершение G1 не обещает public durable API, финализацию/holds или готовность S1: каждый consumer предъявляет собственные обязательные bindings. Нельзя считать любой внешний adapter prerequisite всего G1 или, наоборот, объявлять production admission готовой по pure tests.
 
 | Обязательный критерий | Проверка |
 |---|---|
@@ -114,7 +114,7 @@ Definition of Done ядра G1: принята архитектура ядра, 
 | Междоменные зависимости | Shared leaves/codecs existing; owning key adapters требуют точного принятого API. Нет импорта Terrain registry в Source identity |
 | POJO/typed errors | Единственный Source roster, existing FieldPathError/CheckedPath/FieldRef/aggregation reuse; нет mirrored proof/receipt или новых generic key frameworks |
 
-**Verdict:** G1.1/G1.2 разрешены к реализации по §7 через implement-plan; полный G1 не завершён. G1-BIND/API sheet остаётся gate соответствующего G1.3 pure/semantic слоя и общей приёмки G1, не первым шагом перед values/schema. При необходимости внешнего контракта сообщить владельца и конкретную зависимость, не расширять её заглушкой. Runtime IO/S1/finalizer этим решением не разрешены. Ручные edits apply_patch; mandatory diff перед отчётом; no commit/push/server/SQL/DAG.
+**Текущий verdict:** полный G1 не завершён. Source-owned API/constructor/error contracts необходимы для G1.3; внешний G1-BIND принимается отдельно и блокирует только использующую его composition. Новая реализация — после приёмки целой архитектуры и в порядке основного плана через implement-plan. Runtime IO/S1/finalizer этим документом не разрешены; no commit/push/server/SQL/DAG.
 
 ## 8. Поставка POJO для Pack 3a — собственная проверка 2026-11-14
 
