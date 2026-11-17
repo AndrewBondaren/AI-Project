@@ -62,8 +62,9 @@ class PackPreparationValidator:
         proof_field = FieldRef(lambda: PackStoredProvenance, lambda value: value.source_proof)
         world_field = FieldRef(lambda: SourceDurableProof, lambda value: value.world_uid)
         for index, part in parts:
-            provenance = valid_preparation_field(part, provenance_field)
-            if world is not None and provenance is not None and world_field.select(proof_field.select(provenance)) != world:
+            provenance = preparation_field_value(part, provenance_field)
+            proof_world = valid_preparation_field(preparation_field_value(provenance, proof_field), world_field)
+            if world is not None and proof_world is not None and proof_world != world:
                 _issue(errors, PackPreparationIssueCode.SOURCE_PROOF_MISMATCH,
                        parts_path.item(index).field(provenance_field).field(proof_field).field(world_field),
                        "part proof belongs to another world")
@@ -80,8 +81,9 @@ class PackPreparationValidator:
             _issue(errors, PackPreparationIssueCode.DUPLICATE_ADDRESS,
                    stored_path.item(index).field(stored_address), "duplicate metadata provenance address")
         for index, entry in stored:
-            provenance = valid_preparation_field(entry, stored_provenance)
-            if world is not None and provenance is not None and world_field.select(proof_field.select(provenance)) != world:
+            provenance = preparation_field_value(entry, stored_provenance)
+            proof_world = valid_preparation_field(preparation_field_value(provenance, proof_field), world_field)
+            if world is not None and proof_world is not None and proof_world != world:
                 _issue(errors, PackPreparationIssueCode.SOURCE_PROOF_MISMATCH,
                        stored_path.item(index).field(stored_provenance).field(proof_field).field(world_field),
                        "metadata proof belongs to another world")

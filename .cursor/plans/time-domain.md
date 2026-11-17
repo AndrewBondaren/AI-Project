@@ -12,6 +12,75 @@
 
 **Уже принятые решения:** Snapshot owning-план START-ID, INITIAL-REGISTER, TIME-ZERO, WORLD-INITIAL-POJO, READ-INITIAL-BINDING и reference-based start. Используется существующий `PreparedInitialSettings(operation_id, world_uid, settings, captured_utc)`; `InitialSettingsCandidate` отклонён, не создавать class/alias/re-export. Единственный Time success/serialized payload — proposed `InitialTimeStatePayload(start_identity, clock:TimeClockState, settings:PreparedInitialSettings)`. Successful prepare гарантирует selected zero projection; result roster: payload | InitialTimeInputMismatch | SettingsInvalid | CalendarBudgetExceeded. InitialCalendarProjectionFailed отозван. Дополнительные proof/token и Time.prepare_registered не требуются: semantic preparation/encoding — Time, durable registration — отдельный публичный registrar. Принятие дизайна не означает, что новые типы уже есть в коде.
 
+**WORLD→DAG→TIME — вариант А принят пользователем 2026-11-17.** Владелец настроек формирует существующий `PreparedInitialSettings` через свой публичный метод. Он применяет owning defaults и сохраняет переданный captured UTC; DAG передаёт готовый результат публичному Time preparation, не собирает WorldTimeSettings по полям, не применяет defaults и не читает SQL. Time проверяет identity, календарную семантику и selected zero projection. Прямой вызов Time CalendarValidator из World preparation не входит в принятую целевую границу. Подготовка не означает запись или принятие настроек; публичные методы чтения/записи/удаления настроек остаются отдельным обязательным контрактом владельца, prepare_initial их не заменяет. Решение фиксирует распределение ответственности; exact World method contract и изменение существующей реализации остаются работой владельца. Новый DTO с полями PreparedInitialSettings не вводится. Выбор canonical encoding варианта этим решением не принят.
+
+#### Initial payload encoding: подробный inventory (2026-11-17)
+
+**Статус: INVENTORY COMPLETED; NO-ENVELOPE ACCEPTED; EXACT FORMAT FREEZE OPEN.** Пользователь отдельно принял 2026-11-17 формат без дополнительного envelope («Ок» на вопрос после inventory). Это отдельное решение от варианта А World→DAG→Time. Ни format key/version, ни числовые canonical IDs этим решением не назначены; полный payload ещё не проверен round-trip. Принята граница сериализации ниже, не готовность реализации или окончательного manifest.
+
+**Фактически выполненная проверка:** прочитаны `backend/app/encoding/canonicalCodec.py`, `backend/app/dataModel/encoding/schemaManifest.py`, `backend/app/application/artifacts/contracts/formatBackend.py`, `backend/app/application/artifacts/registry/artifactRegistry.py`, `backend/app/dataModel/artifacts/references.py`, Snapshot registration proposal и существующие Time/World POJO. Read-only Python probe из backend через `.venv/Scripts/python.exe` рекурсивно обошёл model_fields от PreparedInitialSettings и TimeClockState, раскрыл TypeAliasType, generic/union/Annotated/Literal аргументы и enum literals. Получено **34 concrete owner types: 29 records и 5 enums**. Обход типов включает не только STANDARD example, но и альтернативы unions правил/predicates. Он не доказывает runtime round-trip каждого варианта.
+
+##### Состав существующей части payload
+
+Все пути в таблице относительно `backend/app/dataModel/`. Это inventory существующих владельцев, не предложение их копий в wire/encoding namespace.
+
+| Путь | Concrete records | Число |
+|---|---|---:|
+| time/storage/state.py | TimeClockState | 1 |
+| time/values/point.py | TimePoint | 1 |
+| world/settings/timeOperations/initial.py | PreparedInitialSettings | 1 |
+| world/settings/timeSettings.py | WorldTimeSettings | 1 |
+| world/calendar/catalogs/periods.py | CalendarPeriodRegistry, PeriodEntry | 2 |
+| world/calendar/catalogs/seasons.py | CalendarSeasonRegistry, SeasonEntry | 2 |
+| world/calendar/catalogs/spans.py | CalendarSpanRegistry, SpanEntry | 2 |
+| world/calendar/catalogs/weekdays.py | CalendarWeekdayRegistry, WeekdayEntry | 2 |
+| world/calendar/dates/anchor.py | CalendarAnchor, CalendarOrigin | 2 |
+| world/calendar/dates/clock.py | CalendarClockTime | 1 |
+| world/calendar/dates/date.py | CalendarDate | 1 |
+| world/calendar/definitions/definition.py | CalendarDefinition, CalendarEntry | 2 |
+| world/calendar/definitions/registry.py | WorldCalendarRegistry | 1 |
+| world/calendar/epochs/epoch.py | WorldCalendarEpoch | 1 |
+| world/calendar/epochs/registry.py | WorldCalendarEpochRegistry | 1 |
+| world/calendar/rules/edits.py | CalendarSpan, InsertSpanRule, ReplaceSpanRule, RemoveSpanRule | 4 |
+| world/calendar/rules/predicates.py | CalendarCondition, AlwaysPredicate, YearModuloPredicate, YearRangePredicate | 4 |
+
+Пять enums из `world/calendar/enums/rules.py`: CalendarEditKind, CalendarNumbering, CalendarPredicateKind, CalendarSpanRole, CalendarWeekMode. Literal-discriminator fields используют эти существующие enum types; их нельзя пропускать при составлении canonical manifest.
+
+TimeScope как базовый класс TimePoint не становится отдельным вложенным record только из-за наследования. Computed свойства point.scope/coordinate не входят в model_fields. InitialTimeFacts, preparation budget, validation errors и CalendarProjection также не входят в предложенный serialized payload; не добавлять их регистрации по одному лишь участию в подготовке.
+
+**Пока отсутствуют в backend/app:** concrete InitialTimeStatePayload и GameplayStartIdentity. Их design описан в owning-планах; этот inventory не подменяет их implementation. Полный manifest будет включать payload, identity и все реально вложенные типы identity, с reuse существующих регистраций. Поэтому число 34 — нижняя проверенная часть, а не окончательный размер manifest.
+
+Поиск Time/calendar/settings owners в просмотренных canonical manifests/codecs и файлах регистраций не обнаружил готового manifest этой группы. Это результат локального inventory, не резервирование глобального диапазона IDs. Перед freeze требуется повторный поиск регистраций каждого concrete owner и занятых IDs по актуальному дереву с учётом параллельных изменений. `WorldTimeSettings.SCHEMA_ID = SCH-WORLD-TIME-SETTINGS-V1` — существующий идентификатор модели; он не заменяет RegisteredTypeEntry.type_id, ArtifactFormatKey или artifact format_version.
+
+##### Проверенные возможности и ограничения
+
+1. Canonical codec использует TLV, explicit registered type identity для records/enums и имена полей в порядке модели. Decode проверяет missing/duplicate/extra/reordered fields. Manifest требует уникальных type_id и python_type. Нельзя регистрировать тот же owner под новым ID в конкурирующем manifest вместо reuse принятой identity.
+2. TimeRecord/CalendarRecord уже frozen/strict/extra=forbid/revalidate_instances=always. Это соответствует базовым требованиям codec; полный encode/decode всех их вложений ещё не проверен. Изменение schema/model fields после freeze влияет на canonical layout.
+3. RegistryKey является подклассом str; existing encoder обрабатывает его как строку, а owning POJO validation при decode восстанавливает типизированное поле. Отдельные RegistryKey wire records/копии календарных POJO не нужны. Сохранение типа/значения после round-trip должно быть проверено, а не объявлено доказанным чтением ветки encoder.
+4. Integer encoding использует sign+magnitude произвольной длины. Сам codec не заставляет переводить seconds/nanos или календарные годы во float. Граничные значения времени, nanos и большие годы остаются обязательными round-trip checks.
+5. `ArtifactFormatContract` для BLOB требует **content_model=bytes**, запрещает row_count. Регистрация InitialTimeStatePayload как BLOB content_model противоречит existing contract. Owning Time encode должен завершиться до передачи bytes registrar. Общий BLOB backend не становится Time decoder/semantic validator.
+6. ArtifactRef уже содержит kind, format_key, format_version, content_hash, nbytes, row_count. Для BLOB row_count=None. Registry проверяет key/kind/supported_versions; its decode signature уже `(payload:bytes, version:FormatVersion)`. Формат/версия artifact и canonical type IDs решают разные задачи; generic TLV encoding не является собственной версией Time payload.
+7. Проверка checksum/size подтверждает bytes, но не semantic preparation. Принятый method-level success и штатная передача DAG обеспечивают semantic guarantee; дополнительный proof/token не вводится. Decoder обеспечивает формат/структуру и coherence согласно freeze, не повторяет preparation/defaults/now.
+
+##### Принятая граница формата — без дополнительного envelope
+
+**ACCEPTED 2026-11-17:** единственный InitialTimeStatePayload кодируется в canonical bytes без дополнительного domain envelope. Ключ формата и версия передаются существующим ArtifactRef; Time decoder получает bytes и версию явно. Time владеет payload codec и manifest, переиспользует World schemas и Snapshot start identity. Shared registrar владеет persistence/descriptor integrity/retention, сохраняет bytes и не вызывает Time codec или календарный decoder. Публичные операции Time encode/decode получают данные от DAG, не читают World/Snapshot/Artifacts сами. Не добавлять envelope с дублированием версии в рамках этого решения.
+
+Предлагаемые файлы: `application/time/encoding/initialStateCodec.py` и `application/time/encoding/initialStateManifest.py`; payload owner — `dataModel/time/storage/initialState.py`. Это карта будущих файлов; сами файлы не созданы. Перед реализацией сверить folder composition и существующие новые регистрации. Не копировать 34 существующих типа в новые DTO.
+
+Внешний decoder должен получать bytes и поддерживаемый формат/version; прежняя краткая `decode(bytes)` не является завершённым внешним version admission contract. Exact signature, проверка format_key на owning boundary и transport codec failures фиксируются вместе с format freeze. Unsupported format даёт явный отказ; dual-read/legacy adapters не подразумеваются. Повреждённые persisted bytes после verified read остаются infrastructure failure, а не clock fallback. Альтернативный envelope с собственной версией потребовал бы отдельного основания и проверки согласованности с ArtifactRef; такого основания inventory не обнаружил.
+
+##### Gates до FORMAT FROZEN и реализации
+
+1. Сверить актуальный exact GameplayStartIdentity и весь dependency closure; подтвердить ownership и reuse каждого record/enum. Дополнить inventory после появления concrete types без выдумывания foreign fields.
+2. Предъявить конкретные format_key, supported_versions и полный canonical manifest с проверенными IDs. Значения не выбирать скрыто при реализации и не менять Snapshot envelope/terminal/CLOCK_FORMAT из-за появления нового artifact format.
+3. Согласовать Time encode/decode boundary с принятым InitialStateRegistrationInput и verified-read результатом: какие именно bytes/format передаются, как проверяются exact ref/hash/size и связываются decoded payload/accepted binding. Registrar не должен делать foreign Time вызовы.
+4. После разрешения реализации проверить round-trip STANDARD и AUTHORED, все три Edit variants, все три Predicate variants, пустые и непустые epochs/seasons/weekdays, enum literals и RegistryKey, часы 1–3 и дробные начала периодов, ненулевые anchors, отрицательные seconds и nanos, большие календарные годы. Валидные fixture значения берутся из owning POJO/контрактов; не расширять Time диапазон ради codec.
+5. Проверить deterministic bytes, manifest composition collisions, отсутствие регистрации nested owner, повреждённые/truncated bytes, чужой root record, неизвестный type ID, лишние/переставленные поля и неподдерживаемую версию. Immutable identity/bytes mismatch проверяется в соответствующем artifact/registration contract, не подменяется успешным decode.
+6. Отдельно подтвердить semantic preparation/selected zero projection и сохранность captured UTC/anchors; codec round-trip не заменяет эти проверки. Полный Snapshot start/rollback/retention/replay остаётся evidence владельца Snapshot/shared core.
+
+**Evidence boundary:** выполнены чтение исходников, локальный поиск регистраций и read-only traversal 34 concrete types. Round-trip, golden bytes, typing и end-to-end registration/start в этом inventory не запускались. Нет созданных codec/manifest/DTO, новых IDs, DDL, DAG nodes или runtime activation. Все gates выше остаются незакрытыми до фактической проверки, даже если вариант формата будет принят отдельно.
+
 #### Exact initial-only чтение
 
 Входной контракт Snapshot уже принят: `IWorldSnapshotRead.read_initial_binding(SnapshotPublicationReadInput) -> SnapshotInitialBindingReadResult(request, binding|None)`. Binding — `AcceptedInitialStateBinding(publication:WorldPublicationRef, prepared_initial:PreparedInitialTimeStateRef)`. Это exact initial Q, включая старую Q после последующих runtime publications. None у неinitial Q не даёт разрешения читать initial clock как её текущее время. Потерянная обязательная связь initial Q — infrastructure failure.
@@ -37,7 +106,7 @@ WorldInitialSettingsReader строит `TimeSettingsCapture(source=Q, settings=
 
 **Приёмка будущей реализации:** success на exact initial Q; та же Q читается после появления нового head; mismatch start identity/world/timeline/operation отвергается; nonzero clock/noninitial publication отвергаются; подмена bytes с теми же identity отвергается на verified read; повреждённый payload не превращается в default; versions всех календарей принадлежат Q; authored anchors неизменны; все foreign public calls выполняются вне readers. Эти проверки пока не запускались.
 
-**Оставшиеся решения:** граница World settings preparation без direct Time validator; owning canonical format/manifest Time и согласование с registrar; физическая реализация Snapshot/shared registration/binding/retention и общий ARCH-0 gate. Уже принятые zero projection, registration lifecycle, initial binding read и отказ дублирующему POJO не переоткрываются.
+**Оставшиеся работы:** exact публичный World preparation contract и приведение реализации к принятой границе варианта А; выбор и freeze owning canonical format/manifest Time и согласование с registrar; физическая реализация Snapshot/shared registration/binding/retention и общий ARCH-0 gate. Уже принятые распределение World→DAG→Time, zero projection, registration lifecycle, initial binding read и отказ дублирующему POJO не переоткрываются.
 
 ### Ответ владельца Time по temporal provenance (Physics P3.27, предложение к совместной приёмке)
 

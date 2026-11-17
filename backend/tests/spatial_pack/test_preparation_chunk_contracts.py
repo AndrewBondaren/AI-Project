@@ -3,6 +3,7 @@
 import unittest
 
 from pydantic import ValidationError
+from app.dataModel.validation.importIssues.jsonFieldError import JsonFieldError
 
 from app.application.worldData.pack.preparation.metadataProjection import metadata_input_fingerprint
 from app.dataModel.worldPack.encoding.metadataBindings import PACK_METADATA_SCHEMA
@@ -32,9 +33,72 @@ from app.dataModel.worldPack.preparation.errors import PackPreparationArtifactIs
 from app.dataModel.worldPack.meta.metadataAttribution import PackMetadataGroup, PackWildernessStatusBasis
 from app.dataModel.worldPack.preparation.metadataDependencies import PackMetadataDescription, PackMetadataDependencyUse
 from app.dataModel.worldPack.preparation.metadataSubject import PackMetadataSubject
+from app.dataModel.worldPack.meta.parts import PackStoredPart
+from app.dataModel.worldPack.meta.metadataAttribution import PackStoredAssemblyProvenance
+from app.dataModel.worldPack.preparation.addresses import PackAssemblyHeaderAddress
 
 
 class ChunkContractTests(unittest.TestCase):
+    def tile_description(self) -> PackMetadataDescription:
+        usage = SourceProofInput(world_uid="world", uses=())
+        return PackMetadataDescription(subject=PackMetadataSubject(base_publication=self.state.base_publication,
+            address=PackTileMetadataAddress(kind="tile", gx=-2, gy=3), value_fingerprint="a" * 64), dependencies=(
+            PackMetadataDependencyUse(group=PackMetadataGroup.IDENTITY, source_usage=usage, basis=None),
+            PackMetadataDependencyUse(group=PackMetadataGroup.CLIMATE_STATUS, source_usage=usage, basis=None),
+            PackMetadataDependencyUse(group=PackMetadataGroup.WILDERNESS_REFINE_STATUS, source_usage=usage,
+                basis=PackWildernessStatusBasis(chunk_addresses=(), expected_chunks=None))))
+
+    def test_absent_projection_is_independent_of_header_error(self) -> None:
+        state = self.state.model_copy(update={
+            "assembly": self.assembly.model_copy(update={"fine_cell_size": "bad"}),
+            "metadata_dependencies": (self.tile_description(),)})
+        with self.assertRaises(PackPreparationFailure) as caught:
+            WildernessChunkAdmission().validate_wilderness_chunks(PackWildernessChunksInput.model_construct(state=state, entries=()))
+        issues = caught.exception.error.issues
+        self.assertEqual(caught.exception.error.reason.value, "invalid_input")
+        self.assertEqual(len(issues), 2)
+        assert isinstance(issues[0], JsonFieldError)
+        self.assertEqual(issues[0].path.projection(), ("state", "assembly", "fine_cell_size"))
+        semantic = issues[1]
+        assert isinstance(semantic, PackPreparationIssue)
+        self.assertEqual(semantic.code.value, "address_mismatch")
+        self.assertEqual(semantic.path.projection(), ("state", "metadata_dependencies", 0, "subject", "address"))
+
+    def test_invalid_subject_value_is_not_missing_retained_usage(self) -> None:
+        description = self.tile_description()
+        description = description.model_copy(update={"subject": description.subject.model_copy(update={"value_fingerprint": "bad"})})
+        tile = PackTileAssembly(gx=-2, gy=3, climate_status="fine", wilderness_refine_status="absent", chunks=())
+        state = self.state.model_copy(update={"assembly": self.assembly.model_copy(update={"tiles": (tile,)}),
+                                             "metadata_dependencies": (description,)})
+        with self.assertRaises(PackPreparationFailure) as caught:
+            WildernessChunkAdmission().validate_wilderness_chunks(PackWildernessChunksInput.model_construct(state=state, entries=(self.valid_item(),)))
+        self.assertEqual(caught.exception.error.reason.value, "invalid_input")
+        issues = caught.exception.error.issues
+        self.assertEqual(len(issues), 1)
+        assert isinstance(issues[0], JsonFieldError)
+        self.assertEqual(issues[0].path.projection(), ("state", "metadata_dependencies", 0, "subject", "value_fingerprint"))
+
+    def test_stored_proof_world_is_independent_of_planning(self) -> None:
+        provenance = PackStoredProvenance(source_proof=SourceDurableProof(schema_version=1, world_uid="foreign", uses=()), planning=())
+        part = PackStoredPart(address=self.part.address, artifact=self.part.artifact, provenance=provenance)
+        metadata = PackStoredAssemblyProvenance(address=PackAssemblyHeaderAddress(kind="header"), provenance=provenance, attribution=None)
+        bad = provenance.model_copy(update={"planning": "bad"})
+        for field, entry in (("parts", part.model_copy(update={"provenance": bad})),
+                             ("assembly_provenance", metadata.model_copy(update={"provenance": bad}))):
+            with self.subTest(field=field):
+                state = self.state.model_copy(update={field: (entry,)})
+                with self.assertRaises(PackPreparationFailure) as caught:
+                    WildernessChunkAdmission().validate_wilderness_chunks(PackWildernessChunksInput.model_construct(state=state, entries=()))
+                self.assertEqual(caught.exception.error.reason.value, "invalid_input")
+                issues = caught.exception.error.issues
+                self.assertEqual(len(issues), 2)
+                assert isinstance(issues[0], JsonFieldError)
+                self.assertEqual(issues[0].path.projection(), ("state", field, 0, "provenance", "planning"))
+                semantic = issues[1]
+                assert isinstance(semantic, PackPreparationIssue)
+                self.assertEqual(semantic.code.value, "source_proof_mismatch")
+                self.assertEqual(semantic.path.projection(), ("state", field, 0, "provenance", "source_proof", "world_uid"))
+
     def test_existing_tile_requires_imported_usage(self) -> None:
         tile = PackTileAssembly(gx=-2, gy=3, climate_status="fine", wilderness_refine_status="absent", chunks=())
         state = self.state.model_copy(update={"assembly": self.assembly.model_copy(update={"tiles": (tile,)})})

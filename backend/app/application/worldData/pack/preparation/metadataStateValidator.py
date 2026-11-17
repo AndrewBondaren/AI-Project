@@ -19,6 +19,8 @@ from app.dataModel.worldPack.preparation.metadataDependencies import PackMetadat
 from app.dataModel.worldPack.preparation.metadataSubject import PackMetadataSubject
 from app.dataModel.worldPack.preparation.state import PackPreparationState
 from app.dataModel.worldPack.preparation.assembly import PackAssemblyInput, PackTileAssembly, PackChunkAssembly
+from app.dataModel.worldPack.preparation.assembly import PackLocationAssembly, PackSettlementAssembly
+from app.dataModel.worldPack.meta.wildernessRegionEntry import WildernessRegionEntry
 from app.dataModel.worldPack.preparation.addresses import PackChunkAddress
 from app.dataModel.worldPack.preparation.addresses import PackAssemblyHeaderAddress, PackChunkMetadataAddress, PackLocationMetadataAddress, PackSettlementMetadataAddress, PackRegionMetadataAddress
 from app.application.worldData.pack.preparation.metadataProjection import metadata_value_fingerprint
@@ -29,16 +31,45 @@ from app.application.worldData.pack.preparation.errors import _duplicates, _issu
 
 RootT = TypeVar("RootT", bound=BaseModel)
 ValueT = TypeVar("ValueT")
+ItemT = TypeVar("ItemT", bound=BaseModel)
 
 
 class MetadataStateValidator:
+    @staticmethod
+    def _complete_keys(value: object, collection: FieldRef[PackAssemblyInput, tuple[ItemT, ...]],
+                       key: FieldRef[ItemT, ValueT]) -> set[ValueT] | None:
+        rows = preparation_field_value(value, collection)
+        if not isinstance(rows, tuple):
+            return None
+        keys: set[ValueT] = set()
+        for row in rows:
+            admitted = valid_preparation_field(row, key)
+            if admitted is None:
+                return None
+            keys.add(admitted)
+        return keys
+
     def check_subject_values(
         self, state: object, path: CheckedPath[RootT, PackPreparationState],
         errors: ValidatorAggregationHelper[PackPreparationDiagnostic],
     ) -> None:
         assembly_field = FieldRef(lambda: PackPreparationState, lambda value: value.assembly)
-        assembly = valid_preparation_field(state, assembly_field)
         raw_assembly = preparation_field_value(state, assembly_field)
+        # Membership admission is independent of projection values.
+        tiles_field = FieldRef(lambda: PackAssemblyInput, lambda value: value.tiles)
+        raw_tiles = preparation_field_value(raw_assembly, tiles_field)
+        tiles = self._tile_basis_inputs(state)
+        chunk_keys = {key: set(chunks) if chunks is not None else None for key, (chunks, _) in tiles.items()}
+        tile_keys_complete = isinstance(raw_tiles, tuple) and all(
+            valid_preparation_field(tile, FieldRef(lambda: PackTileAssembly, lambda value: value.gx)) is not None
+            and valid_preparation_field(tile, FieldRef(lambda: PackTileAssembly, lambda value: value.gy)) is not None
+            for tile in raw_tiles)
+        locations = self._complete_keys(raw_assembly, FieldRef(lambda: PackAssemblyInput, lambda value: value.locations),
+                                        FieldRef(lambda: PackLocationAssembly, lambda value: value.location_uid))
+        settlements = self._complete_keys(raw_assembly, FieldRef(lambda: PackAssemblyInput, lambda value: value.settlements),
+                                          FieldRef(lambda: PackSettlementAssembly, lambda value: value.location_uid))
+        regions = self._complete_keys(raw_assembly, FieldRef(lambda: PackAssemblyInput, lambda value: value.wilderness_regions),
+                                      FieldRef(lambda: WildernessRegionEntry, lambda value: value.region_uid))
         projections: dict[PackAssemblyAddress, object] = {}
         header = PackAssemblyHeaderAddress(kind="header")
         header_values = (
@@ -81,7 +112,21 @@ class MetadataStateValidator:
             if address is None:
                 continue
             if address not in projections:
-                if assembly is not None:
+                absent = False
+                if isinstance(address, (PackTileMetadataAddress, PackChunkMetadataAddress)):
+                    tile_key = address.gx, address.gy
+                    absent = tile_keys_complete and tile_key not in tiles
+                    if isinstance(address, PackChunkMetadataAddress) and tile_key in tiles:
+                        chunks = chunk_keys[tile_key]
+                        absent = chunks is not None and PackChunkAddress(kind="wilderness_chunk", gx=address.gx,
+                            gy=address.gy, cx=address.cx, cy=address.cy) not in chunks
+                elif isinstance(address, PackLocationMetadataAddress):
+                    absent = locations is not None and address.location_uid not in locations
+                elif isinstance(address, PackSettlementMetadataAddress):
+                    absent = settlements is not None and address.location_uid not in settlements
+                elif isinstance(address, PackRegionMetadataAddress):
+                    absent = regions is not None and address.region_uid not in regions
+                if absent:
                     _issue(errors, PackPreparationIssueCode.ADDRESS_MISMATCH, subject_path.field(address_field), "metadata projection is absent")
             elif fingerprint is not None and fingerprint != metadata_value_fingerprint(address, projections[address]):
                 _issue(errors, PackPreparationIssueCode.SOURCE_PROOF_MISMATCH, subject_path.field(fingerprint_field), "metadata subject value is stale")
@@ -93,8 +138,11 @@ class MetadataStateValidator:
         existing = self._tile_basis_inputs(state)
         descriptions_field = FieldRef(lambda: PackPreparationState, lambda value: value.metadata_dependencies)
         pending: set[PackAssemblyAddress] = set()
-        for _, description in valid_preparation_items(state, descriptions_field):
-            pending.add(description.subject.address)
+        for _, description in _raw_items(state, descriptions_field):
+            subject = preparation_field_value(description, FieldRef(lambda: PackMetadataDescription, lambda value: value.subject))
+            address = valid_preparation_field(subject, FieldRef(lambda: PackMetadataSubject, lambda value: value.address))
+            if address is not None:
+                pending.add(address)
         stored_field = FieldRef(lambda: PackPreparationState, lambda value: value.assembly_provenance)
         address_field = FieldRef(lambda: PackStoredAssemblyProvenance, lambda value: value.address)
         stored_indices = {address: index for index, entry in _raw_items(state, stored_field)

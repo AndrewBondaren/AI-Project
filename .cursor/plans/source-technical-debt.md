@@ -19,6 +19,22 @@
 
 ### INT-SOURCE-READ-LIFETIME — public proof read scope (OPEN)
 
+#### Совместное уточнение конкурентности — 2026-11-17
+
+Требование пользователя: различать конкурентность DAG и внутренний параллелизм доменной операции; выбирать scope policy только с учётом обоих уровней и совместного решения владельцев. Проверенный runtime DAG запускает invocations через asyncio.create_task с лимитом workers; PythonNodeExecutor напрямую await-ит node.execute. Внутри materialize существующий ChunkComputePool использует ThreadPoolExecutor/run_in_executor. Наличие одного уровня не разрешает передачу scope на другой.
+
+Source требует: изоляция mutable request/diagnostics между конкурентными вызовами; явно определённая принадлежность scope task/thread/connection; согласованность exact reads; отсутствие implicit передачи живого scope в workers; определённое завершение workers/cleanup при cancellation до выдачи результата. Не требовать однопоточного DAG. Immutable вычислительные данные могут передаваться workers без authority на storage.
+
+Варианты для совместной оценки, не принятые решения:
+
+1. Public Source entry требует unbound context и получает собственный read lifetime. Внутренние workers вычисляют по immutable captured данным. Нужен существующий либо owning-уточнённый публичный unbound отказ; private _require_unbound не подходит.
+2. Явно согласованный borrowed scope только в одной owning task для атомарной внутренней композиции; workers не заимствуют scope. Нужно подтвердить допустимость DAG-маршрута, видимость uncommitted данных и provisional смысл результата. Это не автоматическое разрешение для scope-free public API.
+3. Если worker действительно нужен storage read: отдельный owning read contract с connection allocation и evidence одной требуемой версии. Независимые транзакции сами по себе не гарантируют общий snapshot; shared live scope не передаётся без подтверждённого механизма.
+
+Владельцы: DAG — execution/context/cancellation; Source — public entry и собственные pure checks; Snapshot/publication — capability/transaction/connection lifetime; Artifacts — binding policy и physical read/GC coordination. Перед предложением новых контрактов каждый проверяет existing POJO/errors/API и сообщает exact imports, статусы accepted/proposed и недостающую дельту, без зеркал и placeholders. Общее решение должно содержать caller trace для обоих уровней конкурентности, отказ при недопустимом scope и проверки cleanup/изоляции/версии. Отдельный ответ одного владельца не закрывает gate.
+
+Полученный ответ Snapshot подтвердил существующий механизм read lifetime и cleanup, но не архитектурный допуск borrowed scope. Static evidence не объявляется тестами. Более ранние записи ожидания ниже исторические; теперь предмет уточнения — совместная политика по указанным требованиям.
+
 2026-11-17: запрос отправлен в существующий видимый чат **SNAPSHOT** (`01a1a0c5-931c-77a0-96a5-cb5b6ca6766f`). Обязательный первый шаг владельца — аудит existing POJO/errors/scopes/methods без дублей, затем подтверждение актуального контракта. Попросили отделить Snapshot/publication ownership от неподтверждённой Artifacts части и не создавать исключение DAG. Статус: ответ ожидается; более ранняя запись «отправка не заявляется» ниже описывает состояние до этой отправки.
 
 Владельцы подтверждения: Snapshot/publication (CommitReadScope и lifetime) и Artifacts (SqliteArtifactScope binding); Source владеет требованиями своей public boundary. Проверено 2026-11-16: existing `SqliteArtifactScope.read_scope()` открывает/закрывает scope и bind/reset либо заимствует existing binding; `SqlitePublicationCommitStore.read_scope(existing_scope=None)` предоставляет concrete lifecycle. Новая инфраструктура Source не требуется на основании одного отсутствующего constructor binding в плане.

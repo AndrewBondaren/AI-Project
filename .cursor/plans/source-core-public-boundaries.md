@@ -64,6 +64,10 @@ Public метод не принимает SourceOperation, codec/manifest, backe
 
 ### АР-1: ошибки и завершение публичной операции
 
+**Принято пользователем 2026-11-17 — разделение request и collector validation.** Request checker проверяет исходный запрос и формирует пользовательские diagnostics от actual root. Normalizer/union/extractor запускаются только после успешной проверки. Collector проверяет canonical proof теми же единственными реализациями правил; некорректный вычисленный Source proof — programming/postcondition failure, не SourceFailure по синтетическому пользовательскому полю. Для READ/VERIFY/SELECT некорректный предъявленный persisted proof диагностируется на request boundary до зависимых вычислений; это не ошибка реализации только потому, что proof persisted.
+
+Внутри живого read scope collector обязательно проверяет finalized captures, membership, доступность/integrity данных и полный durable closure. Ранняя pure validation и occurrence mapping этих проверок не заменяют. Повторный invariant check не создаёт второй набор правил или повторные пользовательские diagnostics. Решение закрывает выбор ответственности этого вопроса АР-1; exact programming-error transport, синхронизация collector spec и приёмка реализации остаются отдельной работой. Не вводить флаг skip_validation/trusted_proof. Одобрение не принимает автоматически occurrence signature delta, read lifetime/DAG binding или всю архитектуру.
+
 ### Требования к occurrence mapping — proposal 2026-11-17
 
 Точные private tuple aliases, функции index/project/localize и явная замена collector signature предъявлены в [source-core-occurrence-mapping.md](source-core-occurrence-mapping.md). Normalizer/union/extractor сохраняют existing signatures; карта сопоставляется с их фактическим результатом без повторного вычисления proof. Дельта collector требует принятия и сверки всех callers §12.1, включая adoption; до этого существующий spec не заменён.
