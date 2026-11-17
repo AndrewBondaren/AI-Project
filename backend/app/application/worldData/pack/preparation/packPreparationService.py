@@ -21,6 +21,9 @@ from app.application.worldData.pack.preparation.errors import (
 )
 from app.application.worldData.pack.preparation.packPreparationValidator import PackPreparationValidator
 from app.application.worldData.pack.preparation.metadataStateValidator import MetadataStateValidator
+from app.application.worldData.pack.preparation.wildernessChunkAdmission import WildernessChunkAdmission
+from app.application.worldData.pack.preparation.wildernessChunkWrite import apply_wilderness_chunks
+from app.dataModel.worldPack.preparation.operations import PackWildernessChunkInput, PackWildernessChunksInput
 from app.dataModel.fields.checkedPath import CheckedPath
 from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.worldPack.preparation.errors import PackPreparationFailureReason
@@ -122,6 +125,14 @@ def _without_representation(state: PackPreparationState, address: PackPartAddres
 
 
 class PackPreparationService:
+    def write_wilderness_chunk(self, request: PackWildernessChunkInput) -> PackPreparationState:
+        admitted = WildernessChunkAdmission().validate_wilderness_chunk(request)
+        return apply_wilderness_chunks(admitted.state, (admitted,))
+
+    def write_wilderness_chunks(self, request: PackWildernessChunksInput) -> PackPreparationState:
+        admitted = WildernessChunkAdmission().validate_wilderness_chunks(request)
+        return apply_wilderness_chunks(admitted.state, admitted.entries)
+
     def write_tile_grade_slots(self, request: PackTileGradeSlotsInput) -> PackPreparationState:
         return _write_grade_slots(PackTileGradeSlotsInput, request,
             FieldRef(lambda: PackTileGradeSlotsInput, lambda value: value.state),
