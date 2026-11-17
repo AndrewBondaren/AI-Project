@@ -216,6 +216,32 @@ History Lifecycle не дублирует snapshot metadata. Использую�
 
 ## Общий контракт — проект POJO
 
+### LC-C04 — обязательное типизированное основание, принято 2026-11-18
+
+Каждый переход Create, Replacement, End и Reactivate обязан содержать типизированное основание. Оно объясняет, почему переход допустим в предметной ситуации, а не повторяет имя lifecycle-операции. Это обязательная часть prepare-входа, подготовленного результата и immutable записи перехода; история сохраняет то основание, которое было проверено при подготовке. Transformation остаётся TODO: при его будущей конкретизации также нельзя вводить переход без основания, но сама семантика преобразования этим не принимается.
+
+Состав основания по смыслу: идентификатор причины из общего каталога и параметры конкретного именованного POJO, принадлежащего owning-домену. Каталог связывает идентификатор с типом параметров и владельцем, не выбирает обработчик. Точная wire-форма association/discriminator, version и registration ещё OPEN; не дублировать owner/type полями каждого экземпляра без необходимости и не создавать второй каталог. Основание может иметь ноль параметров, если его вид исчерпывающе выражает смысл; это конкретный тип без параметров, не произвольный пустой dict.
+
+Недопустимы отсутствие основания, None, свободная строка, Any/dict вместо конкретного типа, неизвестный идентификатор, несовпадение идентификатора с типом параметров и автоматическое «unknown/default reason». Первоначальная генерация и технически инициированный переход тоже требуют конкретного основания; фиктивная причина только ради прохождения обязательного поля запрещена. Человекочитаемый текст может быть представлением, но не authoritative контрактом причины.
+
+Граница ответственности:
+
+| Владелец | Обязанность | Недопустимое поведение |
+|---|---|---|
+| Предметный домен | Определить тип основания и минимальные объясняющие факты/refs, проверить предметную допустимость, вернуть typed результат DAG | Передать непроверенную произвольную причину или вызвать Lifecycle напрямую |
+| DAG | Передать основание и связанные source facts/evidence в публичный prepare Lifecycle | Вычислять доменную причину, изменять её параметры, вызывать внутренний validator |
+| Lifecycle | Проверить обязательность и структурную согласованность типа/каталога, общие инварианты перехода и связь с предъявленными фактами; сохранить основание в результате | Выполнять доменные проверки через callback/DI/dispatch по reason или T, подставлять default |
+| Общий каталог (owner OPEN) | Объявлять association identifier → parameter type → owner для admission/codec | Хранить handlers или маршрутизировать исполнение |
+| Принятая publication/storage boundary | Атомарно сохранить подготовленный переход вместе с основанием и изменением проекции | Подменять основание или выдавать успех при сохранении только части перехода |
+
+Примеры смысла, не новые утверждённые enums/классы: Create при первоначальной генерации; Replacement после изменения связности воды; End вследствие конкретного завершающего события; Reactivate вследствие доменного события восстановления. Одна и та же lifecycle-операция может иметь разные типы предметных оснований. Перечень допустимых оснований/операций/видов, конкретные классы и проверенные owning outputs согласуются до реализации, не выводятся из этих примеров.
+
+Основание участвует в принятом смысловом сравнении повторов: изменение его вида или смысловых параметров при том же change_uid — конфликт, не исправление исторической записи. Exact канонизация остаётся OPEN; одинаковость нельзя проверять по display-тексту. Хранение основания не означает обязательной ссылки на отдельную предметную history-запись: необходимость и exact тип такой ссылки — самостоятельный OPEN. Полный domain before/after не копируется в основание; если оно содержит refs, их разрешение и retention должны быть определены общим binding до кода.
+
+Критерии приёмки LC-C04: (1) отсутствие/null/строка/неизвестный ID и неверный тип параметров отклоняются до builder и публикации; (2) конкретное основание без параметров допускается при принятой декларации; (3) ID/type/owner сохраняются при native codec round-trip без подмены; (4) prepare/result/history содержат то же смысловое основание; (5) exact retry не создаёт дубликат, изменение основания при прежнем change_uid даёт typed конфликт; (6) call graph не содержит доменных callbacks/handlers в каталоге или Lifecycle; (7) rollback не оставляет переход без основания либо новую проекцию без полного перехода. Конкретные ошибки полей/логики, admission POJO и codec реализуются только после общей архитектурной приёмки.
+
+Статус LC-C04 — PARTIAL: обязательность и границы приняты; owner/путь каталога, exact classes/signatures, регистрация, native schema/codec, owning evidence и конкретные ошибки ещё OPEN. Это решение имеет приоритет над историческими пометками «обязательность не решена» ниже; оно не закрывает полный контракт каталога.
+
 **Принято пользователем 2026-11-18: минимальная текущая проекция `EntityLifecycle[T]`** (frozen POJO, `dataModel/lifecycle/entityLifecycle.py`) содержит три смысловых поля:
 
 - типизированная ссылка на сущность — UID и предметный вид T через общий identity-контракт;
@@ -328,7 +354,7 @@ Lifecycle не владеет scheduler, retry исполнения, lease, stag
 
 #### LC-C03 — структура участников принята 2026-11-18
 
-Одна immutable запись описывает весь lifecycle-переход: change_uid, конкретную операцию (Create/Replacement/End/Reactivate), участников с типизированной ссылкой и состояниями до/после, типизированное основание. Обязательность основания ещё не согласована; его наличие в смысловой структуре не вводит обязательное поле или default. Предметные параметры участников не копируются в lifecycle before/after.
+Одна immutable запись описывает весь lifecycle-переход: change_uid, конкретную операцию (Create/Replacement/End/Reactivate), участников с типизированной ссылкой и состояниями до/после, обязательное типизированное основание (LC-C04, решение 2026-11-18). Default вместо основания запрещён. Предметные параметры участников не копируются в lifecycle before/after.
 
 | Операция / участник | До | После |
 |---|---|---|
@@ -379,7 +405,7 @@ Accepted target Snapshot: [ARCH-DEC-1/2](../.cursor/plans/world-domain-patches-s
 | LC-C01 | Identity и вид сущности; Lifecycle + владелец вида/намерения | Existing `dataModel/identity/uid.py: EntityUid`, `dataModel/patch/changes/header.py: PatchRef`; T, различие identity, повторы и назначение change_uid до Lifecycle при формировании намерения приняты | Typed reference, runtime discriminator/invariance, подтверждение вида; конкретный метод назначения/сохранения UID, scope, состав сравнения, patch mapping и конкурентный history binding; str-поля сверить с identity SoT |
 | LC-C02 | Текущая проекция; Lifecycle — PARTIAL | `dataModel/lifecycle/entityLifecycle.py: EntityLifecycle[T]`; 2026-11-18 принят минимальный состав: typed entity ref, активность, last-transition ref | Exact типы/имена ссылок, invariants и read/publication binding; без дублирования истории и metadata; атомарность проекции/перехода |
 | LC-C03 | Запись операции и состояния участников; Lifecycle — PARTIAL | Приняты одна immutable операция, change_uid/вид операции, typed участники с before/after, место для основания; таблица переходов уточнена 2026-11-18 | Exact классы/модули, общий state/ref без дубля LC-C02, typed absence, cardinality/порядок/связи, отсутствие рекурсивного payload; обязательность основания отдельно OPEN |
-| LC-C04 | Основание и каталог; типы принадлежат доменам, owner каталога OPEN | Общая association identity/type/owner принята; конкретных новых классов нет | Обязательность причины, typed parameters, declaration/registration, native codec/schema, exact dependencies; запрет dispatch и предметных callbacks |
+| LC-C04 | Основание и каталог — PARTIAL; типы принадлежат доменам, owner каталога OPEN | Приняты обязательность основания каждого перехода и association identity/type/owner; конкретных новых классов нет | Exact typed parameters/classes, owner/путь каталога, declaration/registration, native codec/schema, evidence/errors; запрет dispatch/default/callbacks; history-reference obligation отдельно OPEN |
 | LC-C05 | Предметные доказательства; producer — owning-домен | Existing `WorldPublicationRef` в `dataModel/worldSnapshot/identity/publication.py`; exact Hydrology output OPEN | Публичный метод владельца, поля output → Lifecycle input, проверенные основание/вид/source revision, полнота, stale/mismatch ошибки; передача через DAG |
 | LC-C06 | Четыре prepare-контракта; Lifecycle | Proposed `dataModel/lifecycle/operations/{create,replacement,end,reactivate}.py`, `changes/prepared*.py`, `lifecycleReplacement.py`; public signatures выше | Полные Prepare/Prepared схемы, ссылки без копирования proposal, before/after и основание; native patch representation, точные результаты validator/builder |
 | LC-C07 | Read data; Lifecycle | Proposed `reads/request.py: LifecycleReadRequest, LifecycleHistoryReadRequest`; `reads/capture.py: LifecycleCapture, LifecycleHistory` | Exact publication/scope, границы/порядок выборки, pagination при необходимости, полнота, unknown/absent; не вводить вторую модель состояния |
