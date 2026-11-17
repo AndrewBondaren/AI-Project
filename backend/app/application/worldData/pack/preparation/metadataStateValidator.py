@@ -36,6 +36,13 @@ ItemT = TypeVar("ItemT", bound=BaseModel)
 
 class MetadataStateValidator:
     @staticmethod
+    def _ambiguous_keys(value: object, collection: FieldRef[PackAssemblyInput, tuple[ItemT, ...]],
+                        key: FieldRef[ItemT, ValueT]) -> set[ValueT]:
+        keys = tuple(admitted for _, row in _raw_items(value, collection)
+                     if (admitted := valid_preparation_field(row, key)) is not None)
+        return {keys[index] for index in _duplicates(keys)}
+
+    @staticmethod
     def _complete_keys(value: object, collection: FieldRef[PackAssemblyInput, tuple[ItemT, ...]],
                        key: FieldRef[ItemT, ValueT]) -> set[ValueT] | None:
         rows = preparation_field_value(value, collection)
@@ -71,6 +78,21 @@ class MetadataStateValidator:
         regions = self._complete_keys(raw_assembly, FieldRef(lambda: PackAssemblyInput, lambda value: value.wilderness_regions),
                                       FieldRef(lambda: WildernessRegionEntry, lambda value: value.region_uid))
         projections: dict[PackAssemblyAddress, object] = {}
+        tile_coordinates = _coordinates(_raw_items(raw_assembly, tiles_field),
+            FieldRef(lambda: PackTileAssembly, lambda value: value.gx),
+            FieldRef(lambda: PackTileAssembly, lambda value: value.gy))
+        duplicate_tiles = {tile_coordinates[index][1] for index in _duplicates(key for _, key in tile_coordinates)}
+        ambiguous: set[PackAssemblyAddress] = set()
+        ambiguous.update(PackTileMetadataAddress(kind="tile", gx=gx, gy=gy) for gx, gy in duplicate_tiles)
+        ambiguous.update(PackLocationMetadataAddress(kind="location", location_uid=uid) for uid in self._ambiguous_keys(
+            raw_assembly, FieldRef(lambda: PackAssemblyInput, lambda value: value.locations),
+            FieldRef(lambda: PackLocationAssembly, lambda value: value.location_uid)))
+        ambiguous.update(PackSettlementMetadataAddress(kind="settlement", location_uid=uid) for uid in self._ambiguous_keys(
+            raw_assembly, FieldRef(lambda: PackAssemblyInput, lambda value: value.settlements),
+            FieldRef(lambda: PackSettlementAssembly, lambda value: value.location_uid)))
+        ambiguous.update(PackRegionMetadataAddress(kind="region", region_uid=uid) for uid in self._ambiguous_keys(
+            raw_assembly, FieldRef(lambda: PackAssemblyInput, lambda value: value.wilderness_regions),
+            FieldRef(lambda: WildernessRegionEntry, lambda value: value.region_uid)))
         header = PackAssemblyHeaderAddress(kind="header")
         header_values = (
             valid_preparation_field(raw_assembly, FieldRef(lambda: PackAssemblyInput, lambda value: value.last_l0_mode)),
@@ -87,6 +109,12 @@ class MetadataStateValidator:
             gy = valid_preparation_field(tile, FieldRef(lambda: PackTileAssembly, lambda value: value.gy))
             if gx is None or gy is None:
                 continue
+            chunk_coordinates = _coordinates(_raw_items(tile, FieldRef(lambda: PackTileAssembly, lambda value: value.chunks)),
+                FieldRef(lambda: PackChunkAssembly, lambda value: value.cx),
+                FieldRef(lambda: PackChunkAssembly, lambda value: value.cy))
+            ambiguous.update(PackChunkMetadataAddress(kind="chunk", gx=gx, gy=gy,
+                cx=chunk_coordinates[index][1][0], cy=chunk_coordinates[index][1][1])
+                for index in _duplicates(key for _, key in chunk_coordinates))
             climate = valid_preparation_field(tile, FieldRef(lambda: PackTileAssembly, lambda value: value.climate_status))
             status = valid_preparation_field(tile, FieldRef(lambda: PackTileAssembly, lambda value: value.wilderness_refine_status))
             if climate is not None and status is not None:
@@ -110,6 +138,9 @@ class MetadataStateValidator:
             fingerprint = valid_preparation_field(subject, fingerprint_field)
             subject_path = path.field(descriptions).item(index).field(subject_field)
             if address is None:
+                continue
+            if address in ambiguous or (isinstance(address, PackChunkMetadataAddress)
+                                        and (address.gx, address.gy) in duplicate_tiles):
                 continue
             if address not in projections:
                 absent = False

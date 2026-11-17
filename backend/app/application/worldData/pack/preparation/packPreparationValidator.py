@@ -10,6 +10,7 @@ from app.dataModel.fields.checkedPath import CheckedPath
 from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.sourceVersioning.sourceDurableProof import SourceDurableProof
 from app.dataModel.sourceVersioning.sourceProofInput import SourceProofInput
+from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
 from app.dataModel.validation.diagnostics.validatorAggregationHelper import ValidatorAggregationHelper
 from app.dataModel.worldPack.meta.metadataAttribution import PackStoredAssemblyProvenance
 from app.dataModel.worldPack.meta.parts import PackStoredPart
@@ -46,7 +47,8 @@ class PackPreparationValidator:
     ) -> None:
         """Collect local identity issues under the calling operation's named input path."""
         base = valid_preparation_field(state, FieldRef(lambda: PackPreparationState, lambda value: value.base_publication))
-        world = base.world_uid if base is not None else None
+        raw_base = preparation_field_value(state, FieldRef(lambda: PackPreparationState, lambda value: value.base_publication))
+        world = valid_preparation_field(raw_base, FieldRef(lambda: WorldPublicationRef, lambda value: value.world_uid))
         parts_field = FieldRef(lambda: PackPreparationState, lambda value: value.parts)
         raw_parts = preparation_field_value(state, parts_field)
         parts = tuple(enumerate(raw_parts if isinstance(raw_parts, tuple) else ()))
@@ -114,8 +116,9 @@ class PackPreparationValidator:
             dependencies = _raw_items(entry, dependencies_field)
             dependency_path = entry_path.field(dependencies_field)
             for use_index, use in dependencies:
-                usage = valid_preparation_field(use, usage_field)
-                if world is not None and usage is not None and usage_world.select(usage) != world:
+                usage = preparation_field_value(use, usage_field)
+                dependency_world = valid_preparation_field(usage, usage_world)
+                if world is not None and dependency_world is not None and dependency_world != world:
                     _issue(errors, PackPreparationIssueCode.SOURCE_PROOF_MISMATCH,
                            dependency_path.item(use_index).field(usage_field).field(usage_world),
                            "metadata usage belongs to another world")
