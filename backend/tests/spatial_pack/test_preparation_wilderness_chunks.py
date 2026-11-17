@@ -16,6 +16,8 @@ from app.dataModel.sourceVersioning.sourceCaptureUsage import SourceCaptureUsage
 from app.dataModel.sourceVersioning.sourceDependencies import SourceDependencySet
 from app.dataModel.sourceVersioning.sourceProofInput import SourceProofInput
 from app.dataModel.sourceVersioning.sourceDurableProof import SourceDurableProof
+from app.dataModel.sourceVersioning.sourceProofSelection import SourceProofSelection
+from app.dataModel.worldPack.meta.metadataAttribution import PackMetadataAttribution, PackMetadataGroupAdmission
 from app.dataModel.worldPack.preparation.addresses import PackChunkAddress, PackTileMetadataAddress, PackChunkMetadataAddress
 from app.dataModel.worldPack.preparation.assembly import PackAssemblyInput
 from app.dataModel.worldPack.preparation.operations import PackWildernessChunkWrite, PackWildernessChunksInput, PackWildernessChunkInput
@@ -31,6 +33,30 @@ from app.core.constants import FINE_CELL_SIZE
 
 
 class WildernessChunkTransitionTests(unittest.TestCase):
+    def test_stored_status_basis_must_match_provisional_basis(self) -> None:
+        initial = self.apply(self.state, self.item(5))
+        tile = PackTileMetadataAddress(kind="tile", gx=-2, gy=3)
+        description = next(entry for entry in initial.metadata_dependencies if entry.subject.address == tile)
+        status = description.dependencies[2]
+        assert status.basis is not None
+        selection = SourceProofSelection(proof_fingerprint="a" * 64, dependency_indices=())
+        for expected in (None, 2):
+            binding = PackStoredAssemblyProvenance(address=tile, provenance=self.proof,
+                attribution=PackMetadataAttribution(groups=tuple(PackMetadataGroupAdmission(
+                    group=use.group, selection=selection,
+                    basis=status.basis.model_copy(update={"expected_chunks": expected})
+                    if use.group is PackMetadataGroup.WILDERNESS_REFINE_STATUS else use.basis)
+                    for use in description.dependencies)))
+            state = initial.model_copy(update={"assembly_provenance": (binding,)})
+            before = state.model_dump()
+            for single in (False, True):
+                with self.subTest(expected=expected, single=single):
+                    result = self.single(state, self.item(5)) if single else self.apply(state, self.item(5))
+                    self.assertEqual(result.assembly_provenance, (binding,) if expected is None else ())
+                    self.assertEqual(result.metadata_dependencies, initial.metadata_dependencies)
+                    self.assertEqual(state.model_dump(), before)
+            self.assertEqual(self.apply(state), state)
+
     def setUp(self) -> None:
         self.state = PackPreparationState(parts=(), assembly=PackAssemblyInput(last_l0_mode="light",
             fine_cells_per_map_cell=1000, world_map_cells_per_tile=32, fine_cell_size=FINE_CELL_SIZE,

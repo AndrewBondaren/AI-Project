@@ -36,6 +36,7 @@ def apply_wilderness_chunks(state: PackPreparationState, entries: tuple[PackWild
     chunks = {key: {(chunk.cx, chunk.cy): chunk for chunk in tile.chunks} for key, tile in tiles.items()}
     descriptions = {entry.subject.address: entry for entry in state.metadata_dependencies}
     original = descriptions.copy()
+    stored_bindings = {entry.address: entry for entry in state.assembly_provenance}
     description_order: dict[PackAssemblyAddress, None] = dict.fromkeys(descriptions)
     tile_groups: dict[tuple[int, int], tuple[PackMetadataDependencyUse, PackMetadataDependencyUse]] = {}
     statuses: dict[tuple[int, int], WildernessRefineStatus] = {}
@@ -93,6 +94,11 @@ def apply_wilderness_chunks(state: PackPreparationState, entries: tuple[PackWild
             PackMetadataDependencyUse(group=PackMetadataGroup.WILDERNESS_REFINE_STATUS, source_usage=empty_usage, basis=basis)))
         if original.get(address) != description:
             changed.add(address)
+        stored = stored_bindings.get(address)
+        if stored is not None and stored.attribution is not None:
+            if any(group.group is PackMetadataGroup.WILDERNESS_REFINE_STATUS and group.basis != basis
+                   for group in stored.attribution.groups):
+                changed.add(address)
         descriptions[address] = description
 
     assembly = state.assembly.model_copy(update={"tiles": tuple(tiles.values())})
