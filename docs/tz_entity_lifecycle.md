@@ -26,9 +26,13 @@ backend/app/
     operations/create.py                 PrepareLifecycleCreate[T]
     operations/replacement.py            PrepareLifecycleReplacement[T]
     operations/end.py                    PrepareLifecycleEnd[T]
+    operations/reactivate.py             PrepareLifecycleReactivate[T]
+    operations/transformation.py         PrepareLifecycleTransformation[From, To] (TODO)
     changes/preparedCreate.py            PreparedLifecycleCreate[T]
     changes/preparedReplacement.py       PreparedLifecycleReplacement[T]
     changes/preparedEnd.py               PreparedLifecycleEnd[T]
+    changes/preparedReactivate.py         PreparedLifecycleReactivate[T]
+    changes/preparedTransformation.py    PreparedLifecycleTransformation[From, To] (TODO)
     results/errors.py                    LifecycleFieldError, LifecycleLogicError
     publication/section.py               LifecycleSection (интеграция OPEN)
   application/lifecycle/
@@ -40,6 +44,10 @@ backend/app/
       ILifecycleReplacementPipelineOpenPipeline, LifecycleReplacementPipelineOpenPipeline
     changes/endPipelineOpenPipeline.py
       ILifecycleEndPipelineOpenPipeline, LifecycleEndPipelineOpenPipeline
+    changes/reactivatePipelineOpenPipeline.py
+      ILifecycleReactivatePipelineOpenPipeline, LifecycleReactivatePipelineOpenPipeline
+    changes/transformationPipelineOpenPipeline.py (TODO)
+      ILifecycleTransformationPipelineOpenPipeline, LifecycleTransformationPipelineOpenPipeline
     validation/transitionValidator.py    LifecycleTransitionValidator
     changes/changeBuilder.py             LifecycleChangeBuilder
     publication/sectionHandler.py        LifecycleSectionHandler (binding OPEN)
@@ -51,6 +59,31 @@ backend/app/
 Папки `reads`, `changes` группируют классы по ответственности. Публичные pipeline не помещаются в универсальный LifecycleService с `execute(kind, payload)`. Класс размещается в собственном модуле; Protocol конкретного pipeline допустим рядом с его реализацией, как в существующем Time. Внутренние классы не реэкспортируются как API для DAG. Конкретный SQLite adapter и pregame Pack adapter назначаются в L3 после выбора storage-контракта, а не создаются по предположению о схеме.
 
 ### Публичные методы для прямого вызова из DAG
+
+**Принято пользователем 2026-11-17: отдельная generic-операция Reactivate[T].** Общего запрета реактивации завершённой записи нет. `End[T]` завершает активность сущности по доменному решению без удаления identity и истории. `Reactivate[T]` восстанавливает ту же сущность с прежним UID и предметным видом, если это допускается конкретными доменными правилами. Смерть/разрушение/засуха сами по себе не означают автоматического End; решение о переходе принадлежит предметному домену и поступает через DAG.
+
+Публичный метод — `LifecycleReactivatePipelineOpenPipeline.prepare_reactivate[T](self, request: PrepareLifecycleReactivate[T]) -> PreparedLifecycleReactivate[T] | LifecycleFieldError | LifecycleLogicError`; соответствующий Protocol `ILifecycleReactivatePipelineOpenPipeline` имеет ту же сигнатуру. Caller — непосредственно DAG с конкретизированным T; зависимости — внутренние validator/builder и публичные POJO, без IO/commit/чужих callbacks. Внутренние `validate_reactivate` и `build_reactivate` не открываются DAG. Правило одного вида для Create/Replacement/End ниже распространяется также на Reactivate.
+
+Предметный домен возвращает типизированное предложение допустимой реактивации и необходимые факты; DAG передаёт их Lifecycle. Lifecycle проверяет identity, исходную revision/publication, допустимость перехода по предъявленным фактам и ограничения истории, не вызывает домен и не заменяет его решение флагом `allow_reactivation=True`. Точная схема proposal/evidence и owning публичные методы ещё OPEN.
+
+Обычное завершение и закрытие предшественника при Replacement различаются по причине и истории. Разрешение Reactivate после End не означает автоматического разрешения Reactivate после Replacement: существующие преемники и предметные ограничения должны быть проверены. Принятое правило водных систем сохраняется: восстановление прежнего состава создаёт новую систему; исторический родитель не реактивируется. Это ограничение конкретного сценария, не всех сущностей.
+
+Каждый цикл End → Reactivate сохраняется в истории; реактивация не стирает прошлое завершение и не переписывает создание сущности. Проект `EntityLifecycle.is_active/ended_by_change_uid` ниже описывает текущую проекцию и **не достаточен как полная история**. В L1 требуется определить записи/переходы истории, причины завершения и связь с публикацией, исключив дубль execution journal Snapshot/Publication. При активной проекции `ended_by_change_uid=None` допустимо только при сохранении предшествующих закрытий в authoritative истории; окончательная модель хранения ещё OPEN.
+
+Проверяемые критерии Reactivate: прежние UID и T сохранены; два последовательных End/Reactivate не теряют ни одного перехода; exact retry не добавляет повторную запись; конфликт payload/старая revision отвергаются; ограничения преемников не обходятся; запрет восстановления исторической водной системы соблюдён; реактивация и сопутствующее доменное состояние публикуются атомарно. Отказ при новом UID вместо восстановления, стирании завершения, безусловном разрешении после Replacement или доменном callback внутри Lifecycle. Подготовка чистая; физическая модель и точные ошибки принимаются в составе полной архитектуры до кода.
+
+**Принято 2026-11-17: сохранить Replacement и добавить Transformation как возможность расширения с TODO.** Replacement[T] — замещение внутри одного предметного вида. Transformation[From, To] — отдельный явный контракт перехода между предметными видами; правило одного T ниже относится к Create/Replacement/End. Типы From/To не являются доменными payload или выбором алгоритма. Предметный домен рассчитывает преобразование; Lifecycle получает его через DAG и готовит общую историю по отдельно принятым правилам.
+
+```python
+# TODO LIFECYCLE-TRANSFORMATION: согласовать semantics, identity, cardinality,
+# source completion, history, evidence, errors и publication до реализации.
+# Только проект контракта; не исполняемая заглушка и не принятая DAG-нода.
+def prepare_transformation[From, To](
+    self, request: PrepareLifecycleTransformation[From, To],
+) -> PreparedLifecycleTransformation[From, To] | LifecycleFieldError | LifecycleLogicError: ...
+```
+
+Публичный владелец — `LifecycleTransformationPipelineOpenPipeline`, Protocol — `ILifecycleTransformationPipelineOpenPipeline`, модуль `application/lifecycle/changes/transformationPipelineOpenPipeline.py`. Разрешённый будущий caller — DAG с конкретизированными From/To. Эффект подготовки — только immutable результат, без IO/commit/чужих calls. До закрытия TODO не реализуется runtime-заглушка и не регистрируется операция. Приёмка требует явных разрешённых пар, сохранения обоих типов при validation/codec, проверяемой истории и атомарности; конкретные проверочные сценарии определяются вместе с семантикой. Не считать любую пару автоматически допустимой, не сводить к Any или union и не заимствовать правила Replacement молча. Сохранение либо смена UID здесь ещё не решены.
 
 **Принятое уточнение 2026-11-17: T обозначает предметный вид сущности, не домен.** Внутри одного домена возможны несколько видов сущностей с раздельными специализациями Lifecycle. Домен владеет предметным определением вида; Lifecycle использует его для связывания ссылок/предложения/evidence/результата, не получает весь предметный объект и не выбирает алгоритм по этому виду. Общая метка домена не заменяет вид. Конкретное переиспользуемое представление вида и его runtime schema определяются после инвентаризации, не придумываются вторым реестром.
 

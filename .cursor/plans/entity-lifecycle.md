@@ -6,6 +6,19 @@
 
 ### Принятое решение: отдельные generic-операции
 
+**Дополнение принято пользователем 2026-11-17: Reactivate[T].** Добавляется `PrepareLifecycleReactivate[T] → PreparedLifecycleReactivate[T]`, публичный метод `prepare_reactivate[T]`, одна общая реализация. Общий запрет реактивации отменён как неприемлемое обобщение: предметный домен определяет допустимость, передаёт typed proposal через DAG; Lifecycle проверяет переход без чужих вызовов. Реактивация сохраняет UID/T и историю всех завершений/восстановлений. End и историзация при Replacement различаются; существующие преемники и ограничения проверяются отдельно. Водные системы продолжают следовать принятому запрету реактивации исторического родителя при восстановлении состава. Условия конкретных переходов/evidence ещё OPEN, но наличие Reactivate принято.
+
+Расширение ответственности и проверяемые критерии:
+
+| Класс / модуль | Ответственность и зависимости | Критерий приёмки / отказа |
+|---|---|---|
+| `LifecycleReactivatePipelineOpenPipeline`, `application/lifecycle/changes/reactivatePipelineOpenPipeline.py` | `prepare_reactivate[T]`, прямой caller DAG; validator/builder и POJO, без IO | Сохранены UID/T, история End/Reactivate, retry без дубля; отказ при новом UID, потере истории, domain callback, автоматическом разрешении после Replacement |
+| `ILifecycleReactivatePipelineOpenPipeline`, тот же модуль | Публичная сигнатура из ТЗ, без поведения | Тип T сохраняется, internals не раскрыты; незамкнутый T/Any в DAG-boundary — отказ |
+
+`LifecycleTransitionValidator.validate_reactivate` проверяет переданные факты и lifecycle-инварианты, `LifecycleChangeBuilder.build_reactivate` строит результат только после успешной проверки; обе операции внутренние и без IO. Requests/results: `dataModel/lifecycle/operations/reactivate.py`, `dataModel/lifecycle/changes/preparedReactivate.py`. Фабрика wiring `make_lifecycle_reactivate_pipeline` не исполняет запросы. Конкретный domain proposal/read binding/ошибки остаются предметом полной приёмки.
+
+Обязательное уточнение L1 до реализации: authoritative история повторных завершений/восстановлений и различение причин закрытия. Одних `is_active`/`ended_by_change_uid` недостаточно; текущее представление нельзя выдавать за полную историю или вводить второй execution ledger. Evidence L2/L3 включает два End→Reactivate, exact retry, conflict/stale, ограничения преемников, водный запрет и атомарность с доменным состоянием. Это часть полной архитектуры, не отдельный срез.
+
 Пользователь 2026-11-17 утвердил типизированные generic-контракты Create/Replacement/End. Публичные пары: `PrepareLifecycleCreate[T] → PreparedLifecycleCreate[T]`, `PrepareLifecycleReplacement[T] → PreparedLifecycleReplacement[T]`, `PrepareLifecycleEnd[T] → PreparedLifecycleEnd[T]`. Методы остаются `prepare_create`, `prepare_replacement`, `prepare_end`; по одной общей реализации на операцию. Единый кандидат `PreparedLifecycleChange` заменён отдельными результатами, без дополнительного envelope. Имена/полные сигнатуры — ТЗ § «Публичные методы для прямого вызова из DAG».
 
 T связывает типизированные ссылки и принадлежность сущностей, не содержит физику/доменные payload и не выбирает алгоритм. Предметная логика остаётся у своего домена; данные передаются через DAG. Не вводятся per-domain методы, dispatch по T, чужие стратегии/callbacks или универсальный execute. Внутренние validator/builder остаются закрытыми.
@@ -17,6 +30,17 @@ T связывает типизированные ссылки и принадл
 Приёмка решения требует статического отказа на смешанных типах, runtime-отказа на неверной специализации, сохранения T в результате и codec round-trip, запрета незамкнутого generic в DAG/section registration и отсутствия domain-dependent ветвления в общей реализации. Конкретные ссылки, ограничения T, native schemas/discriminator и ошибки ещё должны пройти общую POJO-приёмку до кода. Generic-решение принято, полный план и условия End/CRUD/storage/DAG bindings этим не приняты; правило реализации полной архитектуры без срезов сохраняется.
 
 ### Классы, ответственность и проверяемая приёмка
+
+**Расширение принято пользователем 2026-11-17: Replacement и Transformation — разные операции.** `prepare_replacement[T]` сохраняется для замещения внутри одного предметного вида. Для перехода между видами зарезервирован `prepare_transformation[From, To](request: PrepareLifecycleTransformation[From, To]) -> PreparedLifecycleTransformation[From, To] | LifecycleFieldError | LifecycleLogicError`. Правило одного T относится к Replacement/Create/End; Transformation явно связывает исходный From и целевой To, не стирает типы через Any/union. Это возможность расширения, не утверждение существующего межвидового runtime-сценария.
+
+**TODO LIFECYCLE-TRANSFORMATION:** перед реализацией определить допустимые пары видов, identity новых/сохраняемых сущностей, cardinality, завершение источников, predecessor/history semantics, domain evidence, ошибки и атомарную публикацию. Крафтинг — кандидат на проверку, не утверждённый consumer. Не выводить эти правила автоматически из Replacement. Текущая просьба разрешает документировать точку расширения с TODO, не создавать исполняемую заглушку или DAG-binding. Реализация полного домена без срезов остаётся правилом; при общей приёмке явно определить статус этого расширения, а не молча считать TODO реализованным или переносить обязательную архитектуру после кода.
+
+| Класс / файл расширения | Ответственность и граница | Критерий приёмки / отказа |
+|---|---|---|
+| `LifecycleTransformationPipelineOpenPipeline`, `application/lifecycle/changes/transformationPipelineOpenPipeline.py` — TODO | Публичный `prepare_transformation[From, To]`, прямой caller DAG; чистая подготовка lifecycle-перехода, предметное преобразование остаётся у owning домена | До runtime закрыт TODO выше; Input/Output сохраняют обе специализации, неподдерживаемая пара отвергается; IO, domain dispatch/callback, фиктивный успех или заглушка вместо семантики — отказ |
+| `ILifecycleTransformationPipelineOpenPipeline`, тот же модуль — TODO | Та же публичная сигнатура, только публичные POJO | Незамкнутые From/To не допускаются DAG-регистрацией; раскрытие internals или стирание одного типа — отказ |
+
+Внутренние `validate_transformation`/`build_transformation` у validator/builder — только кандидаты после закрытия TODO, не публичные DAG-методы. `PrepareLifecycleTransformation` и `PreparedLifecycleTransformation` размещаются соответственно в `dataModel/lifecycle/operations/transformation.py` и `dataModel/lifecycle/changes/preparedTransformation.py`; поля и ошибки ещё OPEN.
 
 Это карта целевой архитектуры **до шагов реализации**, не перечень существующих классов Lifecycle. Пути ниже относительно `backend/app/`; полные публичные сигнатуры и POJO — в ТЗ § «Классы, папки и видимость». Статус PROPOSED означает конкретное предложение, не разрешение кода; OPEN означает отсутствие обязательного решения. Проверки ниже — требуемые evidence, пока не выполненные тесты. Каждый критерий нарушения означает отказ в приёмке.
 

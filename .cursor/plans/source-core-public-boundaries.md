@@ -66,6 +66,8 @@ Public метод не принимает SourceOperation, codec/manifest, backe
 
 ### Требования к occurrence mapping — proposal 2026-11-17
 
+Точные private tuple aliases, функции index/project/localize и явная замена collector signature предъявлены в [source-core-occurrence-mapping.md](source-core-occurrence-mapping.md). Normalizer/union/extractor сохраняют existing signatures; карта сопоставляется с их фактическим результатом без повторного вычисления proof. Дельта collector требует принятия и сверки всех callers §12.1, включая adoption; до этого существующий spec не заменён.
+
 До выбора нового carrier проверить существующие `SourceProofGroupProjection`, FieldRef/CheckedPath, SourceProofSelection и SourceLogicIssue: projection/selections описывают вычисленный proof/subset, но не заменяют позиции всех повторов исходного request. Не вводить зеркальный proof, публичный provenance DTO либо новый универсальный context. Связь существует только внутри одного вызова Source, не сериализуется и не передаётся Pack.
 
 Обязательные связи: canonical capture → все original (group_index, use_index); canonical object/collection atom → все original (group_index, use_index, dependency_index, typed path). Object/collection ветви различаются existing concrete ref type, не строковым tag. Exact capture входит в ключ связи: одинаковый source ref из разных captures не сливается. Отдельно сохраняется actual request root для proof-level failures; ему не приписывается фиктивный use=0.

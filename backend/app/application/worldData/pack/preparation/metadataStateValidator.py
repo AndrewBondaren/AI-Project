@@ -20,6 +20,9 @@ from app.dataModel.worldPack.preparation.metadataSubject import PackMetadataSubj
 from app.dataModel.worldPack.preparation.state import PackPreparationState
 from app.dataModel.worldPack.preparation.assembly import PackAssemblyInput, PackTileAssembly, PackChunkAssembly
 from app.dataModel.worldPack.preparation.addresses import PackChunkAddress
+from app.dataModel.worldPack.preparation.addresses import PackAssemblyHeaderAddress, PackChunkMetadataAddress, PackLocationMetadataAddress, PackSettlementMetadataAddress, PackRegionMetadataAddress
+from app.application.worldData.pack.preparation.metadataProjection import metadata_value_fingerprint
+from app.application.worldData.pack.preparation.errors import valid_preparation_items
 from app.dataModel.worldPack.bake.wildernessRefineStatus import wilderness_refine_status_for_counts, wilderness_refine_status_without_expected
 
 from app.application.worldData.pack.preparation.errors import _duplicates, _issue, _raw_items, _coordinates
@@ -29,6 +32,90 @@ ValueT = TypeVar("ValueT")
 
 
 class MetadataStateValidator:
+    def check_subject_values(
+        self, state: object, path: CheckedPath[RootT, PackPreparationState],
+        errors: ValidatorAggregationHelper[PackPreparationDiagnostic],
+    ) -> None:
+        assembly_field = FieldRef(lambda: PackPreparationState, lambda value: value.assembly)
+        assembly = valid_preparation_field(state, assembly_field)
+        raw_assembly = preparation_field_value(state, assembly_field)
+        projections: dict[PackAssemblyAddress, object] = {}
+        header = PackAssemblyHeaderAddress(kind="header")
+        header_values = (
+            valid_preparation_field(raw_assembly, FieldRef(lambda: PackAssemblyInput, lambda value: value.last_l0_mode)),
+            valid_preparation_field(raw_assembly, FieldRef(lambda: PackAssemblyInput, lambda value: value.fine_cells_per_map_cell)),
+            valid_preparation_field(raw_assembly, FieldRef(lambda: PackAssemblyInput, lambda value: value.world_map_cells_per_tile)),
+            valid_preparation_field(raw_assembly, FieldRef(lambda: PackAssemblyInput, lambda value: value.fine_cell_size)),
+            valid_preparation_field(raw_assembly, FieldRef(lambda: PackAssemblyInput, lambda value: value.map_subsurface_depth)),
+            valid_preparation_field(raw_assembly, FieldRef(lambda: PackAssemblyInput, lambda value: value.terrain_chunk_columns)),
+        )
+        if all(value is not None for value in header_values):
+            projections[header] = header_values
+        for _, tile in _raw_items(raw_assembly, FieldRef(lambda: PackAssemblyInput, lambda value: value.tiles)):
+            gx = valid_preparation_field(tile, FieldRef(lambda: PackTileAssembly, lambda value: value.gx))
+            gy = valid_preparation_field(tile, FieldRef(lambda: PackTileAssembly, lambda value: value.gy))
+            if gx is None or gy is None:
+                continue
+            climate = valid_preparation_field(tile, FieldRef(lambda: PackTileAssembly, lambda value: value.climate_status))
+            status = valid_preparation_field(tile, FieldRef(lambda: PackTileAssembly, lambda value: value.wilderness_refine_status))
+            if climate is not None and status is not None:
+                projections[PackTileMetadataAddress(kind="tile", gx=gx, gy=gy)] = (gx, gy, climate, status)
+            for _, chunk in valid_preparation_items(tile, FieldRef(lambda: PackTileAssembly, lambda value: value.chunks)):
+                projections[PackChunkMetadataAddress(kind="chunk", gx=gx, gy=gy, cx=chunk.cx, cy=chunk.cy)] = (
+                    chunk.cx, chunk.cy, chunk.refine_role)
+        for _, location in valid_preparation_items(raw_assembly, FieldRef(lambda: PackAssemblyInput, lambda value: value.locations)):
+            projections[PackLocationMetadataAddress(kind="location", location_uid=location.location_uid)] = location
+        for _, settlement in valid_preparation_items(raw_assembly, FieldRef(lambda: PackAssemblyInput, lambda value: value.settlements)):
+            projections[PackSettlementMetadataAddress(kind="settlement", location_uid=settlement.location_uid)] = settlement
+        for _, region in valid_preparation_items(raw_assembly, FieldRef(lambda: PackAssemblyInput, lambda value: value.wilderness_regions)):
+            projections[PackRegionMetadataAddress(kind="region", region_uid=region.region_uid)] = region
+        descriptions = FieldRef(lambda: PackPreparationState, lambda value: value.metadata_dependencies)
+        subject_field = FieldRef(lambda: PackMetadataDescription, lambda value: value.subject)
+        address_field = FieldRef(lambda: PackMetadataSubject, lambda value: value.address)
+        fingerprint_field = FieldRef(lambda: PackMetadataSubject, lambda value: value.value_fingerprint)
+        for index, description in _raw_items(state, descriptions):
+            subject = preparation_field_value(description, subject_field)
+            address = valid_preparation_field(subject, address_field)
+            fingerprint = valid_preparation_field(subject, fingerprint_field)
+            subject_path = path.field(descriptions).item(index).field(subject_field)
+            if address is None:
+                continue
+            if address not in projections:
+                if assembly is not None:
+                    _issue(errors, PackPreparationIssueCode.ADDRESS_MISMATCH, subject_path.field(address_field), "metadata projection is absent")
+            elif fingerprint is not None and fingerprint != metadata_value_fingerprint(address, projections[address]):
+                _issue(errors, PackPreparationIssueCode.SOURCE_PROOF_MISMATCH, subject_path.field(fingerprint_field), "metadata subject value is stale")
+
+    def check_retained_tile_usage(
+        self, state: object, addresses: Iterable[PackChunkAddress], path: CheckedPath[RootT, PackPreparationState],
+        errors: ValidatorAggregationHelper[PackPreparationDiagnostic],
+    ) -> None:
+        existing = self._tile_basis_inputs(state)
+        descriptions_field = FieldRef(lambda: PackPreparationState, lambda value: value.metadata_dependencies)
+        pending: set[PackAssemblyAddress] = set()
+        for _, description in valid_preparation_items(state, descriptions_field):
+            pending.add(description.subject.address)
+        stored_field = FieldRef(lambda: PackPreparationState, lambda value: value.assembly_provenance)
+        address_field = FieldRef(lambda: PackStoredAssemblyProvenance, lambda value: value.address)
+        stored_indices = {address: index for index, entry in _raw_items(state, stored_field)
+                          if (address := valid_preparation_field(entry, address_field)) is not None}
+        seen: set[tuple[int, int]] = set()
+        for chunk in addresses:
+            key = chunk.gx, chunk.gy
+            if key in seen or key not in existing:
+                continue
+            seen.add(key)
+            address = PackTileMetadataAddress(kind="tile", gx=chunk.gx, gy=chunk.gy)
+            if address in pending:
+                continue
+            index = stored_indices.get(address)
+            if index is None:
+                _issue(errors, PackPreparationIssueCode.METADATA_ATTRIBUTION_UNAVAILABLE, path.field(stored_field), "retained tile usages must be imported before writing")
+            else:
+                _issue(errors, PackPreparationIssueCode.METADATA_ATTRIBUTION_UNAVAILABLE,
+                       path.field(stored_field).item(index).field(FieldRef(lambda: PackStoredAssemblyProvenance, lambda value: value.attribution)),
+                       "stored attribution does not provide imported usages")
+
     def check_metadata_groups(
         self, state: object, path: CheckedPath[RootT, PackPreparationState],
         errors: ValidatorAggregationHelper[PackPreparationDiagnostic],

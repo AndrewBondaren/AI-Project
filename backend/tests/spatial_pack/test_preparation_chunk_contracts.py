@@ -35,6 +35,35 @@ from app.dataModel.worldPack.preparation.metadataSubject import PackMetadataSubj
 
 
 class ChunkContractTests(unittest.TestCase):
+    def test_existing_tile_requires_imported_usage(self) -> None:
+        tile = PackTileAssembly(gx=-2, gy=3, climate_status="fine", wilderness_refine_status="absent", chunks=())
+        state = self.state.model_copy(update={"assembly": self.assembly.model_copy(update={"tiles": (tile,)})})
+        with self.assertRaises(PackPreparationFailure) as caught:
+            WildernessChunkAdmission().validate_wilderness_chunks(PackWildernessChunksInput(state=state, entries=(self.valid_item(),)))
+        issue = caught.exception.error.issues[0]
+        assert isinstance(issue, PackPreparationIssue)
+        self.assertEqual(issue.code.value, "metadata_attribution_unavailable")
+        self.assertEqual(issue.path.projection(), ("state", "assembly_provenance"))
+
+    def test_stale_subject_is_independent_of_header_error(self) -> None:
+        tile = PackTileAssembly(gx=-2, gy=3, climate_status="fine", wilderness_refine_status="absent", chunks=())
+        address = PackTileMetadataAddress(kind="tile", gx=-2, gy=3)
+        usage = SourceProofInput(world_uid="world", uses=())
+        description = PackMetadataDescription(subject=PackMetadataSubject(base_publication=self.state.base_publication,
+            address=address, value_fingerprint="a" * 64), dependencies=(
+            PackMetadataDependencyUse(group=PackMetadataGroup.IDENTITY, source_usage=usage, basis=None),
+            PackMetadataDependencyUse(group=PackMetadataGroup.CLIMATE_STATUS, source_usage=usage, basis=None),
+            PackMetadataDependencyUse(group=PackMetadataGroup.WILDERNESS_REFINE_STATUS, source_usage=usage,
+                basis=PackWildernessStatusBasis(chunk_addresses=(), expected_chunks=None))))
+        state = self.state.model_copy(update={"assembly": self.assembly.model_copy(update={"tiles": (tile,), "fine_cell_size": "bad"}),
+                                             "metadata_dependencies": (description,)})
+        with self.assertRaises(PackPreparationFailure) as caught:
+            WildernessChunkAdmission().validate_wilderness_chunks(PackWildernessChunksInput.model_construct(state=state, entries=()))
+        issue = caught.exception.error.issues[-1]
+        assert isinstance(issue, PackPreparationIssue)
+        self.assertEqual(issue.code.value, "source_proof_mismatch")
+        self.assertEqual(issue.path.projection(), ("state", "metadata_dependencies", 0, "subject", "value_fingerprint"))
+
     def test_stale_basis_is_independent_of_climate_status(self) -> None:
         tile = PackTileAssembly(gx=-2, gy=3, climate_status="coarse", wilderness_refine_status="partial",
             chunks=(PackChunkAssembly(cx=1, cy=4, refine_role=None),))

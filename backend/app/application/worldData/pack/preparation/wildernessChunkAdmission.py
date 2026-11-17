@@ -15,6 +15,7 @@ from app.dataModel.worldPack.preparation.provenance import PackStoredProvenance
 from app.dataModel.worldPack.preparation.state import PackPreparationState
 from app.dataModel.worldPack.preparation.operations import PackWildernessChunkWrite, PackWildernessChunkInput, PackWildernessChunksInput
 from app.dataModel.worldPack.preparation.parts import PackWildernessChunkPartInput
+from app.dataModel.worldPack.preparation.addresses import PackChunkAddress
 from app.dataModel.worldPack.preparation.provenance import PackNewPartProvenance, PackInheritedPartProvenance
 from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
 from app.dataModel.artifacts.references import ArtifactKind
@@ -40,7 +41,8 @@ class WildernessChunkAdmission:
         PackPreparationValidator().check_state_identities(state, root.field(state_field), errors)
         MetadataStateValidator().check_metadata_groups(state, root.field(state_field), errors)
         entries = FieldRef(lambda: PackWildernessChunksInput, lambda value: value.entries)
-        seen: set[object] = set()
+        seen: set[PackChunkAddress] = set()
+        ordered: list[PackChunkAddress] = []
         for index, item in _raw_items(admitted, entries):
             path = root.field(entries).item(index)
             self.check_wilderness_chunk(PackWildernessChunkWrite, item, state, path, errors)
@@ -51,7 +53,11 @@ class WildernessChunkAdmission:
                 if address in seen:
                     _issue(errors, PackPreparationIssueCode.DUPLICATE_ADDRESS,
                            path.field(part_field).field(address_field), "duplicate input chunk address")
+                else:
+                    ordered.append(address)
                 seen.add(address)
+        MetadataStateValidator().check_subject_values(state, root.field(state_field), errors)
+        MetadataStateValidator().check_retained_tile_usage(state, ordered, root.field(state_field), errors)
         self._raise_chunk_errors(errors)
         assert checked is not None
         return checked
@@ -66,6 +72,10 @@ class WildernessChunkAdmission:
         PackPreparationValidator().check_state_identities(state, root.field(state_field), errors)
         MetadataStateValidator().check_metadata_groups(state, root.field(state_field), errors)
         self.check_wilderness_chunk(PackWildernessChunkInput, admitted, state, root, errors)
+        part = preparation_field_value(admitted, FieldRef(lambda: PackWildernessChunkInput, lambda value: value.part))
+        address = valid_preparation_field(part, FieldRef(lambda: PackWildernessChunkPartInput, lambda value: value.address))
+        MetadataStateValidator().check_subject_values(state, root.field(state_field), errors)
+        MetadataStateValidator().check_retained_tile_usage(state, () if address is None else (address,), root.field(state_field), errors)
         self._raise_chunk_errors(errors)
         assert checked is not None
         return checked

@@ -6,6 +6,39 @@
 
 ## Действующая граница Time и публичного управления записями (2026-11-09)
 
+### Initial start: актуальные решения и owning read-контракты (2026-11-17)
+
+Документальная детализация по поручению пользователя «3. Сделай». Реализация не выполнялась; новые методы ниже — target design для review, не runtime evidence. Приоритет над историческими предложениями initial binding: public междоменные вызовы выполняет DAG; Snapshot не вызывает Time/World acceptance/writers даже через internal/DI/callback. Time/readers не вызывают Snapshot/World/Artifacts. Конкретные DAG nodes и маршруты не определяются.
+
+**Уже принятые решения:** Snapshot owning-план START-ID, INITIAL-REGISTER, TIME-ZERO, WORLD-INITIAL-POJO, READ-INITIAL-BINDING и reference-based start. Используется существующий `PreparedInitialSettings(operation_id, world_uid, settings, captured_utc)`; `InitialSettingsCandidate` отклонён, не создавать class/alias/re-export. Единственный Time success/serialized payload — proposed `InitialTimeStatePayload(start_identity, clock:TimeClockState, settings:PreparedInitialSettings)`. Successful prepare гарантирует selected zero projection; result roster: payload | InitialTimeInputMismatch | SettingsInvalid | CalendarBudgetExceeded. InitialCalendarProjectionFailed отозван. Дополнительные proof/token и Time.prepare_registered не требуются: semantic preparation/encoding — Time, durable registration — отдельный публичный registrar. Принятие дизайна не означает, что новые типы уже есть в коде.
+
+#### Exact initial-only чтение
+
+Входной контракт Snapshot уже принят: `IWorldSnapshotRead.read_initial_binding(SnapshotPublicationReadInput) -> SnapshotInitialBindingReadResult(request, binding|None)`. Binding — `AcceptedInitialStateBinding(publication:WorldPublicationRef, prepared_initial:PreparedInitialTimeStateRef)`. Это exact initial Q, включая старую Q после последующих runtime publications. None у неinitial Q не даёт разрешения читать initial clock как её текущее время. Потерянная обязательная связь initial Q — infrastructure failure.
+
+**Проверка reuse:** существующие `CurrentTimeRead`, `HistoricalTimeRead`, `TimeSettingsRead`, `HistoricalTimeSettingsRead` содержат только адрес источника; они не переносят уже полученный binding/payload. Их переопределение изменило бы current/historical semantics. Для новой pure-проекции используются два явных типизированных аргумента; одинаковые ReadInitialTime/ReadInitialTimeSettings DTO не создаются.
+
+| Публичный метод (proposed) | Вход | Успех | Путь класса |
+|---|---|---|---|
+| TimeInitialStateReader.read | binding:AcceptedInitialStateBinding, payload:InitialTimeStatePayload | existing TimeCapture(publication=binding.publication, point=payload.clock.point) | backend/app/application/time/reads/initialStateReader.py |
+| WorldInitialSettingsReader.read | binding:AcceptedInitialStateBinding, payload:InitialTimeStatePayload | existing TimeSettingsCapture | backend/app/application/worldData/timeSettings/initialSettingsReader.py |
+
+World-метод — запрошенный consumer-контракт владельцу World, не разрешение Time реализовать чужой класс. Если владелец изменит класс/путь, согласуется одна карта без второго settings reader с той же ролью.
+
+Предусловие обоих методов: binding получен из successful Snapshot read; payload — owning decode точных bytes artifact из binding.prepared_initial.artifact после общего verified read с publication protection. Связь bytes/ref проверяется hash/size/format, а не равенством world/operation. DAG передаёт соответствующие результаты; методы не скачивают bytes и не считают конструктор binding доказательством происхождения. Public verified-read/transport и encoding freeze остаются внешними prerequisites; raw caller POJO не заменяет этот путь.
+
+Оба метода проверяют полное равенство payload.start_identity и binding.prepared_initial.start_identity; соответствие Q.world_uid/active_timeline_id payload clock и settings world; settings.operation_id — start operation; clock.coordinate=(0,0); Q.gameplay_started=True и Q.snapshot_head=None. Проверки согласованности не вызывают semantic preparation повторно и не заменяют digest verification. Их успешный результат не утверждает, что Q является current head.
+
+WorldInitialSettingsReader строит `TimeSettingsCapture(source=Q, settings=payload.settings.settings, versions=tuple(CalendarVersionRef(calendar_key=entry.definition.system_calendar, publication=Q) for entry in payload.settings.settings.calendars.entries))`. Это initial versions: все принадлежат фактической Q, порядок registry сохраняется. Существующий capture validator проверяет покрытие ключей и world, но не равенство всех version.publication source; initial метод обязан обеспечить более сильное условие. Anchors/captured UTC не пересчитываются. captured UTC остаётся в payload, новый capture field не добавляется.
+
+**Ошибка методов:** reuse existing `PublicationInfrastructureError` для несовместимости accepted binding и decoded persisted payload; типизированный return union с новым InitialStateBindingMismatch не вводится. Это нарушение принятого immutable состояния/связывания результатов, а не expected calendar validation refusal. Decode failure после verified bytes также infrastructure на границе persisted read, исходный CanonicalEncodingError сохраняется как cause. Missing artifact/unsupported format не дают fallback, clock zero по умолчанию или успешный TimeCapture. Точный public transport infrastructure errors должен следовать принятой общей политике, а не новому Time result wrapper.
+
+**Границы классов:** Time reader только проверяет binding coherence и проецирует clock; World reader только проверяет coherence и проецирует settings/initial versions. Ни один не выбирает дальнейшие операции, не инициирует IO/commit/repair, не захватывает now и не декодирует чужой формат. Отдельный existing WorldCalendarResolver.resolve_at может потреблять полученный capture по публичному вызову. Runtime current/historical reads остаются отдельным scope; существующий SnapshotTimeReadSource с прямыми Snapshot вызовами не объявляется соответствующим новой границе и не меняется этим документальным шагом.
+
+**Приёмка будущей реализации:** success на exact initial Q; та же Q читается после появления нового head; mismatch start identity/world/timeline/operation отвергается; nonzero clock/noninitial publication отвергаются; подмена bytes с теми же identity отвергается на verified read; повреждённый payload не превращается в default; versions всех календарей принадлежат Q; authored anchors неизменны; все foreign public calls выполняются вне readers. Эти проверки пока не запускались.
+
+**Оставшиеся решения:** граница World settings preparation без direct Time validator; owning canonical format/manifest Time и согласование с registrar; физическая реализация Snapshot/shared registration/binding/retention и общий ARCH-0 gate. Уже принятые zero projection, registration lifecycle, initial binding read и отказ дублирующему POJO не переоткрываются.
+
 ### Ответ владельца Time по temporal provenance (Physics P3.27, предложение к совместной приёмке)
 
 Для опубликованного времени гарантию даёт успешное чтение TimeReader через SnapshotTimeReadSource и scoped clock payload. CurrentTimeRead(expected) проверяет текущую publication и активную timeline; read_pinned(publication) читает именно закреплённую publication без проверки latest. В обоих случаях observed = TimeCapture.point, source = TimeCapture.publication. HistoricalTimeRead(snapshot) даёт observed = HistoricalTimeCapture.point и source = HistoricalTimeCapture.snapshot. Snapshot head унаследованной ветки может принадлежать другой timeline. [Реализация чтения](../../backend/app/application/time/reads/snapshotSource.py)
