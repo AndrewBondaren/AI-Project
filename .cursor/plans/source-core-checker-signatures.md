@@ -4,6 +4,8 @@
 
 ## 1. Общая граница
 
+**Консолидированный proposal 2026-11-16:** Identity/Selection signatures ниже синхронизированы с source-core-traversal-contract.md §4; прежние варианты с whole ref/selection больше не являются инструкцией будущей реализации. Решение принимается в целой архитектуре АР-1…АР-6. Код A0→D получил независимый PASS; прежние записи ниже «не приняты» относятся к истории до этого результата и не распространяют PASS на новую дельту.
+
 Корень модулей — `app.application.worldData.sourceVersioning.proof.validation`, один именованный checker на модуль с тем же lowerCamelCase именем. Все методы sync, pure, без IO, mutation, holds или public calls. Отрицательный результат — existing issues; пустой tuple означает отсутствие найденных нарушений этой проверки, не полную admission. SourceFailure собирается request-specific стадией, не каждым checker. Operation в checker не передаётся.
 
 В signatures ниже используются существующие Source POJO и shared BaseModel/EntityUid/CheckedPath. `SourceFieldIssue | SourceLogicIssue` — union существующих типов, не новый carrier. Aggregator стабильно разделяет issues на два tuple и применяет порядок §11.3; порядок вызова helpers не заменяет нормативный порядок diagnostics.
@@ -25,15 +27,19 @@ class SourceWorldChecker:
 class SourceIdentityChecker:
     def __init__(self, descriptors: SourceDescriptorLookup,
                  keys: SourceIdentityKeyAdapter) -> None: ...
-    def check[RootT: BaseModel, RefT: (SourceVersionRef, SourceCollectionVersionRef)](
-        self, source: RefT, *, path: CheckedPath[RootT, RefT],
+    def check[RootT: BaseModel, IdentityT: (
+        RegistryMemberId, LibraryMemberId, EntityObjectId,
+        SourceSettingsId, SourceCollectionId,
+    )](
+        self, identity: IdentityT, *, path: CheckedPath[RootT, IdentityT],
         group_index: int | None, use_index: int | None,
+        source: SourceVersionRef | SourceCollectionVersionRef | None,
     ) -> tuple[SourceFieldIssue | SourceLogicIssue, ...]: ...
 ```
 
 World checker — отдельный инвариант, общий для request/proof/capture/identity. Нужен в том числе для пустого foreign-world proof: отсутствие atoms не отменяет проверку world. Единственный код WRONG_WORLD. Request стадия вызывает его для фактов с собственной world identity; GLOBAL library identity не получает выдуманный world.
 
-Identity checker владеет только descriptor/category/scope/key_kind и exact key admissibility. SourceVersionRef path продолжается через object_id и typed variant; collection path — через collection_id. Unknown descriptor → UNKNOWN_DESCRIPTOR; несовместимая definition → DESCRIPTOR_MISMATCH; invalid key → INVALID_IDENTITY по точному owning key field. При unknown/mismatched definition зависимая owning key проверка пропускается. Значение path и source поступают из одного обхода request.
+Identity checker владеет только descriptor/category/scope/key_kind и exact key admissibility. Traversal уже продолжил ref path через object_id/variant либо collection_id; checker получает путь непосредственно к identity после structural/local value допуска. Повреждённая revision не отменяет эту проверку: source=None, исходные group/use сохраняются. Unknown descriptor → UNKNOWN_DESCRIPTOR; несовместимая definition → DESCRIPTOR_MISMATCH; invalid key → INVALID_IDENTITY по точному owning key field. При unknown/mismatched definition зависимая owning key проверка пропускается. Значение identity/path/source поступают из одного обхода request.
 
 **Уточнение SourceIdentityKeyAdapter:** ранее предложенный internal abstract `validate_exact(identity: SourceObjectId) -> SourceFieldCode | None` сохраняется как key-only port, отрицательный результат только INVALID_IDENTITY. Он выбирает подтверждённую owning validation по immutable registration, не проверяет world/category/membership. Collection/key_kind NONE не вызывает adapter. Missing required registration — composition error, не permissive успех и не business отсутствие. Concrete adapters — INT-TERRAIN, не новая реализация чужих validators. Exact constructor immutable key registry конкретного adapter относится к интеграции, не маскируется пустым implementation.
 
@@ -77,15 +83,16 @@ class SourceProofCanonicalChecker:
 class SourceSelectionChecker:
     def __init__(self, atoms: SourceProofAtomIndex) -> None: ...
     def check[RootT: BaseModel](
-        self, selection: SourceProofSelection, *, proof: SourceDurableProof,
-        path: CheckedPath[RootT, SourceProofSelection],
+        self, *, fingerprint: RevisionHex | None,
+        indices: tuple[tuple[int, int, CheckedPath[RootT, int]], ...],
+        proof: SourceDurableProof | None,
         selection_index: int | None,
     ) -> tuple[SourceFieldIssue | SourceLogicIssue, ...]: ...
 ```
 
 Оба используют fixed existing SOURCE_PROOF_SCHEMA_V1/CanonicalCodec; caller не подаёт schema. Canonical checker проверяет persisted order/unique form, пустые uses и nested dependency collections; NON_CANONICAL_PROOF указывает на точную typed nested collection. Не нормализует и не проверяет наличие body. Semantic conflicts остаются checker §3; сообщения не дублируются как конфликт и order error без самостоятельного нарушения.
 
-Selection checker получает canonical proof; его own validation не повторяет canonical checker. Invalid bool/negative/duplicate/unsorted indices → INVALID_SELECTION по typed path; bounds проверяются только для пригодных indices. Fingerprint mismatch → SELECTION_PROOF_MISMATCH; bounds → SELECTION_OUT_OF_RANGE. selection_index=None для одиночного SELECT, исходный индекс для groups; он записывается в existing logic group_index, use_index=None согласно §11.3. Checker не строит subset и не проверяет соответствие ожидаемой группе: это SourceProofGroupMatcher.
+Selection checker получает готовые facts: original position, пригодное значение индекса, original path. Structural bool/negative ошибки диагностирует только inspect_selection; semantic duplicate/unsorted — только checker через shared rule. proof при наличии уже canonical; None пропускает только fingerprint/bounds, не проверку порядка indices. fingerprint=None означает уже диагностированную непригодность поля. Fingerprint mismatch → SELECTION_PROOF_MISMATCH; bounds → SELECTION_OUT_OF_RANGE. selection_index=None для одиночного SELECT, исходный индекс для groups; он записывается в existing logic group_index, use_index=None согласно §11.3. Checker не обходит selection повторно, не строит subset и не проверяет соответствие ожидаемой группе: это SourceProofGroupMatcher.
 
 Число selections проверяет request-specific VERIFY_GROUPS стадия: единственный GROUP_COUNT_MISMATCH на result.selections. Это relation двух полей конкретного request, не отдельный универсальный service. Не создавать SourceSelectionCountChecker без иной самостоятельной ответственности.
 

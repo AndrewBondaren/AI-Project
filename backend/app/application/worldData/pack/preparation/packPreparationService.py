@@ -20,6 +20,7 @@ from app.application.worldData.pack.preparation.errors import (
     preparation_errors, raise_preparation_errors, validate_preparation_input, valid_preparation_field, preparation_field_value,
 )
 from app.application.worldData.pack.preparation.packPreparationValidator import PackPreparationValidator
+from app.application.worldData.pack.preparation.metadataStateValidator import MetadataStateValidator
 from app.dataModel.fields.checkedPath import CheckedPath
 from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.worldPack.preparation.errors import PackPreparationFailureReason
@@ -59,7 +60,7 @@ def _write_grade_slots(model: type[RequestT], request: RequestT,
     part = preparation_field_value(admitted, part_ref)
     validator = PackPreparationValidator()
     validator.check_state_identities(state, path.field(state_ref), errors)
-    validator.check_metadata_groups(state, path.field(state_ref), errors)
+    MetadataStateValidator().check_metadata_groups(state, path.field(state_ref), errors)
     artifact = valid_preparation_field(part, artifact_ref)
     if artifact is not None and (artifact.kind is not ArtifactKind.BLOB
             or artifact.format_key != GRADE_SLOTS_FORMAT_KEY or artifact.format_version != GRADE_SLOTS_STORAGE_VERSION):
@@ -103,7 +104,7 @@ def _admit(model: type[RequestT], request: RequestT,
         validator = PackPreparationValidator()
         path = CheckedPath.root(model).field(state_field)
         validator.check_state_identities(raw_state, path, errors)
-        validator.check_metadata_groups(raw_state, path, errors)
+        MetadataStateValidator().check_metadata_groups(raw_state, path, errors)
     raise_preparation_errors(errors, PackPreparationFailureReason.DEPENDENCY_MISMATCH)
     assert checked is not None
     return checked
@@ -146,7 +147,7 @@ class PackPreparationService:
         part = preparation_field_value(admitted, part_ref)
         validator = PackPreparationValidator()
         validator.check_state_identities(state, path.field(state_ref), errors)
-        validator.check_metadata_groups(state, path.field(state_ref), errors)
+        MetadataStateValidator().check_metadata_groups(state, path.field(state_ref), errors)
         address_ref = FieldRef(lambda: PackSpatialRootPartInput, lambda value: value.address)
         address = preparation_field_value(part, address_ref)
         domain = valid_preparation_field(address, FieldRef(lambda: PackSpatialRootAddress, lambda value: value.domain))
@@ -232,7 +233,7 @@ class PackPreparationService:
         if isinstance(raw_state, (PackPreparationState, dict)):
             state_path = CheckedPath.root(PackLocationsIndexInput).field(state_ref)
             validator.check_state_identities(raw_state, state_path, errors)
-            validator.check_metadata_groups(raw_state, state_path, errors)
+            MetadataStateValidator().check_metadata_groups(raw_state, state_path, errors)
         if part is not None:
             root = CheckedPath.root(PackLocationsIndexInput)
             part_path = root.field(FieldRef(lambda: PackLocationsIndexInput, lambda value: value.part))
@@ -276,7 +277,7 @@ class PackPreparationService:
         if isinstance(raw_state, (PackPreparationState, dict)):
             state_path = CheckedPath.root(PackCoarseClimateInput).field(state_ref)
             validator.check_state_identities(raw_state, state_path, errors)
-            validator.check_metadata_groups(raw_state, state_path, errors)
+            MetadataStateValidator().check_metadata_groups(raw_state, state_path, errors)
         if part is not None:
             root = CheckedPath.root(PackCoarseClimateInput)
             part_path = root.field(FieldRef(lambda: PackCoarseClimateInput, lambda value: value.part))

@@ -33,6 +33,7 @@ class SourceGroupVerificationRequestChecker:
                  identities: SourceIdentityChecker,
                  conflicts: SourceUsageConflictChecker,
                  canonical: SourceProofCanonicalChecker,
+                 result_values: SourceProofResultValueChecker,
                  selections: SourceSelectionChecker) -> None: ...
     def check(self, request: SourceProofGroupsVerifyInput) -> SourceFailure | None: ...
 
@@ -68,6 +69,8 @@ Operation фиксирована классом: ADMIT, READ, ADMIT_GROUPS, VERI
 Остаток SRC-AR-04: предъявить точные signatures/functions для proof/usages/dependencies/selections и structural leaf boundary, с nullable/повреждёнными ветвями и original positions в результатах; сверить их вызовы во всех пяти request checkers. Принятие варианта 2 закрывает выбор подхода, **не закрывает этот остаток и не означает приёмку АР-1**.
 
 ## 2. Последовательность и prerequisites
+
+**Детализация 2026-11-16:** [source-core-traversal-contract.md](source-core-traversal-contract.md) задаёт leaf/root/group signatures, scalar validation boundary и trace пяти callers. Его §4 содержит явные proposals изменения внутренних Identity/Selection checker signatures; прежние signatures не объявляются совместимыми с этим решением. Это часть архитектуры до реализации, не новый локальный срез. Диагностика непригодных selection indices остаётся INVALID_SELECTION.
 
 ### Принятое представление результатов traversal
 
@@ -133,7 +136,7 @@ def inspect_selection[RootT: BaseModel](
 
 **Вложенные вызовы:** request-specific root traversal → inspect_proof (где есть persisted proof) → inspect_usages → inspect_usage → inspect_dependencies. Selection-ветка отдельно вызывает inspect_selection. Каждый вызов возвращает полностью вычисленный immutable tuple, callbacks/yield отсутствуют. Group wrappers сохраняют исходный group index вне дочерней функции; при формировании существующего conflict batch добавляют group/use indices только к допущенным leaf refs. Expected и presented стороны не смешиваются. Проверки world/identity/revisions/canonical/selection выполняются request checker после обхода, не указанными функциями.
 
-**Оставшийся обязательный контракт перед приёмкой этих signatures:** leaf inspection capture/ref/identity/revision и обход root/group wrappers. Простое isinstance или whole-model model_validate не заменяют leaf boundary. Текущий код содержит semantic validators `LibraryMemberId.canonical_uuid`, `_SourceIdentity.nonempty_descriptor`, `SourceCaptureRef.witness_shape`, а также relation validators usage/proof. Поэтому returned structural ref ещё нельзя передавать conflict checker/codec, требующим валидный ref. Нужны exact scalar facts и однократный semantic admission leaf до этого вызова. Нельзя обходить validators через model_construct, анализировать текст ValueError или объявлять любой semantic отказ INVALID_SHAPE. Эти функции и распределение existing validators должны быть предъявлены в АР-1, без копии схемы/зеркальных POJO. SRC-AR-04 остаётся OPEN до завершения этой части и сверки всех пяти callers.
+**Leaf boundary предъявлена отдельным proposal:** source-core-traversal-contract.md §§1–3 определяет capture/ref/identity/revision и root/group wrappers; §§4–5 — необходимые checker deltas и trace пяти callers. Whole-model validation Source request не используется; local identity/witness predicates должны иметь одну реализацию, общая ArtifactRef validation остаётся у существующего типа. SRC-AR-04 остаётся OPEN до консолидации и проверки этих дельт и result value relations; одно наличие signatures не является приёмкой.
 
 ### Порядок проверки после structural traversal
 

@@ -4,18 +4,135 @@
 
 ## Целевая архитектура
 
-POJO — `dataModel/lifecycle/`; pure consumer переходов — `application/lifecycle/`. Домен рассчитывает новые параметры; lifecycle проверяет замещение, новые UID, ссылки на предшественников и закрытие старых сущностей. Application writer атомарно сохраняет lifecycle и доменные параметры. История не удаляется. Генерация, геометрия и симуляция времени не входят в lifecycle.
+### Принятое решение: отдельные generic-операции
+
+Пользователь 2026-11-17 утвердил типизированные generic-контракты Create/Replacement/End. Публичные пары: `PrepareLifecycleCreate[T] → PreparedLifecycleCreate[T]`, `PrepareLifecycleReplacement[T] → PreparedLifecycleReplacement[T]`, `PrepareLifecycleEnd[T] → PreparedLifecycleEnd[T]`. Методы остаются `prepare_create`, `prepare_replacement`, `prepare_end`; по одной общей реализации на операцию. Единый кандидат `PreparedLifecycleChange` заменён отдельными результатами, без дополнительного envelope. Имена/полные сигнатуры — ТЗ § «Публичные методы для прямого вызова из DAG».
+
+T связывает типизированные ссылки и принадлежность сущностей, не содержит физику/доменные payload и не выбирает алгоритм. Предметная логика остаётся у своего домена; данные передаются через DAG. Не вводятся per-domain методы, dispatch по T, чужие стратегии/callbacks или универсальный execute. Внутренние validator/builder остаются закрытыми.
+
+Приёмка решения требует статического отказа на смешанных типах, runtime-отказа на неверной специализации, сохранения T в результате и codec round-trip, запрета незамкнутого generic в DAG/section registration и отсутствия domain-dependent ветвления в общей реализации. Конкретные ссылки, ограничения T, native schemas/discriminator и ошибки ещё должны пройти общую POJO-приёмку до кода. Generic-решение принято, полный план и условия End/CRUD/storage/DAG bindings этим не приняты; правило реализации полной архитектуры без срезов сохраняется.
+
+### Классы, ответственность и проверяемая приёмка
+
+Это карта целевой архитектуры **до шагов реализации**, не перечень существующих классов Lifecycle. Пути ниже относительно `backend/app/`; полные публичные сигнатуры и POJO — в ТЗ § «Классы, папки и видимость». Статус PROPOSED означает конкретное предложение, не разрешение кода; OPEN означает отсутствие обязательного решения. Проверки ниже — требуемые evidence, пока не выполненные тесты. Каждый критерий нарушения означает отказ в приёмке.
+
+| Класс и модуль | Ответственность / методы / caller | Допустимые зависимости и эффекты | Проверяемый критерий приёмки | Конкретный признак нарушения |
+|---|---|---|---|---|
+| `LifecycleReader`, `application/lifecycle/reads/reader.py` — PROPOSED | `read_current`, `read_history`: прочитать lifecycle-факты одной публикации; caller DAG | Собственный `ILifecycleReadSource`, публичные POJO; только read | На fixture с двумя публикациями каждый результат имеет ровно requested publication; неполные факты дают типизированный отказ, записи отсутствуют | Смешение версий, foreign reader/pipeline, запись или скрытая загрузка другой публикации |
+| `ILifecycleReadSource`, `application/lifecycle/reads/sourcePort.py` — PROPOSED, concrete adapter OPEN | Контракт чтения собственного состояния для Reader | Принятый собственный storage binding; read без commit | Contract tests для concrete adapter: отсутствующие записи и неполная история различимы; capture привязан к одной версии | Неопределённая полнота, foreign SQL, изменение данных; отсутствие конкретного adapter также блокирует приёмку |
+| `LifecycleCreatePipelineOpenPipeline`, `application/lifecycle/changes/createPipelineOpenPipeline.py` — PROPOSED | `prepare_create`: подготовить первоначальное создание; прямой caller DAG | Validator, builder, POJO; без IO/мутации входа | Создание без предшественников детерминировано; конфликт identity возвращает отказ; spy подтверждает отсутствие IO | Публикация, вызов чужого домена, выбор другой публичной операции |
+| `ILifecycleCreatePipelineOpenPipeline`, тот же модуль — PROPOSED | Только публичная сигнатура `prepare_create` | Только публичные Input/Output/Error Lifecycle | Structural typing реализации и consumer fixture не требуют internal типов | Дополнительные стадии, builder/repository/context в публичной сигнатуре |
+| `LifecycleReplacementPipelineOpenPipeline`, `application/lifecycle/changes/replacementPipelineOpenPipeline.py` — PROPOSED | `prepare_replacement`: подготовить замещение; прямой caller DAG | Validator, builder, переданный capture/evidence; без IO | Merge/split сохраняют predecessor history; несовпадающие successor refs/fingerprint дают отказ до builder; повтор эквивалентен | Дочитывающий callback, вызов Hydrology, непроверенный evidence, частичная публикация |
+| `ILifecycleReplacementPipelineOpenPipeline`, тот же модуль — PROPOSED | Только публичная сигнатура `prepare_replacement` | Публичные POJO; без поведения/эффектов | Реализация заменяется за контрактом без изменения DAG-caller | Caller передаёт алгоритм проверки или управляет validate/build |
+| `LifecycleEndPipelineOpenPipeline`, `application/lifecycle/changes/endPipelineOpenPipeline.py` — OPEN semantics | `prepare_end`: завершение без преемника; прямой caller DAG после согласования | Validator, builder, POJO; без IO | После согласования условий: explicit end сохраняет историю; dry/refill не завершают lifecycle | Подмена Delete, завершение из-за отсутствия воды; неизвестные условия end блокируют приёмку |
+| `ILifecycleEndPipelineOpenPipeline`, тот же модуль — OPEN | Публичная сигнатура end без выбора сценария | Только публичные POJO | Exact Input/Output/Error согласованы с end semantics и реализацией | Интерфейс принят при неопределённом смысле операции |
+| `LifecycleTransitionValidator`, `application/lifecycle/validation/transitionValidator.py` — PROPOSED | `validate_create/replacement/end`: инварианты перехода; caller соответствующий pipeline | Только переданные факты и typed diagnostics; без IO | Отдельные отрицательные случаи scope, stale/incomplete capture, cycle, inactive predecessor, conflicting change и несовпадения domain binding; несколько независимых ошибок не теряются | Исправление данных, создание successor payload, IO, выдача успеха на неполной ancestry |
+| `LifecycleChangeBuilder`, `application/lifecycle/changes/changeBuilder.py` — PROPOSED | `build_create/replacement/end`: построить immutable результат после успешной проверки | Проверенные входы и POJO; без IO | На одинаковом входе одинаковый change; вход не мутирован; spy подтверждает отсутствие вызова при validation failure | Builder повторно принимает semantic решение, выбирает внешний маршрут, пишет состояние |
+| `LifecycleSectionCodec`, `application/lifecycle/publication/sectionCodec.py` — PROPOSED target binding | `encode/decode`: native canonical serialization; caller согласованный PatchSetCodec | Один SectionContract/schema; без IO и behavior | Round-trip принятой native секции; неверный format/model отклонён; registry связывает тот же contract | Legacy conversion, validate/apply, второй ручной набор field rules |
+| `LifecycleSectionHandler`, `application/lifecycle/publication/sectionHandler.py` — OPEN candidate | Кандидат behavior integration; validate/apply не являются DAG API | Допустимая nested chain ещё не установлена | До реализации предъявлена разрешённая atomic chain с владельцами acceptance/storage; затем stale/partial-write rollback tests | Само наличие DomainSectionHandler принято за разрешение Snapshot → чужой writer; encode/decode в behavior |
+| `ILifecycleWritePort`, `application/lifecycle/storage/writePort.py` — OPEN candidate | Предполагаемая запись подготовленных данных; exact методы/caller OPEN | Только заранее принятая storage/publication boundary | Exact порт и concrete adapter названы; два соединения temporary SQLite подтверждают CAS и общий rollback | Самостоятельный commit, повторное вычисление перехода, отсутствие exact signature/owner |
+
+`application/lifecycle/composition/factory.py` содержит функции, не orchestration-класс. Проверка: `make_lifecycle_*` только собирают зависимости; вызов фабрики не читает/не меняет world state и не запускает pipeline. Нарушение: обработка запроса, выбор маршрута либо публикация при wiring.
+
+### Существующие владельцы и границы их использования
+
+Эти классы не переносятся в Lifecycle. Наличие их кода подтверждено, но конкретное подключение Lifecycle должно пройти проверки ниже. Реестр не объявляется полным: concrete storage/CRUD/settings и Hydrology output владельцы пока не определены; это основание отказа, а не разрешение пропустить их.
+
+| Класс / источник | Разрешённая ответственность | Проверяемый критерий / основание отказа |
+|---|---|---|
+| `IWorldSnapshotApply`, `application/worldSnapshot/contracts/applyPort.py` | Публичный runtime apply-вход; DAG передаёт общий PatchSet | Caller trace показывает DAG → apply, нет Lifecycle → apply. Любой второй commit-вход — отказ |
+| `WorldSnapshotService`, `application/worldSnapshot/service/worldSnapshotService.py` | Общая атомарная публикация, assignment refs/Q, CAS | Два соединения и fault injection: stale/partial write не оставляют одну опубликованную часть. Новый foreign acceptance/writer без принятой chain, materialization или competing Q — отказ |
+| `SectionRegistry`, `application/patch/registry/sectionRegistry.py` | Единственная atomic registration contract/behavior/codec в accepted target | Несовпадающие model/key/version отклонены; одна association. Второй Lifecycle registry или выдача current combined API за target — отказ |
+| `DomainSectionHandler`, `application/patch/contracts/sectionHandler.py` | Accepted target: только behavior validate/apply; current ещё combined | Подключение проверяется отдельно по native binding и междоменной chain. Протокол не разрешает чужой writer автоматически |
+| `SectionContract`, тот же модуль | Единое описание native model/version/schema | Одна декларация используется behavior/codec; дублирующие модели/schema либо несовпадающие contract instances — отказ |
+| `SectionCodec`, target `application/patch/contracts/sectionCodec.py` | Accepted target: только encode/decode | Native round-trip без storage/behavior; считать отсутствующую target реализацию уже готовой — отказ |
+| `IWorldPublicationStore`, `application/worldSnapshot/storage/publicationStore.py` | CAS expected P → assigned Q в общей scope | Конкурирующая публикация отвергается целиком; собственный CAS/transaction Lifecycle — отказ |
+| `SnapshotApplyContext`, `application/worldSnapshot/contracts/context.py` | Внутренний transaction-bound context общей публикации | Q назначена Snapshot, pack/timeline согласованы; context/CommitReadScope в публичном prepare request — отказ |
+
+POJO и ошибки не скрываются за таблицей service-классов: их состав, ownership и evidence отсутствия дублей проверяются отдельно по ТЗ и критерию POJO ниже. До полного реестра нельзя утверждать, что ответственность **каждого** класса/типа закрыта.
+
+### Проверка ответственности по AGENTS.md и implement-plan — 2026-11-17
+
+Основание: [обязательная приёмка плана любого домена](../rules/dag-generator-interface.mdc#обязательная-приёмка-плана-любого-домена). Проверены текущий текст плана, соответствующие разделы ТЗ и подтверждённые Snapshot-контракты. **Результат: отказ в приёмке плана к реализации — обязательные сведения неполны.** Проверка документа не является запуском перечисленных тестов.
+
+| Критерий правила | Место evidence в плане | Вывод и точная причина |
+|---|---|---|
+| Запрет ветвящейся orchestration в pipeline | «Классы, ответственность…», строки трёх pipeline и validator/builder | Разделение описано: выбор операции у DAG. Не принято: точные runtime bindings/условия ещё отсутствуют |
+| Запрет скрытой orchestration | Там же, caller каждого pipeline и composition | Только прямой DAG caller предусмотрен; отсутствует согласованный конкретный caller для трассировки — OPEN |
+| Запрет прямых междоменных вызовов | «Существующие владельцы…», handler/write-port; «Зафиксированное наличие…» | Hydrology/Lifecycle проходят через DAG; atomic write chain не определена. Handler/DI не закрывает запрет — OPEN |
+| Ответственность каждого класса | Две таблицы выше | Для названных кандидатов заданы эффекты/критерии отказа. Concrete adapters, полный CRUD/settings и validator межсекционной consistency не определены; полнота реестра не доказана — отказ |
+| Публичный контракт / pipeline / internals | Таблица классов и ТЗ § «Публичные методы…» | Read/prepare отделены от validate/build; полные поля/ошибки и write signatures не закрыты — отказ |
+| Неизменность порядка | Решение пользователя «без срезов», L0–L3, совместная L3/W3 | Порядок работ сохранён; отсутствует утверждённый runtime порядок с условиями и deps — OPEN, новые ноды не придуманы |
+| CRUD данных и настроек | «Обязательные материалы приёмки», «Зафиксированное наличие…» | Create/Read/Update ещё проекты, Delete и четыре CRUD настроек не конкретизированы; end не заменяет Delete — отказ |
+| Междоменный CRUD-протокол | Там же, semantic binding и физическая запись | Нет exact Hydrology public output и принятой цепочки публикации; потребность не заменяет подтверждённый метод владельца — отказ |
+| POJO, field/logic errors, отсутствие дублей | ТЗ § «Подтверждённые контракты…» и § «Требования к интеграции…» | Общий reuse зафиксирован; full schemas, errors carrier и mapping ещё proposed, анализ всех пересечений не завершён — отказ |
+
+Исправлено при этой проверке: архитектура и проверяемая ответственность вынесены до реализации; combined handler не предлагается; кандидат writer не объявляется разрешённым; промежуточный consumer не считается поставленным доменом. Для снятия отказа нужно закрыть перечисленные архитектурные пробелы, обновить evidence по каждому критерию и провести общую приёмку до кода. Смена названий классов или зелёные unit-тесты не закрывают отсутствующие контракты и маршруты.
+
+**Обязательное решение пользователя 2026-11-17: архитектура домена первична; реализация архитектуры выполняется по полному плану, без срезов.** Сначала дорабатывается и принимается архитектура Lifecycle целиком: публичные и внутренние классы, методы, POJO/ошибки, CRUD данных/настроек, физическое состояние/история, зависимости, публикация и DAG-маршруты. До этого не реализуются отдельно «готовые» POJO, pure consumer, read-service или первый consumer. Запрещено выдавать частичную реализацию за завершённый домен, откладывать обязательную архитектуру на интеграцию или создавать временные интерфейсы/writers ради первого сценария.
+
+L0–L3 остаются порядком зависимостей работ, а не самостоятельными срезами поставки. L0 и спецификация L1 должны закрыть архитектуру **включая проект L2/L3** до первой правки Python/SQL. После общей приёмки реализуется вся принятая архитектура последовательно по плану; проверки этапов не заменяют итоговую приёмку полного домена. W3 — интеграционная проверка первого потребителя, не причина сузить общий домен до гидрологии. Миграция всех остальных доменов в этот scope не добавляется. Это уточнение пользователя заменяет прежнее допущение отдельного принятия доменной части при открытой обязательной архитектуре.
+
+POJO — `dataModel/lifecycle/`; pure consumer переходов — `application/lifecycle/`. Домен рассчитывает новые параметры и возвращает предложение перехода DAG; DAG вызывает публичную операцию Lifecycle. Lifecycle проверяет замещение, новые UID, ссылки на предшественников и закрытие старых сущностей и возвращает подготовленное изменение. Прямые междоменные вызовы запрещены, включая DI и callbacks. После gameplay DAG собирает PatchSet, Snapshot атомарно применяет доменные изменения и историю через handlers. До gameplay используется staged Pack publication/activation без snapshot от bake. Независимого application writer нет. История не удаляется. Генерация, геометрия и симуляция времени не входят в lifecycle.
 
 Placement и HY-12 не являются входными зависимостями общего lifecycle. Он переиспользует существующие DET-1, runtime/worldEdit и persist infrastructure. Прецеденты is_active/ended_at не означают уже существующий универсальный механизм.
 
 ## Шаги
+
+Структура папок, проект классов, публичные prepare/read-сигнатуры для DAG и внутренние методы зафиксированы в [ТЗ, § «Классы, папки и видимость — проект архитектуры»](../../docs/tz_entity_lifecycle.md#классы-папки-и-видимость--проект-архитектуры). Это единый источник контрактов; не дублировать сигнатуры в плане. Реализация отсутствует. Кандидаты классов не означают согласование нод или принятие полного CRUD.
+
+Распределение уточнённой структуры по существующим шагам:
+
+- L0: сверить зависимости с существующими `WorldPublicationRef`, `DomainSectionHandler`, `SectionContract`, `IWorldSnapshotApply`, identity/diagnostics; проверить отсутствие пересекающихся POJO и определить storage/read владельцев.
+- L1: довести названные request/capture/change/error POJO до состава полей; согласовать prepare/read-контракты, Delete и настройки. Установить полноту фактов для проверки циклов/retry и соответствие доменных данных преемников. Проект `prepare_end` требует отдельного согласования условий завершения.
+- L2: реализовать принятые атомарные OpenPipeline, `LifecycleTransitionValidator` и `LifecycleChangeBuilder`; внутренние validate/build не открывать DAG. `LifecycleReader` реализуется только после принятия собственного read binding, без обхода междоменного CRUD.
+- L3: реализовать только заранее принятую физическую storage/publication архитектуру, включая runtime и pregame binding. `LifecycleSectionHandler` пока кандидат, а не предписанная реализация: его подключение зависит от доказанного разрешённого маршрута. Конкретные классы adapters, методы write-port, зависимости и критерии отказа фиксируются при общей архитектурной приёмке до L2 и любого кода, не проектируются впервые внутри L3.
+
+Публичные pipeline вызываются DAG напрямую. Reader вызывает только собственный read-port; prepare-pipeline вызывает только validator/builder. Цепочка Snapshot → Lifecycle handler → storage не считается разрешённой: concrete acceptance/write binding OPEN до проверки запрета прямых междоменных вызовов, включая internal/DI/callback. Общая handler-инфраструктура не отменяется. Target handler/codec разделены по принятому Snapshot ARCH-DEC-1/2; старый combined Python-интерфейс не является образцом для новой реализации. Этот перечень не определяет NodeId, runtime deps или новую последовательность поставки.
+
+Уточнение интеграции 2026-11-17: [ТЗ, требования к Snapshot](../../docs/tz_entity_lifecycle.md#требования-к-интеграции-snapshot--proposed-не-принятый-binding) содержит proposed Input/Output/Error, operation/change mapping, domain evidence и требуемые owning deltas. Current общие типы и accepted handler/codec decision отделены от proposed Lifecycle binding. L0/L1 должны подтвердить exact публичный Hydrology output и отсутствие дублей POJO; L3 — разрешённую atomic write chain, errors и полный retention closure. Это дополнительные материалы существующих шагов, не перестановка L0→L1→L2→L3/W3.
+
+Обязательное будущее evidence L3: два независимых соединения одной temporary SQLite; partial write failure, stale publication между prepare/commit, exact retry, тот же change UID с иным payload, несовпадение successor/domain refs, cancellation/rollback/unknown outcome, history read после следующего перехода, сохранение participant UID при dry/refill с новыми system UID. Тесты пока не выполнены; эти требования не объявляют реализацию или план принятыми.
+
+Актуализация 2026-11-17: это открытый проект, не принятый implementation-план. Порядок L0 → L1 → L2 → L3 и совместная точка L3/W3 сохранены; новые ноды, deps, триггеры и параллельные ветви не назначаются. Источник порядка — шаги этого плана и ТЗ Lifecycle § «План и межплановые зависимости». До кода требуется закрыть обязательные критерии ниже по текущим [правилам DAG](../rules/dag-generator-interface.mdc).
+
+### Обязательные материалы приёмки — OPEN
+
+| Критерий | Что должно быть предъявлено | Текущий статус |
+|---|---|---|
+| Три запрета DAG | Для каждого публичного pipeline прямой caller из DAG, владелец ветвления, вложенные вызовы и эффекты; отсутствие прямых междоменных вызовов | OPEN: bindings не согласованы |
+| Ответственность каждого класса | Для всех новых и задействованных классов: роль, допустимые зависимости, эффекты, проверка приёмки и конкретный признак нарушения | OPEN: полный состав классов определяется инвентаризацией L0 |
+| Публичный контракт / открытый pipeline / реализация | Владелец, конкретный класс и метод, полная сигнатура, Input/Output/FieldError/LogicError из dataModel, внутренние классы и цепочка вызовов; без раскрытия алгоритма caller-у | OPEN в L1; имена открытых pipeline, интерфейсов и модулей получают суффикс OpenPipeline |
+| Сохранение порядка | Сопоставление L0–L3 с источником; отдельно утверждённая карта runtime-зависимостей и условий | Порядок поставки сохранён; runtime-карта OPEN до GEN-NODE-JOINT-REVIEW |
+| CRUD данных | Отдельные конкретные Create/Read/Update/Delete: класс, метод, сигнатура, POJO, scope, effects, DoD | Все четыре OPEN; Delete должен сохранять инвариант истории |
+| CRUD настроек | Именованный POJO настроек и четыре конкретных метода с Input/Output/Error | Все четыре OPEN; отсутствие настроек или исключение нельзя предполагать |
+| Междоменный CRUD | По порядку: потребность → подтверждённый публичный метод владельца и POJO → соответствие полей → согласованный путь через DAG | OPEN для Hydrology, Lifecycle, Pack/Snapshot; неподтверждённые методы не заменять придуманными |
+| POJO и ошибки | Для каждого типа модуль, владелец, поля, смысл; сравнение с существующими/планируемыми типами, доказательство отсутствия дублей | OPEN в L0/L1; проекты двух POJO не означают приёмку |
+| Публикация | Подтверждённые Pack/Snapshot контракты, соответствие секций, revision/CAS, identity, rollback и retry | OPEN в L3; отдельный writer недопустим |
+
+Любой OPEN или нарушение обязательного архитектурного критерия означает отказ в приёмке полного плана реализации; эта актуализация не разрешает начинать код. Отдельные контракты можно обсуждать и фиксировать как решения, но нельзя считать их разрешением частичной реализации при открытой архитектуре домена. Настоящая таблица не подменяет доказательства по каждому классу и типу.
+
+### Зафиксированное наличие и незакрытая архитектура
+
+Подробный реестр current/accepted/proposed приведён в [ТЗ, § «Подтверждённые контракты Snapshot и ограничения повторного использования»](../../docs/tz_entity_lifecycle.md#подтверждённые-контракты-snapshot-и-ограничения-повторного-использования). Результат проверки Snapshot: новые generic Snapshot POJO не обоснованы; reuse PatchSet/PatchRef/dependencies/publication/context/retention подтверждён по наличию, но не доказывает готовность Lifecycle binding. Accepted разделение handler/codec ещё не следует считать реализованным в current Python.
+
+До общей архитектурной приёмки необходимо закрыть:
+
+1. **Физическое представление и запись:** точные state/history записи, собственники хранения и разрешённая atomic write chain Snapshot/shared core. Нельзя подставить чужой writer через DI; generic handler сам по себе не разрешение.
+2. **Semantic binding:** публичный owning output Hydrology, связь entity↔patch с допустимой кардинальностью и exact section fingerprint, полное покрытие преемников. Проверяющий класс, Input/Output/Error и место admission должны быть названы; одного evidence POJO недостаточно.
+3. **Identity:** отдельный смысл change_uid и operation_id, повтор change_uid в другой публикационной операции, полнота исходных фактов, native patch representation; без второго execution journal.
+4. **Errors:** точные варианты pure-prepare отказов для DAG отдельно от publication-boundary ошибок; реальные field paths и при необходимости согласованный relation carrier, без маскировки logic relation как field error.
+5. **Retention:** authoritative полный closure state/history artifacts и владельцы historical domain payload; metadata-ссылка и receipt не доказывают полноту или commit.
+6. **Оставшийся публичный контракт:** Create/Read/Update/Delete данных и настроек, условия завершения, полный реестр классов/методов/типов и отсутствие дублей; затем согласованные DAG bindings. Никакого фиктивного SettingsService или неявного исключения CRUD.
+
+Это архитектурные обязательства полного плана, не backlog после поставки L2. Изменение внешних Snapshot/Pack/Hydrology контрактов требует owning согласования; домен не назначает их сам.
 
 ### L0 — инвентаризация общего механизма
 
 Цель: проверить существующие lifecycle/history/result/persist контракты до новых типов.
 ТЗ: lifecycle § Расположение и ответственность; § Инварианты; structural mutations §7.
 Файлы: этот план; аудит `dataModel/`, `application/`, `db/models/`; код не меняется.
-Контракт: карта прецедентов, ownership текущего состояния и истории, world/scope identity, revision, transaction и связи с snapshot/rollback. Миграция государств и cell_states — отдельные будущие срезы, не prerequisite воды.
+Контракт: карта прецедентов, ownership текущего состояния и истории, world/scope identity, revision, transaction и связи с snapshot/rollback. Проверить существующие Engine LifecycleBinding/OutputLifecycle, PlacementSession, Artifacts staging/holders/GC, Publication OperationLedger, TimeLifecycle и PlanningService: это отдельные ответственности, не кандидаты на механический перенос в Lifecycle. Для переиспользования подтвердить конкретные методы/POJO и callers; составить полный реестр классов и типов для приёмки. Миграция государств и cell_states — отдельные будущие срезы, не prerequisite воды.
 Проверка: каждый переиспользуемый контракт подтверждён путём и caller; отсутствующие отмечены.
 Done: отсутствуют дубли общего механизма под видом гидрологии.
 
@@ -24,7 +141,7 @@ Done: отсутствуют дубли общего механизма под �
 Цель: довести проекты EntityLifecycle/LifecycleReplacement до проверяемого контракта.
 ТЗ: lifecycle § Общий контракт и § Инварианты; DET-1.
 Файлы: `docs/tz_entity_lifecycle.md`, `backend/app/dataModel/lifecycle/`; `backend/app/ids/` только при необходимости нового тега по инвентаризации.
-Контракт: scope, change_uid, новые entity_uid, predecessor links, active/historical, результат; обязательная идемпотентность повторов и обнаружение разных payload одного change_uid. Сигнатуры фиксируются в ТЗ до consumer.
+Контракт: scope, change_uid, новые entity_uid, predecessor links, active/historical, результат; обязательная идемпотентность повторов и обнаружение разных payload одного change_uid. Сигнатуры фиксируются в ТЗ до consumer. Разделить предложение замещения и подготовленное изменение, определить типизированные ошибки полей и логики без дублей. Закрыть конкретные CRUD-контракты данных/настроек и матрицу междоменных входов/результатов. Подтвердить связь доменных данных преемников с lifecycle-переходом и исходной revision; не вводить произвольный dict, собственный журнал исполнения или новый envelope без проверки существующих типов.
 Проверка: POJO validation, ссылки/циклы, identity/retry, одинаковые runtime/preview facts.
 Done: общий контракт пригоден для водных POJO без локальных lifecycle-полей.
 
@@ -37,17 +154,17 @@ Done: общий контракт пригоден для водных POJO бе
 Цель: построить и проверить transition без persist.
 ТЗ: lifecycle § Инварианты, контракт L1.
 Файлы: `backend/app/application/lifecycle/`, профильные tests.
-Контракт: актуальные записи + typed replacement → validated change set либо общий unresolved; ни удаления истории, ни доменной геометрии.
+Контракт: актуальные записи + typed replacement → подготовленное изменение либо типизированный отказ по L1; ни удаления истории, ни доменной геометрии. Публичный pipeline вызывается непосредственно DAG и возвращает результат DAG; не вызывает Hydrology, Snapshot, Pack или чужие read services. Проверки внутри одной атомарной операции не выделяются автоматически в ноды. Конкретный binding остаётся OPEN до совместной приёмки.
 Проверка: merge, split, no-op/retry, cycle, foreign scope, stale input, conflicting operation; отсутствие мутаций при ошибке.
-Done: consumer готов к первому domain adapter; storage не объявляется реализованным.
+Промежуточная проверка: pure consumer соответствует заранее принятой полной архитектуре. Это не отдельная поставка, не приёмка домена и не разрешение завершить работу без L3.
 
 ### L3 — общий write boundary и первый consumer
 
 Цель: обеспечить атомарное сохранение lifecycle вместе с доменными параметрами.
 ТЗ: lifecycle § Инварианты; гидрология § Контракты домена динамических водных систем.
-Файлы: application writer/repository boundary по L0; водный adapter из W3; SQL только `0001_initial.sql` + db models, если storage-решение требует schema.
-Контракт: revision и operation identity проверяются одной транзакцией; новые записи и историзация старых коммитятся вместе. Доменный payload не помещается в общий POJO произвольным dict.
-Проверка: temporary storage, rollback/failure injection, fresh read истории, повтор операции, stale revision.
-Done: W3 подтверждает интеграцию первого consumer. Полная миграция старых доменов не входит в Done.
+Файлы: доменные handlers и repository adapters в принятой границе Pack/Snapshot по L0/L1; водный adapter из W3; SQL только `0001_initial.sql` + db models, если storage-решение требует schema. Конкретные пути и классы OPEN до подтверждения контрактов владельцев.
+Контракт: после gameplay DAG собирает PatchSet из доменных patches/refs, Snapshot применяет его атомарно через handlers без повторного materialization; до gameplay — Pack publication/activation, immutable manifest@hash, без snapshot от bake. Revision, scope, operation identity и соответствие lifecycle/доменных частей проверяются в общей границе публикации; новые записи и историзация старых коммитятся вместе. Domain handler не владеет commit и не запускает другой доменный pipeline. Доменный payload не помещается в общий POJO произвольным dict; bulk остаётся artifact refs.
+Проверка: temporary storage, rollback/failure injection между частями изменения, fresh read истории, повтор операции, конфликт payload той же операции, stale revision между prepare и commit, несовпадение доменных данных и преемников; отдельные pregame/runtime сценарии. Проследить фактические callers и вложенные calls; исключить обходные API/worker/callback writers после принятого cutover, не удаляя действующие пути до принятой замены.
+Done полного плана: реализована вся принятая архитектура Lifecycle, проверены полный публичный контракт данных/настроек, внутренняя ответственность, POJO/ошибки, чтение/история, атомарная публикация и разрешённые маршруты; W3 подтверждает первого consumer. Ни один обязательный архитектурный OPEN не перенесён в «следующий срез». Полная миграция старых доменов не входит в Done.
 
 L3 интегрируется с W3 после независимой подготовки L2 и W2; это одна общая точка приёмки, не цикл prerequisites. Не запускать backend, не менять DAG, не коммитить.

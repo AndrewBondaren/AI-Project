@@ -56,7 +56,29 @@ Public метод не принимает SourceOperation, codec/manifest, backe
 
 Это не задача создать ещё один facade. Требуемый выход — одна конкретная Source read-lifetime boundary и один provenance-preserving internal contract closure, согласованные с §11.3/12.1 спецификации. Если нужна дельта collector signature, сначала предъявить её явно; существующую принятую signature молча не менять. Запрет прямых междоменных calls также применим к выбранной infrastructure composition; scoped lifetime не является исключением сам по себе.
 
+**Проверка существующей реализации, 2026-11-16:** `db/repositories/sqlite/artifacts/access/artifactScope.py::SqliteArtifactScope.read_scope()` уже открывает read scope через SqlitePublicationCommitStore, устанавливает task-local binding и сбрасывает его в finally. При existing binding он вместо открытия возвращает read-only facet живого scope. Поэтому «нужного механизма нет» — неверно; не подтверждены его допустимость на Source public boundary и политика borrowed/ambient scope. `_require_unbound` — private, Source не получает права вызывать его. Точный вопрос владельцам записан как INT-SOURCE-READ-LIFETIME в source-technical-debt.md. Не создавать замену этим классам.
+
+**Повторная validation:** оригинальный request проверяется до transformation. Collector по §12.1 сохраняет проверку переданного persisted proof и authority/membership после IO. Проверки не запускаются дважды над исходным request: collector получает canonical output как отдельное внутреннее значение и использует те же invariant implementations, не второй набор правил. Если output normalizer/union/extractor не проходит pure invariants, это нарушение postcondition реализации, не ошибка исходного пользовательского поля. Ни synthetic SourceProofReadInput, ни его field paths не выдаются за исходный root. Это требование к будущей collector дельте; текущая signature/поведение spec не переписаны.
+
+**Конкретный остаток provenance:** operation enum и SourceLogicIssue.source/artifact недостаточны для однозначного обратного отображения, когда одна dependency встречается в нескольких исходных groups/uses либо IO issue относится к capture целиком. Нельзя выбирать первый совпавший ref или восстанавливать origin по сообщению ошибки. Требуется явный internal контракт, сохраняющий связь каждого canonical capture/atom со всеми original occurrences и отдельно proof-level failures. Этот контракт должен сопровождать normalization/union/selection и collector; один post-processing SourceFailure без такой связи не решает проблему. Публичные error POJO не расширяются молча. Это собственная работа Source АР-1, не долг Snapshot/Artifacts.
+
 ### АР-1: ошибки и завершение публичной операции
+
+### Требования к occurrence mapping — proposal 2026-11-17
+
+До выбора нового carrier проверить существующие `SourceProofGroupProjection`, FieldRef/CheckedPath, SourceProofSelection и SourceLogicIssue: projection/selections описывают вычисленный proof/subset, но не заменяют позиции всех повторов исходного request. Не вводить зеркальный proof, публичный provenance DTO либо новый универсальный context. Связь существует только внутри одного вызова Source, не сериализуется и не передаётся Pack.
+
+Обязательные связи: canonical capture → все original (group_index, use_index); canonical object/collection atom → все original (group_index, use_index, dependency_index, typed path). Object/collection ветви различаются existing concrete ref type, не строковым tag. Exact capture входит в ключ связи: одинаковый source ref из разных captures не сливается. Отдельно сохраняется actual request root для proof-level failures; ему не приписывается фиктивный use=0.
+
+Normalizer/union не выбирает один origin среди повторов: сохраняется полный набор occurrences в исходном порядке. Selection оставляет mappings только выбранных atoms и их captures; canonical ordinal результата не заменяет исходный ordinal. READ использует исходные proof positions. VERIFY не смешивает expected и presented origins: IO collector проверяет presented canonical proof, а group matching диагностирует expected groups своей стадией.
+
+Предлагаемая кратность: capture-level IO issue распространяется на все соответствующие original uses; dependency-level — на все uses, где заявлен этот exact capture+dependency. Повтор одной dependency внутри одного use не создаёт одинаковые SourceLogicIssue: existing carrier не содержит dependency_index, поэтому одинаковые итоговые logic diagnostics сводятся при отображении, сохраняя первый исходный порядок. Field diagnostics сохраняют каждый точный path и не объединяются по одному коду. Это явное уточнение семантики для приёмки, не уже утверждённая дельта §11.3.
+
+Ошибка инфраструктуры/декодирования не превращается в field error исходного request. Structural/canonical отказ вычисленного proof — нарушение postcondition Source, а не ошибка пользователя; исходный persisted proof проверяется до преобразования. Authority/membership/availability проверки collector остаются обязательными внутри живого scope и не заменяются ранее построенным mapping.
+
+До приёмки нужны exact функции построения/проекции mapping и дельта collector, позволяющая отличить capture/atom/proof-level issue до потери контекста. Текущую `collect(scope, SourceProofReadInput, operation)` нельзя объявлять достаточной лишь на основании наличия SourceLogicIssue.source/artifact. Минимальные сценарии: один atom в двух группах; повтор atom в одном use; один source ref в разных captures; capture-wide refusal; subset с изменившимися ordinals; VERIFY expected/presented; proof-level failure без use. Все случаи проверяются без IO и без новых публичных POJO; runtime read lifetime проверяется отдельно.
+
+### Таблица ошибок публичной операции
 
 | Граница | Результат / отказ | Что запрещено |
 |---|---|---|
@@ -91,7 +113,7 @@ Public метод не принимает SourceOperation, codec/manifest, backe
 | Group verification | Проверки исходного verify request → group matcher → exact capture/closure evaluation → сравнение предъявленных durable refs → groups result | Не только subset, но exact union, соответствие каждой группы и exact closure |
 | Selection | Проверки исходного select request/proof/selection → extractor → exact capture/closure evaluation выбранного proof → SourceProofResult | Самостоятельный proof выбранных dependencies и его полный closure |
 
-Closure evaluation — общий internal алгоритм из spec, а не вызов публичного read. Перенос диагностик в original request принадлежит request-specific стадии, без синтетического read input как diagnostic root. Проверки witness/captured mapping выполняются до утверждения durable result. Concrete IO ports и constructor wiring принимаются отдельно; до этого эти operation owners не могут быть реализованы с fake refs или stub collectors. Pure algorithms остаются независимым следующим кандидатом ядра.
+Closure evaluation — общий internal алгоритм из spec, а не вызов публичного read. Перенос диагностик в original request принадлежит request-specific стадии, без синтетического read input как diagnostic root. Проверки witness/captured mapping выполняются до утверждения durable result. Concrete IO ports и constructor wiring принимаются отдельно; до этого эти operation owners не могут быть реализованы с fake refs или stub collectors. Дальнейшая реализация следует только после завершения архитектуры целого ядра; нового независимого кандидата этот документ не разрешает.
 
 ## 4. Проверка полноты по принятой S1/S2 дельте
 

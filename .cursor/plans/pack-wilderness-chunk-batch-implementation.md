@@ -1,5 +1,7 @@
 # Pack: реализация single и batch wilderness chunk writes
 
+**Уточнение пользователя — 2026-11-17:** реализация B1 и части B2 уже начата; B2 не завершён. До его продолжения выполнить разделение admission по ответственности из B2.0 ниже. Предыдущий PASS относится к проверенной редакции плана; данное уточнение согласовано пользователем, но отдельная независимая приёмка изменений и кода не объявляется. Историческое «код по нему не изменён» в записи 2026-11-16 больше не описывает текущий статус.
+
 2026-11-16. Статус: **PASS независимой приёмки implementation-плана B1–B5, включая технические решения §3.1–3.2; код по нему не изменён**. Результат зафиксирован по прямому поручению пользователя после независимого ревью в текущем чате. Это отдельный вердикт, не автоматическое распространение прежнего PASS контрактного дополнения из чата `01a1e4f2-bf85-73c3-81dd-7a1137ac6e27`. B6 остаётся отдельной последней интеграцией; реализация, весь Pack и production end-to-end этим вердиктом не приняты. Формулировки ниже о предстоящей приёмке плана сохраняют историю подготовки и заменены настоящим статусом.
 
 ## 1. Источники и предел работы
@@ -28,7 +30,7 @@
 | State, assembly, metadata subjects/dependencies/attribution, SourceProofInput/SourceDurableProof/SourceProofSelection | Переиспользовать owning declarations из принятого inventory |
 | `operations.py` содержит другие pure writes, но нет chunk single/item/batch | Добавить только согласованные объявления |
 | `PackPreparationService` содержит start_empty, climate/index/spatial/grade writes и deletes; chunk методов нет | Single и batch поставлять вместе на одном transition, не ссылаться на несуществующий single как доказательство |
-| `PackPreparationValidator` проверяет state identities/groups; errors.py умеет leaf admission и missing sentinel | Расширить нужными predicates, сохранить независимую диагностику; не считать существующие checks полной проверкой актуальности subject/basis |
+| `PackPreparationValidator` первоначально проверял state identities/groups; в частичной B2 получил также chunk admission | Сначала разделить по B2.0; не добавлять subject/basis и retained checks в общий класс. errors.py сохраняет leaf admission/missing sentinel |
 | `errors.py` создаёт TypeAdapter при leaf checks | Добавить reuse annotations при подтверждённом exact cache key; не кешировать результат валидации values |
 | `app/encoding/canonicalCodec.py` содержит CanonicalCodec, encode/content_digest | Использовать существующее ядро; конкретный проект Pack binding предъявлен в §3.1 и принимается вместе с этим планом |
 | Legacy `worldPackWriter.commit_chunk`, status policy | Источник уже принятой семантики; не вызывать legacy writer из pure service и не переносить его replacement-order |
@@ -53,7 +55,10 @@ Input объявления — `app/dataModel/worldPack/preparation/operations.p
 | Класс / модуль | Ответственность и зависимости | DoD / отказ в приёмке |
 |---|---|---|
 | PackPreparationService, существующий | Две публичные atomic операции: admission → локальное применение → один результат | Нет IO, public-method chaining, скрытого workflow или service-held состояния |
-| PackPreparationValidator, существующий | State/item predicates и точные diagnostics; только данные и общие validation helpers | Ошибка соседнего поля не скрывает независимую проверку; ошибки не исправляют input |
+| PackPreparationValidator — `app/application/worldData/pack/preparation/packPreparationValidator.py` | Общий structural admission state и инварианты identity/уникальности его состава; metadata checks делегируются MetadataStateValidator | Не содержит chunk request/item/evidence predicates. Ошибка соседнего поля не скрывает независимую проверку; state не исправляется |
+| WildernessChunkAdmission — `app/application/worldData/pack/preparation/wildernessChunkAdmission.py` | Внутренняя граница admission single/batch: schema request, payload descriptor/provenance, дубликаты входных адресов, вызов owning проверок и итоговый reason | Один collector на вызов; возвращает валидированный owning request либо PackPreparationFailure. Не применяет writes, не вычисляет projections и не выбирает следующую публичную операцию |
+| MetadataEvidenceValidator — `app/application/worldData/pack/preparation/metadataEvidenceValidator.py` | Проверки предъявленных selectors, fingerprint выбранного typed input и world usage; использует metadataProjection и owning FieldRef/CheckedPath | Добавляет diagnostics в переданный collector; не читает state целиком, не проверяет payload provenance, не выполняет Source SELECT/admission |
+| MetadataStateValidator — `app/application/worldData/pack/preparation/metadataStateValidator.py` | Metadata groups, subject/base/projection, basis и доступность сохраняемых usages; использует owning metadata records и metadataProjection | Независимые проверки с исходными paths; не вычисляет отсутствующее historical usage, не применяет transitions и не управляет workflow |
 | PackWildernessChunkWrite / PackWildernessChunkInput / PackWildernessChunksInput, новые | Data-only declarations из принятого контракта | Strict/frozen/extra-forbid/revalidate-always; exact item admission; single со state внутри entries отклоняется |
 | PackMetadataInputEvidence, PackMetadataValueInputSelector, PackMetadataRegionInputSelector, согласованные, ещё отсутствуют в runtime | Единственные объявления в `dataModel/worldPack/preparation/metadataDependencies.py` по metadata POJO §2–3; selector/value_fingerprint/source_usage | Полная owning форма selector union, без урезанного batch-зеркала; chunk допускает только VALUE ADDRESS/REFINE_ROLE |
 | PackMetadataInputField / PackRegionMetadataInputField и discriminator selectors, согласованные | Closed enum roster metadata POJO §3 в том же owning модуле | Не создавать OTHER, строковые field paths или новые значения; объявления не реализуют остальные write-методы |
@@ -63,7 +68,7 @@ Input объявления — `app/dataModel/worldPack/preparation/operations.p
 | CanonicalTypeKind — тот же модуль; RECORD/ENUM | Категория регистрации, без effects | Только owning варианты; ChunkRefineRole/ClimateBakeStatus — Literal aliases, не Enum и не отдельные entries |
 | CanonicalEncodingError — `app/encoding/canonicalCodec.py`, existing exception без дополнительных полей | Сбой canonical primitive | Невалидный пользовательский input отклоняется typed Pack admission до encoding; ошибка регистрации не маскируется как METADATA_INPUT_MISMATCH |
 
-Внутренние новые модули — функции, не новые публичные классы:
+Помимо внутренних validation-классов выше, новые вычислительные модули содержат функции, не новые публичные классы:
 
 - `app/application/worldData/pack/preparation/metadataProjection.py`: выбор owning projection, проверка subject, canonical fingerprint input evidence/projection. Один общий механизм, пригодный для последующих describe/bind; сами публичные методы сюда не добавляются.
 - `app/application/worldData/pack/preparation/wildernessChunkWrite.py`: локальные индексы, membership, применение одного item и итоговая материализация. Локальные typed dict/list/set не выходят из вызова, не сохраняются в service/cache, не являются публичным builder или вторым state POJO.
@@ -139,7 +144,23 @@ Canonical order basis в пределах одного tile: после duplicat
 
 ### B2. Полный admission и независимые ошибки
 
-- В validator добавить проверки evidence slots/fingerprint/world, актуальности pending subject и basis, уникальности batch addresses, доступности сохраняемых tile usages. Base/state проверять до применения, entries независимо от ошибок соседних полей.
+#### B2.0. Разделение ответственности перед продолжением B2
+
+Решение пользователя 2026-11-17: не развивать PackPreparationValidator в god-object. До новых predicates перенести уже написанный single/batch admission и `_raise_chunk_errors` в WildernessChunkAdmission; проверки evidence вынести в MetadataEvidenceValidator, metadata groups/basis — в MetadataStateValidator. В PackPreparationValidator оставить общие инварианты state. Не сохранять две реализации перенесённых проверок или alias-классы.
+
+Внутренняя цепочка одной операции: PackPreparationService → WildernessChunkAdmission → общие state checks / metadata state checks / payload и evidence checks → единый итоговый отказ либо валидированный request → локальный transition. Это стадии одной atomic операции Pack, не вызовы самостоятельных публичных операций. DAG по-прежнему вызывает service напрямую; дополнительный междоменный фасад, pipeline или dispatcher не появляется.
+
+WildernessChunkAdmission создаёт один ValidatorAggregationHelper на single/batch admission. Проверяющие методы остальных классов принимают этот collector и typed CheckedPath, добавляют diagnostics и не вызывают raise самостоятельно. Общий standalone `PackPreparationValidator.validate_state` сохраняет собственную границу: один collector, затем общие и metadata проверки, один итоговый отказ. Не вызывать standalone validate_state внутри chunk admission, чтобы не получить ранний отказ и второй collector.
+
+Допустимые зависимости: WildernessChunkAdmission → PackPreparationValidator, MetadataStateValidator, MetadataEvidenceValidator, existing errors helpers; PackPreparationValidator → MetadataStateValidator для standalone state admission; metadata validators → owning records, fields/validation helpers и metadataProjection. Обратные зависимости на service/admission и зависимости между evidence/state validators запрещены. Классы не хранят request/state/collector между вызовами. Новых POJO, error codes, public Input/Output/Error или сервисных настроек нет.
+
+Проверки исполнения разделения: перенесённые методы отсутствуют в прежнем классе; нет дублированных group/evidence правил; прежние regression tests проходят; codes/paths/reason и порядок diagnostics сохраняются на одинаковых single/batch входах. Проверить nested вызовы и отсутствие повторного полного admission state. Реальный output transition и порядок операций не изменяются этим рефакторингом.
+
+Порядок остатка: **B2.0 → актуальность subject/basis и retained usages → полная приёмка B2 → B3**. Само разнесение файлов не закрывает B2.
+
+#### B2.1. Проверки после разделения
+
+- В MetadataEvidenceValidator разместить evidence slots/fingerprint/world; в MetadataStateValidator — актуальность pending subject/basis и сохраняемые tile usages; в WildernessChunkAdmission — уникальность batch addresses и payload admission. Base/state проверять до применения, entries независимо от ошибок соседних полей.
 - Сохранять валидированные значения после успешного schema admission; не продолжать semantic checks на исходном dict вместо полученного POJO. После частичного отказа допускать отдельные необходимые поля с исходными индексами, не целые записи как условие независимых checks.
 - Уникальность address не зависит от artifact/provenance; format не зависит от address; proof.world не зависит от planning; missing basis отличается от explicit None.
 - Следовать code/path таблице принятого batch-контракта без нового набора ошибок. Причина: structural → INVALID_INPUT; иначе любой non-address semantic mismatch → DEPENDENCY_MISMATCH; иначе address duplicates → IDENTITY_CONFLICT. Missing/duplicate metadata slot остаётся METADATA_INPUT_MISMATCH, не IDENTITY_CONFLICT.

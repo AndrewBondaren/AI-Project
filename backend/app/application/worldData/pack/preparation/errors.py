@@ -1,10 +1,13 @@
 """Application exception carrying the Pack-owned preparation refusal."""
 
-from typing import TypeVar, get_args
+from collections.abc import Iterable
+from functools import lru_cache
+from typing import TypeVar, get_args, cast
 
 from pydantic import BaseModel, TypeAdapter, ValidationError
 from app.dataModel.fields.fieldBinding import bind_field
 from app.dataModel.fields.fieldRef import FieldRef
+from app.dataModel.fields.checkedPath import CheckedPath
 
 from app.application.jsonValidation.resolution.diagnostics import ResolveContext
 from app.application.jsonValidation.resolution.wireIssues import pydantic_issues
@@ -19,6 +22,7 @@ from app.dataModel.worldPack.preparation.errors import (
     PackPreparationError,
     PackPreparationFailureReason,
     PackPreparationIssue,
+    PackPreparationIssueCode,
     PackPreparationArtifactIssue,
     PackPreparationRetentionLimitIssue,
     is_structural_preparation_issue,
@@ -27,6 +31,14 @@ from app.dataModel.worldPack.preparation.errors import (
 InputT = TypeVar("InputT", bound=BaseModel)
 ValueT = TypeVar("ValueT")
 _MISSING_PREPARATION_FIELD = object()
+
+
+@lru_cache
+def _preparation_adapter(model: type[BaseModel], field: str, item: bool) -> TypeAdapter[object]:
+    annotation = model.model_fields[field].rebuild_annotation()
+    if item:
+        annotation = get_args(annotation)[0]
+    return TypeAdapter[object](annotation)
 
 
 def preparation_field_value(value: object, ref: FieldRef[InputT, ValueT]) -> object:
@@ -43,8 +55,8 @@ def valid_preparation_field(value: object, ref: FieldRef[InputT, ValueT]) -> Val
     """Validate one independent branch after root diagnostics have been collected."""
     binding = bind_field(ref)
     try:
-        return TypeAdapter[ValueT](binding.model.model_fields[binding.field].rebuild_annotation()).validate_python(
-            preparation_field_value(value, ref), strict=True)
+        return cast(ValueT, _preparation_adapter(binding.model, binding.field, False).validate_python(
+            preparation_field_value(value, ref), strict=True))
     except ValidationError:
         return None
 
@@ -55,12 +67,11 @@ def valid_preparation_items(value: object, ref: FieldRef[InputT, tuple[ValueT, .
     raw = preparation_field_value(value, ref)
     if not isinstance(raw, tuple):
         return ()
-    annotation = binding.model.model_fields[binding.field].annotation
-    adapter = TypeAdapter[ValueT](get_args(annotation)[0])
+    adapter = _preparation_adapter(binding.model, binding.field, True)
     accepted: list[tuple[int, ValueT]] = []
     for index, item in enumerate(raw):
         try:
-            accepted.append((index, adapter.validate_python(item, strict=True)))
+            accepted.append((index, cast(ValueT, adapter.validate_python(item, strict=True))))
         except ValidationError:
             continue
     return tuple(accepted)
@@ -110,3 +121,34 @@ def raise_preparation_errors(
     errors.raise_if_any(lambda issues: PackPreparationFailure(
         PackPreparationError(reason=effective_reason, issues=issues)
     ))
+
+
+RootT = TypeVar("RootT", bound=BaseModel)
+
+
+def _raw_items(value: object, ref: FieldRef[RootT, tuple[ValueT, ...]]) -> tuple[tuple[int, object], ...]:
+    raw = preparation_field_value(value, ref)
+    return tuple(enumerate(raw)) if isinstance(raw, tuple) else ()
+
+
+def _coordinates(items: tuple[tuple[int, object], ...], x: FieldRef[RootT, int],
+                 y: FieldRef[RootT, int]) -> tuple[tuple[int, tuple[int, int]], ...]:
+    result = []
+    for index, item in items:
+        a, b = valid_preparation_field(item, x), valid_preparation_field(item, y)
+        if a is not None and b is not None:
+            result.append((index, (a, b)))
+    return tuple(result)
+
+
+def _duplicates(keys: Iterable[object]) -> Iterable[int]:
+    seen: set[object] = set()
+    for index, key in enumerate(keys):
+        if key in seen:
+            yield index
+        seen.add(key)
+
+
+def _issue(errors: ValidatorAggregationHelper[PackPreparationDiagnostic], code: PackPreparationIssueCode,
+           path: CheckedPath[RootT, ValueT], message: str) -> None:
+    errors.add(PackPreparationIssue(code=code, path=path.freeze(), message=message))

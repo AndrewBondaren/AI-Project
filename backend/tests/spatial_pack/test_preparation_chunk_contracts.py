@@ -1,0 +1,146 @@
+"""Owning chunk input schema and canonical metadata identity contracts."""
+
+import unittest
+
+from pydantic import ValidationError
+
+from app.application.worldData.pack.preparation.metadataProjection import metadata_input_fingerprint
+from app.dataModel.worldPack.encoding.metadataBindings import PACK_METADATA_SCHEMA
+from app.dataModel.worldPack.preparation.addresses import PackChunkAddress
+from app.dataModel.worldPack.preparation.metadataDependencies import (
+    PackMetadataInputField, PackMetadataValueInputSelector, PackMetadataRegionInputSelector,
+    PackRegionMetadataInputField,
+)
+from app.encoding.canonicalCodec import decode, encode
+from app.core.constants import FINE_CELL_SIZE
+from app.dataModel.worldPack.preparation.assembly import PackAssemblyInput, PackTileAssembly, PackChunkAssembly
+from app.dataModel.worldPack.preparation.operations import PackWildernessChunkInput, PackWildernessChunksInput, PackWildernessChunkWrite
+from app.dataModel.worldPack.preparation.parts import PackWildernessChunkPartInput
+from app.dataModel.worldPack.preparation.provenance import PackNewPartProvenance, PackStoredProvenance
+from app.dataModel.worldPack.preparation.state import PackPreparationState
+from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
+from app.dataModel.sourceVersioning.sourceDurableProof import SourceDurableProof
+from app.dataModel.artifacts.references import ArtifactRef, ArtifactKind
+from app.dataModel.worldPack.meta.fineTerrainStorageFormat import FINE_TERRAIN_FORMAT_KEY, FINE_TERRAIN_STORAGE_VERSION
+from app.application.worldData.pack.preparation.metadataProjection import metadata_projection, metadata_value_fingerprint
+from app.dataModel.worldPack.preparation.addresses import PackTileMetadataAddress, PackChunkMetadataAddress
+from app.application.worldData.pack.preparation.wildernessChunkAdmission import WildernessChunkAdmission
+from app.application.worldData.pack.preparation.errors import PackPreparationFailure
+from app.dataModel.worldPack.preparation.metadataDependencies import PackMetadataInputEvidence
+from app.dataModel.sourceVersioning.sourceProofInput import SourceProofInput
+from app.dataModel.worldPack.preparation.errors import PackPreparationArtifactIssue, PackPreparationIssue
+
+
+class ChunkContractTests(unittest.TestCase):
+    def valid_item(self) -> PackWildernessChunkWrite:
+        address = PackMetadataValueInputSelector(kind="value", field=PackMetadataInputField.ADDRESS)
+        role = PackMetadataValueInputSelector(kind="value", field=PackMetadataInputField.REFINE_ROLE)
+        usage = SourceProofInput(world_uid="world", uses=())
+        return PackWildernessChunkWrite(part=self.part, refine_role=None, metadata_inputs=(
+            PackMetadataInputEvidence(input=address, value_fingerprint=metadata_input_fingerprint(address, self.part.address), source_usage=usage),
+            PackMetadataInputEvidence(input=role, value_fingerprint=metadata_input_fingerprint(role, None), source_usage=usage)))
+
+    def test_chunk_admission_and_duplicate_reason(self) -> None:
+        item = self.valid_item()
+        validator = WildernessChunkAdmission()
+        request = PackWildernessChunksInput(state=self.state, entries=(item,))
+        self.assertEqual(validator.validate_wilderness_chunks(request), request)
+        with self.assertRaises(PackPreparationFailure) as caught:
+            validator.validate_wilderness_chunks(PackWildernessChunksInput(state=self.state, entries=(item, item)))
+        self.assertEqual(caught.exception.error.reason.value, "identity_conflict")
+        issue = caught.exception.error.issues[0]
+        assert isinstance(issue, PackPreparationIssue)
+        self.assertEqual(issue.code.value, "duplicate_address")
+
+    def test_chunk_format_and_evidence_world_are_independent(self) -> None:
+        item = self.valid_item()
+        bad = item.model_copy(update={
+            "part": item.part.model_copy(update={"address": item.part.address.model_copy(update={"kind": "bad"}),
+                "artifact": item.part.artifact.model_copy(update={"format_version": 100})}),
+            "metadata_inputs": (item.metadata_inputs[0].model_copy(update={"source_usage": SourceProofInput(world_uid="foreign", uses=())}), item.metadata_inputs[1]),
+        })
+        with self.assertRaises(PackPreparationFailure) as caught:
+            WildernessChunkAdmission().validate_wilderness_chunks(PackWildernessChunksInput.model_construct(state=self.state, entries=(bad,)))
+        self.assertEqual(caught.exception.error.reason.value, "invalid_input")
+        self.assertEqual([(issue.issue if isinstance(issue, PackPreparationArtifactIssue) else issue).code.value
+                          for issue in caught.exception.error.issues],
+                         ["SCHEMA_VIOLATION", "format_mismatch", "source_proof_mismatch"])
+
+    def setUp(self) -> None:
+        self.assembly = PackAssemblyInput(last_l0_mode="light", fine_cells_per_map_cell=1000,
+            world_map_cells_per_tile=32, fine_cell_size=FINE_CELL_SIZE, map_subsurface_depth=0,
+            terrain_chunk_columns=32, tiles=(), locations=(), settlements=(), wilderness_regions=())
+        self.state = PackPreparationState(parts=(), assembly=self.assembly, assembly_provenance=(), metadata_dependencies=(),
+            base_publication=WorldPublicationRef(world_uid="world", publication_id="base", pack_hash=None,
+                snapshot_head=None, active_timeline_id=None, gameplay_started=False))
+        self.part = PackWildernessChunkPartInput(
+            address=PackChunkAddress(kind="wilderness_chunk", gx=-2, gy=3, cx=1, cy=4),
+            artifact=ArtifactRef(kind=ArtifactKind.BLOB, format_key=FINE_TERRAIN_FORMAT_KEY,
+                format_version=FINE_TERRAIN_STORAGE_VERSION, content_hash="a" * 64, nbytes=1),
+            provenance=PackNewPartProvenance(kind="new", provenance=PackStoredProvenance(
+                source_proof=SourceDurableProof(schema_version=1, world_uid="world", uses=()), planning=())))
+
+    def test_single_is_not_batch_item(self) -> None:
+        single = PackWildernessChunkInput(state=self.state, part=self.part, refine_role=None, metadata_inputs=())
+        with self.assertRaises(ValidationError) as caught:
+            PackWildernessChunksInput.model_validate({"state": self.state, "entries": (single,)})
+        self.assertEqual(caught.exception.errors()[0]["loc"], ("entries", 0))
+        item = PackWildernessChunkWrite(part=self.part, refine_role=None, metadata_inputs=())
+        self.assertEqual(PackWildernessChunksInput(state=self.state, entries=(item,)).entries, (item,))
+
+    def test_missing_role_and_forged_nested_address(self) -> None:
+        with self.assertRaises(ValidationError) as caught:
+            PackWildernessChunkWrite.model_validate({"part": self.part, "metadata_inputs": ()})
+        self.assertEqual(caught.exception.errors()[0]["loc"], ("refine_role",))
+        bad = self.part.model_copy(update={"address": self.part.address.model_copy(update={"cx": True})})
+        with self.assertRaises(ValidationError):
+            PackWildernessChunkWrite(part=bad, refine_role=None, metadata_inputs=())
+
+    def test_tile_projection_excludes_chunks(self) -> None:
+        tile = PackTileAssembly(gx=-2, gy=3, climate_status="fine", wilderness_refine_status="partial", chunks=())
+        assembly = self.assembly.model_copy(update={"tiles": (tile,)})
+        changed = assembly.model_copy(update={"tiles": (tile.model_copy(update={"chunks": (
+            PackChunkAssembly(cx=1, cy=4, refine_role=None),)}),)})
+        address = PackTileMetadataAddress(kind="tile", gx=-2, gy=3)
+        before = metadata_projection(assembly, address)
+        after = metadata_projection(changed, address)
+        self.assertEqual(before, (-2, 3, "fine", "partial"))
+        self.assertEqual(metadata_value_fingerprint(address, before), metadata_value_fingerprint(address, after))
+        chunk = PackChunkMetadataAddress(kind="chunk", gx=-2, gy=3, cx=1, cy=4)
+        self.assertIsNone(metadata_projection(assembly, chunk))
+        self.assertEqual(metadata_projection(changed, chunk), (1, 4, None))
+
+    def test_address_round_trip_and_identity(self) -> None:
+        address = PackChunkAddress(kind="wilderness_chunk", gx=-2, gy=3, cx=1, cy=4)
+        selector = PackMetadataValueInputSelector(kind="value", field=PackMetadataInputField.ADDRESS)
+        encoded = encode(address, PACK_METADATA_SCHEMA)
+        self.assertEqual(decode(encoded, PackChunkAddress, PACK_METADATA_SCHEMA), address)
+        self.assertNotEqual(metadata_input_fingerprint(selector, address),
+                            metadata_input_fingerprint(selector, address.model_copy(update={"cy": 5})))
+
+    def test_nullable_role_has_distinct_identity(self) -> None:
+        selector = PackMetadataValueInputSelector(kind="value", field=PackMetadataInputField.REFINE_ROLE)
+        fingerprints = {
+            metadata_input_fingerprint(selector, None),
+            metadata_input_fingerprint(selector, "scene"),
+            metadata_input_fingerprint(selector, "background"),
+            metadata_input_fingerprint(selector, "path"),
+            metadata_input_fingerprint(selector, "location"),
+        }
+        self.assertEqual(len(fingerprints), 5)
+
+    def test_region_selector_rejects_bool_and_missing_index(self) -> None:
+        for index in (True, -1, "1"):
+            with self.subTest(index=index), self.assertRaises(ValidationError):
+                PackMetadataRegionInputSelector.model_validate({
+                    "kind": "region_entry", "entry_index": index,
+                    "field": PackRegionMetadataInputField.REGION_UID,
+                })
+        with self.assertRaises(ValidationError):
+            PackMetadataRegionInputSelector.model_validate({
+                "kind": "region_entry", "field": PackRegionMetadataInputField.REGION_UID,
+            })
+
+    def test_exact_registration_inventory(self) -> None:
+        self.assertEqual(tuple(entry.type_id for entry in PACK_METADATA_SCHEMA.entries), tuple(range(20401, 20416)))
+        self.assertEqual(len({entry.python_type for entry in PACK_METADATA_SCHEMA.entries}), 15)
