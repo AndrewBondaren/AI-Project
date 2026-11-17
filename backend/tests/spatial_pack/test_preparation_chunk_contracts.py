@@ -29,9 +29,34 @@ from app.application.worldData.pack.preparation.errors import PackPreparationFai
 from app.dataModel.worldPack.preparation.metadataDependencies import PackMetadataInputEvidence
 from app.dataModel.sourceVersioning.sourceProofInput import SourceProofInput
 from app.dataModel.worldPack.preparation.errors import PackPreparationArtifactIssue, PackPreparationIssue
+from app.dataModel.worldPack.meta.metadataAttribution import PackMetadataGroup, PackWildernessStatusBasis
+from app.dataModel.worldPack.preparation.metadataDependencies import PackMetadataDescription, PackMetadataDependencyUse
+from app.dataModel.worldPack.preparation.metadataSubject import PackMetadataSubject
 
 
 class ChunkContractTests(unittest.TestCase):
+    def test_stale_basis_is_independent_of_climate_status(self) -> None:
+        tile = PackTileAssembly(gx=-2, gy=3, climate_status="coarse", wilderness_refine_status="partial",
+            chunks=(PackChunkAssembly(cx=1, cy=4, refine_role=None),))
+        address = PackTileMetadataAddress(kind="tile", gx=-2, gy=3)
+        usage = SourceProofInput(world_uid="world", uses=())
+        description = PackMetadataDescription(subject=PackMetadataSubject(base_publication=self.state.base_publication,
+            address=address, value_fingerprint="a" * 64), dependencies=(
+            PackMetadataDependencyUse(group=PackMetadataGroup.IDENTITY, source_usage=usage, basis=None),
+            PackMetadataDependencyUse(group=PackMetadataGroup.CLIMATE_STATUS, source_usage=usage, basis=None),
+            PackMetadataDependencyUse(group=PackMetadataGroup.WILDERNESS_REFINE_STATUS, source_usage=usage,
+                basis=PackWildernessStatusBasis(chunk_addresses=(), expected_chunks=None))))
+        state = self.state.model_copy(update={"assembly": self.assembly.model_copy(update={"tiles": (
+            tile.model_copy(update={"climate_status": "bad"}),)}), "metadata_dependencies": (description,)})
+        with self.assertRaises(PackPreparationFailure) as caught:
+            WildernessChunkAdmission().validate_wilderness_chunks(PackWildernessChunksInput.model_construct(state=state, entries=()))
+        issues = caught.exception.error.issues
+        self.assertEqual([issue.code.value for issue in issues if isinstance(issue, PackPreparationIssue)],
+                         ["metadata_basis_mismatch"])
+        semantic = issues[-1]
+        assert isinstance(semantic, PackPreparationIssue)
+        self.assertEqual(semantic.path.projection(), ("state", "metadata_dependencies", 0, "dependencies", 2, "basis"))
+
     def valid_item(self) -> PackWildernessChunkWrite:
         address = PackMetadataValueInputSelector(kind="value", field=PackMetadataInputField.ADDRESS)
         role = PackMetadataValueInputSelector(kind="value", field=PackMetadataInputField.REFINE_ROLE)

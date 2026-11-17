@@ -18,8 +18,11 @@ from app.dataModel.worldPack.preparation.errors import PackPreparationDiagnostic
 from app.dataModel.worldPack.preparation.metadataDependencies import PackMetadataDependencyUse, PackMetadataDescription
 from app.dataModel.worldPack.preparation.metadataSubject import PackMetadataSubject
 from app.dataModel.worldPack.preparation.state import PackPreparationState
+from app.dataModel.worldPack.preparation.assembly import PackAssemblyInput, PackTileAssembly, PackChunkAssembly
+from app.dataModel.worldPack.preparation.addresses import PackChunkAddress
+from app.dataModel.worldPack.bake.wildernessRefineStatus import wilderness_refine_status_for_counts, wilderness_refine_status_without_expected
 
-from app.application.worldData.pack.preparation.errors import _duplicates, _issue
+from app.application.worldData.pack.preparation.errors import _duplicates, _issue, _raw_items, _coordinates
 
 RootT = TypeVar("RootT", bound=BaseModel)
 ValueT = TypeVar("ValueT")
@@ -30,6 +33,7 @@ class MetadataStateValidator:
         self, state: object, path: CheckedPath[RootT, PackPreparationState],
         errors: ValidatorAggregationHelper[PackPreparationDiagnostic],
     ) -> None:
+        tiles = self._tile_basis_inputs(state)
         transient = FieldRef(lambda: PackPreparationState, lambda value: value.metadata_dependencies)
         dependencies = FieldRef(lambda: PackMetadataDescription, lambda value: value.dependencies)
         raw_descriptions = preparation_field_value(state, transient)
@@ -57,6 +61,8 @@ class MetadataStateValidator:
                 self._check_group(address, key, basis,
                     group_path.item(use_index).field(FieldRef(lambda: PackMetadataDependencyUse, lambda value: value.group)),
                     group_path.item(use_index).field(FieldRef(lambda: PackMetadataDependencyUse, lambda value: value.basis)), errors)
+                if isinstance(address, PackTileMetadataAddress) and key is PackMetadataGroup.WILDERNESS_REFINE_STATUS and basis is not None:
+                    self._check_current_basis(address, basis, tiles, group_path.item(use_index).field(basis_ref), errors)
             if isinstance(raw_uses, tuple) and len(keys) == len(raw_uses):
                 self._check_group_completeness(address, (key for _, key in keys), group_path, errors)
         stored = FieldRef(lambda: PackPreparationState, lambda value: value.assembly_provenance)
@@ -90,8 +96,59 @@ class MetadataStateValidator:
                 self._check_group(address, key, basis,
                                   group_path.item(group_index).field(group_field),
                                   group_path.item(group_index).field(basis_field), errors)
+                if isinstance(address, PackTileMetadataAddress) and key is PackMetadataGroup.WILDERNESS_REFINE_STATUS and basis is not None:
+                    self._check_current_basis(address, basis, tiles, group_path.item(group_index).field(basis_field), errors)
             if isinstance(raw_groups, tuple) and len(keys) == len(raw_groups):
                 self._check_group_completeness(address, (key for _, key in keys if key is not None), group_path, errors)
+
+    @staticmethod
+    def _tile_basis_inputs(state: object) -> dict[tuple[int, int], tuple[tuple[PackChunkAddress, ...] | None, str | None]]:
+        assembly = preparation_field_value(state, FieldRef(lambda: PackPreparationState, lambda value: value.assembly))
+        result: dict[tuple[int, int], tuple[tuple[PackChunkAddress, ...] | None, str | None]] = {}
+        for _, tile in _raw_items(assembly, FieldRef(lambda: PackAssemblyInput, lambda value: value.tiles)):
+            gx = valid_preparation_field(tile, FieldRef(lambda: PackTileAssembly, lambda value: value.gx))
+            gy = valid_preparation_field(tile, FieldRef(lambda: PackTileAssembly, lambda value: value.gy))
+            if gx is None or gy is None:
+                continue
+            key = gx, gy
+            if key in result:
+                result[key] = None, None
+                continue
+            chunks_field = FieldRef(lambda: PackTileAssembly, lambda value: value.chunks)
+            raw = preparation_field_value(tile, chunks_field)
+            coordinates = _coordinates(_raw_items(tile, chunks_field),
+                FieldRef(lambda: PackChunkAssembly, lambda value: value.cx),
+                FieldRef(lambda: PackChunkAssembly, lambda value: value.cy))
+            addresses = None
+            if isinstance(raw, tuple) and len(coordinates) == len(raw) and len({xy for _, xy in coordinates}) == len(raw):
+                addresses = tuple(PackChunkAddress(kind="wilderness_chunk", gx=gx, gy=gy, cx=cx, cy=cy)
+                                  for cx, cy in sorted(xy for _, xy in coordinates))
+            status = valid_preparation_field(tile, FieldRef(lambda: PackTileAssembly, lambda value: value.wilderness_refine_status))
+            result[key] = addresses, status
+        return result
+
+    @staticmethod
+    def _check_current_basis(
+        address: PackTileMetadataAddress, basis: PackWildernessStatusBasis,
+        tiles: dict[tuple[int, int], tuple[tuple[PackChunkAddress, ...] | None, str | None]],
+        path: CheckedPath[RootT, PackWildernessStatusBasis | None],
+        errors: ValidatorAggregationHelper[PackPreparationDiagnostic],
+    ) -> None:
+        current = tiles.get((address.gx, address.gy))
+        if current is None:
+            return
+        addresses, status = current
+        # Existing group checks already report duplicate and foreign-tile basis addresses.
+        if len(set(basis.chunk_addresses)) != len(basis.chunk_addresses) or any(
+                (c.gx, c.gy) != (address.gx, address.gy) for c in basis.chunk_addresses):
+            return
+        expected_status = (wilderness_refine_status_without_expected(len(basis.chunk_addresses))
+                           if basis.expected_chunks is None else
+                           wilderness_refine_status_for_counts(len(basis.chunk_addresses), basis.expected_chunks))
+        if ((addresses is not None and addresses != basis.chunk_addresses)
+                or (status is not None and status != expected_status)):
+            _issue(errors, PackPreparationIssueCode.METADATA_BASIS_MISMATCH, path,
+                   "basis differs from current membership or status policy")
 
     def _check_group_completeness(
         self, address: PackAssemblyAddress, groups: Iterable[PackMetadataGroup],
