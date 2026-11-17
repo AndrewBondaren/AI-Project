@@ -4,6 +4,12 @@
 
 ## Решения пользователя и источники
 
+**Вариант 1 принят пользователем 2026-11-17 («Давай 1»).** Artifacts предоставляет две самостоятельные публичные операции для DAG: pure `prepare_stage` вычисляет descriptor и возвращает prepared объект с той же ссылкой на content; `stage` принимает lease и этот prepared объект, выполняет reserve/write/seal. Publication открывает и завершает preparation. Это решение заменяет прежнее предложение единственного stage(lease, content); не означает приёмку всех типов ошибок, foreign-контрактов или реализацию. Далее действует редакция двух операций.
+
+**Дополнение решения пользователя, 2026-11-17:** INITIAL-REGISTER переводится на сохранённый ref после отдельного публичного staging через DAG; прежняя bytes-входная форма registrar подлежит нормативному пересмотру. Это принятие границы, не exact нового Input/Output/Error. Требуется согласовать открытие INITIAL_STATE_PREPARATION/lease, identity и format admission, защиту staged ref, атомарную регистрацию/завершение подготовки, replay и cleanup. Time остаётся владельцем pure preparation/encode/decode, registrar не вызывает Time/World. До согласования конкретного протокола прежний accepted bytes-input в Snapshot читается как исходный контракт под замену, а не как разрешение сохранить два публичных пути.
+
+По поручению пользователя начато междоменное согласование с Pack, Publication/Artifacts/Snapshot и Time в существующих чатах владельцев. Каждый сначала сверяет собственные актуальные контракты, затем предъявляет точную дельту и возражения. Ответы по новой границе ожидаются. Направление согласовано пользователем; полная междоменная архитектура ещё не принята.
+
 В обсуждении согласованы публичный атомарный staging, явный вызов через DAG и передача подготовленного объекта по ссылке внутри процесса. Пользователь отдельно потребовал первым пунктом реализации закрепить архитектуру. Подробные сигнатуры, классы, ноды и порядок интеграции ещё требуют архитектурной приёмки.
 
 Нормативные источники: [правила DAG и все критерии приёмки](../rules/dag-generator-interface.mdc), [Snapshot ТЗ](../../docs/tz_world_snapshot.md), [owning-план Snapshot](./world-domain-patches-snapshots.md), [GEN-DAG](./gen-dag-1-post-geo-ws.md). Текущие формулировки ТЗ и правила DAG помещают staging внутрь materialization. Новый публичный staging меняет именно эту границу; ARCH-0 должен подготовить и согласовать точную синхронизацию источников, а не скрыто трактовать старую границу как новую. Остальные утверждённые порядки bake и публикации сохраняются.
@@ -15,8 +21,10 @@
 ### Целевая граница
 
 ```text
-DAG → Domain.prepare → типизированный объект подготовленных данных
-DAG → Artifacts.stage(тот же объект) → ArtifactRef
+DAG → Domain.prepare/owning encode → типизированное immutable content
+DAG → Artifacts.prepare_stage(content) → PreparedArtifact(content, descriptor)
+DAG → Publication.open_preparation(owning input, descriptor) → lease
+DAG → Artifacts.stage(lease, prepared) → ArtifactRef
 DAG → следующий публичный потребитель / публикация Pack / Snapshot.apply
 ```
 
@@ -24,7 +32,7 @@ DAG → следующий публичный потребитель / публ�
 
 Artifacts остаётся общей инфраструктурой ядра патчей; Snapshot, Pack и Source используют единый механизм. DAG владеет порядком публичных операций и выбором следующей операции. Домены владеют содержимым результата. Artifacts не вызывает публичный pipeline другого домена, не выбирает следующую стадию и не запускает materialization. Регистрация кодеков и storage adapters не должна маскировать такие вызовы.
 
-Публичная операция staging целиком выполняет подготовку descriptor/hash, reserve, запись и seal/проверку по существующим контрактам. DAG не управляет этими внутренними действиями. Атомарность означает единый внешний результат операции; это не обещание одной SQL-транзакции вокруг BLOB IO. До успеха возможны удерживаемые staged данные, но отсутствует опубликованный результат. Transaction scopes, writer drain, fences, holders и защита от GC остаются ответственностью общей инфраструктуры.
+Pure prepare_stage выполняет format admission, encode/hash/размер/row_count и выдаёт descriptor без IO и lease. Stage проверяет соответствие prepared содержимого descriptor и своему binding, затем целиком выполняет reserve, запись и seal/проверку по существующим контрактам. DAG не управляет этими внутренними действиями. Атомарность stage означает единый внешний результат операции; это не обещание одной SQL-транзакции вокруг BLOB IO. До успеха возможны удерживаемые staged данные, но отсутствует опубликованный результат. Transaction scopes, writer drain, fences, holders и защита от GC остаются ответственностью общей инфраструктуры. Строка open_preparation в схеме — зависимость специализированного initial-пути, не разрешение переоткрывать Pack lease для каждого артефакта; Pack сохраняет свой owning preparation binding.
 
 ### Передача данных
 
@@ -78,25 +86,66 @@ Artifacts остаётся общей инфраструктурой ядра п
 
 #### Публичная операция staging: конкретный предлагаемый контракт
 
+**Дополнение двухоперационной редакции.** TARGET `application/artifacts/staging/artifactPrepareStageOpenPipeline.py`: concrete `ArtifactPrepareStageOpenPipeline[C: bytes | BaseModel]`; интерфейс `IArtifactPrepareStageOpenPipeline` в `application/artifacts/contracts/artifactPrepareStageOpenPipeline.py`. Публичная сигнатура: `def prepare_stage(self, request: ArtifactPrepareStageInput[C]) -> PreparedArtifact[C]`. TARGET модели в `dataModel/artifacts/staging/preparedArtifact.py`: `ArtifactPrepareStageInput[C](content: C)` и `PreparedArtifact[C](content: C, descriptor: ArtifactRef)`, frozen/strict/extra-forbid. Format/version задаёт trusted binding с existing ArtifactFormatContract[C], согласованный для соответствующего producer; DAG не получает codec callback/backend. Формат не выбирается по содержимому и не подменяется producer. Подготовленный descriptor — ожидаемая identity, не доказательство записи, seal или удержания. PreparedArtifact не является capability; stage не доверяет вручную собранному descriptor. Публичные ошибки admission/mismatch требуют точного общего error mapping в ART-Q3; завершённый Error freeze этим именованием не объявляется.
+
+Гарантия identity: `prepared.content is request.content`, затем stage использует тот же content. Prepared envelope может быть новым малым объектом; копирование содержимого ради границы запрещено. Pure prepare не открывает operation, не читает SQL и не создаёт holds. Concrete specialized модели и их validation проверяются без обхода model_construct.
+
 Владелец — Artifacts. TARGET модуль `backend/app/application/artifacts/staging/artifactStageOpenPipeline.py`: конкретный класс `ArtifactStageOpenPipeline[C: bytes | BaseModel]`; TARGET интерфейс `IArtifactStageOpenPipeline` в `application/artifacts/contracts/artifactStageOpenPipeline.py`. Метод у обоих: `async stage(self, request: ArtifactStageInput[C]) -> ArtifactRef`. Фабрика composition root `make_artifact_stage_pipeline` связывает один existing `ArtifactFormatContract[C]`, версию и backend; они не передаются DAG как executable значения.
 
-TARGET `backend/app/dataModel/artifacts/staging/stageInput.py::ArtifactStageInput[C]`: frozen/strict/extra-forbid модель с полями `lease: OperationLeaseRef`, `content: C`. Format key/version определяются зафиксированным binding pipeline и проверяются до записи. Каждый binding использует concrete specialization (например, bytes для BLOB); открытый BaseModel/Any или необъявленная union в DAG запрещены. Request содержит ссылку на подготовленное содержимое, а не его копию; при реализации обязательна проверка identity вложенного `content` после admission/construction, в том числе с existing `revalidate_instances=always`. Если стандартное создание envelope копирует модель, это блокер реализации контракта, а не основание обходить validation через model_construct.
+TARGET `backend/app/dataModel/artifacts/staging/stageInput.py::ArtifactStageInput[C]`: frozen/strict/extra-forbid модель с полями `lease: OperationLeaseRef`, `prepared: PreparedArtifact[C]`. Это замена прежнего content-поля, не дополнительная overload. Format key/version определяются зафиксированным binding pipeline и проверяются до записи. Каждый binding использует concrete specialization (например, bytes для BLOB); открытый BaseModel/Any или необъявленная union в DAG запрещены. Request содержит ссылку на prepared и его содержимое, а не копию; при реализации обязательна проверка identity вложенного content после admission/construction, в том числе с existing revalidate_instances=always. Если стандартное создание envelope копирует модель, это блокер реализации контракта, а не основание обходить validation через model_construct.
 
 Для BLOB используется existing bytes-contract; произвольная доменная модель не подаётся existing BLOB backend. Доменный producer подготавливает canonical bytes и помещает их в свой named frozen output; DAG передаёт именно bytes field. Для SQL_ROWS используется конкретная frozen row-set модель owning-домена. Новый универсальный PreparedArtifact, новый ref и второй storage payload не нужны. Точные producer outputs каждого формата утверждаются у владельца, до их появления SQL_ROWS binding остаётся OPEN.
 
 Успех — existing `dataModel/artifacts/references.py::ArtifactRef`: `kind, format_key, format_version, content_hash, nbytes, row_count`. Новый success DTO с повторением этих полей не вводится. Ref означает sealed/held результат данной подготовки; не READY всей операции и не published state.
 
-TARGET logic error POJO `dataModel/artifacts/staging/stageFailure.py::ArtifactStageFailure`: `operation_id: EntityUid`, `code: ArtifactStageFailureCode`; enum только `LEASE_NOT_WRITABLE` для доказанного отказа admission. TARGET exception `application/artifacts/staging/stageErrors.py::ArtifactStageRefused` несёт этот POJO. Не переводить arbitrary ValueError в LEASE_NOT_WRITABLE: catalog/registry/backend ValueError может обозначать иной отказ или corruption. До реализации нужен точный typed refusal из owning lease adapter; пока mapping OPEN. Input schema/immutability errors проверяются до side effects через существующую validation infrastructure; конкретный field-error binding также OPEN, не маскируется logic code.
+#### Контракт ошибок двух операций — редакция для приёмки
+
+2026-11-17. Конкретное предложение Artifacts; заменяет предварительный одноэлементный LEASE_NOT_WRITABLE roster. Типы ниже TARGET, не существующая реализация. Требует приёмки и согласования с владельцем shared lifecycle; не объявляет ART-Q3 закрытым.
+
+Обе операции возвращают только success-тип из signatures выше; ожидаемые отказы передаются именованными application exceptions с concrete dataModel POJO. Не вводить одновременно альтернативный result union с теми же ошибками. Pure prepare_stage не имеет operation_id и не возвращает lease-ошибки.
+
+**Field/input errors.** TARGET `dataModel/artifacts/staging/inputErrors.py`:
+
+- `ArtifactInputIssueCode(StrEnum)`: `CONTENT_NOT_IMMUTABLE`, `CONTENT_TYPE_MISMATCH`, `FORMAT_BINDING_MISMATCH`, `DESCRIPTOR_MISMATCH`.
+- `ArtifactInputIssue(FieldPathError[ArtifactInputIssueCode])`: existing обязательные code/path/message без дополнительных копий этих полей.
+- `ArtifactInputError`: `issues: tuple[JsonFieldError | WireShapeIssue | ArtifactInputIssue, ...]`, непустой tuple, strict/frozen/extra-forbid; existing JsonFieldError/WireShapeIssue импортируются из validation/importIssues, не копируются.
+- TARGET carrier `application/artifacts/staging/stageErrors.py::ArtifactInputRejected(error: ArtifactInputError)`. Это узкий доменный exception carrier, не новый общий error framework.
+
+Structural errors переводятся существующим pydantic_issues механизмом; independent checks собираются existing ValidatorAggregationHelper. FieldRef/bind_field задают канонические пути относительно конкретной специализации input. Если невозможно проверить зависимое поле из-за malformed root, downstream check пропускается, но другие независимые ошибки собираются. Новый валидатор immutable payload не создаётся: reuse validate_immutable с размещением ошибки на content-пути. Backend/codec exception нельзя ловить общим except ValueError и объявлять input issue.
+
+**Lifecycle refusals stage.** TARGET `dataModel/artifacts/staging/stageFailure.py::ArtifactStageFailure`: `operation_id: EntityUid`, `code: ArtifactStageFailureCode`. Enum: `LEASE_MISMATCH`, `ADMISSION_CLOSED`. TARGET `ArtifactStageRefused(failure: ArtifactStageFailure)` в том же application carrier-модуле.
+
+| Ошибка | Точное условие / источник | Где допустима |
+|---|---|---|
+| CONTENT_TYPE_MISMATCH | Content не соответствует concrete registered specialization | prepare_stage и stage, до reserve |
+| CONTENT_NOT_IMMUTABLE | Existing validate_immutable отверг содержимое | prepare_stage и stage, до reserve |
+| FORMAT_BINDING_MISMATCH | prepared.descriptor kind/key/version не соответствует binding stage | stage, до reserve |
+| DESCRIPTOR_MISMATCH | Вычисленный из prepared.content полный descriptor не равен prepared.descriptor | stage, до reserve |
+| LEASE_MISMATCH | Persisted operation отсутствует либо полный OperationLeaseRef, построенный из authoritative record, отличается от входного | Typed replacement конкретной ветки SqliteArtifactCatalog._lease, сейчас строки 90–92; не предварительный cached read |
+| ADMISSION_CLOSED | Lease binding совпал и persisted chain валиден, но PREPARING/open admission/current fence условие writable не выполнено | Typed replacement writable ветки _lease, сейчас строки 112–114; проверяется повторно внутри storage transactions |
+
+LEASE_MISMATCH намеренно сохраняет существующую объединённую семантику missing/stale/world/kind/fingerprint mismatch. Не вводить отдельные detailed outcomes без owning решения. Отсутствие/повреждение persisted admission chain требует отдельной классификации владельцем lifecycle перед переносом: текущая реализация часть случаев включает в закрытый admission. Нельзя менять corruption semantics незаметно при типизации. Reserve/writer/seal обязаны распространять typed отказ из актуальной проверки; stage не парсит сообщения исключений и не подменяет защиту повторным read после отказа.
+
+**Existing exception categories сохраняются:** OperationBusyError — занятый writer; PublicationInfrastructureError/CorruptBlobError — инфраструктура и corruption; UnknownCommitOutcome — неизвестный commit/rollback; CancelledError — отмена coroutine после owning drain. Codec programming/configuration errors не выдаются за пользовательский отказ. Ошибки недействительной registration/format binding factory должны выявляться в composition до runtime; неизвестный caller format не используется как runtime dispatcher, поскольку format фиксирован binding. Неперечисленные storage ValueError остаются пунктами inventory для owning classification, а не автоматически классифицируются новым enum.
+
+**Почему не reuse OperationBindingMismatch:** existing `dataModel/publication/operationBindingMismatch.py` требует requested_request_fingerprint публикации, которого у stage нет. Подстановка фиктивного значения или копирование этого POJO недопустимы. ArtifactStageFailure описывает отказ конкретной staging operation, не новую persisted phase/terminal. ArtifactGcFailure относится только к GC, OperationCancelled — к durable отмене; ни один не является carrier staging refusal. PackPreparationError остаётся у Pack; междоменный mapping не переносит его в Artifacts.
+
+**Ответственность новых типов:** InputIssue/InputError лишь хранят типизированные diagnostics, StageFailure — operation refusal, application exceptions лишь переносят эти POJO. Они не читают storage, не выбирают retry и не пишут terminal. Критерий отказа — любое такое поведение либо дубль existing validation field. Independent field checks не обходятся fail-fast для несвязанных полей; hash не вычисляется при malformed/mutable content.
+
+**DoD prepare_stage:** вход проверен, descriptor соответствует binding и canonical содержимому, возвращён PreparedArtifact с исходной content identity; нет storage reads/writes/lease. **DoD stage:** проверено prepared соответствие, reserve/write/seal завершены и ref равен descriptor; результат не обещает READY/registration/publication. При отказе до reserve нет storage effects; при отмене/ошибке после reserve может остаться удерживаемый staged результат — cleanup принадлежит existing lifecycle, отказ не означает rollback всей файловой записи.
+
+Открытые owning вопросы этой редакции сведены к точным пунктам: распространение typed refusals через все lease callers без поломки их контрактов; классификация оставшихся storage ValueError/corrupt-chain ветвей; правила логирования нового доменного carrier по existing error/logging policy. Полный публичный Error freeze требует их закрытия; основной roster больше не оставлен как неназванный «typed mapping».
 
 Existing `PublicationInfrastructureError`, `UnknownCommitOutcome` и `OperationBusyError` сохраняются как инфраструктурные исходы, а `CancelledError` распространяется после writer drain. Не изобретать второй error framework, не возвращать ложный успех/повтор при неизвестном commit. Конкретный публичный Error-контракт не принимается до закрытия field/refusal mapping.
 
 #### Внутренняя цепочка и ответственность
 
-Предлагаемая линейная цепочка: admission входа → existing typed staging implementation → encode/hash/row_count → reserve → backend.write → seal → ArtifactRef. `finish_preparation`, publish, cancel и collect не вызываются автоматически из stage. Domain admission/выбор формата происходит в owning preparation и composition, а не в DAG или общих кодеках.
+Принятая граница двух операций: prepare_stage admission → внутренний pure descriptor builder → PreparedArtifact; stage admission → внутренняя проверка descriptor/content/binding → reserve → backend.write → seal → ArtifactRef. Переиспользовать descriptor-алгоритм TypedArtifactStager через внутреннюю реализацию; stage не вызывает публичный prepare_stage, и prepare_stage не запускает stage. Повторная проверка hash при stage допустима и не означает копирования/повторного доменного вычисления. `finish_preparation`, publish, cancel и collect не вызываются автоматически из stage. Domain admission/выбор формата происходит в owning preparation и composition, а не в DAG или общих кодеках.
 
 | Класс / модуль относительно backend/app | Ответственность, допустимые зависимости и эффекты | Проверка / признак отказа |
 |---|---|---|
 | TARGET ArtifactStageOpenPipeline, путь выше | Только порядок одной stage-операции, typed admission adapter и внутренний stager; storage effects через зависимости | Смена hash/backend не меняет pipeline; вычисление digest, доменная классификация или retry внутри него → FAIL |
+| TARGET ArtifactPrepareStageOpenPipeline, путь выше | Одна pure операция подготовки через внутренний descriptor builder, без IO/lease | Открывает operation/пишет данные/запускает stage либо другой домен → FAIL |
 | TARGET IArtifactStageOpenPipeline, путь выше | Только публичный контракт | Backend/CommitScope/SQL в signature → FAIL |
 | Existing TypedArtifactStager, application/artifacts/staging/artifactStaging.py | Внутренний алгоритм descriptor и staging через registry/IArtifactStaging; сохраняется как implementation, не второй публичный entry | Не вызывает Pack/Source/Snapshot и не выбирает следующую операцию; foreign pipeline → FAIL |
 | Existing ArtifactStagingService, тот же модуль | Storage lifecycle facade через catalog/lease/holder/ledger/GC/log; reserve/seal остаются internal для DAG | DAG вызывает reserve/seal по отдельности или сервис запускает domain preparation → FAIL |
@@ -120,8 +169,10 @@ Existing `PublicationInfrastructureError`, `UnknownCommitOutcome` и `OperationB
 
 | Тип / dataModel/artifacts | Поля и ответственность | Disposition |
 |---|---|---|
-| ArtifactStageInput[C], TARGET staging/stageInput.py | lease + content, вход одной операции | Не второй lease/ref: композиция existing identity и payload; отдельно проверить все planned StageInput перед freeze |
-| ArtifactStageFailure, TARGET staging/stageFailure.py | operation_id + code, ожидаемый отказ stage | Не GcFailure и не cancellation; field mapping OPEN |
+| ArtifactPrepareStageInput[C] / PreparedArtifact[C], TARGET staging/preparedArtifact.py | content; content + descriptor соответственно | Временная подготовка без storage guarantees, не второй canonical payload/ref; новый POJO требует проверки общего inventory |
+| ArtifactStageInput[C], TARGET staging/stageInput.py | lease + prepared, вход сохранения | Не второй lease/ref: композиция existing identity и prepared; отдельно проверить все planned StageInput перед freeze |
+| ArtifactStageFailure, TARGET staging/stageFailure.py | operation_id + LEASE_MISMATCH/ADMISSION_CLOSED | Не GcFailure и не cancellation; owning propagation review OPEN |
+| ArtifactInputIssue / ArtifactInputError, TARGET staging/inputErrors.py | code/path/message; nonempty issues из existing structural и owning field diagnostics | Не копировать JsonFieldError/WireShapeIssue; классификация/агрегация в admission, не DTO |
 | OperationLeaseRef, lifecycle/lease.py | operation_id/world_uid/kind/preparation_fingerprint/fence | Reuse; public capability, не CommitScope |
 | StagingReservation, тот же файл | artifact_id/lease/ref | Internal; не выдавать DAG для управления фазами |
 | ArtifactRef, references.py | kind/format_key/format_version/content_hash/nbytes/row_count | Единственная identity результата хранения |
