@@ -1,6 +1,6 @@
 # PatchSet: архитектура самостоятельного домена
 
-Дата: 2026-11-18. Статус: **PS-ARCH-0 — архитектурная проверка ядра PASS после фиксации PS-R3 и PS-R5 по поручению пользователя. Код и production-интеграция не приняты; граница — §8**.
+Дата: 2026-11-18. Статус: **REOPENED — прежний архитектурный PASS отозван по замечаниям ревью; исправления и актуальный реестр — §9. Код не изменён. Внешние контракты по-прежнему не блокируют ядро**.
 
 Это первый этап выделения PatchSet. Код, DAG, canonical format и ТЗ этим документом не изменены. Основание: решение пользователя о самостоятельном домене и CRUD только по необходимости; консультация `Between domain operations`; [owning-план](world-domain-patches-snapshots.md), раздел «PatchSet как самостоятельный домен»; [ТЗ Patch System](../../docs/tz_patch_system.md); [правило архитектурной приёмки](../rules/dag-generator-interface.mdc).
 
@@ -292,7 +292,7 @@ PASS ниже означает соответствие описанной ар�
 | Согласованность с ТЗ | PASS | §5/§7.3 и ТЗ Patch System/Snapshot синхронизированы: DAG организует, PatchSet конструирует, результат возвращается DAG |
 | Неизменность утверждённого порядка | PASS | §5 сохраняет четыре внешних шага; §7.5 закреплён после PS-R3 по прямому поручению пользователя, порядок diagnostics PS-R1 сохранён |
 
-**Вывод: PASS архитектурной проверки общего ядра.** PS-R1, PS-R3 и PS-R5 закрыты в документах; карта классов/POJO ядра определена, внешние контракты приёмку не блокируют. Это результат проверки проекта по AGENTS.md в ограниченном scope §8.1, не приёмка реализации, production-интеграции или Snapshot ARCH-0 целиком.
+**Исторический вывод PASS отозван:** повторное ревью выявило внутренние пробелы ядра; актуальный статус и исправления — §9. Принятые решения PS-R1/PS-R3/PS-R5 сохраняются в части, не изменяемой исправлениями. Внешние контракты не возвращаются в блокеры ядра.
 
 ### 8.3. Последовательность закрытия и последующие проверки
 
@@ -300,3 +300,81 @@ PASS ниже означает соответствие описанной ар�
 2. После этого по пункту 2 закреплены семь шагов §7.5, исходы structural failure, стабильная агрегация независимых ошибок и отсутствие частичного результата. Повторная проверка не выявила противоречий с внешним порядком и PS-R1.
 
 Следующий этап — реализация по принятой архитектуре и применимым repository gates; текущая задача код не меняет. Canonical bytes/hash, exact child validation, typed paths для inherited fields и negative/aggregation cases проверяются при реализации. Производители секций, production union и сценарии capture остаются в отдельном реестре без влияния на этот архитектурный PASS.
+
+## 9. Повторное ревью: исправление внутренних пробелов ядра
+
+Основание — замечания пользователя из приложенного ревью и поручение «Зафиксируй и давай править». **Этот раздел имеет приоритет над прежними картами §2–4 и историческим PASS §8 в перечисленных ниже изменениях.** Новые архитектурные изменения предъявляются на повторную приёмку; запись предложенного исправления не означает, что оно уже реализовано или автоматически принято.
+
+| ID | Приоритет / замечание | Статус после прохода |
+|---|---|---|
+| PS-REV-1 | P1: нет общего владельца отношений PatchRef → набор/секция | §9.1: предложены единый владелец и typed header contract; требуется приёмка изменения generic bound |
+| PS-REV-2 | P1: два независимых алгоритма четырёх existing инвариантов | §9.2: определён единый чистый механизм, adapters не копируют правила; требуется приёмка размещения |
+| PS-REV-3 | P1: malformed root/extra не имеют честного field path | PS-R1 сохраняется; §9.3 явно покрывает unknown fields и unchecked construction |
+| PS-REV-4 | P2: для автономных diagnostics недостаточно paths/message | §9.4: предложены code-specific typed details без optional bag; точные POJO ниже |
+| PS-REV-5 | P2: норматив DAG и CRUD | Граница DAG уже синхронизирована; общее правило CRUD синхронизируется с решением пользователя без искусственных методов |
+| PS-REV-6 | P2: identity/model_fields/checked paths после наследования | §9.5 расширяет проверки; старый PatchSetContext не возвращается |
+
+### 9.1. PS-REV-1: PatchRef — общий инвариант ядра
+
+**Предложение владельца:** ядро PatchSet проверяет для каждого patch общий header.ref: operation_id совпадает с набором; section_key совпадает с header.key содержащей секции; PatchRef уникален внутри секции. Успех assemble обязан гарантировать эти отношения. Проверка не читает предметные поля patch и не делегируется факультативному handler.
+
+Actual `DomainSection[P: BaseModel]` не даёт доступа к PatchHeader. Не использовать getattr, dict, cast или callback извлечения чужого payload. Предлагается новый общий базовый POJO `PatchData` в `dataModel/patch/changes/patchData.py`: единственное общее поле `header: PatchHeader`, frozen/strict/extra-forbid/revalidate-always. Concrete native patches наследуют его и добавляют свои owning поля; PatchHeader/PatchRef переиспользуются без копий. `DomainSection[P: PatchData]` сужает generic bound. Родитель не является самостоятельным patch operation или новым универсальным payload.
+
+Это изменение общего контракта, **не молчаливый refactor**: перед кодом проверить существующие native fixtures/manifest declarations и доказать сохранение wire layout для уже имеющих header моделей. Произвольный prepared result без header больше не может быть direct patch. Ни один production домен не переводится в этом проходе; его binding остаётся отдельным, но новый общий header contract должен быть принят именно в ядре. Если модель нельзя связать с PatchData без изменения формата, не вводить legacy adapter или придумывать header — вернуть этот конкретный случай на контрактную приёмку.
+
+Чистые checks проходят sections по индексу, затем patches по индексу. Для каждого patch: operation mismatch, section mismatch, duplicate полного PatchRef с адресом первого совпадения. После совпадения operation/key уникальность refs эквивалентна уникальности ordinal; требование ordinal == position или непрерывности ordinal **не добавляется**. Ошибки identity и duplicate независимы и агрегируются. Собственные unique/self checks PatchHeader не копируются. Внешние depends_on PatchRef и семантика частичных дельт этим расширением не интерпретируются.
+
+### 9.2. PS-REV-2: один источник правил, два представления результата
+
+Новый внутренний чистый класс `PatchSetInvariants` — `dataModel/patch/validation/patchSetInvariants.py` (владелец Patch core). Это helper проверки модели, не application pipeline; IO, application imports, registry, concrete domain types и вызовы публичных операций запрещены.
+
+Методы:
+
+```python
+check_core[S: DomainSection](data: PatchSetData[S]) -> tuple[PatchSetInvariantViolation, ...]
+check_prepared_order[S: DomainSection](data: PatchSetData[S]) -> tuple[PatchSetInvariantViolation, ...]
+```
+
+check_core — единственное место existing world/pack/player/section checks и новых PatchRef checks §9.1. check_prepared_order — наличие и порядок prepared section dependencies, без fingerprint computation. Helper импортирует PatchSetData, но не дочерний PatchSet; родитель не импортирует helper, что исключает цикл. Local алгоритм индексирования — private implementation этого класса, не отдельный public контракт.
+
+`PatchSet.coherent_request` вызывает только check_core; при нарушениях поднимает ValueError как адаптацию к existing Pydantic validation boundary. Его прежние четыре самостоятельных проверки удаляются. Новый core также усиливает конструирование PatchSet тремя явно описанными гарантиями PatchRef; это осознанная контрактная дельта, а не утверждение сохранения old malformed acceptance.
+
+`PatchSetAssemblyValidator` вызывает check_core и check_prepared_order, затем только строит checked paths и типизированные diagnostics по facts. Он **не повторяет predicates**, не сравнивает UID/key повторно и не пересчитывает причины. Модель и assembler используют одни и те же facts; различается их presentation. Direct constructor/decode не начинает проверять prepared-order автоматически: existing разделение гарантии assemble и constructor сохраняется.
+
+Новый immutable внутренний record `PatchSetInvariantViolation` — `dataModel/patch/validation/invariantViolation.py`: `details: PatchSetInvariantDetails`, `section_index: NonNegativeStrictInt | None`, `patch_index: NonNegativeStrictInt | None`, `dependency_index: NonNegativeStrictInt | None`, `player_index: NonNegativeStrictInt | None`, `related_index: NonNegativeStrictInt | None`. Индексы описывают место fact внутри переданного data, не являются FieldPath. Связь допустимых индексов с discriminator details проверяется record validator: world/pack — все None; player duplicate — player/related; section duplicate — section/related; dependency — section/dependency и related target при order; patch — section/patch и related patch при duplicate. Остальные индексы None. Это internal fact, не второй public issue и не копия request.
+
+Ответственность и DoD: helper вычисляет причины ровно в одном месте, model adapter обеспечивает constructor invariants, application adapter адресует facts конкретной input schema. Отказ при импорте application из dataModel, повторных predicates в adapters или изменении фактов при форматировании message. Тест должен подать одни данные через input/assemble и прямой result constructor: одинаковые нарушения check_core не могут давать успех на одной из границ. Message equality не требуется; semantics причины едина.
+
+### 9.3. PS-REV-3: malformed inputs без вымышленных путей
+
+Неверный корневой Python object отклоняется exact type admission с TypeError. Raw mapping с extra не является input assemble: при штатном создании concrete input Pydantic extra=forbid даёт ValidationError владельцу construction/transport; assemble не вызывается. При unchecked exact instance повторная validation даёт ValidationError за сохранившееся нарушение. Если unchecked construction уже отбросил extra, восстановить утраченные поля невозможно; API не гарантирует forensic detection первоначального raw input и запрещает использовать unchecked construction как public decode.
+
+Не создавать FieldRef неизвестного поля и не заменять boundary failure на INVALID_INPUT. Relation issue предназначен только для структурно валидного input. Regression cases: wrong root, extra при штатном создании, unchecked malformed известное поле, valid input с relation errors; проверить отсутствие relation validator calls для structural failures.
+
+### 9.4. PS-REV-4: автономные машинные аргументы
+
+Предлагается заменить единственный enum code у публичного issue на **discriminated union details**: `PatchSetAssemblyRelationIssue(details: PatchSetInvariantDetails, path: ValidatedFieldPath, related_path: ValidatedFieldPath | None, message: StrictStr)`. Code живёт только в details, не дублируется независимо в оболочке. `PatchSetInvariantDetails` — union concrete records из `dataModel/patch/validation/invariantDetails.py`, discriminator `code`; его используют и internal fact, и public issue по ссылке. Все records frozen strict extra-forbid revalidate-always. Code enum — `PatchSetInvariantCode` в том же модуле; заменяет предложенный PatchSetAssemblyRelationCode, новых wire storage formats эти diagnostics ещё не имеют.
+
+| Concrete record | Literal code (суффикс patch_set.assembly.) | Обязательные типизированные аргументы |
+|---|---|---|
+| WorldMismatchDetails | world_mismatch | expected_world_uid:EntityUid (поле набора), actual_world_uid:EntityUid (expected_world.world_uid) |
+| MissingPackDetails | missing_pack | publication:WorldPublicationRef — existing ref, не копия его полей |
+| DuplicatePlayerDetails | duplicate_player | player_uid:EntityUid |
+| DuplicateSectionDetails | duplicate_section | section_key:SectionKey |
+| MissingPreparedDependencyDetails | missing_prepared_dependency | source_section_key:SectionKey, missing_section_key:SectionKey |
+| PreparedDependencyOrderDetails | prepared_dependency_order | source_section_key:SectionKey, dependency_section_key:SectionKey |
+| PatchOperationMismatchDetails | patch_operation_mismatch | patch_ref:PatchRef, expected_operation_id:EntityUid |
+| PatchSectionMismatchDetails | patch_section_mismatch | patch_ref:PatchRef, expected_section_key:SectionKey |
+| DuplicatePatchRefDetails | duplicate_patch_ref | patch_ref:PatchRef |
+
+Здесь по одному concrete POJO на смысл причины, общий набор optional payload fields не вводится. Missing key и конфликтующие identities доступны без message parsing и исходного request. Paths остаются адресами, details — фактической причиной, а не конкурирующим адресным форматом. Индексы повторений не дублируются в details: public paths уже содержат их.
+
+Для PatchOperationMismatch path = sections[i].patches[k].header.ref.operation_id, related_path = operation_id. Для PatchSectionMismatch path = sections[i].patches[k].header.ref.section_key, related_path = sections[i].header.key. Для DuplicatePatchRef path = sections[i].patches[k].header.ref, related_path = sections[i].patches[first].header.ref. Existing шесть правил paths из §7.1 сохраняются. Checked selectors строятся от concrete input/patch schema с учётом union branch, не от PatchData root.
+
+Предлагаемая вставка нового блока проверок в §7.5: world/pack → duplicate players → duplicate sections → PatchRef checks → prepared dependencies → refusal/result. Existing относительный порядок причин сохранён; **новый блок и изменение public diagnostics предъявлены на повторную приёмку**, не объявляются автоматически принятыми как прежний PS-R5.
+
+### 9.5. PS-REV-6 и повторная приёмка
+
+Дополнить regression matrix: точный tuple имён/порядка model_fields до/после наследования; те же concrete class/module identities у existing PatchSet specializations и schema bindings; golden bytes/hash/round-trip; CheckedPath/FieldRef inherited fields rooted в concrete child; root mismatch при selector родителя; exact type admission для двух разных S и двух siblings; равенство закрытого union input/output; отсутствие повторного объявления inherited fields. Новый PatchData отдельно проверяется на native patch wire/schema compatibility. Никакой PASS до проверки фактического изменения реализации.
+
+**Текущий итог: архитектура вновь на ревью.** Основные исправления разработаны, но PS-REV-1/2/4 меняют общий header contract, размещение общего checker и структуру diagnostics. Нужна их согласованная интеграция в основную карту и ТЗ, затем повторная проверка. Код не начат; внешние контракты не блокируют эту работу. Старые утверждения о PASS в §6–8 читать как исторические, заменённые этим разделом.
