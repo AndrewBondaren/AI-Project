@@ -107,6 +107,22 @@ entry → DAG → подготовка/сбор PatchSet → Snapshot apply → 
 пока остаётся хотя бы один обход в его scope. Проверка не откладывается
 до итогового ревью или интеграции.
 
+### Граница DAG и домена PatchSet — уточнение 2026-11-18
+
+По решению пользователя «только DAG собирает» означает владение процессом подготовки и вызовами, а не размещение алгоритма сборки в ноде. **DAG организует сборку; домен PatchSet выполняет чистую публичную операцию `assemble`.** Это уточняет прежнюю формулировку о формировании набора и не разрешает альтернативных callers в обход DAG.
+
+1. Домены возвращают подготовленные native sections через свои согласованные операции. DAG передаёт готовые секции, их явный порядок и полный контекст в `assemble_patch_set`.
+2. Нода напрямую вызывает `PatchSetAssembler.assemble(request: PatchSetAssemblyInput[S]) -> PatchSet[S] | PatchSetAssemblyRefused` через `IPatchSetAssembly`. Она не выполняет предметную подготовку, merge, вычисление fingerprints или алгоритм проверки зависимостей.
+3. PatchSet проверяет структуру, общие отношения, уникальность ключей и локальный порядок PREPARED зависимостей. Возвращает целый immutable набор либо полный типизированный отказ; не сортирует, не дополняет и не исправляет набор автоматически.
+4. Результат возвращается DAG. Только после успеха `write_changes` через engine CALL вызывает `apply_snapshot` семейства Snapshot. Отказ сборки исключает применение. PatchSet не вызывает Snapshot, другие домены, storage, staging или engine и не выбирает следующую операцию.
+5. Snapshot сохраняет собственные проверки актуальности базы, admission и применения. Успех assemble не подтверждает current heads, semantic acceptance, fingerprints зависимостей, наличие published refs, holds или commit. Snapshot не собирает набор и не повторяет подготовку доменных изменений.
+
+Порядок и родство сохраняются: `write_changes → prepare_changes → assemble_patch_set → apply_snapshot`. Предметная подготовка секций принадлежит их владельцам; их конкретные публичные контракты уточняются отдельно и не блокируют приёмку общего ядра. Debug/API/import/batch не получают прямого обходного входа.
+
+**POJO:** `PatchSetData[S]` единожды объявляет все девять existing полей PatchSet. Дочерний `PatchSetAssemblyInput[S]` — структурно валидный запрос до проверки общих отношений; дочерний `PatchSet[S]` сохраняет existing инварианты результата. Общая наследуемая структура этих двух ролей явно разрешена пользователем; поля не переобъявляются, отдельный PatchSetContext не вводится. В будущем коде рядом с этими классами требуется пометка о разделении ролей. Flat canonical format existing PatchSet должен сохраниться.
+
+Точные классы, пути, типы ошибок и критерии: [архитектура ядра §§1–4, 7.1](../.cursor/plans/patch-set-domain-architecture.md). Внутренний порядок одной операции — §7.5 того же плана; он не становится набором DAG-нод. [Схема семейства записи](../.cursor/plans/dag-multidomain-patch-publication-draft.md). [Отдельный реестр внешних контрактов](../.cursor/plans/patch-set-external-contracts.md).
+
 ## Архитектура
 
 ```mermaid
@@ -115,8 +131,9 @@ flowchart LR
   GEN[Generator: domain output] --> ENTRY
   ENTRY --> DOMAIN[Domain: подготовка Patch без записи]
   DOMAIN --> ENTRY
-  ENTRY --> SET[PatchSet: patches и временный кэш результатов]
-  SET --> SNAP[Snapshot: единственный владелец применения]
+  ENTRY --> SET[PatchSet.assemble: чистая сборка]
+  SET --> RESULT[Результат возвращается DAG]
+  RESULT --> SNAP[Snapshot: вызов из DAG после успеха]
   SNAP --> BEHAVIOUR[Domain implementation: поведение Patch]
   BEHAVIOUR --> SNAP
   SNAP --> STORE[Результирующее состояние и история]
