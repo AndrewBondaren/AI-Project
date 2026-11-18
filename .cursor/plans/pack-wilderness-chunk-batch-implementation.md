@@ -1,5 +1,9 @@
 # Pack: реализация single и batch wilderness chunk writes
 
+**Решение пользователя, 2026-11-18:** B5 открыт. Прежние замеры невалидны для приёмки. L0 (планирование/metadata) и L2 (материализация одного tile) требуют разных тестов. L2 может обновлять только выбранные, в том числе несмежные chunks, сохраняя остальные. Объём накопленного Pack с L0/L2 варьируется отдельно от входа. Реальные прогоны отложены до появления валидного мира.
+
+**Отзыв результата B5, 2026-11-18:** вывод о выполнении B5 снят; старые 24 замера не используются как доказательство производительности Pack. [Исправленный отчёт](pack-wilderness-chunk-batch-measurement.md) разделяет сценарии L0/L2 и ограничения fixture harness. B6 не выполнен.
+
 **B4, 2026-11-17:** подключены публичные `PackPreparationService.write_wilderness_chunk` и `write_wilderness_chunks` к B2/B3. Single не создаёт batch request; оба метода выполняют admission до общего перехода. Проверены public single-chain/batch equality, порядок, retained usage, invalidation, nullable role, nested state, stale subject/basis и агрегированный отказ до применения. 114 preparation unittest прошли; Pyright production Pack и тестов B1–B4 — 0 ошибок/предупреждений. B3/B4 реализованы, но независимый PASS кода не объявлен. B5 (измерения) и B6 (DAG) не выполнены; реальный Source bind/closure не проверялся этим срезом. Следующая историческая запись описывает состояние до B4.
 
 **Статус 2026-11-17:** пользователь передал PASS независимой повторной проверки B2: последние два P2 закрыты. B3 реализован в `wildernessChunkWrite.py` и проверен внутренними transition-тестами: 107 preparation unittest, Pyright production Pack и тестов B1–B3 — 0 ошибок/предупреждений. Независимая приёмка B3 ещё не проведена. Публичное подключение B4, измерения B5 и интеграция B6 остаются невыполненными.
@@ -209,7 +213,7 @@ Stale provenance проверяется по output invalidation и изменё
 
 Добавить воспроизводимый harness `tests/spatial_pack/measure_wilderness_chunk_batch.py`, отчёт `.cursor/plans/pack-wilderness-chunk-batch-measurement.md` создавать только по фактическим замерам.
 
-Матрица: 1000/4000/16000 additions и replacements; один большой tile и много tiles; лёгкий и тяжёлый nested provenance/usage/basis. Измерять построение публичного request вместе с admission/применением/результатом, время и peak memory. Отдельно фиксировать B/U/R (объёмы базы/входа/результата), canonical sorting и owning leaf checks. Fixture setup отделить от измеряемого маршрута; constructor validation не исключать.
+Матрицу разделить. L0: owning записи планирования/metadata, отдельный публичный маршрут и критерии. L2: полный tile либо выбранные chunks одного tile, additions/replacements, сохранение незатронутых chunks и tiles. Размер накопленного Pack (L0 и L2) — отдельная ось B, не увеличение входа U за границы tile. Покрытие и адреса брать из настроек валидного мира; искусственные 16 chunks/tile и произвольные N chunks в одном tile отменены. Измерять constructor request, admission/переход/результат, время, peak memory, B/U/R, sorting и owning checks. Реальные прогоны отложены пользователем до валидного мира; fixture проверки не закрывают B5.
 
 Критерии: ограниченное, не растущее с K число полных проходов по базе/результату; отсутствие K materializations basis/state и повторного full tile scan; локальный индекс строится один раз; стоимость сопоставляется с B+U+R и отдельно sorting. Предъявить counters наряду со временем, условия запуска и исходные результаты. Квадратичный рост при сопоставимых B/U/R или повторные полные обходы означают FAIL массового среза, а не повод отключить strict admission. Числовой предел entries не вводить.
 

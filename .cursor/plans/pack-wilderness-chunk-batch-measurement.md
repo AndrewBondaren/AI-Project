@@ -1,37 +1,37 @@
-# Pack B5: измерения batch wilderness writes
+# Pack B5: прежняя приёмка отозвана
 
-Дата: 2026-11-18. Матрица выполняется; итоговый вывод ниже будет заполнен по завершённым прогонам. Независимый PASS этим отчётом не объявляется.
+2026-11-18. **B5 открыт. Прежние 24 замера невалидны для приёмки Pack.** Вывод «B5 выполнен / критерии выполнены» отозван. Нагрузка one/many с произвольными 1000/4000/16000 wilderness writes не воспроизводила ни L0, ни материализацию L2. Старые таблицы удалены из действующего отчёта; их числа не являются приёмочными доказательствами.
 
-## Воспроизведение
+## Раздельные сценарии
 
-Из `backend`:
+- **L0:** запись данных планирования и metadata через owning L0 контракт. Отдельный тест не реализован: в текущем preparation service нет публичного map-tile write. Нельзя подменять его wilderness write или прямой сборкой state.
+- **L2:** результат материализации одного tile за вызов, полное или частичное покрытие. Размер накопленной базы B варьируется отдельно от входа U. Реальный Pack содержит и L0, и L2; большая база не означает много-tile вход материализации.
+
+Частичное обновление L2 может выбирать несмежные chunks. Полная перезапись tile не обязательна: незатронутые chunks, artifacts и metadata сохраняются. Отдельная регрессия заменяет первый и последний chunks существующего tile и проверяет сохранность остальных. CLI --chunks задаёт префикс покрытия для проверки размера fixture; он не заменяет будущий сценарий фактического выбора chunks материализатором.
+
+Будущий реальный тест должен предъявить валидную базу с L0/L2, настройки мира, фактическое покрытие, artifact/provenance, additions/replacements одного tile и неизменность остальных tiles. Измерять B/U/R, constructor request, admission, результат, память и counters отдельно для L0 и L2.
+
+## Исправленный L2 harness
+
+`backend/tests/spatial_pack/measure_wilderness_chunk_batch.py` теперь использует `fine_bbox_for_tile` и `iter_fine_chunks` по настройкам assembly, двумерные адреса и пересчитанный ADDRESS fingerprint. Defaults дают 1024 chunks с обрезанными краями, а не произвольное число в одной строке.
+
+Удалены CLI --sizes, --case и one/many. Новые параметры:
+- --base-tiles: количество уже материализованных tiles fixture-базы;
+- --chunks: вход одного tile, по умолчанию полное покрытие; выход за сетку отклоняется;
+- --replace: один существующий tile, требует непустую базу; иначе один новый tile;
+- --heavy: искусственная форма Source данных;
+- --run-fixture: обязательный явный opt-in; без него измерения не запускаются.
+
+Пример проверки инструмента из backend, отдельный процесс на случай:
 
 ```powershell
-.\.venv\Scripts\python.exe -B tests/spatial_pack/measure_wilderness_chunk_batch.py --sizes 1000 4000 16000
+.\.venv\Scripts\python.exe -B tests/spatial_pack/measure_wilderness_chunk_batch.py --run-fixture --base-tiles 1 --replace
 ```
 
-Опциональный `--output <path>` записывает JSONL. Без него результат выводится в stdout. Каждый случай запускается в отдельном дочернем процессе; `--case N MANY HEAVY REPLACEMENT` воспроизводит отдельный случай (флаги 0/1). Python 3.14.4, Windows 11 10.0.26200, AMD64; Pyright 1.1.414.
+Это **не реальный тест мира**: база fixture содержит L2, artifact/proof искусственные; payload и Source authority не проверяются. Корректная геометрия не заменяет валидные L0/L2 данные. Время включает публичный request и service, setup исключён. OS peak memory включает imports/setup, counters выполняются отдельно.
 
-## Метод
+## Статус
 
-- 24 случая: 3 размера × additions/replacements × one/many tiles × light/heavy.
-- One: все N chunks в одном tile. Many: до 16 chunks на tile; T = ceil(N/16), то есть 63/250/1000 tiles. Уникальные входные адреса. Replacements заменяют artifact hash существующих chunks, сохраняя metadata values/usages.
-- Light: пустые Source proof/usage. Heavy: по 2 captures с 1 object dependency каждый, как в durable payload proof, так и в каждом из двух metadata evidence slots. Planning пустой в обеих сериях. Это проверка вложенных Source данных и basis, не оценка всех возможных Planning graphs. Source DTO построены как fixture; внешняя authority/adoption не симулируется.
-- Время: один непрoфилированный вызов `PackWildernessChunksInput(...)` и публичного `write_wilderness_chunks`, включая strict nested constructor validation, admission, transition и materialization результата. Fixture/база/входные items подготовлены до таймера. Построение самого публичного request НЕ исключено. GC включён, перед прогоном вызван collect.
-- Память: Windows `GetProcessMemoryInfo.PeakWorkingSetSize` после timed call, до счётчиков. Это системный peak процесса, **включая imports и setup**, а не чистая allocation delta операции. Отдельно сохранены baseline working set, setup peak и retained working set после результата. Fresh process исключает влияние предыдущих случаев. Разность peak и baseline не выдаётся за точный объём allocations.
-- Счётчики: отдельное исполнение того же request/service после timed call; cProfile считает owning checks/sorted. Обёртка BaseModel constructor делегирует исходному constructor без обхода validation и считает только прямые создания из transition. Она действует только во втором прогоне и снимается после него. Не используется для времени/памяти. Производственный код не инструментирован.
-- Пробные calibration-прогоны с tracemalloc и line/opcode tracing исключены из основной серии: стоимость инструмента существенно меняла исполнение, а line events не равны materializations. Отдельный пробный heavy 4 captures × 4 dependencies на 1000 additions/one tile дал 15.906701 с и 378.156 MiB OS peak; он не участвует в сравнении основной heavy серии.
+Реальный тест отложен по решению пользователя: существующие миры могут быть невалидны после перестройки. Генератор и DAG не запускаются и не меняются. B5 не закрывается проверкой fixture. Расхождение iterator с обрезанным краем и fine_chunk_rect с делением вниз остаётся отдельным вопросом перед реальным materialization-прогоном.
 
-## Объёмы и критерий
-
-U содержит N parts, 2N evidence slots. R содержит N parts, N chunk rows, T tile rows, N+T descriptions и суммарно N basis addresses. При additions база пуста; при replacements B имеет те же количества, что R. В heavy U содержит 6N object-dependency occurrences (payload proof и два slots); B/R содержат 6N+2T occurrences (parts, chunk groups, tile identity). Это логический объём обхода, не число уникальных Python objects или heap bytes. Basis в one tile растёт до 16000 адресов.
-
-Static trace: локальные индексы parts, tiles, chunk membership, descriptions и stored bindings строятся до item-loop. Каждый item обновляет свой part/chunk и группы; полный basis не строится в item-loop. Финальный цикл затронутых tiles сортирует membership и создаёт basis; state собирается после него. Полные validation-проходы фиксированы относительно N, но не равны одному физическому обходу. Конструкторы и owning leaf validators включены в counters.
-
-Sorting предъявляется отдельно: для одного tile сортируется N координат; для many — до 16 на tile. Ожидаемая стоимость O(B+U+R) плюс canonical sorting и owning leaf checks относится к фиксированной форме вложенных данных, а не к произвольной тяжести proof. Последовательность N публичных single writes остаётся другой нагрузкой и не получает эту гарантию.
-
-## Проверки кода
-
-115 preparation unittest прошли. Целевой Pyright production Pack, тестов B1–B4 и harness: 0 ошибок/предупреждений. Расширенный `tests/spatial_pack`: 39 файлов, **473 ошибки, 0 предупреждений**; существующий долг за пределами этого среза не исправлялся. Массовый срез не означает чистоту всех тестов проекта.
-
-Git diff в окружении недоступен: `fatal: this operation must be run in a work tree`. Файлы среза читаются напрямую; это ограничение проверки diff, не доказательство его пустоты. Production Pack в B5 не изменялся.
+Регрессии test_preparation_measurement_scope.py проверяют границу одного tile, двумерную сетку, независимость базы от входа и отказ на невозможную нагрузку. Это функциональные проверки harness, не доказательство производительности.

@@ -1,4 +1,4 @@
-"""Reproducible B5 workload. Run from backend; setup is outside measured calls."""
+"""L2 single-tile fixture harness; not a real-world or L0 acceptance test."""
 
 import argparse
 import cProfile
@@ -8,7 +8,6 @@ import json
 import platform
 import sys
 import time
-import subprocess
 from collections import Counter
 from contextlib import nullcontext
 from pathlib import Path
@@ -30,6 +29,9 @@ from app.dataModel.sourceVersioning.sourceVersionRef import SourceVersionRef
 from app.dataModel.sourceVersioning.sourceObjectId import EntityObjectId
 from app.dataModel.sourceVersioning.sourceDescriptor import SourceDescriptorCategory
 from app.dataModel.sourceVersioning.sourceObjectRevision import SourceRevision
+from app.application.worldData.generators.coordinates.worldTile import fine_bbox_for_tile, iter_fine_chunks
+from app.application.worldData.pack.preparation.metadataProjection import metadata_input_fingerprint
+from app.dataModel.worldPack.preparation.metadataDependencies import PackMetadataInputField, PackMetadataValueInputSelector
 
 
 class ProcessMemoryCounters(ctypes.Structure):
@@ -52,9 +54,11 @@ def memory() -> tuple[int, int]:
     return int(counters.working), int(counters.peak)
 
 
-def fixture(n: int, many: bool, heavy: bool, replacement: bool) -> tuple[PackPreparationState, tuple[PackWildernessChunkWrite, ...]]:
+def fixture(base_tiles: int, chunk_count: int | None, heavy: bool, replacement: bool) -> tuple[PackPreparationState, tuple[PackWildernessChunkWrite, ...]]:
     helper = WildernessChunkTransitionTests()
     helper.setUp()
+    if base_tiles < 0 or (replacement and base_tiles == 0):
+        raise ValueError("replacement requires at least one existing tile; base_tiles must be nonnegative")
     if heavy:
         uses = tuple(helper.usage(marker).uses[0].model_copy(update={"dependencies": SourceDependencySet(objects=tuple(
             SourceVersionRef(object_id=EntityObjectId.model_validate(dict(kind=SourceDescriptorCategory.ENTITY,
@@ -65,13 +69,34 @@ def fixture(n: int, many: bool, heavy: bool, replacement: bool) -> tuple[PackPre
         helper.proof = PackStoredProvenance(source_proof=SourceDurableProof(schema_version=1, world_uid="world", uses=uses), planning=())
     else:
         usage = SourceProofInput(world_uid="world", uses=())
-    entries = []
-    for i in range(n):
-        item = helper.item(i % 16 if many else i, gx=i // 16 if many else 0)
-        entries.append(PackWildernessChunkWrite(part=item.part, refine_role=None, metadata_inputs=tuple(
-            evidence.model_copy(update={"source_usage": usage}) for evidence in item.metadata_inputs)))
-    items = tuple(entries)
-    state = helper.apply(helper.state, *items) if replacement else helper.state
+    assembly = helper.state.assembly
+    bbox = fine_bbox_for_tile(0, 0, assembly.fine_cells_per_map_cell)
+    side = assembly.terrain_chunk_columns
+    coordinates = tuple(((rect.x_min - bbox.x_min) // side, (rect.y_min - bbox.y_min) // side)
+                        for rect in iter_fine_chunks(bbox, side))
+    count = len(coordinates) if chunk_count is None else chunk_count
+    if not 1 <= count <= len(coordinates):
+        raise ValueError("L2 request must fit the actual chunk grid of one tile")
+
+    def tile_items(gx: int, limit: int) -> tuple[PackWildernessChunkWrite, ...]:
+        entries = []
+        for cx, cy in coordinates[:limit]:
+            item = helper.item(cx, gx=gx)
+            address = item.part.address.model_copy(update={"cy": cy})
+            evidence = []
+            for supplied in item.metadata_inputs:
+                assert isinstance(supplied.input, PackMetadataValueInputSelector)
+                value = address if supplied.input.field is PackMetadataInputField.ADDRESS else item.refine_role
+                evidence.append(supplied.model_copy(update={"source_usage": usage,
+                    "value_fingerprint": metadata_input_fingerprint(supplied.input, value)}))
+            entries.append(PackWildernessChunkWrite(part=item.part.model_copy(update={"address": address}),
+                refine_role=item.refine_role, metadata_inputs=tuple(evidence)))
+        return tuple(entries)
+
+    state = helper.state
+    for gx in range(base_tiles):
+        state = helper.apply(state, *tile_items(gx, len(coordinates)))
+    items = tile_items(0 if replacement else base_tiles, count)
     if replacement:
         items = tuple(item.model_copy(update={"part": item.part.model_copy(update={
             "artifact": item.part.artifact.model_copy(update={"content_hash": "f" * 64})})}) for item in items)
@@ -83,15 +108,16 @@ def execute(state: PackPreparationState, entries: tuple[PackWildernessChunkWrite
     return PackPreparationService().write_wilderness_chunks(request)
 
 
-def measure(n: int, many: bool, heavy: bool, replacement: bool) -> dict[str, object]:
-    state, entries = fixture(n, many, heavy, replacement)
+def measure(base_tiles: int, chunk_count: int | None, heavy: bool, replacement: bool) -> dict[str, object]:
+    state, entries = fixture(base_tiles, chunk_count, heavy, replacement)
+    n = len(entries)
     gc.collect()
     baseline, setup_peak = memory()
     start = time.perf_counter()
     result = execute(state, entries)
     seconds = time.perf_counter() - start
     retained, peak = memory()
-    assert len(result.parts) == n
+    assert len(result.parts) == len(state.parts) + (0 if replacement else n)
     volumes = dict(base_parts=len(state.parts), input_parts=n, result_parts=len(result.parts),
         base_tiles=len(state.assembly.tiles), result_tiles=len(result.assembly.tiles),
         base_descriptions=len(state.metadata_dependencies), result_descriptions=len(result.metadata_dependencies))
@@ -124,7 +150,8 @@ def measure(n: int, many: bool, heavy: bool, replacement: bool) -> dict[str, obj
             calls[f"{Path(code.co_filename).name}:{code.co_name}"] = entry.callcount
         elif isinstance(code, str) and "builtins.sorted" in code:
             calls["sorted"] = entry.callcount
-    return dict(n=n, layout="many" if many else "one", weight="heavy" if heavy else "light",
+    return dict(input_chunks=n, base_tiles=base_tiles, level="L2", input_tiles=1, fixture_only=True,
+        weight="heavy" if heavy else "light",
         operation="replace" if replacement else "add", seconds=round(seconds, 6), peak_mib=round(peak / 2**20, 3),
         baseline_mib=round(baseline / 2**20, 3), setup_peak_mib=round(setup_peak / 2**20, 3), retained_mib=round(retained / 2**20, 3),
         volumes=volumes, materializations=dict(counts), calls=calls)
@@ -132,30 +159,20 @@ def measure(n: int, many: bool, heavy: bool, replacement: bool) -> dict[str, obj
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--sizes", type=int, nargs="+", default=[1000, 4000, 16000])
+    parser.add_argument("--base-tiles", type=int, default=0)
+    parser.add_argument("--chunks", type=int, default=None, help="omit for full tile coverage")
+    parser.add_argument("--heavy", action="store_true")
+    parser.add_argument("--replace", action="store_true")
+    parser.add_argument("--run-fixture", action="store_true", help="explicit opt-in; not real-world acceptance")
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--case", type=int, nargs=4)
     args = parser.parse_args()
-    if args.case:
-        n, many, heavy, replacement = args.case
-        print(json.dumps(measure(n, bool(many), bool(heavy), bool(replacement))), flush=True)
-        return
+    if not args.run_fixture:
+        parser.error("real-world tests are deferred; use --run-fixture only to inspect the L2 harness")
     with (args.output.open("w", encoding="utf-8") if args.output else nullcontext(sys.stdout)) as output:
         output.write(json.dumps(dict(python=sys.version, platform=platform.platform(),
             timing="unprofiled request construction + service; separate counter run",
             memory="fresh child process OS peak working set through timed call, INCLUDING setup/imports; baseline and setup peak reported separately")) + "\n")
-        for n in args.sizes:
-            for heavy in (False, True):
-                for many in (False, True):
-                    for replacement in (False, True):
-                        print(f"START {n=} {heavy=} {many=} {replacement=}", flush=True, file=sys.stderr)
-                        completed = subprocess.run([sys.executable, "-B", __file__, "--case", str(n), str(int(many)),
-                            str(int(heavy)), str(int(replacement))], check=True, capture_output=True, text=True)
-                        encoded = completed.stdout.strip()
-                        output.write(encoded + "\n")
-                        output.flush()
-                        if args.output:
-                            print(encoded, flush=True)
+        output.write(json.dumps(measure(args.base_tiles, args.chunks, args.heavy, args.replace)) + "\n")
 
 
 if __name__ == "__main__":
