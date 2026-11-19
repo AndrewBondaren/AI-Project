@@ -21,6 +21,8 @@
 
 ### TIME-PATCH-1 — несовместимость проектной секции с PatchData
 
+**Уточнение 2026-11-19 — локальная дельта ACCEPTED пользователем через координатора.** Приняты TimeAdvancePatch(PatchData){proposal:TimeAdvanceProposal}, TimeAdvanceSection[TimeAdvancePatch] с одним patch и Time-owned header: общий operation_id, time_clock, ordinal0, patch version1, пустые dependencies/artifacts; native equality proposal/header operation проверяется также при decode. Pure proposal/API и Input/expected errors prepare_section сохраняются; successful receipt возвращает исходный patch.header.ref. Ни DAG, ни assembler header не вставляют. Исторический gap формы ниже устранён на уровне решения, не реализации. Concrete Time codec/manifest/IDs и production integration OPEN. См. [IC-1](interdomain-contract-register.md#ic-1--time-native-section).
+
 Зафиксировано 2026-11-19. **OPEN интеграции Time; не блокирует архитектурную приёмку ядра PatchSet.**
 
 В [Time-плане §10](time-domain.md) TimeAdvanceSection задан как DomainSection[TimeAdvanceProposal]. Existing [TimeAdvanceProposal](../../backend/app/dataModel/time/changes/advance.py) содержит operation_id/base/interval, но не PatchHeader и не наследует PatchData. Поэтому эта форма несовместима с принятым целевым bound DomainSection[P: PatchData] из [архитектуры ядра §9.1](patch-set-domain-architecture.md#91-ps-rev-1-patchref--общий-инвариант-ядра).

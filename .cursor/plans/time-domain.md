@@ -26,6 +26,8 @@
 
 #### Принятый локальный prepare_section
 
+**IC-1 / TIME-PATCH-1 — native дельта принята пользователем 2026-11-19 в чате координатора DAG.** Вместо прежнего DomainSection[TimeAdvanceProposal] используется TimeAdvanceSection(DomainSection[TimeAdvancePatch]) с одним patch. Новый TimeAdvancePatch(PatchData) наследует header и содержит existing proposal без копирования его полей. Time формирует PatchRef(operation_id=request.operation_id, section_key=CLOCK_SECTION=time_clock, ordinal=0), PatchHeader с отдельной TIME_ADVANCE_PATCH_FORMAT=1 и пустыми depends_on/artifacts. Native модель проверяет эти ограничения и proposal.operation_id == header.ref.operation_id также при прямом создании/revalidation/decode. Existing TimeAdvanceProposal/prepare_advance и именованный Input/expected refusals prepare_section не меняются. Для successful positive advance changed=(input_patch.header.ref,), без реконструкции адреса; актуальные states/history по C2. Исторические без-header формулировки ниже заменены этой принятой границей. Exact codec/manifest/type IDs, production composition и runtime evidence OPEN; это не code-go. [Реестр IC-1](interdomain-contract-register.md#ic-1--time-native-section).
+
 Подтверждение пользователя передано владельцем общей записи 2026-11-18 (чат 01a1ef35-3287-7a12-89e2-76273eaa043d после явного «Передай»). **LOCAL CONTRACT ACCEPTED, NOT IMPLEMENTED.**
 
 - Existing module `application/time/changes/advancePipelineOpenPipeline.py`: concrete TimeAdvancePipelineOpenPipeline и interface ITimeAdvancePipelineOpenPipeline дополняются `prepare_section(request:PrepareTimeAdvanceSection) -> TimeAdvanceSection | TimeSectionContextMismatch`.

@@ -1,5 +1,7 @@
 # Pack V2 — граница домена и реализация публичных операций
 
+**Уточнение 2026-11-19:** [решение о владении версиями](pack-format-version-ownership.md) имеет приоритет над прежними записями сохранения wire/version полей ниже. Принято направление единственного format descriptor; окончательное удаление дублирующих полей требует проверки consumers и междоменной сверки, не выполнено этим документом.
+
 Дата: 2026-11-12. Детализация REV-02 по поручению пользователя. SoT: [World Pack storage](../../docs/tz_world_pack_storage.md), разделы prepare/activate, read_part, preparation errors и roster классов. Связь: [основной план](world-pack-v2-single-manifest-contract.md), [Source appendix](source-proof-v2-contract-spec.md). Статус: проект приёмки, не evidence реализации.
 
 Актуальная [сводка локальной приёмки](pack-local-acceptance-status.md) после trace всех payload отделяет Pack-owned остаток от внешних bindings и уже принятых решений. Наличие trace не означает готовности runtime.

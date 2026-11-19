@@ -10,6 +10,8 @@ metadata:
 
 ## Назначение
 
+**Приоритетное уточнение 2026-11-19:** пользователь выбрал [разделение версий DAG-операций и persisted formats](../.cursor/plans/pack-format-version-ownership.md). Цель — один формат Pack с ArtifactRef.format_version; удаление дублирующих pack_version/codec_version/payload_format из manifest конкретизируется после проверки consumers/import-export и сверки координатора. Прежние требования ниже о безусловном сохранении этих полей и паре wire 3.0.0/storage 2 больше не фиксируют конечную схему. Это направление перехода, не выполненная миграция и не разрешение менять текущие bytes или назначать новый version number.
+
 **GEO-1 G0-S (target, 2026-10-27):** planning input revision не равна pack
 content hash или manifest cache stamp `(mtime_ns,size)`. L0/L2 доставляются
 из coherent typed refs; parent light остаётся persisted L0 SoT, не live compose.

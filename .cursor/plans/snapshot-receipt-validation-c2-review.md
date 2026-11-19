@@ -4,17 +4,17 @@
 
 **Итог: C2 architecture ACCEPTED; детальный implementation contract OPEN, готовность к реализации не подтверждена.** Ниже конкретные пробелы, не повторная приёмка C1/ядра PatchSet.
 
-## C2-R1: источник и фаза bases — OPEN
+## C2-R1: источник и фаза bases — вариант А ACCEPTED
 
 План §4 требует bases до early receipt validation, но existing WorldSnapshotService._append_metadata читает их после всех handler.apply. ТЗ §§5–7 фиксирует validation → apply → metadata, а current missing-base diagnostics агрегируются с builder issues (owning план, scoped D1 metadata). Перенос чтения раньше может изменить набор уже выполненных handlers и доступных diagnostics при missing/corrupt base.
 
-Это не доказанное противоречие самому C2: C2 явно требует ранний отказ на invalid receipt. Но сохранение старого порядка без уточнения reads не доказано. Gate C2-G1 обязателен: точная позиция чтения, MissingPersistedSnapshotBase semantics, signature delta и исход при одновременно missing base/invalid receipt. Не выдавать перенос за механический error refactor; не менять ТЗ автоматически.
+**Решение пользователя 2026-11-19: «Ок, давай А».** WorldSnapshotService читает все exact pinned bases после всех успешных handler.validate, до первого handler.apply, в той же transaction, один раз с reuse для receipt validation и metadata. None head пропускается; пустой sections не отменяет необходимое наследование базы. Missing/corrupt base останавливает путь до apply как infrastructure fault; потенциальные apply/receipt ошибки уже не вычисляются. Это явное согласованное изменение фазы отказа, не механическая миграция ошибок. R1 закрыт в этой области; signature/wiring, diagnostic details и evidence остаются C2-G1/R3/R5, синхронизация ТЗ — G4.
 
-## C2-R2: индекс receipt не проходит через proposed validator — OPEN
+## C2-R2: индекс receipt — explicit section_index ACCEPTED
 
 План §2: collect_receipt_provenance принимает receipt_index, а SnapshotReceiptValidator.validate принимает только section/receipt/context/bases. Existing SnapshotMetadataFieldIssue.destination и relation address привязаны к original receipt index. Из этих аргументов нельзя надёжно получить индекс среди секций/receipts.
 
-До кода выбрать явный внутренний параметр индекса либо согласованный иной адрес. Не искать индекс по равенству объектов, не ставить 0 для всех receipts и не терять адрес при revalidation. Это внутренняя signature delta, не новая публичная DTO.
+**Решение пользователя 2026-11-19 («Ок»):** передавать keyword-only section_index из enumerate исходных sections в validate и далее в helper. Строгий int >= 0, bool запрещён; никакого поиска по равенству, len(accumulator) или constant 0. В последовательном пути индекс соответствует receipts[i]. Public DTO не расширяются. Предложенные signatures исправлены в плане §2; прежнее описание выше — основание замечания. R2 закрыт по источнику/передаче индекса, exact упаковка адресов diagnostics остаётся R3/R5.
 
 ## C2-R3: агрегирование malformed receipt ещё не замкнуто — OPEN
 
@@ -40,4 +40,4 @@ Existing validate_receipt_provenance получает один metadata/base и 
 - PASS: новые input-association причины имеют отличную от metadata-envelope проверок ответственность; reuse existing POJO указан. Полный POJO/error PASS невозможен до R2/R3/R5.
 - OPEN: полный class/method acceptance implementation-плана до закрытия R1–R5; наличие gate не равно его выполнению.
 
-Порядок следующего разбора: R1 (доступность базы и trace) → R2/R4 (внутренние входы и единые predicates) → R3/R5 (diagnostics/aggregation/transport). Это порядок проектирования, не перестановка runtime. После решений обновить детализацию C2, сверить ТЗ и выполнить повторную документальную приёмку до кода.
+R1 разобран: вариант А принят. R2 разобран: явный section_index принят. Следующий разбор — R4 (единые provenance predicates), затем R3/R5 (diagnostics/aggregation/transport). Это порядок проектирования; принятая runtime-дельта А описана отдельно. После решений сверить ТЗ и выполнить повторную документальную приёмку до кода.
