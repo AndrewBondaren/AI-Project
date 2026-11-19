@@ -108,7 +108,7 @@ def plan_area_barrier_cells(
     if building is not None:
         loc_uid = building.location_uid
     else:
-        loc_uid = f"{world.world_uid}-area-{bx0}-{by0}"
+        loc_uid = None
     cells = emit_barrier_cells(
         world, ring, gate_coords, material, loc_uid, slot.ground_z,
     )

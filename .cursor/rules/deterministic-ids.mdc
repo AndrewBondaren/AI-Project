@@ -1,4 +1,4 @@
-# Детерминированные uid / rng — только `app.application.worldData.ids`
+# Детерминированные uid / rng — только `app.ids`
 
 SoT: [`docs/project_data_storage_tz.md`](../../docs/project_data_storage_tz.md) § «Детерминированные uid и rng (DET-1)».
 
@@ -6,7 +6,7 @@ SoT: [`docs/project_data_storage_tz.md`](../../docs/project_data_storage_tz.md) 
 
 ## Где лежит
 
-`backend/app/application/worldData/ids/` — helper **домена worldData, вне всех генераторов**. Генераторы, ассемблеры, persist, pack — только импортируют.
+`backend/app/ids/` — общий механизм проекта, вне всех генераторов. Генераторы, ассемблеры, persist, pack — только импортируют. Runtime UID также выдаёт `app.ids.runtime_uid()`.
 
 - ❌ `app/utils/` — не общая утилита, а контракт домена мира (`utils/deterministicIds.py` удалён)
 - ❌ `dataModel/` — формула = application-слой (`dataModel/worldPack/packJobUid.py` — wire-композитор job/site строк, uid не хэширует)
@@ -46,4 +46,4 @@ entity_uid(world_uid, UidKind.TRANSITION, parent=building_uid, a=a_xyz, b=b_xyz,
 
 ## При ревью
 
-Новый uid / rng → source-gate `tests/test_deterministic_ids.py` (`SourceGateTests`) падает на `uuid5(`/`uuid4(`/`Random(`/`random.seed(`/`hashlib.*(`/`app.utils.deterministicIds` вне helper'а. Легитимное исключение — только с записью в `_EXEMPT` и причиной (content_hash, runtime ids вне worldData, dataModel authored fallback). Смена формулы — recreate SQL + пересборка pack + реимпорт библиотек.
+Новый uid / rng → source-gate `tests/test_deterministic_ids.py` (`SourceGateTests`) проверяет обходы общего helper. Runtime и authored fallback используют `app.ids.runtime_uid()` без исключений. `tests/test_local_uid_identity.py` дополнительно проверяет строковые формулы в закрытом скоупе. Content fingerprints учитываются отдельно от UID; новые hash-вызовы требуют проверки. Известные отложенные генераторы — незакрытый долг, а не разрешённые обходы. Для UID-local среза обновление старых SQL/pack/refs исключено пользователем; проверки выполняются на новых тестовых данных.

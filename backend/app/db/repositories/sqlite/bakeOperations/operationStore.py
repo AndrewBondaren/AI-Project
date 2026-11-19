@@ -1,7 +1,7 @@
 import sqlite3
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
-from uuid import uuid4
+from app.ids import runtime_uid
 
 from app.dataModel.world.bakeOperation.admission import BakeAdmission, BakeConflict, Joined, Started
 from app.dataModel.world.bakeOperation.record import BakeError, BakeErrorKind, BakeOwner, BakeRecord, BakeResult, BakeStatus, RolledBack, Waiter, PublicationOperationId
@@ -40,8 +40,8 @@ class SQLiteBakeOperations:
                     return BakeConflict(operation)
                 result = Joined(operation)
             else:
-                operation = str(uuid4())
-                owner = BakeOwner(operation, str(uuid4()), 1)
+                operation = runtime_uid()
+                owner = BakeOwner(operation, runtime_uid(), 1)
                 self.db.execute("INSERT INTO bake_operations(operation_id,world_uid,kind,fingerprint,request_version,"
                                 "request_blob,status,owner_id,fence,lease_until) VALUES(?,?,?,?,?,?,?,?,1,unixepoch('subsec')+?)",
                                 (operation, request.world_uid, request.kind, fingerprint, request.version, request.canonical(),
@@ -78,7 +78,7 @@ class SQLiteBakeOperations:
 
     def recover(self) -> BakeOwner | None:
         with self.transaction():
-            owner = str(uuid4())
+            owner = runtime_uid()
             row = self.db.execute("UPDATE bake_operations SET owner_id=?,fence=fence+1,lease_until=unixepoch('subsec')+?, "
                                   "status=CASE WHEN status=? THEN ? ELSE status END "
                                   "WHERE operation_id=(SELECT operation_id FROM bake_operations JOIN bake_world_claims "

@@ -1,6 +1,7 @@
 from app.core.logging.contracts import LogConsumer
 from app.core.logging.consumers import get_consumer_logger
 import random
+from app.ids import area_scope_uid, standalone_building_uid
 from collections.abc import Set
 from dataclasses import replace
 
@@ -276,7 +277,7 @@ class StructureAreaAssembler:
                 template_uid=template_uid,
             )
             if area_uid is None:
-                area_uid = f"{building.location_uid}#area"
+                area_uid = area_scope_uid(world.world_uid, building.location_uid)
             body = template.main_building
             structure = structure_catalog.resolve(body.structure)
             if structure is None:
@@ -455,7 +456,7 @@ class StructureAreaAssembler:
                 world.world_uid, area_uid, identity, map_x, map_y,
             )
             if area_uid is not None
-            else f"{world.world_uid}-{identity}-{map_x}-{map_y}"
+            else standalone_building_uid(world.world_uid, identity, map_x, map_y)
         )
         body = template.main_building
         return NamedLocation(

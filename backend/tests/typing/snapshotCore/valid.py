@@ -17,6 +17,7 @@ from app.dataModel.worldSnapshot.sections.retention import SectionStateRetention
 from app.dataModel.worldSnapshot.results.applyIssues import SnapshotApplyCode, SnapshotApplyRelationIssue
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
 from app.dataModel.worldSnapshot.sections.refs import SectionHistoryRef, SectionStateRef
+from tests.snapshotCore.support.fakeSection import HeaderOnlyPatch
 from app.dataModel.patch.changes.header import PatchHeader
 from app.dataModel.patch.sections.section import DomainSection, SectionHeader
 from app.dataModel.patch.request.patchSet import PatchSet
@@ -65,13 +66,24 @@ format_registry = ArtifactFormatRegistry(entries=(
 category = outcome(SnapshotApplyOutcomeKind.CONFLICT)
 
 
-def typed_section(header: SectionHeader, patch: PatchHeader) -> DomainSection[PatchHeader]:
-    return DomainSection[PatchHeader](header=header, patches=(patch,))
+def typed_section(header: SectionHeader, patch: PatchHeader) -> DomainSection[HeaderOnlyPatch]:
+    return DomainSection[HeaderOnlyPatch](header=header, patches=(HeaderOnlyPatch(header=patch),))
+
+
+from app.application.patch.contracts.assembly import IPatchSetAssembly
+from app.application.patch.assembly.patchSetAssembler import PatchSetAssembler
+from app.dataModel.patch.results.assembly import PatchSetAssemblyResult
+from tests.snapshotCore.support.fakeSection import FakeAssemblyInput, FakePatchSet
+
+
+def typed_assembly(request: FakeAssemblyInput) -> PatchSetAssemblyResult[FakeSection]:
+    service: IPatchSetAssembly[FakeSection] = PatchSetAssembler[FakeSection](FakeAssemblyInput, FakePatchSet)
+    return service.assemble(request)
 
 
 def typed_request(publication: WorldPublicationRef, digest: RevisionHex,
-                  section: DomainSection[PatchHeader]) -> PatchSet[DomainSection[PatchHeader]]:
-    return PatchSet[DomainSection[PatchHeader]](
+                  section: DomainSection[HeaderOnlyPatch]) -> PatchSet[DomainSection[HeaderOnlyPatch]]:
+    return PatchSet[DomainSection[HeaderOnlyPatch]](
         format_version=1, operation_id="op", preparation_fingerprint=digest,
         world_uid=publication.world_uid, timeline_id="main", turn_id=1,
         expected_world=publication, expected_players=(), sections=(section,),

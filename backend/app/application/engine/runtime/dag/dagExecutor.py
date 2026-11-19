@@ -1,7 +1,7 @@
 """Concurrent Python levels and synchronous barrier commit; no domain work."""
 
 import asyncio
-from uuid import uuid4
+from app.ids import runtime_uid
 from collections.abc import Collection, Mapping, Callable
 from time import time
 from typing import cast
@@ -259,7 +259,7 @@ class DAGExecutor:
         try:
             if durable is None:
                 await self.run_invocation(plan, state.catalog.execution_id, root, revision, options.store,
-                                          owner=str(uuid4()), workers=options.workers,
+                                          owner=runtime_uid(), workers=options.workers,
                                           invocation_limit=options.invocation_limit, lease_seconds=options.lease_seconds,
                                           prior_outputs=tuple(earlier))
                 saved = await options.store.load(state.catalog.execution_id)

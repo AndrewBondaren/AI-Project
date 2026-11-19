@@ -1,5 +1,5 @@
 import dataclasses
-import uuid
+from app.ids import runtime_uid
 from datetime import datetime, timezone
 
 from app.application.worldData.errors import WorldDataNotFoundError
@@ -24,7 +24,7 @@ class PlayerService:
     async def create(self, data: dict) -> Player:
         known = {f.name for f in dataclasses.fields(Player)}
         data = {
-            "character_uid": str(uuid.uuid4()),
+            "character_uid": runtime_uid(),
             "created_at": datetime.now(timezone.utc).isoformat(),
             **{k: v for k, v in data.items() if k in known},
         }
@@ -35,7 +35,7 @@ class PlayerService:
     async def copy(self, character_uid: str) -> Player:
         original = await self.get_by_id(character_uid)
         data = dataclasses.asdict(original)
-        data["character_uid"] = str(uuid.uuid4())
+        data["character_uid"] = runtime_uid()
         data["created_at"] = datetime.now(timezone.utc).isoformat()
         player = Player(**data)
         await self._repo.create(player)

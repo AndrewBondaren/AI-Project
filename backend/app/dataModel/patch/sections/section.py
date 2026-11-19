@@ -5,6 +5,7 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.dataModel.patch.registry.sectionMetadata import SectionKey
+from app.dataModel.patch.changes.patchData import PatchData
 from app.dataModel.patch.sections.dependency import PreparedSectionDependency, SectionDependency
 from app.dataModel.patch.values import FormatVersion
 
@@ -26,7 +27,7 @@ class SectionHeader(BaseModel):
         return self
 
 
-class DomainSection[P: BaseModel](BaseModel):
+class DomainSection[P: PatchData](BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
 
     header: SectionHeader

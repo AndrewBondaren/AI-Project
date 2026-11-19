@@ -216,15 +216,15 @@ _EXEMPT = (
     "application/worldBundle/deriveWorldUid.py",               # world_uid derivation
     "application/worldData/pack/io/",                          # content_hash integrity
     "application/worldData/pack/import_/packImportService.py", # content_hash
-    "application/chat/chatService.py",                         # runtime ids (D8)
-    "application/session/playerService.py",                    # runtime ids (D8)
-    "application/session/gameSessionService.py",               # runtime ids (D8)
-    "core/logMiddleware.py",                                   # request id
-    # dataModel cannot import application/worldData/ids (layer) — authored
-    # fallback mint; system_name is UNIQUE in perk/race_templates (step 8)
-    "dataModel/perks/perkTemplateOutline.py",
-    "dataModel/races/raceTemplateOutline.py",
 )
+
+# Content fingerprints only: UUID/RNG violations in these files still fail.
+_CONTENT_HASH_FILES = {
+    "storage/artifacts/blobBackend.py": 4,
+    "storage/artifacts/blobRead.py": 1,
+    "dataModel/world/bakeOperation/request.py": 1,
+    "application/worldData/generators/hydrology/encoding/sourceShape.py": 1,
+}
 
 class SourceGateTests(unittest.TestCase):
     def test_no_det_id_formula_outside_ids(self):
@@ -238,6 +238,13 @@ class SourceGateTests(unittest.TestCase):
             hits = sorted(
                 {name for name, rx in _BANNED if rx.search(text)}
             )
+            if rel in _CONTENT_HASH_FILES:
+                self.assertEqual(
+                    re.findall(r"\bhashlib\.(md5|sha1|sha256)\(", text),
+                    ["sha256"] * _CONTENT_HASH_FILES[rel],
+                    f"content hash inventory changed: {rel}",
+                )
+                hits = [hit for hit in hits if hit != "hashlib"]
             if hits:
                 violations[rel] = hits
 

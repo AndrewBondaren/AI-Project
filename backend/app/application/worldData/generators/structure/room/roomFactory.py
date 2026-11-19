@@ -4,6 +4,7 @@
 Координаты (origin_x/y) не проставляются — это задача _layoutEngine.
 """
 import logging
+from app.ids import room_scope_uid
 from random import Random
 
 from app.application.cascade.locationScope import (
@@ -169,7 +170,7 @@ def instantiate_level_rooms(
 
         room_ctx = room_context(
             world, ctx, room_def,
-            room_uid=f"{building_uid}|{room_id}",
+            room_uid=room_scope_uid(world.world_uid, building_uid, room_id),
         )
         room_tier = room_ctx.economic_tier
         wall_mat, floor_mat = resolve_room_materials(

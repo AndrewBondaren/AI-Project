@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import uuid
+from app.ids import runtime_uid
 from typing import Annotated, Any, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -27,7 +27,7 @@ class RaceTemplateOutline(BaseModel):
 
     @model_validator(mode="after")
     def _fill_identity(self) -> Self:
-        uid = str(uuid.uuid4()) if self.template_uid is None else self.template_uid
+        uid = runtime_uid() if self.template_uid is None else self.template_uid
         system = uid if self.system_name is None else self.system_name
         display = system if self.display_name is None else self.display_name
         if (

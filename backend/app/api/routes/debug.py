@@ -4,6 +4,7 @@ Debug endpoints вЂ” С‚РѕР»СЊРєРѕ РґР»СЏ СЂР°Р·СЂ�
 """
 from dataclasses import asdict
 import logging
+from app.ids import debug_building_uid
 
 from pydantic import ValidationError
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -96,7 +97,7 @@ async def debug_generate_structure_rotations(
             f"Plot '{plot.system_name}': structure '{plot.main_building.structure}' not found",
         ) from exc
     building = NamedLocation(
-        location_uid=f"debug-building-{world_uid}", world_uid=world_uid,
+        location_uid=debug_building_uid(world_uid), world_uid=world_uid,
         display_name="[Debug] " + plot.display_name, system_location_type="building",
         created_at=datetime.now(timezone.utc).isoformat(), map_x=map_x, map_y=map_y, map_z=map_z,
         parent_wall_material=DEFAULT_WALL_MATERIAL, parent_floor_material=DEFAULT_FLOOR_MATERIAL,
@@ -156,7 +157,7 @@ async def debug_generate_structure(
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
 
     building = NamedLocation(
-        location_uid=f"debug-building-{world_uid}",
+        location_uid=debug_building_uid(world_uid),
         world_uid=world_uid,
         display_name="[Debug] " + layout_template.display_name,
         system_location_type="building",

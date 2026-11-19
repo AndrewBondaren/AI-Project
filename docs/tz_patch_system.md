@@ -125,6 +125,20 @@ entry → DAG → подготовка/сбор PatchSet → Snapshot apply → 
 
 ## Архитектура
 
+### Общие инварианты PatchSet и единый checker — 2026-11-19
+
+В целевом ядре native patch наследует `PatchData` с единственным общим полем `header: PatchHeader`; DomainSection ограничивает payload типом `P: PatchData`. Это общий typed контракт, не разрешение ядру читать предметный payload. Существующие PatchHeader/PatchRef используются без дублирования. Подключение несовместимых concrete моделей — отдельная интеграция, например [TIME-PATCH-1](../.cursor/plans/patch-set-external-contracts.md#time-patch-1--несовместимость-проектной-секции-с-patchdata).
+
+Единственный источник общих predicates — чистый `PatchSetInvariants` в `dataModel/patch/validation/patchSetInvariants.py`. Его `check_core(PatchSetData)` проверяет world/pack, unique player/section keys и для каждого patch: operation_id равен operation_id набора, section_key равен ключу содержащей секции, ordinal уникален в этой секции. Ordinal проверяется независимо от identity; несовпадения identity не подавляют duplicate ordinal. Для повтора полного ref не выдаётся вторая дублирующая причина. Ordinal не обязан совпадать с позицией или быть непрерывным.
+
+`PatchSet.coherent_request` вызывает этот же check_core и адаптирует нарушение к ValueError/Pydantic ValidationError. `PatchSetAssemblyValidator` вызывает check_core и check_prepared_order, затем только превращает facts в typed diagnostics с checked paths. Ни один adapter не копирует predicates. DataModel helper не импортирует application и не выполняет IO. Input не запускает relation checks при конструировании; результат запускает обязательный core check, включая новые patch identity/ordinal гарантии. Проверка prepared-order остаётся дополнительной гарантией assemble.
+
+Порядок diagnostics: world/pack → duplicate players → duplicate section keys → по sections/patches operation mismatch, section mismatch, duplicate ordinal → prepared dependency missing/order. Независимые ошибки агрегируются; неоднозначный target key подавляет только зависимый order check. Неверный root type даёт TypeError; structural/extra violations при создании или revalidation input — ValidationError, без фиктивного field path.
+
+Internal факт `PatchSetInvariantViolation` содержит typed details и индексы `Annotated[StrictInt, Field(ge=0)] | None`. Public `PatchSetAssemblyRelationIssue` содержит те же details и checked path/related_path/message. Discriminated union details сохраняет машинную причину и необходимые UID/key/ordinal без исходного request; code объявляется только в details, message не парсится. Точные девять records, поля, пути, размещение и критерии — [архитектура §§9.1–9.5](../.cursor/plans/patch-set-domain-architecture.md). Само повторное использование details не создаёт второй источник правил или копию owning refs.
+
+Эта фиксация изменяет целевой контракт ядра. Код ещё не объявляется реализованным. Existing native schema/bytes/hash, model_fields, exact specialization identities и inherited checked paths проверяются при реализации; недопустимы тихий adapter, выдуманный header или молчаливое изменение формата чужого patch.
+
 ```mermaid
 flowchart LR
   DBG[Debug API] --> ENTRY[DAG]

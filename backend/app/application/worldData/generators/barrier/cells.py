@@ -15,7 +15,7 @@ def emit_barrier_cells(
     ring:         set[tuple[int, int]],
     gate_coords:  set[tuple[int, int]],
     material:     str,
-    location_uid: str,
+    location_uid: str | None,
     ground_z:     int,
 ) -> list[MapCell]:
     cells: list[MapCell] = []

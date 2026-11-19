@@ -1,39 +1,20 @@
-"""Ordered runtime request; domain payloads are never interpreted here."""
+"""Result role of PatchSetData with core relations enforced on construction.
 
-from typing import Annotated, Self
+Shared fields with assembly input are authorized in tz_patch_system.md.
+Prepared-order is an admission guarantee, not a constructor invariant.
+"""
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
-
-from app.dataModel.identity.uid import EntityUid
+from typing import Self
+from pydantic import model_validator
+from app.dataModel.patch.request.patchSetData import PatchSetData
 from app.dataModel.patch.sections.section import DomainSection
-from app.dataModel.patch.values import FormatVersion
-from app.dataModel.validation.diagnostics.runtimeIssueContext import RevisionHex
-from app.dataModel.worldSnapshot.identity.publication import PlayerHeadExpectation, WorldPublicationRef
+from app.dataModel.patch.validation.patchSetInvariants import PatchSetInvariants
 
 
-class PatchSet[S: DomainSection](BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
-
-    format_version: FormatVersion
-    operation_id: EntityUid
-    preparation_fingerprint: RevisionHex
-    world_uid: EntityUid
-    timeline_id: EntityUid
-    turn_id: Annotated[StrictInt, Field(ge=1)]
-    expected_world: WorldPublicationRef
-    expected_players: tuple[PlayerHeadExpectation, ...]
-    sections: tuple[S, ...]
-
+class PatchSet[S: DomainSection](PatchSetData[S]):
     @model_validator(mode="after")
     def coherent_request(self) -> Self:
-        if self.expected_world.world_uid != self.world_uid:
-            raise ValueError("publication belongs to another world")
-        if self.expected_world.pack_hash is None:
-            raise ValueError("runtime request requires a pack")
-        players = tuple(player.player_uid for player in self.expected_players)
-        if len(set(players)) != len(players):
-            raise ValueError("duplicate player expectation")
-        keys = tuple(section.header.key for section in self.sections)
-        if len(set(keys)) != len(keys):
-            raise ValueError("duplicate section key")
+        violations = PatchSetInvariants.check_core(self)
+        if violations:
+            raise ValueError(tuple(violation.details for violation in violations))
         return self

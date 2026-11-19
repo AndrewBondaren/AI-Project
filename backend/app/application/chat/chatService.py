@@ -1,6 +1,6 @@
 import asyncio
 import json
-import uuid
+from app.ids import runtime_uid
 from dataclasses import asdict
 from datetime import datetime, timezone
 
@@ -50,7 +50,7 @@ class ChatService:
         return result
 
     async def _save_turn(self, session_id: str, player_input: str, result) -> None:
-        turn_id = str(uuid.uuid4())
+        turn_id = runtime_uid()
         now = datetime.now(timezone.utc).isoformat()
         llm_text = result if isinstance(result, str) else json.dumps(result, ensure_ascii=False)
         await self._message_repo.create_turn(Turn(
@@ -60,7 +60,7 @@ class ChatService:
             created_at=now,
         ))
         await self._message_repo.create_message(Message(
-            message_id=str(uuid.uuid4()),
+            message_id=runtime_uid(),
             turn_id=turn_id,
             session_id=session_id,
             created_at=now,

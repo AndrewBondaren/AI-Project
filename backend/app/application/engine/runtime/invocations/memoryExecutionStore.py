@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from time import monotonic
-from uuid import UUID, uuid4
+from uuid import UUID
+from app.ids import runtime_uid
 
 from app.application.engine.contracts.invocation.executionStore import Checkpoint, Claim, CloseReceipt, OwnershipConflict
 from app.dataModel.engine.dag.identity import ExecutionId, WaitId
@@ -17,7 +18,7 @@ class _Entry:
 
 class MemoryExecutionStore:
     def __init__(self) -> None:
-        self._store_id = uuid4()
+        self._store_id = UUID(runtime_uid())
         self._entries: dict[ExecutionId, _Entry] = {}
 
     async def get_store_id(self) -> UUID:

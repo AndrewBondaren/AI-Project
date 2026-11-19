@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import Mapping
-from uuid import uuid4
+from app.ids import runtime_uid
 
 from pydantic import BaseModel
 
@@ -41,7 +41,7 @@ class ExecutionRecovery[O: BaseModel, S: BaseModel]:
             read_header(before, execution_id, settings, max_passes, requested_task)
             return terminal_result(before, execution_id, self._binding.response_type)
         try:
-            claim = await settings.store.claim(execution_id, str(uuid4()), settings.lease_seconds)
+            claim = await settings.store.claim(execution_id, runtime_uid(), settings.lease_seconds)
         except OwnershipConflict:
             winner = await settings.store.load(execution_id)
             if winner.final_revision is None:

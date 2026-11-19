@@ -1,4 +1,4 @@
-from uuid import uuid4
+from app.ids import runtime_uid
 
 from pydantic import BaseModel, TypeAdapter
 
@@ -59,7 +59,7 @@ class ExecutionInteraction[O: BaseModel]:
         if before.stop_intent is not None:
             self._interaction_graph(execution_id, settings, before)
         try:
-            claim = await settings.store.claim(execution_id, str(uuid4()), settings.lease_seconds)
+            claim = await settings.store.claim(execution_id, runtime_uid(), settings.lease_seconds)
         except OwnershipConflict:
             saved = await settings.store.load(execution_id)
             graph, _ = self._interaction_graph(execution_id, settings, saved)

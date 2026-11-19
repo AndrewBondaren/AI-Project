@@ -1,7 +1,7 @@
 from app.core.logging.contracts import LogConsumer
 from app.core.logging.consumers import get_consumer_logger
 import time
-import uuid
+from app.ids import runtime_uid
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -13,7 +13,7 @@ logger = get_consumer_logger(LogConsumer.HTTP)
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        req_id = uuid.uuid4().hex[:8]
+        req_id = runtime_uid()
         token = request_id_var.set(req_id)
         start = time.perf_counter()
 

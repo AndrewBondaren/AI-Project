@@ -1,4 +1,4 @@
-import uuid
+from app.ids import runtime_uid
 from datetime import datetime, timezone
 
 from app.application.worldData.errors import WorldDataNotFoundError
@@ -51,7 +51,7 @@ class GameSessionService:
 
         now = datetime.now(timezone.utc).isoformat()
         session = GameSession(
-            id=str(uuid.uuid4()),
+            id=runtime_uid(),
             world_uid=world_uid,
             player_character_id=character_id,
             created_at=now,

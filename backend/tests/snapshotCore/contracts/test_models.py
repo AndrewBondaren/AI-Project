@@ -14,6 +14,7 @@ from app.dataModel.artifacts.references import (
 )
 from app.dataModel.patch.registry.sectionMetadata import PatchSectionMetadata, PatchSectionRegistry
 from app.dataModel.patch.values import FormatVersion, PatchOrdinal
+from tests.snapshotCore.support.fakeSection import HeaderOnlyPatch
 from app.dataModel.patch.changes.header import PatchHeader, PatchRef
 from app.dataModel.patch.sections.dependency import (
     PreparedSectionDependency, PublishedSectionDependency, SectionDependency,
@@ -255,8 +256,8 @@ class CoreModelTests(unittest.TestCase):
         patch = PatchHeader(ref=PatchRef(operation_id="op", section_key=self.section_key, ordinal=0),
                             format_version=1, depends_on=(), artifacts=())
         # Structural fixtures only: these headers are not production domain patches.
-        section_type = DomainSection[PatchHeader]
-        section = section_type(header=header, patches=(patch,))
+        section_type = DomainSection[HeaderOnlyPatch]
+        section = section_type(header=header, patches=(HeaderOnlyPatch(header=patch),))
         self.assertEqual(section_type.model_validate_json(section.model_dump_json()), section)
         for patches in ((), [], (self.artifact,), ({"untyped": "payload"},)):
             with self.subTest(patches=patches), self.assertRaises(ValidationError):
@@ -274,13 +275,13 @@ class CoreModelTests(unittest.TestCase):
         values = dict(format_version=1, operation_id="op", preparation_fingerprint="b" * 64,
                       world_uid="world", timeline_id="main", turn_id=1, expected_world=publication,
                       expected_players=(), sections=())
-        request_type = PatchSet[DomainSection[PatchHeader]]
+        request_type = PatchSet[DomainSection[HeaderOnlyPatch]]
         empty = request_type.model_validate(values)
         self.assertEqual(request_type.model_validate_json(empty.model_dump_json()), empty)
-        sections = tuple(DomainSection[PatchHeader](
+        sections = tuple(DomainSection[HeaderOnlyPatch](
             header=SectionHeader(key=RegistryKey[PatchSectionRegistry](key), format_version=1, depends_on=()),
-            patches=(PatchHeader(ref=PatchRef(operation_id="op", section_key=RegistryKey[PatchSectionRegistry](key),
-                                              ordinal=0), format_version=1, depends_on=(), artifacts=()),),
+            patches=(HeaderOnlyPatch(header=PatchHeader(ref=PatchRef(operation_id="op", section_key=RegistryKey[PatchSectionRegistry](key),
+                                              ordinal=0), format_version=1, depends_on=(), artifacts=())),),
         ) for key in ("z", "a"))
         request = request_type.model_validate({**values, "sections": sections})
         self.assertEqual(tuple(section.header.key for section in request.sections), ("z", "a"))
@@ -386,7 +387,7 @@ class CoreModelTests(unittest.TestCase):
         ref = PatchRef(operation_id="op", section_key=self.section_key, ordinal=0)
         patch = PatchHeader(ref=ref, format_version=1, depends_on=(), artifacts=())
         header = SectionHeader(key=self.section_key, format_version=1, depends_on=())
-        section = DomainSection[PatchHeader](header=header, patches=(patch,))
+        section = DomainSection[HeaderOnlyPatch](header=header, patches=(HeaderOnlyPatch(header=patch),))
         publication = WorldPublicationRef(world_uid="world", publication_id="p", pack_hash="a" * 64,
                                           snapshot_head=None, active_timeline_id="main", gameplay_started=True)
         state = SectionStateRef(snapshot=self.world, section_key=self.section_key, format_version=1)
@@ -400,7 +401,7 @@ class CoreModelTests(unittest.TestCase):
                                               diagnostics=(target_issue("invalid"),)),
             SectionApplyReceipt(section_key=self.section_key, history=(), states=(),
                                 changed=()),
-            PatchSet[DomainSection[PatchHeader]](
+            PatchSet[DomainSection[HeaderOnlyPatch]](
                 format_version=1, operation_id="op", preparation_fingerprint="b" * 64,
                 world_uid="world", timeline_id="main", turn_id=1, expected_world=publication,
                 expected_players=(), sections=(section,),
@@ -419,7 +420,7 @@ class CoreModelTests(unittest.TestCase):
                         setattr(record, next(iter(type(record).model_fields)), None)
         invalid = patch.model_copy(update={"ref": ref.model_copy(update={"ordinal": -1})})
         with self.assertRaises(ValidationError):
-            DomainSection[PatchHeader](header=header, patches=(invalid,))
+            DomainSection[HeaderOnlyPatch](header=header, patches=(HeaderOnlyPatch.model_construct(header=invalid),))
 
 
     def _snapshot_dto_fixtures(self):

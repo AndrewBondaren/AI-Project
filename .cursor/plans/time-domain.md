@@ -129,7 +129,51 @@ TimeScope как базовый класс TimePoint не становится �
 
 **Evidence boundary:** выполнены чтение исходников, локальный поиск регистраций и read-only traversal 34 concrete types. Round-trip, golden bytes, typing и end-to-end registration/start в этом inventory не запускались. Нет созданных codec/manifest/DTO, новых IDs, DDL, DAG nodes или runtime activation. Все gates выше остаются незакрытыми до фактической проверки, даже если вариант формата будет принят отдельно.
 
-#### Exact initial-only чтение
+#### TIME-Q1: одна публичная Time-операция после protected read (2026-11-19)
+
+**ACCEPTED архитектурное направление:** пользователь выбрал вариант 2 в чате назначенного координатора Between domain operations (01a1ef35-3287-7a12-89e2-76273eaa043d) и поручил передать подробный контракт Time. Три публичные операции под управлением DAG: Snapshot exact initial binding → Artifacts protected verified read → одна Time-операция получения initial TimeCapture. Отдельный DAG-вызов codec.decode в этом сценарии исключён; decode — локальный алгоритм Time reader. Кодек остаётся Time-owned и не удаляется. Новые NodeId/родство/семейства не назначаются. Процесс записи и принятый prepare_section не меняются.
+
+**Exact API ниже — PROPOSED для координатора/пользователя, не автоматически ACCEPTED этим направлением.** Existing success TimeCapture переиспользуется. В `dataModel/time/reads/initial.py` proposed `InitialTimeRead(TimeRecord)` содержит только `binding:AcceptedInitialStateBinding` и `artifact_read:ArtifactReadOutput`. Это композиция owning POJO без копирования ref/bytes/publication/identity. ArtifactReadOutput пока foreign proposal с request+payload; exact import и финальная форма остаются внешним prerequisite, Time не создаёт копию.
+
+Concrete public `application/time/reads/initialStateReader.py::TimeInitialStateReader.read(self, request:InitialTimeRead) -> TimeCapture | InitialTimeReadRejected`. Метод sync/pure; owning codec задаётся Time composition. Предыдущая proposed сигнатура read(binding,payload) для initial Time capture заменена этой. Settings reader не принимается автоматически этим решением.
+
+Внутренний порядок: typed admission → независимые проверки exact read ref и format → owning decode → независимые проверки decoded payload/binding coherence → existing TimeCapture(publication=binding.publication, point=payload.clock.point). Не допускаются IO, живые hold/authority checks, foreign public calls, повторный physical hash/size, fingerprints, latest/repair/rebase, выбор следующей операции и повторная preparation/selected zero projection. Captured UTC/anchors не пересчитываются.
+
+**До decode:** весь `artifact_read.request.ref` равен `binding.prepared_initial.artifact`; прочитанный ref имеет BLOB, key time.initial_state.canonical и version 1 из единственной Time декларации. Неверная пара двух корректных результатов — owning refusal, не разрешение декодировать другой artifact. Codec получает artifact_read.payload и версию именно прочитанного ref. Method-level источник verified read и binding обязателен; DTO/holder не bearer capability.
+
+**После decode:** payload.start_identity полностью равен binding.prepared_initial.start_identity; clock.point.world_uid равен Q.world_uid; clock.point.timeline_id равен Q.active_timeline_id; clock.coordinate=(0,0); settings.operation_id равен payload.start_identity.operation_id; settings.world_uid равен clock.point.world_uid. Q — binding.publication. Initial admissibility Q и связь Q со своей reference гарантирует owning AcceptedInitialStateBinding, не новый Time SQL read. Не выдумывать дополнительные foreign identity fields. Если часть coherence закрепляется invariant самого payload, её нарушение относится к schema failure decode и не проверяется второй раз reader-ом; exact распределение закрепить при payload schema freeze.
+
+**Proposed Error POJO — `dataModel/time/results/initialRead.py`:** InitialTimeReadIssueCode(StrEnum), concrete InitialTimeReadFieldIssue(FieldPathError[InitialTimeReadIssueCode]), InitialTimeReadRejected(TimeRecord) с непустым issues:tuple[InitialTimeReadFieldIssue,...]. До decode diagnostics имеют root InitialTimeRead и следующие стабильные code/path:
+
+| Enum member / wire code | Checked path |
+|---|---|
+| ARTIFACT_MISMATCH / time.initial_read.artifact_mismatch | artifact_read.request.ref |
+| UNSUPPORTED_KIND / time.initial_read.unsupported_kind | artifact_read.request.ref.kind |
+| UNSUPPORTED_FORMAT / time.initial_read.unsupported_format | artifact_read.request.ref.format_key |
+| UNSUPPORTED_VERSION / time.initial_read.unsupported_version | artifact_read.request.ref.format_version |
+
+Все четыре проверки независимы, собираются в указанном порядке existing ValidatorAggregationHelper + FieldRef/bind_field + checked paths. При непустом наборе возвращается InitialTimeReadRejected, codec не вызывается. Malformed input остаётся standard typed/Pydantic admission, не сворачивается в этот refusal.
+
+**Proposed exceptions — `application/time/reads/initialReadErrors.py`:** InitialTimePayloadCorruptError(PublicationInfrastructureError) и InitialTimeStateMismatchError(PublicationInfrastructureError). Первый поднимается только из пойманного на owning decode CanonicalEncodingError с сохранённым cause: malformed canonical bytes, wrong root и schema validation failure. Отдельный mirror error POJO без дополнительных данных не создаётся. Второй содержит проверенный непустой tuple InitialTimeReadFieldIssue для structurally decoded, но несогласованного persisted payload. Root checked paths здесь InitialTimeStatePayload, а не InitialTimeRead:
+
+| Enum member / wire code | Checked path |
+|---|---|
+| START_IDENTITY_MISMATCH / time.initial_read.start_identity_mismatch | start_identity |
+| CLOCK_WORLD_MISMATCH / time.initial_read.clock_world_mismatch | clock.point.world_uid |
+| CLOCK_TIMELINE_MISMATCH / time.initial_read.clock_timeline_mismatch | clock.point.timeline_id |
+| CLOCK_NOT_ZERO / time.initial_read.clock_not_zero | clock.point |
+| SETTINGS_OPERATION_MISMATCH / time.initial_read.settings_operation_mismatch | settings.operation_id |
+| SETTINGS_WORLD_MISMATCH / time.initial_read.settings_world_mismatch | settings.world_uid |
+
+Порядок агрегации — порядок таблицы, все доступные независимые проверки до отказа. Наличие root в ValidatedFieldPath позволяет не добавлять decoded payload в request ради диагностики. Неизвестные programming faults не ловятся blanket catch. Corruption/semantic mismatch не превращаются в TimeStateUnavailable, отсутствие часов, несинхронизированное время или fallback zero. Upper node error wrapper остаётся DAG binding, не алгоритм классификации в ноде.
+
+**Scope/lifetime:** только exact initial/start Q, включая старую Q при сохранённых owning гарантиях; не current read runtime publication и не автоматически coherent base общей записи. При Snapshot binding=None dependent Artifacts/Time не запускаются; общий absence result ещё принадлежит DAG binding. TimeCapture относится к Q и не обещает current head, живой hold или полномочия на следующее storage read. После возврата owned immutable bytes pure decode не требует продолжения физического IO hold. Кто допускается к read, race lookup→admission, release старой Q и drain/cancellation остаются Publication/Artifacts OPEN.
+
+**Статусы:** объединение decode+reader и трёхоперационная граница ACCEPTED; exact input/error roster/public signature — PROPOSED; foreign ArtifactReadOutput/authority/lifetime/read policy — OPEN; concrete initial payload schema/manifest — Time OPEN; итоговый absence/error binding — DAG OPEN. Этот раздел фиксирует ответ владельца без объявления всего маршрута принятым или реализованным. Междоменные согласования проходят назначенного координатора согласно interdomain-contract-coordination.mdc. Код/тесты не выполнялись.
+
+#### Историческая редакция exact initial-only чтения (2026-11-17)
+
+Для Time capture сигнатура с decoded payload и отдельный DAG decode ниже заменены решением 2026-11-19 выше. Остальные reuse/initial version сведения сохраняют силу только в непротиворечащей части; World settings reader остаётся отдельным предложением владельцу, не дополнительной принятой операцией трёхшагового Time read.
 
 Входной контракт Snapshot уже принят: `IWorldSnapshotRead.read_initial_binding(SnapshotPublicationReadInput) -> SnapshotInitialBindingReadResult(request, binding|None)`. Binding — `AcceptedInitialStateBinding(publication:WorldPublicationRef, prepared_initial:PreparedInitialTimeStateRef)`. Это exact initial Q, включая старую Q после последующих runtime publications. None у неinitial Q не даёт разрешения читать initial clock как её текущее время. Потерянная обязательная связь initial Q — infrastructure failure.
 

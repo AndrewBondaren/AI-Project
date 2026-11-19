@@ -4,7 +4,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from types import UnionType
 from typing import Union, get_args, get_origin
-from pydantic import BaseModel, TypeAdapter
+from pydantic import TypeAdapter
+from app.dataModel.patch.changes.patchData import PatchData
 
 from app.application.worldSnapshot.contracts.context import SnapshotApplyContext, SnapshotValidationContext
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest, CanonicalTypeKind
@@ -43,8 +44,8 @@ class SectionContract[S: DomainSection]:
         patch_type = patch_args[0]
         patch_models = get_args(patch_type) if get_origin(patch_type) in (Union, UnionType) else (patch_type,)
         for patch_model in patch_models:
-            if (not isinstance(patch_model, type) or not issubclass(patch_model, BaseModel)
-                    or patch_model is BaseModel or patch_model.__pydantic_generic_metadata__.get("parameters")):
+            if (not isinstance(patch_model, type) or not issubclass(patch_model, PatchData)
+                    or patch_model is PatchData or patch_model.__pydantic_generic_metadata__.get("parameters")):
                 raise TypeError("section needs concrete patch models, not an untyped payload")
         CanonicalSchemaManifest.model_validate(self.manifest)
         if not any(entry.python_type is model and entry.kind is CanonicalTypeKind.RECORD

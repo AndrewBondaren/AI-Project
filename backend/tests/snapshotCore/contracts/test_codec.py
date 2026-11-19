@@ -5,6 +5,7 @@ from enum import StrEnum
 from hashlib import sha256
 import unittest
 from unittest.mock import patch, create_autospec
+from pydantic import ValidationError
 
 from app.encoding.canonicalCodec import (
     CanonicalEncodingError, content_digest, decode, digest, encode, merge_manifests,
@@ -170,7 +171,14 @@ class CanonicalRequestCodecTests(unittest.TestCase):
         self.assertEqual(self.codec.decode(payload), self.request)
         self.assertEqual(self.codec.fingerprint(self.request), content_digest(payload).hex())
         self.assertEqual(self.codec.fingerprint_bytes(payload), self.codec.fingerprint(self.request))
-        for changes in ({"operation_id": "other"}, {"preparation_fingerprint": "c" * 64},
+        with self.assertRaises(ValidationError):
+            self.codec.encode(self.request.model_copy(update={"operation_id": "other"}))
+        changed_patch = self.section.patches[0].model_copy(update={"header":
+            self.section.patches[0].header.model_copy(update={"ref":
+                self.section.patches[0].header.ref.model_copy(update={"operation_id": "other"})})})
+        for changes in ({"operation_id": "other", "sections": (
+                            self.section.model_copy(update={"patches": (changed_patch,)}),)},
+                        {"preparation_fingerprint": "c" * 64},
                         {"world_uid": "other", "expected_world": self.publication.model_copy(update={"world_uid": "other"})},
                         {"timeline_id": "branch"}, {"turn_id": 2},
                         {"expected_world": self.publication.model_copy(update={"publication_id": "other"})},
@@ -196,7 +204,9 @@ class CanonicalRequestCodecTests(unittest.TestCase):
         handler.decode.side_effect = lambda payload, version: decode(payload, OtherSection, manifest)
         self.registry.register(contract, handler)
         other = OtherSection(header=SectionHeader(key=other_key, format_version=1, depends_on=()),
-            patches=(self.section.patches[0],))
+            patches=(self.section.patches[0].model_copy(update={"header":
+                self.section.patches[0].header.model_copy(update={"ref":
+                    self.section.patches[0].header.ref.model_copy(update={"section_key": other_key})})}),))
         codec = PatchSetCodec(self.registry, PatchSet[FakeSection | OtherSection])
         request = PatchSet[FakeSection | OtherSection].model_validate(
             {**self.empty.model_dump(), "sections": (self.section, other)})

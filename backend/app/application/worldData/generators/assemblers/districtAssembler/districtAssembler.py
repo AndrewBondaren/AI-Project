@@ -137,6 +137,7 @@ class DistrictAssembler:
         corridor, _ = corridor_rects_from_entries(slot, inner)
         tokens = build_tokens(
             slot, cache, world, city_skeleton, catalog=catalog, rng=buildings_rng,
+            settlement_uid=settlement_uid,
         )
         pass1, leftover1, occupied = run_pass1(slot, inner, lattice, tokens, corridor)
         _ = leftover1

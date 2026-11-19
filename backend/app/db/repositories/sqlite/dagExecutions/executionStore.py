@@ -1,5 +1,6 @@
 import sqlite3
-from uuid import UUID, uuid4
+from uuid import UUID
+from app.ids import runtime_uid
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 from hashlib import sha256
 
@@ -31,7 +32,7 @@ class SQLiteExecutionStore:
     def _ensure_identity(self) -> UUID:
         self.db.execute("CREATE TABLE IF NOT EXISTS dag_store_identity "
                         "(singleton INTEGER PRIMARY KEY CHECK(singleton=1), store_id TEXT NOT NULL)")
-        self.db.execute("INSERT OR IGNORE INTO dag_store_identity VALUES (1,?)", (str(uuid4()),))
+        self.db.execute("INSERT OR IGNORE INTO dag_store_identity VALUES (1,?)", (runtime_uid(),))
         return UUID(self.db.execute("SELECT store_id FROM dag_store_identity WHERE singleton=1").fetchone()[0])
 
     async def get_store_id(self) -> UUID:

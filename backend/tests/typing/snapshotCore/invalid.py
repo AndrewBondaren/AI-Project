@@ -7,6 +7,7 @@ from app.dataModel.worldSnapshot.identity.refs import PlayerSnapshotRef, WorldSn
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
 from app.dataModel.worldSnapshot.sections.refs import SectionHistoryRef, SectionStateRef
 from app.dataModel.artifacts.references import ArtifactRef
+from tests.snapshotCore.support.fakeSection import HeaderOnlyPatch
 from app.dataModel.patch.changes.header import PatchHeader
 from app.dataModel.patch.sections.section import DomainSection, SectionHeader
 from app.dataModel.patch.request.patchSet import PatchSet
@@ -57,14 +58,14 @@ def different_refs(world: WorldSnapshotRef, player: PlayerSnapshotRef,
 needs_outcome("committed")  # EXPECT: reportArgumentType
 
 
-def needs_patch_request(request: PatchSet[DomainSection[PatchHeader]]) -> None:
+def needs_patch_request(request: PatchSet[DomainSection[HeaderOnlyPatch]]) -> None:
     pass
 
 
 def different_payloads(header: SectionHeader, artifact: ArtifactRef,
-                       wrong_request: PatchSet[DomainSection[ArtifactRef]],
+                       wrong_request: PatchSet[FakeSection],
                        diagnostic: FieldPathError) -> None:
-    DomainSection[PatchHeader](header=header, patches=(artifact,))  # EXPECT: reportArgumentType
+    DomainSection[HeaderOnlyPatch](header=header, patches=(artifact,))  # EXPECT: reportArgumentType
     needs_patch_request(wrong_request)  # EXPECT: reportArgumentType
     TargetVersionExpected(version=artifact, presence=TargetPresence.PRESENT)  # EXPECT: reportArgumentType
     SectionRefused(category="conflict", diagnostics=(diagnostic,))  # EXPECT: reportArgumentType
@@ -147,7 +148,7 @@ def write_capability(scope: CommitScope) -> None:
 
 
 def wrong_handler_binding(contract: SectionContract[FakeSection],
-                          handler: DomainSectionHandler[DomainSection[PatchHeader]]) -> None:
+                          handler: DomainSectionHandler[DomainSection[HeaderOnlyPatch]]) -> None:
     SectionRegistry().register(contract, handler)  # EXPECT: reportArgumentType
 
 
@@ -179,7 +180,7 @@ from app.application.patch.encoding.patchSetCodec import PatchSetCodec
 from app.application.worldSnapshot.encoding.snapshotCodec import SnapshotEnvelopeCodec
 
 
-def wrong_codec_input(codec: PatchSetCodec[FakeSection], wrong_request: PatchSet[DomainSection[PatchHeader]],
+def wrong_codec_input(codec: PatchSetCodec[FakeSection], wrong_request: PatchSet[DomainSection[HeaderOnlyPatch]],
                       publication: WorldPublicationRef) -> None:
     codec.encode(wrong_request)  # EXPECT: reportArgumentType
     SnapshotEnvelopeCodec().encode(publication)  # EXPECT: reportArgumentType
@@ -254,3 +255,19 @@ from app.dataModel.artifacts.lifecycle.gc import GcReport
 
 def invalid_gc_failure(diagnostic: FieldPathError) -> None:
     GcReport(deleted=(), retained=(), failed=(diagnostic,))  # EXPECT: reportArgumentType
+
+# The bound also rejects headerless native payloads.
+invalid_section = DomainSection[ArtifactRef]  # EXPECT: reportInvalidTypeArguments
+
+from app.application.patch.assembly.patchSetAssembler import PatchSetAssembler
+from app.dataModel.patch.request.assembly import PatchSetAssemblyInput
+from app.dataModel.patch.request.patchSetData import PatchSetData
+from tests.snapshotCore.support.fakeSection import FakeAssemblyInput, FakePatchSet
+
+
+def invalid_assembly(parent: PatchSetData[FakeSection],
+                     foreign: PatchSetAssemblyInput[DomainSection[HeaderOnlyPatch]]) -> None:
+    assembler = PatchSetAssembler[FakeSection](FakeAssemblyInput, FakePatchSet)
+    assembler.assemble(parent)  # EXPECT: reportArgumentType
+    assembler.assemble(foreign)  # EXPECT: reportArgumentType
+    PatchSetAssembler[FakeSection](FakeAssemblyInput, PatchSet[DomainSection[HeaderOnlyPatch]])  # EXPECT: reportArgumentType

@@ -19,7 +19,7 @@ from app.application.jsonValidation.sourceValidation import validate_source
 
 from app.application.cascade.cascadeLink import EmptyLink, Link
 from app.application.cascade.contextResolver import extend, scope_sequence
-from app.ids import UidKind, entity_rng
+from app.ids import UidKind, entity_rng, area_scope_uid
 from app.application.worldData.locations.settlementSkeletonAccess import settlement_skeleton_pojo
 from app.dataModel.locations.context.locationContext import LocationContext
 from app.dataModel.locations.context.locationCascadeDefaults import LocationCascadeDefaults
@@ -168,7 +168,7 @@ def debug_building_context(
     ctx = (
         area_context(
             world, ctx, plot,
-            area_uid=f"{building.location_uid}#area",
+            area_uid=area_scope_uid(world.world_uid, building.location_uid),
         )
         if plot is not None
         else extend(ctx, EmptyLink(ScopeLevel.AREA))

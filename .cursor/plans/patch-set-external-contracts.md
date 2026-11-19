@@ -1,10 +1,35 @@
 # PatchSet: внешние контракты и интеграции
 
-Дата: 2026-11-18. Статус: **отдельный реестр интеграционных зависимостей; НЕ БЛОКИРУЕТ приёмку ядра PatchSet**.
+Дата: 2026-11-18; актуализировано 2026-11-19. Статус: **отдельный реестр принятых границ и открытых интеграционных зависимостей; НЕ БЛОКИРУЕТ приёмку ядра PatchSet**.
 
 Основание: пользователь поручил «Внешние контракты зафиксируй отдельно, но не блокирующими приемку». Архитектура ядра — [PS-ARCH-0](patch-set-domain-architecture.md). Ни один OPEN ниже не возвращается в её блокеры. Каждый контракт уточняется перед подключением соответствующего сценария; Time/Lifecycle приведены как известные кандидаты, не обязательные участники каждого набора.
 
 ## Правила закрытия интеграции
+
+### SN-Q1.1 — принятая зависимость Snapshot от общего checker
+
+**Граница принята пользователем 2026-11-19 после разбора Between domain operations.** Источник решения и актуальный статус внутренних работ — [Snapshot SN-Q1.1](world-domain-patches-snapshots.md#sn-q11--междоменная-гарантия-prepared-order-на-входе-apply); точный контракт helper — [архитектура PatchSet §9.2](patch-set-domain-architecture.md#92-ps-rev-2-один-источник-правил-два-представления-результата).
+
+- Application-маршрут: assemble → результат в DAG → apply Snapshot; отказ сборки исключает apply. Snapshot не вызывает assemble.
+- Разрешённая зависимость модели: Snapshot dependency admission → PatchSetInvariants.check_prepared_order в dataModel/patch/validation/patchSetInvariants.py. Входной PatchSet[S] передаётся как PatchSetData[S]; результат — tuple[PatchSetInvariantViolation, ...]. Patch core владеет predicates и facts, Snapshot — адаптацией facts к своей диагностике; копирования predicates и обратной application-зависимости нет.
+- Проверка выполняется до immutable binding/terminal replay без IO. Constructor/decode сохраняет только check_core; успех assemble дополнительно гарантирует prepared-order. Fingerprints, PUBLISHED dependencies и предметная допустимость этим checker не подтверждаются.
+- SN-Q1-I1…I4 остаются внутренними OPEN Snapshot: место вызова/классы, diagnostics, отказ до claim, recovery/retry trace. Они не блокируют ядро и не требуют повторного согласования неизменной границы. Изменения публичных Input/Output/Error или разрешённых внешних callers согласуются отдельно через координатора.
+
+Сверка с owning SN-Q1.1 выполнена: ответственность, направление зависимости, факты и порядок совпадают. Реализация Snapshot и DAG wiring в PS-I1 → PS-I2 не входят; архитектурная приёмка зависимости не подтверждает runtime readiness.
+
+**Ответ координатора 2026-11-19: место вызова — PASS, вопрос закрыт.** Внутри Snapshot apply: structural revalidation/check_core → dependency admission/check_prepared_order → canonical request fingerprint → immutable binding/claim/exact terminal replay. Поддержана целевая привязка `SnapshotRequestValidator.validate(request: PatchSet[S]) -> None` в `application/worldSnapshot/service/snapshotRequestValidator.py`; это TARGET, не existing runtime. Дополнительный private `_check_prepared_order` необязателен. OPEN остаются owning diagnostic carrier/aggregation/transport и полнота внутренних dependency checks Snapshot; выбор позиции в общей цепочке больше не OPEN. Источник: ответ Between domain operations на адресный запрос пользователя, thread `01a1ef35-3287-7a12-89e2-76273eaa043d`.
+
+### TIME-PATCH-1 — несовместимость проектной секции с PatchData
+
+Зафиксировано 2026-11-19. **OPEN интеграции Time; не блокирует архитектурную приёмку ядра PatchSet.**
+
+В [Time-плане §10](time-domain.md) TimeAdvanceSection задан как DomainSection[TimeAdvanceProposal]. Existing [TimeAdvanceProposal](../../backend/app/dataModel/time/changes/advance.py) содержит operation_id/base/interval, но не PatchHeader и не наследует PatchData. Поэтому эта форма несовместима с принятым целевым bound DomainSection[P: PatchData] из [архитектуры ядра §9.1](patch-set-domain-architecture.md#91-ps-rev-1-patchref--общий-инвариант-ядра).
+
+Перед подключением владелец Time должен согласовать native patch с общим header, его связь с existing proposal, producer Input/Output/Error, operation/section/ordinal binding и codec/manifest. Выбор изменения proposal или отдельного native patch принадлежит владельцу Time; этот реестр его не назначает. DAG и PatchSet не вставляют header через cast/adapter, не угадывают ordinal и не объявляют proposal совместимым по совпадению части полей.
+
+Критерий закрытия: owning Time-план и concrete модели согласованы с принятым общим header contract; section действительно связана с соответствующим PatchData subtype; общий operation/section/ordinal и canonical binding проверены. Actual Time API и его код этой записью не меняются. PatchData реализован в PS-I1 (2026-11-19); TimeAdvanceProposal непосредственно как native patch не допускается. Здесь зафиксирована несовместимость проектной Time-секции с общим контрактом; runtime pure Time proposal этой правкой не изменён.
+
+### Общие требования к внешним контрактам
 
 Для подключаемого производителя фиксируются владелец, public class/module/method, полная сигнатура и Input/Output/Error POJO, конкретное соответствие Output → PatchSetAssemblyInput, гарантии базы/identity, маршрут передачи через DAG и проверки. Production binding проверяется отдельно. Существование DTO, тестовой специализации или подходящего поля не доказывает готовность всей интеграции. При уточнении не переносить подготовку чужих данных в ядро PatchSet.
 
@@ -45,6 +70,6 @@
 
 **Следующие адресные вопросы владельцам:** Time/Lifecycle — concrete native-section producer с Input/Output/Error, cardinality/dependencies и identity mapping; владелец publication capture — coherent world/player expectations и источник timeline/turn; владелец общей подготовки — operation identity/preparation fingerprint и retry/staging binding; владелец composition root — production union и две именованные child специализации, совместимые со Snapshot. Отсутствующий метод не считается разрешением создать его внутри PatchSet.
 
-**Разделение приёмки принято пользователем:** «делай приемку ядра по архитектуре, дальнейшие контракты могут уточняться». Generic ядро проверяется отдельно без импортов Time/Lifecycle. PS-R2 и production union не блокируют архитектуру ядра; test-only specialization не заменяет production binding. Точный результат проверки ядра — §8 архитектурного плана. Для production-маршрута PS-R2 остаётся OPEN до exact owner contracts и Output → Input.
+**Разделение приёмки принято пользователем:** «делай приемку ядра по архитектуре, дальнейшие контракты могут уточняться». Generic ядро проверяется отдельно без импортов Time/Lifecycle. PS-R2 и production union не блокируют архитектуру ядра; test-only specialization не заменяет production binding. Актуальный результат проверки ядра — §10 архитектурного плана; §8 сохраняет историю первой проверки. Для production-маршрута PS-R2 остаётся OPEN до exact owner contracts и Output → Input.
 
 

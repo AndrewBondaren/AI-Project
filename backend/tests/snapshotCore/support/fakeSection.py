@@ -6,10 +6,12 @@ from app.application.patch.encoding.coreManifest import PATCH_CORE_SCHEMA
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest, RegisteredTypeEntry, CanonicalTypeKind
 from app.application.patch.contracts.sectionHandler import DomainSectionHandler, SectionContract
 from app.application.worldSnapshot.contracts.context import SnapshotApplyContext, SnapshotValidationContext
-from app.dataModel.patch.changes.header import PatchHeader
+from app.dataModel.patch.changes.patchData import PatchData
 from app.dataModel.patch.results.sectionResult import SectionAccepted, SectionApplyReceipt, SectionValidation
 from app.dataModel.patch.sections.section import DomainSection
 from app.dataModel.patch.values import FormatVersion
+from app.dataModel.patch.request.assembly import PatchSetAssemblyInput
+from app.dataModel.patch.request.patchSet import PatchSet
 
 
 class FakeTarget(BaseModel):
@@ -27,15 +29,25 @@ class FakePrepared(BaseModel):
     values: tuple[int, ...]
 
 
-class FakePatch(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
-    header: PatchHeader
+class HeaderOnlyPatch(PatchData):
+    pass
+
+
+class FakePatch(PatchData):
     target: FakeTarget
     change: FakeChange
     prepared: FakePrepared
 
 
 class FakeSection(DomainSection[FakePatch]):
+    pass
+
+
+class FakeAssemblyInput(PatchSetAssemblyInput[FakeSection]):
+    pass
+
+
+class FakePatchSet(PatchSet[FakeSection]):
     pass
 
 

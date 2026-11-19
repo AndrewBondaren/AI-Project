@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from copy import deepcopy
 from pathlib import Path
+from dataclasses import replace
 from unittest.mock import patch
 
 from app.application.worldData.persist.connectionPersistService import ConnectionPersistService
@@ -24,6 +25,8 @@ from app.dataModel.locations.transitions.transitionType import TransitionType
 from app.dataModel.locations.transitions.worldTransitionTypeRegistry import WorldTransitionTypeRegistry
 from app.dataModel.worldPack.wire.settlementStructureWire import SettlementStructureWire
 from app.db.database import Database
+from app.ids import standalone_building_uid
+from app.core.container import Container
 from app.db.models.connectionNode import ConnectionNode
 from app.db.repositories.iTransitionRepository import TransitionRepositoryContext
 from app.db.repositories.sqlite.transitionRepository import SqliteTransitionRepository
@@ -39,14 +42,17 @@ class TransitionPackRoundtripTest(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.world, self.building = test_world_building()
+        self.building = replace(self.building, location_uid=standalone_building_uid(
+            self.world.world_uid, "orientation-template", self.building.map_x, self.building.map_y))
         self.paths = WorldPackPaths(Path(self.tmp.name) / "pack", self.world.world_uid)
         self.writer = WorldPackWriter(self.paths)
         self.db = Database(str(Path(self.tmp.name) / "world.sqlite"))
         await self.db.connect()
         await self.db.apply_migrations()
-        await self.db.conn.execute("INSERT INTO worlds(world_uid,name,created_at) VALUES (?,?,?)",
-                                   (self.world.world_uid, self.world.name, self.world.created_at))
-        await self.db.conn.commit()
+        self.world = await Container(None, self.db).world_service().create({
+            "world_uid": self.world.world_uid, "name": self.world.name,
+            "created_at": self.world.created_at,
+        })
         template = simple_structure()
         neighbor = deepcopy(template.levels[0]["rooms"][0])
         neighbor.update(room_id="kitchen", display_name="Kitchen")
@@ -136,6 +142,35 @@ class TransitionPackRoundtripTest(unittest.IsolatedAsyncioTestCase):
         entry = reader.manifest.settlement_structure_entry("settlement")
         self.assertEqual(entry.structure_hash, tmp.content_hash)
         self.assertEqual(entry.packed_district_uids, ["district"])
+
+    async def test_generated_uid_sql_pack_export_and_fresh_import(self):
+        await self.test_sql_and_pack_roundtrip_have_exact_aggregate_and_uid_agreement()
+        source = Container(None, self.db).world_bundle_service()
+        exported = await source.export(self.world.world_uid)
+        source_uids = {row["location_uid"] for row in exported["locations"]}
+        self.assertIn(self.building.location_uid, source_uids)
+        self.assertTrue({room.location_uid for room in self.layout.rooms} <= source_uids)
+        target = Database(str(Path(self.tmp.name) / "imported.sqlite"))
+        await target.connect()
+        try:
+            await target.apply_migrations()
+            container = Container(None, target)
+            results, rolled_back = await container.world_bundle_service().import_bundle(exported)
+            self.assertFalse(rolled_back, results)
+            self.assertTrue(all(result.failed == 0 for result in results.values()), results)
+            worlds = await container.world_repository().get_all()
+            self.assertEqual(len(worlds), 1)
+            imported = await container.world_bundle_service().export(worlds[0].world_uid)
+            locations = imported["locations"]
+            self.assertEqual(len(locations), len(exported["locations"]))
+            imported_uids = {row["location_uid"] for row in locations}
+            for row in locations:
+                parent = row.get("parent_location_uid")
+                if parent is not None:
+                    self.assertIn(parent, imported_uids)
+            self.assertEqual(len(imported["connection_nodes"]), len(exported["connection_nodes"]))
+        finally:
+            await target.disconnect()
 
     async def test_sql_failure_rolls_back_refs_and_never_publishes_tmp(self):
         tmp = self.writer.encode_settlement_structure_tmp("settlement", self.wire, registry=self.registry)

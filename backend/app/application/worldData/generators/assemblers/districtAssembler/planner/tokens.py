@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+from app.ids import packing_token_uid
 
 from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
@@ -122,13 +123,16 @@ def build_tokens(
         if n <= 0:
             packing_info(
                 PackingStep.TOKENS, district=district,
-                uid=f"{uid}#0", w=fp.width, h=fp.depth,
+                template_uid=uid, w=fp.width, h=fp.depth,
                 N=0, priority=priority, n_from=n_from,
             )
             continue
         for i in range(n):
             token = PackingToken(
-                uid=f"{uid}#{i}",
+                uid=packing_token_uid(
+                    world.world_uid, settlement_uid, slot.origin_x, slot.origin_y,
+                    slot.ground_z, slot.slot_index, uid, i,
+                ),
                 template_uid=uid,
                 w=fp.width,
                 h=fp.depth,

@@ -15,10 +15,19 @@ from app.ids.deterministicIds import (
     seeded_u01,
 )
 from app.ids.regionRngChannel import RegionRngChannel
+from app.ids.localIdentity import (
+    area_scope_uid, debug_building_uid, packing_token_uid,
+    room_scope_uid, standalone_building_uid,
+)
 from app.ids.regionIdentity import region_uid
 from app.ids.uidKind import LibraryKind, UidKind
 
 __all__ = [
+    "area_scope_uid",
+    "debug_building_uid",
+    "packing_token_uid",
+    "room_scope_uid",
+    "standalone_building_uid",
     "LibraryKind",
     "RegionRngChannel",
     "region_uid",

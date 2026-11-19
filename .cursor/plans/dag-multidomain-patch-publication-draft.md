@@ -1,6 +1,61 @@
-# DAG: семейство записи доменных изменений
+# DAG: общая карта междоменных процессов и контрактов
 
 Дата: 2026-11-18. Статус: СХЕМА СЕМЕЙСТВ И РОЛЕЙ ЗАФИКСИРОВАНА пользователем вместо прежней черновой схемы. Корень — write_changes; его дети — prepare_changes и assemble_patch_set; apply_snapshot остаётся в семействе Snapshot и вызывается через engine CALL. Точные POJO, bindings, внутренние доменные последовательности и полная архитектурная приёмка остаются OPEN. Фиксация схемы не является разрешением реализации.
+
+## Общая карта контрактов — 2026-11-19
+
+Основной предмет работы — общая картина процессов и междоменные контракты. Карта ниже показывает публичные границы, не внутренние алгоритмы доменов. Схема семейств и детализация записи ниже сохраняются как отдельные представления. Имена процессных блоков чтения/Pack не назначают NodeId. Все переходы между доменами организует DAG; стрелки не разрешают прямые междоменные вызовы.
+
+```mermaid
+flowchart TB
+    subgraph WRITE["Общая запись — установленный порядок DAG"]
+        W["write_changes"] --> P["prepare_changes"]
+        P -->|"Готовые native sections + общий контекст"| A["assemble_patch_set → PatchSetAssembler.assemble"]
+        A -->|"Успех: PatchSet"| S["apply_snapshot → Snapshot.apply"]
+        S --> O["SnapshotApplyResult → caller"]
+    end
+    subgraph PREP["Условные доменные контракты подготовки — не обязательная очередь"]
+        SRC["Source: proof / evidence"]
+        LC["Lifecycle: native section — OPEN"]
+        TIME["Time: prepare_section — локально принят; integration OPEN"]
+        PACK["Pack: owning операции по необходимости — binding OPEN"]
+        ART["Artifacts: prepare_stage / stage при необходимости"]
+        CACHE["Cache: get / create / update / evict по сценарию"]
+    end
+    P -. "CALL / owning result, если нужен" .-> SRC
+    P -. "CALL / owning result, если нужен" .-> LC
+    P -. "CALL / owning result, если нужен" .-> TIME
+    P -. "CALL / owning result, если нужен" .-> PACK
+    P -. "CALL / owning result, если нужен" .-> ART
+    P -. "CALL / owning result, если нужен" .-> CACHE
+    subgraph READ["Отдельное exact initial-read — вариант 2 принят"]
+        Q["Запрос точной initial Q"] --> B["Snapshot: read_initial_binding"]
+        B -->|"Binding найден: exact artifact"| R["Artifacts: protected verified read — OPEN"]
+        B -->|"Binding отсутствует"| N["Отсутствие: без dependent reads"]
+        R -->|"Binding + связанный verified read result"| T["Time: одна публичная read-операция; decode внутри — exact API OPEN"]
+        T --> CAP["TimeCapture initial Q"]
+    end
+    subgraph PP["Самостоятельная подготовка Pack — маршрут PROPOSED / OPEN"]
+        PM["Pack: готовые bytes + состав / evidence"] --> ST["Artifacts: prepare_stage → stage"]
+        ST --> PA["Pack: admission результата staging"]
+        PA --> FIN["Publication / Artifacts: protection + completion READY; public entry OPEN"]
+        FIN --> CAND["Pack: candidate по confirmed READY; replay binding OPEN"]
+        PROOF["Source: proof / closure evidence — mapping OPEN"] -. "Входы через DAG; authority / adoption OPEN" .-> FIN
+    end
+```
+
+Легенда: сплошные стрелки — последовательность/передача результата под управлением DAG; пунктир — условная потребность в контракте, не обязательный этап и не установленный порядок между семействами. Родство нод показано отдельно ниже. Для успешной записи отказ подготовки/сборки исключает dependent apply; схема не заменяет полный Error/retry/cancel contract.
+
+| Граница | Передаваемый контракт / гарантия | Статус и оставшаяся работа |
+|---|---|---|
+| Доменные producers → подготовка → PatchSet | Готовые native sections и полный контекст, без conversion в DAG | Exact producers, production union, coherent base и общая identity — отдельные OPEN; готовую section повторно не готовить |
+| PatchSet → DAG → Snapshot | Успешный assemble гарантирует check_core + prepared-order; Snapshot повторно использует общий pure checker в admission | Граница принята; прямой validate → checker, без wrapper и нового NodeId. Exact diagnostics/transport и recovery callers OPEN; см. SN-Q1.1 |
+| Snapshot initial binding → Artifacts → Time | Сохраняется Q → binding → exact ArtifactRef → verified bytes → TimeCapture | Вариант 2 принят: decode внутри одной Time-операции. Authority/lifetime, exact IO/Error и format binding OPEN. None не равно corruption; missing outcome верхнего процесса уточняется |
+| Pack bytes → Artifacts → Pack | Pack владеет семантикой/bytes; Artifacts descriptor и staging; Pack проверяет соответствие результата | Достаточность prepare_stage/stage для BLOB согласована; exact Pack public split и полный маршрут PA-2 OPEN |
+| Source evidence / inherited members → protection / READY → candidate | Source владеет proof semantics; Publication/Artifacts — согласованной protection/completion; Pack — candidate semantics | Public lifecycle entry, допустимые internal bindings, полный closure, root lifetime и durable exact replay OPEN. Source evidence само по себе не authority |
+| Cache ↔ owning consumer через DAG | Cache хранит значение; owning consumer проверяет его пригодность | Cache hit не заменяет authority/admission и не является publication/hold. Подключение только по конкретному producer/consumer |
+
+Exact initial-read не является автоматически current-time read или coherent capture для записи. Самостоятельная Pack-подготовка не обязательна перед Snapshot.apply; Pack state/candidate не native section. Activation, gameplay start и генераторы сюда не добавлены. Accepted местной границы не означает принятия полного маршрута или разрешения реализации. Источники детализации: [Snapshot SN-Q1.1](world-domain-patches-snapshots.md), [PatchSet](patch-set-domain-architecture.md), [Time](time-domain.md), [Artifacts](artifacts-public-staging-dag.md), [Pack PA-1/PA-2](pack-artifacts-boundary-trace.md).
 
 ## Область обсуждения
 
@@ -106,6 +161,9 @@ sequenceDiagram
     participant Domains as Ноды доменных семейств
     participant Assemble as assemble_patch_set
     participant Apply as apply_snapshot
+    participant Snapshot as Snapshot.apply (TARGET)
+    participant Validator as SnapshotRequestValidator.validate (TARGET)
+    participant Checker as PatchSetInvariants.check_prepared_order
     Caller->>Write: Изменения + контекст операции
     Write->>Prepare: CALL: подготовить изменения
     Prepare->>Domains: Необходимые операции по зависимостям
@@ -114,11 +172,27 @@ sequenceDiagram
     Write->>Assemble: CALL: результаты + контекст публикации
     Assemble-->>Write: PatchSet
     Write->>Apply: CALL: PatchSet
+    Apply->>Snapshot: Публичный apply(PatchSet)
+    Note over Snapshot: Structural revalidation / check_core
+    Snapshot->>Validator: Dependency admission: validate(PatchSet)
+    Validator->>Checker: Прямой вызов общего pure helper
+    Checker-->>Validator: tuple[PatchSetInvariantViolation, ...]
+    Note over Validator: Owning diagnostics; без копии predicates
+    Validator-->>Snapshot: Успешный admission
+    Note over Snapshot: Request fingerprint → immutable binding / claim
+    alt Exact terminal replay
+        Note over Snapshot: Сохранённый исход; без target checks и handlers
+    else Новая попытка
+        Note over Snapshot: Проверки базы → validation/apply → metadata/handoff/CAS/terminal → confirmed commit
+    end
+    Snapshot-->>Apply: SnapshotApplyResult
     Apply-->>Write: SnapshotApplyResult
     Write-->>Caller: Результат операции DAG
 ```
 
-Диаграмма показывает успешный путь. Правила каждого шага:
+Уточнение пользователя 2026-11-19: общий маршрут дополнен вложенной Snapshot admission-цепочкой по [SN-Q1-I1](world-domain-patches-snapshots.md#sn-q1-i1-методы-и-проверка-ответственности-после-реализации). Snapshot/Validator/Checker на sequence-диаграмме — доменные классы и вызовы, не новые DAG-ноды и не изменение семейств. `validate` прямо вызывает `PatchSetInvariants.check_prepared_order`; отдельный `_check_prepared_order` не требуется. Constructor/decode сохраняет только check_core; повторного assemble внутри Snapshot нет. Место проверки принято, реализация TARGET; exact diagnostics/transport и полный dependency coverage остаются OPEN. При отказе admission дальнейшие зависимые этапы не запускаются; отказ не объявляется автоматически durable REJECTED. Prepared fingerprints и mutable-state проверки не переносятся в общий helper.
+
+Диаграмма показывает успешный admission с ветвями terminal replay и новой попытки. Это не автоматическое разрешение новых retry-callers. Правила каждого шага:
 
 1. write_changes принимает конкретные типизированные изменения и контекст. Caller не задаёт технический список вызовов Source/Pack/Artifacts. Идентичность операции и expected publication должны быть определены до apply; точный поставщик этих значений и форма входа OPEN.
 2. prepare_changes организует необходимые чтения и операции подготовки по подтверждённым зависимостям. Полный успешный результат означает готовность всего обязательного набора к сборке; частичный набор не выдаётся за общий успех. Обязательный отказ исключает сборку и apply.
