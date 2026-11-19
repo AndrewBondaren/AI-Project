@@ -1,5 +1,9 @@
 # Доменное чтение, patches и snapshots — новый архитектурный план
 
+**C2, детализация 2026-11-19:** [план Snapshot receipt validation](snapshot-receipt-validation-c2.md) фиксирует validator, POJO ошибок, перенос provenance и условия ранней проверки. Пользователь поручил закрепить предложение и отдельно проверить противоречия. Gates pinned bases/diagnostics/trace остаются явными; реализация Snapshot не начата этой записью, C1 ведётся отдельно.
+
+**Решение пользователя 2026-11-19:** [отдельный контракт C1/C2](section-codec-receipt-contract.md) фиксирует выбранное разделение SectionCodec / semantic handler с единой регистрацией и Snapshot-owned receipt membership validation. C1 передаётся отдельному чату реализации; C2 остаётся у Snapshot. Exact gates и scope приведены в документе; прежние proposal-пометки DEC-2 читаются с этим уточнением, runtime readiness не заявляется.
+
 **Навигация PatchSet (2026-11-19):** [архитектура и единая матрица приёмки](patch-set-domain-architecture.md), [два слайса реализации ядра PS-I1 → PS-I2](patch-set-core-implementation.md), [внешние контракты — отдельно, без блокировки ядра](patch-set-external-contracts.md). Слайсы включают локальную миграцию существующих моделей/fixtures и проверки; DAG binding в них не входит. Это планирование поставки, не evidence выполненного кода.
 
 **Межплановые зависимости:** [WORLD-PLAN-GRAPH-1](./world-generation-plan-dependency-graph.md) — навигационный граф gates GEO/SPATIAL/GEN-DAG/Patches/DAG-TYPING/PHYSICS; нормативные контракты и статусы остаются в этом owning-плане.
@@ -116,6 +120,8 @@ Existing encode/decode у DomainSectionHandler и BoundSectionHandler сохра
 **Условие полного закрытия:** внутренняя детализация SN-Q1-I1…I4 предъявлена пользователю с PASS/OPEN/FAIL и источниками; возможные изменения внешнего контракта согласуются отдельно по правилу выше. Основания уже принятой границы: PatchSet architecture §9.2, DAG write K3/K4, Snapshot public-methods §4 и public-apply-atomic-trace §1. Принятые PS-ARCH-0 и разрешение PS-I1 → PS-I2 не переоткрываются; внутренние OPEN Snapshot не блокируют ядро PatchSet. Это фиксация границы работ, не разрешение реализации Snapshot или DAG wiring.
 
 ### PatchSet как самостоятельный домен — решение и границы, 2026-11-18
+
+**Итоговая приёмка ядра 2026-11-19:** пользователь подтвердил результат ревью: новых существенных P1/P2/P3 не обнаружено, прежний P2 закрыт, PS-I1 → PS-I2 принимается в согласованном scope. [Отчёт ревью](patch-set-core-review.md). Внешние интеграции, Snapshot admission и DAG wiring остаются за пределами этой приёмки.
 
 **Реализация ядра 2026-11-19:** PS-I1 → PS-I2 выполнены; общий checker, public assemble и diagnostics проверены. Evidence и индивидуальная приёмка классов — [план реализации §6](patch-set-core-implementation.md#6-результаты-реализации-2026-11-19): snapshotCore 205 tests OK (1 Windows symlink skip), завершающий contracts-run 91 tests OK. Snapshot lifecycle и DAG/producer integration остаются отдельными работами. Ниже «код не начат на момент фиксации» относится к исходному разрешению, не к текущему статусу ядра.
 

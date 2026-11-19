@@ -70,13 +70,3 @@ class DomainSectionHandler[S: DomainSection](ABC):
     async def apply(self, section: S, context: SnapshotApplyContext) -> SectionApplyReceipt | SectionRefused:
         """Append prepared changes using bound storage; never materialize or commit."""
         ...
-
-    @abstractmethod
-    def encode(self, section: S) -> bytes: ...
-
-    @abstractmethod
-    def decode(self, payload: bytes, version: FormatVersion) -> S:
-        """Validate canonical bytes before any supported read-upgrade."""
-        # The Snapshot integration slice does not authorize read-upgrades for
-        # deferred v1 domains: no dual-read, fallback or compatibility adapter.
-        ...

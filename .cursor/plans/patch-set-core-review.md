@@ -4,7 +4,11 @@
 
 Объект: реализация `.cursor/plans/patch-set-core-implementation.md`.
 
-**Итог: ядро пока не принимается.** Воспроизведён дефект допуска concrete section models. Полная проверка diff и регрессии осталась OPEN. Это отчёт о выполненной части независимого ревью, а не утверждение о завершении всех запрошенных проверок.
+**Актуальный итог — принято, 2026-11-19.** Пользователь передал результат: «Новых существенных находок P1/P2/P3 не обнаружено. Прежний P2 закрыт. Ядро PS-I1 → PS-I2 принимается в согласованном scope».
+
+Источник итоговой приёмки — сообщение пользователя; новых прогонов тестов этой записью не заявляется. Приёмка ограничена общим ядром PatchSet и не закрывает production producers, capture/identity/union, DAG wiring или реализацию Snapshot admission.
+
+Ниже сохранена история первоначального частичного ревью и исправления. Формулировки «не принимается» и OPEN в ней относятся к состоянию до итоговой приёмки и не являются текущим отказом в приёмке ядра.
 
 ## Находки
 
@@ -90,3 +94,11 @@ Git возвращал `fatal: this operation must be run in a work tree`, вк�
 Production producers, capture/identity, production union, Snapshot admission implementation и DAG wiring не считаются дефектами PS-I1/PS-I2. Constructor/decode обязан обеспечивать check_core; дополнительная prepared-order гарантия относится к успешному assemble. Реализация вызова общего checker в Snapshot остаётся ответственностью Snapshot.
 
 **Решение: не принимать ядро до устранения P2 и закрытия обязательных OPEN проверок.**
+
+## Исправление владельцем PatchSet — 2026-11-19
+
+P2 исправлен в PatchSetAssembler construction admission: обязательность inherited section fields и их metadata проверяются по owning DomainSection. Удаление MinLen или ослабление его minimum отклоняется с TypeError; усиление minimum допускается. Константа минимального размера не копируется из модели в application.
+
+Добавлен test_construction_retains_section_minimum в tests/snapshotCore/contracts/test_patch_assembly.py: снятый minimum, min_length=0 и допустимый min_length=2. До исправления первые два case воспроизводимо падали (TypeError не возникал), после исправления проходят. Контрактный discover — 92 tests, OK, включая Pyright. Diff исправления просмотрен.
+
+Это результат исправления и локальной проверки владельцем, не завершение независимого ревью. Остальные OPEN и исходный объём независимой проверки сохранены; полная регрессия в этом проходе не повторялась.

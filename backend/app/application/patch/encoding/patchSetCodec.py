@@ -33,7 +33,7 @@ class PatchSetCodec[S: DomainSection]:
             value = getattr(request, name)
             if name == "sections":
                 value = tuple((section.header.key, section.header.format_version,
-                               self.registry.resolve(section).encode(section)) for section in request.sections)
+                               self.registry.resolve_codec(section).encode(section)) for section in request.sections)
             elif name == "expected_players":
                 value = tuple(sorted(request.expected_players, key=lambda player: player.player_uid))
             fields.append((name, value))
@@ -65,13 +65,13 @@ class PatchSetCodec[S: DomainSection]:
                     or type(section[2]) is not bytes):
                 raise CanonicalEncodingError("invalid section projection")
             key = TypeAdapter(SectionKey).validate_python(section[0], strict=True)
-            bound = self.registry.require(key)
+            bound = self.registry.require_codec(key)
             if key in keys or section[1] not in bound.metadata.supported_versions:
                 raise CanonicalEncodingError("duplicate section or unsupported section version")
             keys.add(key)
         decoded = []
         for key, version, content in sections:
-            section = self.registry.require(key).decode(content, version)
+            section = self.registry.require_codec(key).decode(content, version)
             if section.header.key != key:
                 raise CanonicalEncodingError("decoded section key does not match its projection")
             decoded.append(section)

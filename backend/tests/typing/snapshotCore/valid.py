@@ -153,14 +153,14 @@ from app.application.worldSnapshot.contracts.commitScope import CommitScope, Com
 from app.application.worldSnapshot.contracts.context import SnapshotValidationContext, SnapshotApplyContext
 from app.application.worldSnapshot.storage.commitStore import IPublicationCommitStore
 from app.application.worldSnapshot.storage.historyStore import ISnapshotHistoryStore
-from tests.snapshotCore.support.fakeSection import FakeSection, FakeSectionHandler, FakePrepared
+from tests.snapshotCore.support.fakeSection import FakeSection, FakeSectionHandler, FakeSectionCodec, FakePrepared
 
 
 def register_typed_sections(contract: SectionContract[FakeSection], handler: FakeSectionHandler,
                             section: FakeSection) -> bytes:
     registry = SectionRegistry()
-    registry.register(contract, handler)
-    return registry.resolve(section).encode(section)
+    registry.register(contract, handler, FakeSectionCodec(contract))
+    return registry.resolve_codec(section).encode(section)
 
 
 def register_typed_artifacts(contract: ArtifactFormatContract[FakePrepared],

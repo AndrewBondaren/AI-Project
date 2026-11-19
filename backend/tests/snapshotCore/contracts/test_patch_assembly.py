@@ -2,7 +2,7 @@
 
 import unittest
 from unittest.mock import patch
-from pydantic import ValidationError
+from pydantic import Field, ValidationError
 
 from app.application.patch.assembly.patchSetAssembler import PatchSetAssembler
 from app.application.patch.assembly.patchSetAssemblyValidator import PatchSetAssemblyValidator
@@ -116,6 +116,36 @@ class PatchAssemblyTests(unittest.TestCase):
         ):
             with self.assertRaises((ValueError, TypeError)):
                 PatchSetAssembler(input_model, output_model)
+
+    def test_construction_retains_section_minimum(self):
+        class EmptySection(DomainSection[HeaderOnlyPatch]):
+            patches: tuple[HeaderOnlyPatch, ...]
+
+        class ZeroMinimumSection(DomainSection[HeaderOnlyPatch]):
+            patches: tuple[HeaderOnlyPatch, ...] = Field(min_length=0)
+
+        class StrongerSection(DomainSection[HeaderOnlyPatch]):
+            patches: tuple[HeaderOnlyPatch, ...] = Field(min_length=2)
+
+        for section_model in (EmptySection, ZeroMinimumSection, StrongerSection):
+            class Input(PatchSetAssemblyInput[section_model]):
+                pass
+
+            class Result(PatchSet[section_model]):
+                pass
+
+            with self.subTest(section=section_model.__name__):
+                if section_model is not StrongerSection:
+                    empty = section_model(header=section("x").header, patches=())
+                    request = Input(**values((empty,)))
+                    self.assertEqual(request.sections[0].patches, ())
+                    with self.assertRaisesRegex(TypeError, "section field constraints"):
+                        PatchSetAssembler(Input, Result)
+                else:
+                    assembler = PatchSetAssembler(Input, Result)
+                    data = section("x", refs=(("op", "x", 0), ("op", "x", 1)))
+                    valid = section_model(header=data.header, patches=data.patches)
+                    self.assertIs(type(assembler.assemble(Input(**values((valid,))))), Result)
 
     def test_world_player_section_and_patch_key_paths(self):
         from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef, PlayerHeadExpectation

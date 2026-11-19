@@ -118,6 +118,7 @@ def different_lifecycle_types(world: WorldSnapshotRef, player: PlayerSnapshotRef
     SnapshotApplyRelationIssue(code="gameplay_not_started", section_key=None, player_uid=None, artifact=None)  # EXPECT: reportArgumentType
     SnapshotApplyRelationIssue(code=SnapshotApplyCode.GAMEPLAY_NOT_STARTED, section_key=None, player_uid=None, artifact=world)  # EXPECT: reportArgumentType
 
+from app.application.patch.contracts.sectionCodec import SectionCodec
 from app.application.patch.contracts.sectionHandler import DomainSectionHandler, SectionContract
 from app.application.patch.registry.sectionRegistry import SectionRegistry
 from app.application.artifacts.contracts.formatBackend import ArtifactBackend, ArtifactFormatContract
@@ -148,8 +149,14 @@ def write_capability(scope: CommitScope) -> None:
 
 
 def wrong_handler_binding(contract: SectionContract[FakeSection],
-                          handler: DomainSectionHandler[DomainSection[HeaderOnlyPatch]]) -> None:
-    SectionRegistry().register(contract, handler)  # EXPECT: reportArgumentType
+                          handler: DomainSectionHandler[DomainSection[HeaderOnlyPatch]],
+                          codec: SectionCodec[FakeSection]) -> None:
+    SectionRegistry().register(contract, handler, codec)  # EXPECT: reportArgumentType
+
+
+def wrong_codec_binding(contract: SectionContract[FakeSection], handler: FakeSectionHandler,
+                        codec: SectionCodec[DomainSection[HeaderOnlyPatch]]) -> None:
+    SectionRegistry().register(contract, handler, codec)  # EXPECT: reportArgumentType
 
 
 def wrong_artifact_binding(contract: ArtifactFormatContract[bytes],

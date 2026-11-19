@@ -16,6 +16,7 @@ from app.application.worldSnapshot.encoding.coreManifest import SNAPSHOT_CORE_SC
 from app.application.patch.encoding.patchSetCodec import PatchSetCodec
 from app.application.worldSnapshot.encoding.snapshotCodec import SnapshotEnvelopeCodec
 from app.application.patch.registry.sectionRegistry import SectionRegistry
+from app.application.patch.contracts.sectionCodec import SectionCodec
 from app.application.patch.contracts.sectionHandler import SectionContract, DomainSectionHandler
 from app.application.worldData.pack.io.tileCodec import TileCodec, PAYLOAD_KIND_WORLD_MAP
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest, CanonicalTypeKind, RegisteredTypeEntry
@@ -34,7 +35,7 @@ from tests.snapshotCore.support.diagnostics import diagnostic_roundtrip, target_
 from app.dataModel.validation.diagnostics.runtimeIssueContext import RuntimeIssueContext
 from app.dataModel.spatial.facing import Facing
 from tests.snapshotCore.support.fakeSection import (
-    FakeTarget, FakeChange, FakePrepared, FakePatch, FakeSection, FakeSectionHandler, FAKE_SECTION_SCHEMA,
+    FakeTarget, FakeChange, FakePrepared, FakePatch, FakeSection, FakeSectionHandler, FakeSectionCodec, FAKE_SECTION_SCHEMA,
 )
 
 
@@ -44,8 +45,9 @@ class CanonicalRequestCodecTests(unittest.TestCase):
         self.contract = SectionContract(key=self.key, section_model=FakeSection,
             supported_versions=frozenset({1, 2}), manifest=FAKE_SECTION_SCHEMA)
         self.handler = FakeSectionHandler(self.contract)
+        self.section_codec = FakeSectionCodec(self.contract)
         self.registry = SectionRegistry()
-        self.registry.register(self.contract, self.handler)
+        self.registry.register(self.contract, self.handler, self.section_codec)
         self.codec = PatchSetCodec(self.registry, PatchSet[FakeSection])
         self.publication = WorldPublicationRef(world_uid="w", publication_id="p", pack_hash="a" * 64,
             snapshot_head=None, active_timeline_id="t", gameplay_started=True)
@@ -200,9 +202,11 @@ class CanonicalRequestCodecTests(unittest.TestCase):
             supported_versions=frozenset({1}), manifest=manifest)
         handler = create_autospec(DomainSectionHandler, instance=True)
         handler.contract = contract
-        handler.encode.side_effect = lambda section: encode(section, manifest)
-        handler.decode.side_effect = lambda payload, version: decode(payload, OtherSection, manifest)
-        self.registry.register(contract, handler)
+        section_codec = create_autospec(SectionCodec, instance=True)
+        section_codec.contract = contract
+        section_codec.encode.side_effect = lambda section: encode(section, manifest)
+        section_codec.decode.side_effect = lambda payload, version: decode(payload, OtherSection, manifest)
+        self.registry.register(contract, handler, section_codec)
         other = OtherSection(header=SectionHeader(key=other_key, format_version=1, depends_on=()),
             patches=(self.section.patches[0].model_copy(update={"header":
                 self.section.patches[0].header.model_copy(update={"ref":
@@ -243,7 +247,7 @@ class CanonicalRequestCodecTests(unittest.TestCase):
             self.codec.encode(self.request.model_copy(update={"format_version": 2}))
 
     def test_section_key_version_noncanonical_and_unknown_types_refuse_without_domain_work(self):
-        section_bytes = self.registry.resolve(self.section).encode(self.section)
+        section_bytes = self.registry.resolve_codec(self.section).encode(self.section)
         bad_sections = (
             (("unknown", 1, section_bytes),), ((self.key, 3, section_bytes),),
             ((self.key, True, section_bytes),), ((self.key, 1, b"not canonical"),),
@@ -271,7 +275,7 @@ class CanonicalRequestCodecTests(unittest.TestCase):
             handler = FakeSectionHandler(contract)
             registry = SectionRegistry()
             with self.assertRaises(CanonicalEncodingError):
-                registry.register(contract, handler)
+                registry.register(contract, handler, FakeSectionCodec(contract))
             self.assertEqual(handler.calls, [])
             with self.assertRaises(ValueError):
                 registry.require(contract.key)
@@ -292,7 +296,7 @@ class CanonicalRequestCodecTests(unittest.TestCase):
                 legacy = decode(payload, OldSection, old_schema)
                 return FakeSection(header=legacy.header.model_copy(update={"format_version": 2}), patches=legacy.patches)
             return decode(payload, FakeSection, self.contract.manifest)
-        self.handler.decode = read_upgrade
+        self.section_codec.decode = read_upgrade
         upgraded = self.codec.decode(original)
         self.assertEqual(upgraded.sections[0].header.format_version, 2)
         self.assertEqual(self.codec.fingerprint_bytes(original), content_digest(original).hex())

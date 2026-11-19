@@ -2,6 +2,7 @@
 
 from types import UnionType
 from typing import Union, get_args, get_origin
+from annotated_types import MinLen
 from pydantic import BaseModel
 
 from app.application.patch.assembly.patchSetAssemblyValidator import PatchSetAssemblyValidator
@@ -41,6 +42,17 @@ class PatchSetAssembler[S: DomainSection]:
             if not isinstance(section_model, type) or not issubclass(section_model, DomainSection):
                 raise TypeError("assembly requires native section models")
             self._require_native_model(section_model)
+            for name, inherited in DomainSection.model_fields.items():
+                bound = section_model.model_fields[name]
+                if inherited.is_required() and not bound.is_required():
+                    raise TypeError("native section field constraints must remain required")
+                for constraint in inherited.metadata:
+                    if isinstance(constraint, MinLen):
+                        minima = [item.min_length for item in bound.metadata if isinstance(item, MinLen)]
+                        if not minima or any(minimum < constraint.min_length for minimum in minima):
+                            raise TypeError("native section field constraints must retain the minimum length")
+                    elif constraint not in bound.metadata:
+                        raise TypeError("native section field constraints must retain inherited metadata")
             patch_annotation = section_model.model_fields["patches"].annotation
             patch_args = get_args(patch_annotation)
             if (section_model.model_fields["header"].annotation is not SectionHeader

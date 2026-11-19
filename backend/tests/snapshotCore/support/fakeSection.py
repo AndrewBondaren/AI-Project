@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict
 from app.encoding.canonicalCodec import CanonicalEncodingError, encode, decode, merge_manifests
 from app.application.patch.encoding.coreManifest import PATCH_CORE_SCHEMA
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest, RegisteredTypeEntry, CanonicalTypeKind
+from app.application.patch.contracts.sectionCodec import SectionCodec
 from app.application.patch.contracts.sectionHandler import DomainSectionHandler, SectionContract
 from app.application.worldSnapshot.contracts.context import SnapshotApplyContext, SnapshotValidationContext
 from app.dataModel.patch.changes.patchData import PatchData
@@ -75,6 +76,15 @@ class FakeSectionHandler(DomainSectionHandler[FakeSection]):
         self.calls.append("apply")
         return SectionApplyReceipt(section_key=section.header.key, states=(), history=(),
                                    changed=())
+
+class FakeSectionCodec(SectionCodec[FakeSection]):
+    def __init__(self, contract: SectionContract[FakeSection]) -> None:
+        self._contract = contract
+        self.calls: list[str] = []
+
+    @property
+    def contract(self) -> SectionContract[FakeSection]:
+        return self._contract
 
     def encode(self, section: FakeSection) -> bytes:
         self.calls.append("encode")

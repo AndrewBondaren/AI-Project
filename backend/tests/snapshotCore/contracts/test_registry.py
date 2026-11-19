@@ -24,7 +24,7 @@ from app.dataModel.registryKey import RegistryKey
 from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
 from app.dataModel.worldSnapshot.identity.refs import WorldSnapshotRef
 from tests.snapshotCore.support.fakeSection import (
-    FakeTarget, FakeChange, FakePrepared, FakePatch, FakeSection, FakeSectionHandler, FAKE_SECTION_SCHEMA,
+    FakeTarget, FakeChange, FakePrepared, FakePatch, FakeSection, FakeSectionHandler, FakeSectionCodec, FAKE_SECTION_SCHEMA,
 )
 
 
@@ -47,6 +47,7 @@ class SectionRegistryTests(unittest.TestCase):
         self.contract = SectionContract(key=self.key, section_model=FakeSection,
                                         supported_versions=frozenset({1, 2}), manifest=self.manifest)
         self.handler = FakeSectionHandler(self.contract)
+        self.section_codec = FakeSectionCodec(self.contract)
         self.section = FakeSection(header=SectionHeader(key=self.key, format_version=1, depends_on=()),
             patches=(FakePatch(header=PatchHeader(ref=PatchRef(operation_id="op", section_key=self.key, ordinal=0),
                 format_version=1, depends_on=(), artifacts=()), target=FakeTarget(name="house"),
@@ -64,12 +65,12 @@ class SectionRegistryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             registry.resolve(self.section)
         with self.assertRaises(TypeError):
-            registry.register(self.contract, object())
-        registry.register(self.contract, self.handler)
+            registry.register(self.contract, object(), self.section_codec)
+        registry.register(self.contract, self.handler, self.section_codec)
         self.assertEqual(self.handler.calls, [])  # constructors/registration do not execute domain work
         bound = registry.resolve(self.section)
-        encoded = bound.encode(self.section)
-        decoded = bound.decode(encoded, 1)
+        encoded = registry.resolve_codec(self.section).encode(self.section)
+        decoded = registry.require_codec(self.key).decode(encoded, 1)
         self.assertIs(type(decoded), FakeSection)
         self.assertEqual(decoded, self.section)
         self.assertEqual(decoded.patches[0].prepared.values, (1, 2, 3))
@@ -81,8 +82,11 @@ class SectionRegistryTests(unittest.TestCase):
         self.assertIs(apply_context.next_publication, target)
         receipt = self._complete(bound.apply(self.section, apply_context))
         self.assertEqual(receipt.section_key, self.key)
-        self.assertEqual(self.handler.calls, ["encode", "decode", "validate", "apply"])
-        self.assertEqual(bound.manifest, self.manifest)
+        self.assertEqual(self.handler.calls, ["validate", "apply"])
+        self.assertEqual(self.section_codec.calls, ["encode", "decode"])
+        self.assertFalse(hasattr(bound, "encode"))
+        self.assertFalse(hasattr(registry.require_codec(self.key), "apply"))
+        self.assertEqual(registry.require_codec(self.key).manifest, self.manifest)
 
     def test_runtime_target_must_match_assigned_snapshot_and_pinned_base(self):
         snapshot = WorldSnapshotRef(world_uid="world", timeline_id="timeline", snapshot_id="tick")
@@ -96,16 +100,50 @@ class SectionRegistryTests(unittest.TestCase):
         with self.assertRaises(TypeError):
             replace(context, next_publication=snapshot)
 
+    def test_codec_binding_failures_leave_registry_unchanged(self):
+        registry = SectionRegistry()
+        manifest = registry.manifest
+        for codec, error in ((object(), TypeError),
+                             (FakeSectionCodec(replace(self.contract)), ValueError)):
+            with self.subTest(codec=codec), self.assertRaises(error):
+                registry.register(self.contract, self.handler, codec)
+            self.assertIs(registry.manifest, manifest)
+            for lookup in (registry.require, registry.require_codec):
+                with self.assertRaises(ValueError):
+                    lookup(self.key)
+        registry.register(self.contract, self.handler, self.section_codec)
+        behavior, representation = registry.require(self.key), registry.require_codec(self.key)
+        manifest = registry.manifest
+        with self.assertRaises(ValueError):
+            registry.register(self.contract, self.handler, self.section_codec)
+        self.assertIs(registry.require(self.key), behavior)
+        self.assertIs(registry.require_codec(self.key), representation)
+        self.assertIs(registry.manifest, manifest)
+        self.assertEqual(self.handler.calls, [])
+        self.assertEqual(self.section_codec.calls, [])
+
+    def test_representation_preserves_bytes_without_semantic_dispatch(self):
+        registry = SectionRegistry()
+        registry.register(self.contract, self.handler, self.section_codec)
+        codec = registry.resolve_codec(self.section)
+        payload = codec.encode(self.section)
+        self.assertEqual(payload, canonical_encode(self.section, self.manifest))
+        self.assertEqual(codec.decode(payload, 1), self.section)
+        self.assertEqual(self.handler.calls, [])
+        self.section_codec.encode = lambda section: "not bytes"
+        with self.assertRaises(TypeError):
+            codec.encode(self.section)
+
     def test_duplicate_wrong_binding_models_keys_and_versions_fail_before_handler(self) -> None:
         registry = SectionRegistry()
-        registry.register(self.contract, self.handler)
+        registry.register(self.contract, self.handler, self.section_codec)
         with self.assertRaises(ValueError):
-            registry.register(self.contract, self.handler)
+            registry.register(self.contract, self.handler, self.section_codec)
         other_contract = replace(self.contract, key=RegistryKey[PatchSectionRegistry]("other"))
         with self.assertRaises(ValueError):
-            SectionRegistry().register(other_contract, self.handler)
+            SectionRegistry().register(other_contract, self.handler, self.section_codec)
         with self.assertRaises(ValueError):
-            registry.register(other_contract, FakeSectionHandler(other_contract))
+            registry.register(other_contract, FakeSectionHandler(other_contract), FakeSectionCodec(other_contract))
         invalid_sections = (
             self.section.model_copy(update={"header": self.section.header.model_copy(update={"format_version": 3})}),
             self.section.model_copy(update={"header": self.section.header.model_copy(update={"key": other_contract.key})}),
@@ -118,12 +156,12 @@ class SectionRegistryTests(unittest.TestCase):
                 with self.assertRaises((ValueError, TypeError, ValidationError)):
                     registry.resolve(section)
                 with self.assertRaises((ValueError, TypeError, ValidationError)):
-                    bound.encode(section)
+                    registry.resolve_codec(self.section).encode(section)
                 with self.assertRaises((ValueError, TypeError, ValidationError)):
                     self._complete(bound.validate(section, self.context))
         for version in (0, 3, True, "1"):
             with self.assertRaises(ValueError):
-                bound.decode(b"bad", version)
+                registry.require_codec(self.key).decode(b"bad", version)
         self.assertEqual(self.handler.calls, [])
 
     def test_section_contract_requires_concrete_frozen_strict_model_and_manifest(self) -> None:
@@ -138,15 +176,15 @@ class SectionRegistryTests(unittest.TestCase):
 
     def test_decoded_wrong_model_or_key_is_rejected(self) -> None:
         registry = SectionRegistry()
-        registry.register(self.contract, self.handler)
+        registry.register(self.contract, self.handler, self.section_codec)
         bound = registry.resolve(self.section)
         wrong = self.section.model_copy(update={"header": self.section.header.model_copy(
             update={"key": RegistryKey[PatchSectionRegistry]("other")})})
         with self.assertRaises(ValueError):
-            bound.decode(canonical_encode(wrong, self.manifest), 1)
-        self.handler.decode = lambda payload, version: FakePrepared(values=())
+            registry.require_codec(self.key).decode(canonical_encode(wrong, self.manifest), 1)
+        self.section_codec.decode = lambda payload, version: FakePrepared(values=())
         with self.assertRaises(TypeError):
-            bound.decode(canonical_encode(self.section, self.manifest), 1)
+            registry.require_codec(self.key).decode(canonical_encode(self.section, self.manifest), 1)
 
     def test_runtime_capabilities_are_abstract_opaque_and_read_is_not_write(self) -> None:
         for scope_type in (CommitReadScope, CommitScope):

@@ -293,7 +293,10 @@ base, защищённой commit transaction. Композиция нескол
 Source preconditions не притворяются RuntimeTargetExpectation:
 они добавляются domain binding только после source-versioning 2–3.
 
-### DomainSectionHandler и явный реестр
+### DomainSectionHandler, SectionCodec и явный реестр
+
+Уточнение пользователя 2026-11-19 по C1: поведение секции и canonical
+представление разделены; [контракт и scope реализации](../.cursor/plans/section-codec-receipt-contract.md).
 
 `DomainSectionHandler[S]` — общий application port, S фиксируется
 concrete секцией. Обязанности и сигнатуры:
@@ -305,13 +308,21 @@ concrete секцией. Обязанности и сигнатуры:
   async доменное apply уже подготовленного изменения, append новых
   доменных SQL/overlay/history версий через domain storage в переданной
   commit scope. При несовпадении precondition — typed refusal всего набора;
-- `encode(section: S) -> bytes` / `decode(payload: bytes, version: FormatVersion) -> S`:
-  pure domain codec; decode включает поддерживаемый read-upgrade и полную
-  валидацию. Неизвестный формат — отказ, не partial decode;
 - `restore(ref: SectionStateRef, context: SnapshotReadContext) -> S` **не вводится**:
   секция patches не является состоянием. Domain read/restore контракты
   остаются у домена; Snapshot использует отдельные domain-owned read/merge
   ports, согласуемые с concrete handler. Общего state DTO ядро не выдумывает.
+
+`SectionCodec[S]` — отдельный pure application port с общей `contract`
+декларацией: `encode(section: S) -> bytes` и
+`decode(payload: bytes, version: FormatVersion) -> S`. Decode включает
+полную валидацию concrete модели и поддерживаемый owning-контрактом
+read-upgrade представления. Неизвестный формат отклоняется без partial decode.
+Read-upgrade не выполняет semantic apply, не переписывает persisted bytes
+или исходный request fingerprint. Это размещение уже поддерживаемого upgrade,
+не разрешение новых legacy decoders/adapters или версий без согласования.
+Codec не получает scope/storage/handler и не вызывает публичные доменные
+pipelines. Encode/decode исключены из DomainSectionHandler.
 
 `SectionValidation` — typed union `SectionAccepted` / `SectionRefused`.
 Accepted не даёт права самостоятельной записи. Refused содержит
@@ -348,11 +359,19 @@ publication pointer API или возможность самостоятельн
 Read context не содержит write capability. Точные storage bindings — шаг 3.
 
 Application registry предоставляет
-`register[S](contract: SectionContract[S], handler: DomainSectionHandler[S])`
-и `resolve(section) -> BoundSectionHandler`. SectionContract фиксирует key,
+`register[S](contract: SectionContract[S], handler: DomainSectionHandler[S], codec: SectionCodec[S]) -> None`.
+`resolve(section)` / `require(key)` возвращают BoundSectionHandler;
+`resolve_codec(section)` / `require_codec(key)` возвращают BoundSectionCodec.
+SectionContract фиксирует key,
 concrete section model, supported format versions и canonical schema
-manifest. Register проверяет соответствие key/model/handler, повтор key
-запрещён. Bound handler проверяет точный тип секции перед typed dispatch.
+manifest. Register проверяет exact identity общей декларации contract/handler/codec,
+уникальность key/model и schema collisions до изменения registry; обе capabilities
+регистрируются атомарно, без частичного binding при отказе. Bound handler проверяет
+точный тип секции перед semantic dispatch; BoundSectionCodec выполняет checked
+representation dispatch с проверками exact type/key/version/bytes.
+PatchSetCodec вызывает resolve_codec/require_codec и не запускает semantic
+validate/apply. Это согласованный pure infrastructure binding, не разрешение
+произвольных прямых междоменных вызовов. DAG registry/codec не получает.
 Единственная проверяемая heterogeneous dispatch boundary находится внутри
 реестра; публичные входы не используют Any, object payload или casts caller'а.
 Core serializers не сериализуют concrete subtype как base Pydantic model
