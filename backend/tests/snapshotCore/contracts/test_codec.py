@@ -3,6 +3,8 @@
 from dataclasses import replace
 from enum import StrEnum
 from hashlib import sha256
+import json
+from pathlib import Path
 import unittest
 from unittest.mock import patch, create_autospec
 from pydantic import ValidationError
@@ -167,6 +169,28 @@ class CanonicalRequestCodecTests(unittest.TestCase):
             encoded = snapshot_codec.encode(envelope)
             self.assertEqual(snapshot_codec.decode(encoded), envelope)
             self.assertEqual(snapshot_codec.encode(snapshot_codec.decode(encoded)), encoded)
+
+    def test_nonempty_pre_split_golden_bytes_and_hashes(self):
+        golden = json.loads((Path(__file__).resolve().parents[1] / "support" /
+                             "sectionCodecPreSplitGolden.json").read_text(encoding="utf-8"))
+        self.assertEqual(self.contract.supported_versions,
+                         frozenset(int(version) for version in golden["versions"]))
+        for version, expected in golden["versions"].items():
+            with self.subTest(version=version):
+                section = self.section.model_copy(update={"header":
+                    self.section.header.model_copy(update={"format_version": int(version)})})
+                request = self.request.model_copy(update={"sections": (section,)})
+                section_bytes = bytes.fromhex(expected["section"]["hex"])
+                request_bytes = bytes.fromhex(expected["request"]["hex"])
+                codec = self.registry.resolve_codec(section)
+                self.assertEqual(codec.encode(section), section_bytes)
+                self.assertEqual(content_digest(section_bytes).hex(), expected["section"]["sha256"])
+                self.assertEqual(codec.decode(section_bytes, int(version)), section)
+                self.assertEqual(self.codec.encode(request), request_bytes)
+                self.assertEqual(self.codec.fingerprint(request), expected["request"]["sha256"])
+                self.assertEqual(self.codec.fingerprint_bytes(request_bytes), expected["request"]["sha256"])
+                self.assertEqual(self.codec.decode(request_bytes), request)
+        self.assertEqual(self.handler.calls, [])
 
     def test_concrete_section_roundtrip_and_request_binding_covers_each_input(self):
         payload = self.codec.encode(self.request)
