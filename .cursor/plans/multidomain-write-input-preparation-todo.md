@@ -12,6 +12,12 @@
 
 ## TODO совместного проектирования
 
+### Initial / branch-point Time binding — отдельное обязательство верхнего процесса
+
+По решению пользователя 2026-11-20 producer готовой exact-Q Time записи не блокирует локальный H3 на готовых данных. До готовности initial/branch-point сценария необходимо определить владельца producer и точный Output → TimePublicationRow mapping, обеспечить atomic visibility публикации Q и immutable PublicationTimeState для её активного timeline. Time владеет admission/representation; владелец публикации и transaction composition определяется при согласовании. Требуется отдельно сверить создание row с принятым initial artifact/start protocol: скрытого artifact→row materialize внутри Snapshot/H3 не разрешено. Чужой timeline, initial ancestor, zero/fallback не заменяют необходимое состояние. H3 только читает/проверяет его; missing даёт REQUIRED_STATE_MISSING. Producer, преобразования времени и новые публичные операции этим TODO не утверждаются. Отсутствие producer блокирует соответствующий верхний сценарий, не принятый локальный контракт чтения/записи.
+
+### Общие задачи
+
 | Задача | Требуемый результат | Участники / владелец |
 |---|---|---|
 | Выбрать сценарий и участников | Явный состав доменов, их вклады и граница одной операции | Владелец сценария TODO; Time и другие домены TODO |
