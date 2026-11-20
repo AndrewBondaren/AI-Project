@@ -1,5 +1,7 @@
 # Доменное чтение, patches и snapshots — новый архитектурный план
 
+**H3, 2026-11-20 — exact binding PROPOSED:** [Snapshot → Time source binding](snapshot-time-source-binding-h3.md) задаёт Snapshot-owned resolver, strict DTO/errors, context/Time mapping, inherited и publication-bound sources, lifetime и критерии ответственности. Поправка порядка source reads до handler.validate уже ACCEPTED пользователем; конкретные signatures требуют приёмки Time/координатором. H2/terminal и реализация C2 не разрешены этой записью.
+
 **C2, детализация 2026-11-19:** [план Snapshot receipt validation](snapshot-receipt-validation-c2.md) фиксирует validator, POJO ошибок, перенос provenance и условия ранней проверки. Пользователь поручил закрепить предложение и отдельно проверить противоречия. Gates pinned bases/diagnostics/trace остаются явными; реализация Snapshot не начата этой записью, C1 ведётся отдельно.
 
 **Решение пользователя 2026-11-19:** [отдельный контракт C1/C2](section-codec-receipt-contract.md) фиксирует выбранное разделение SectionCodec / semantic handler с единой регистрацией и Snapshot-owned receipt membership validation. C1 передаётся отдельному чату реализации; C2 остаётся у Snapshot. Exact gates и scope приведены в документе; прежние proposal-пометки DEC-2 читаются с этим уточнением, runtime readiness не заявляется.

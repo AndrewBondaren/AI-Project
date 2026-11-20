@@ -1,6 +1,6 @@
 # PatchSet: внешние контракты и интеграции
 
-Дата: 2026-11-18; актуализировано 2026-11-19. Статус: **отдельный реестр принятых границ и открытых интеграционных зависимостей; НЕ БЛОКИРУЕТ приёмку ядра PatchSet**.
+Дата: 2026-11-18; актуализировано 2026-11-20. Статус: **отдельный реестр принятых границ и открытых интеграционных зависимостей; НЕ БЛОКИРУЕТ приёмку ядра PatchSet**.
 
 Основание: пользователь поручил «Внешние контракты зафиксируй отдельно, но не блокирующими приемку». Архитектура ядра — [PS-ARCH-0](patch-set-domain-architecture.md). Ни один OPEN ниже не возвращается в её блокеры. Каждый контракт уточняется перед подключением соответствующего сценария; Time/Lifecycle приведены как известные кандидаты, не обязательные участники каждого набора.
 
@@ -20,6 +20,38 @@
 **Ответ координатора 2026-11-19: место вызова — PASS, вопрос закрыт.** Внутри Snapshot apply: structural revalidation/check_core → dependency admission/check_prepared_order → canonical request fingerprint → immutable binding/claim/exact terminal replay. Поддержана целевая привязка `SnapshotRequestValidator.validate(request: PatchSet[S]) -> None` в `application/worldSnapshot/service/snapshotRequestValidator.py`; это TARGET, не existing runtime. Дополнительный private `_check_prepared_order` необязателен. OPEN остаются owning diagnostic carrier/aggregation/transport и полнота внутренних dependency checks Snapshot; выбор позиции в общей цепочке больше не OPEN. Источник: ответ Between domain operations на адресный запрос пользователя, thread `01a1ef35-3287-7a12-89e2-76273eaa043d`.
 
 ### TIME-PATCH-1 — несовместимость проектной секции с PatchData
+
+#### Canonical IDs: решение пользователя и подтверждение PatchSet — 2026-11-20
+
+**ACCEPTED:** пользователь через координатора принял шесть назначений ниже. **Owning-подтверждение PatchSet — PASS в области общего patch manifest и подключения native sections.** Эта запись имеет приоритет над историческими пометками proposed/неназначенного patch ID ниже. Полная интеграция IC-1 остаётся OPEN.
+
+| Тип | Принятый canonical ID | Evidence |
+|---|---:|---|
+| TimePoint | 31100 | Existing класс; merge с PATCH_CORE_SCHEMA проверен |
+| TimeInterval | 31102 | Existing класс; merge с PATCH_CORE_SCHEMA проверен |
+| TimeCapture | 31103 | Existing класс; merge с PATCH_CORE_SCHEMA проверен |
+| TimeAdvanceProposal | 31104 | Existing класс; merge с PATCH_CORE_SCHEMA проверен |
+| TimeAdvanceSection | 31105 | Нет конфликта ID с core; binding будущего concrete класса ещё не проверен |
+| TimeAdvancePatch | 31107 | Нет конфликта ID с core; binding будущего concrete класса ещё не проверен |
+
+Фактическая проверка 2026-11-20: поиск этих номеров в backend, .cursor/plans и docs не обнаружил конкурирующих назначений другим типам. Read-only Python probe загрузил [PATCH_CORE_SCHEMA](../../backend/app/application/patch/encoding/coreManifest.py): 62 entries, пересечение с шестью IDs пустое. Реальный [merge_manifests](../../backend/app/encoding/canonicalCodec.py) успешно объединил core с четырьмя existing Time records — 66 entries. Два будущих класса не заменялись заглушками; успешный merge полного manifest из шести Time records не заявляется. Предложенный TimeClockState=31106 не входит в эти назначения.
+
+**Границы владения.** PatchSet отвечает за общий patch manifest и совместимое подключение секций через SectionContract/SectionRegistry; конкретные Time records и representation принадлежат Time. Отдельный глобальный владелец резервации canonical IDs в проверенных источниках не установлен и этой записью не назначается. SectionRegistry — registry конкретной композиции, не глобальный allocator. Решение пользователя о назначениях и подтверждение PatchSet не доказывают глобальную runtime-регистрацию. Если требуется отдельный authoritative реестр резерваций между независимыми compositions, координатор должен установить его владельца.
+
+**Обязательные проверки реализации:**
+
+1. Merge PATCH_CORE_SCHEMA с шестью настоящими concrete Time classes; отсутствие ID→разные declarations и owner→разные identities. Полностью одинаковые shared declarations допускаются existing merge.
+2. Полная transitive closure: Section → Patch → Proposal → Capture/Interval → Point плюс shared header/publication/ref/dependency/artifact types. Core уже содержит WorldPublicationRef, WorldSnapshotRef, PatchHeader, PatchRef и SectionHeader.
+3. Базы TimeRecord/TimeScope/PatchData не получают ID только из-за наследования; вычисляемые properties не добавляются в manifest как сериализуемые поля.
+4. Concrete round-trip всех допустимых nullable/union веток, native invariants и отказы неизвестных ID/version. Успешный merge не является доказательством closure.
+5. Повторная collision-проверка с остальными manifests выбранной runtime composition; production union сейчас не назначается.
+6. Exact same SectionContract instance у handler/codec/registry, key time_clock и supported section versions {1}, по принятой форме C1.
+
+**Остаток:** concrete manifest/runtime registration и evidence реализации; глобальная резервация отдельным механизмом не доказана. Нового code-go, миграций или повторной приёмки ядра PS-I1→PS-I2 нет. Источники решения — [IC-1](interdomain-contract-register.md#ic-1--time-native-section), [Time-план](time-domain.md); источник owning evidence — проверка PatchSet по адресному запросу координатора 2026-11-20.
+
+#### История согласования формы
+
+**Дополнение 2026-11-19:** пользователь принял форму concrete TimeSectionCodec и manifest из shared PATCH_CORE_SCHEMA + шести Time records (Point/Interval/Capture/Proposal/Patch/Section), time_clock/version1 и exact contract identity по C1. Точный контракт записан в time-domain.md. Canonical IDs пяти Time records пока proposed, нового patch не назначен; общий registry audit/подтверждение и implementation/runtime OPEN. Это не повторная приёмка ядра PatchSet.
 
 **Уточнение 2026-11-19 — локальная дельта ACCEPTED пользователем через координатора.** Приняты TimeAdvancePatch(PatchData){proposal:TimeAdvanceProposal}, TimeAdvanceSection[TimeAdvancePatch] с одним patch и Time-owned header: общий operation_id, time_clock, ordinal0, patch version1, пустые dependencies/artifacts; native equality proposal/header operation проверяется также при decode. Pure proposal/API и Input/expected errors prepare_section сохраняются; successful receipt возвращает исходный patch.header.ref. Ни DAG, ни assembler header не вставляют. Исторический gap формы ниже устранён на уровне решения, не реализации. Concrete Time codec/manifest/IDs и production integration OPEN. См. [IC-1](interdomain-contract-register.md#ic-1--time-native-section).
 

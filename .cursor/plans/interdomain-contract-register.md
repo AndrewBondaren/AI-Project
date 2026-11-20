@@ -4,6 +4,10 @@
 
 ## Сводная таблица
 
+**IC-1 — подтверждение PatchSet 2026-11-20:** все шесть принятых IDs допустимы относительно текущего PATCH_CORE_SCHEMA (62 entries, пересечение пустое); merge четырёх existing Time records проверен (66 entries). Полный concrete manifest из шести records ещё не проверен, глобальная резервация не заявляется. Область владения, evidence и remaining gates зафиксированы в [TIME-PATCH-1: canonical IDs](patch-set-external-contracts.md#canonical-ids-решение-пользователя-и-подтверждение-patchset--2026-11-20). Это уточняет следующий исторический OPEN подтверждения registry: owning-проверка PatchSet закрыта в своей области, отдельный глобальный владелец резерваций не установлен.
+
+**IC-1 — решение пользователя 2026-11-20:** приняты canonical IDs TimePoint=31100, TimeInterval=31102, TimeCapture=31103, TimeAdvanceProposal=31104, TimeAdvanceSection=31105, TimeAdvancePatch=31107. Это уточнение имеет приоритет над историческими пометками proposed/отсутствующего ID ниже. Подтверждение владельца общего registry остаётся OPEN: поиск по коду, планам и документации не выявил конфликта 31107, но не доказывает глобальное резервирование. При реализации обязательны проверки merged-manifest collisions и полной transitive closure. Решение не разрешает код/миграции и не закрывает production binding, X-ID/X-BASE или IC-1 целиком.
+
 | ID | Направление | Статус | Что закрыть | Владельцы |
 |---|---|---|---|---|
 | IC-1 | Time → PatchSet, TIME-PATCH-1 | Native patch-дельта ACCEPTED 2026-11-19; интеграция OPEN | Concrete codec/manifest/IDs и production binding | Time, PatchSet, Snapshot |
@@ -28,6 +32,32 @@
 | X-REP | Native representation / codec registration | IC-1/2/4 | Concrete models/manifest/IDs/versions, один contract и раздельные codec/handler по C1 |
 
 ## IC-1 — Time native section
+
+### Сверка на готовых входах — 2026-11-20
+
+**H3 / C2-R1 — поправка порядка принята пользователем 2026-11-20.** Snapshot разрешает необходимые привязки принятого состояния после expected-context checks до handler.validate; metadata сохраняется в текущей transaction/попытке. После успешных validations дочитываются остальные pinned bases до первого apply, без повторного чтения уже полученных metadata. Source fault может опередить semantic refusal; прежняя гарантия полного отсутствия base reads при validation refusal уточнена. Отдельная persisted projection не вводится. См. [C2-R1](snapshot-receipt-validation-c2.md). Exact binding Input/Output/Error и подтверждение Time ещё OPEN; H2 не принимается этим решением. Эта запись имеет приоритет над историческим ожиданием решения о порядке ниже.
+
+**Терминология H3 — зафиксировано по решению пользователя 2026-11-20.** `source binding` здесь означает **привязку принятого состояния секции**, а не участие домена Source. В рассматриваемом предложении Snapshot определяет адрес Time-состояния для exact публикации Q (в том числе inherited SectionStateRef либо initial publication binding), Time читает собственные данные по этой привязке в общей borrowed transaction. Домен Source не участвует; зависимости от его публичного контракта в H3 не выявлено. Исторический идентификатор H3-SOURCE сохраняется для трассировки вопроса. Эта фиксация терминологии не принимает proposed DTO/методы, не меняет C2-R1 и не закрывает H3: поправка порядка чтения metadata и exact binding ещё требуют отдельного согласования.
+
+Получены адресные ответы Time, PatchSet и Snapshot; координатор сверил существующие assembly/apply signatures и результат. Это ограниченная сверка цепочки, не приёмка всех owning-планов или runtime.
+
+| Переход | Вывод | Остаток дизайна |
+|---|---|---|
+| Time.prepare_section(PrepareTimeAdvanceSection) → TimeAdvanceSection или TimeSectionContextMismatch | Принятый локальный контракт подтверждён Time | Нет нового вопроса producer; operation/publication mismatch агрегируются, native admission отдельно; zero/negative advance не допускаются |
+| Native sections → IPatchSetAssembly.assemble(PatchSetAssemblyInput[S]) | Owning DESIGN PASS PatchSet; успех PatchSet[S], отказ PatchSetAssemblyRefused | Новых owning gaps assembler нет; structural TypeError/ValidationError не business refusal |
+| Успешный PatchSet[S] → IWorldSnapshotApply.apply | Mapping подтверждён обеими сторонами | Передача без adapter/reassembly; при assembly refusal apply не вызывается |
+| Snapshot → TimeSectionHandler.validate/apply | Общие signatures/context определены; concrete binding OPEN | Time: точные semantic diagnostics и mapping отсутствующего state/конфликта/integrity faults; transaction-bound reader/writer, initial-base чтение, assigned states/history, closures и cancellation |
+| Receipt → публичный результат Snapshot | Архитектура C2 принята; exact Error transport OPEN | Snapshot/IC-4: admission errors и typed C2 fault → public/node error, rollback и unknown outcome без подмены business refusal |
+
+Time handler не коммитит borrowed scope и не вызывает чужие public pipelines. Его storage binding требует проверки допустимых зависимостей, а не считается принятым по наличию интерфейса. Все критерии dag-generator-interface.mdc остаются обязательными при приёмке конкретизации.
+
+**Различать результаты:** SectionApplyReceipt(states, history, changed) — внутренний результат применения секции до commit. DAG получает SnapshotApplyResult(category, operation_id, request_fingerprint, committed, diagnostics). Только COMMITTED подтверждает запись; committed содержит world_snapshot/player_snapshots/publication. Busy/infrastructure/unknown outcome и cancellation не маскируются обычным отказом. Предлагаемый SnapshotPublicError ещё не frozen.
+
+**Остаток дизайна IC-1:** (1) Time handler errors, (2) Time transaction/storage/receipt trace, (3) используемая граница Snapshot admission/C2 → public/node errors, принадлежащая IC-4. Upstream producers, выбор полного production union и сценария не блокируют локальный контракт. Реализация manifest/codec/registration и merge/round-trip/atomicity evidence учитываются отдельно, не выдаются за недостающие решения дизайна. Следующая конкретизация — Time (1–2), затем совместная сверка с Snapshot (3). Полный IC-1 остаётся OPEN.
+
+**Уточнение границы пользователем 2026-11-20:** IC-1 рассматривает запись при уже предоставленных входах: Time.prepare_section → native section → assemble_patch_set → Snapshot.apply → receipt. Происхождение operation_id, исходного состояния и параметров изменения вынесено в [отдельный TODO-план совместной подготовки входов Time и других доменов](multidomain-write-input-preparation-todo.md). X-ID/X-BASE сохраняются в общем учёте IC-3, но отсутствие их producers не блокирует приёмку локального IC-1. В IC-1 остаются требования к переданным значениям, проверки, ошибки и гарантии выполнения. Это уточнение имеет приоритет над прежними формулировками блокеров ниже; оно само по себе не объявляет IC-1 закрытым и не разрешает реализацию.
+
+**Следующее решение пользователя 2026-11-19 — codec/manifest shape ACCEPTED.** Приняты TimeSectionCodec(SectionContract[TimeAdvanceSection]) с pure encode/decode и CanonicalEncodingError для representation; manifest closure = PATCH_CORE_SCHEMA + TimePoint/TimeInterval/TimeCapture/TimeAdvanceProposal/TimeAdvancePatch/TimeAdvanceSection; key time_clock, supported section versions {1}, одна exact contract identity handler/codec/registry. IDs 31100/31102/31103/31104/31105 остаются proposed до подтверждения общего registry; один ID TimeAdvancePatch отсутствует. Это остаток representation freeze, не новый выбор формы. Код/миграции/production composition не разрешены.
 
 **Решение пользователя 2026-11-19: «Ок» после предъявления IC-1.** Принята локальная дельта: TimeAdvancePatch(PatchData) с inherited header и existing proposal без копирования полей; TimeAdvanceSection[TimeAdvancePatch] с одним patch; Time формирует ref общего operation_id/time_clock/ordinal0, отдельную patch version1, empty patch dependencies/artifacts. Native модель проверяет header-инварианты и proposal.operation_id == header.ref.operation_id при создании/revalidation/decode. Existing proposal/prepare_advance и Input/expected refusals prepare_section неизменны. Successful positive advance receipt.changed использует исходный patch.header.ref без реконструкции. Это заменяет статус PROPOSED самой дельты в исторических абзацах и таблицах ниже. Exact codec/manifest/type IDs, production union/X-ID/X-BASE и implementation evidence остаются OPEN; разрешения писать код это решение не даёт.
 
