@@ -4,6 +4,75 @@
 
 ## Решения пользователя и источники
 
+### H2-SIG: propagation W/R через Artifacts — 2026-11-20, PROPOSED
+
+Owning дельта для координатора Between domain operations по [H2-SIG](interdomain-refusal-transport-h2.md). Не code-go и не приёмка H2. Заменяет прежнее однопараметрическое предложение store/ledger/конкретных adapters[R]. W — concrete текущий Snapshot write result; R — закрытый набор читаемых Snapshot roots, включающий W. Reader policy legacy root20124 | W остаётся предложением Publication до пользовательской приёмки. D принадлежит result composition и отдельно в leases не передаётся. H3, reuse TimeSectionRefused, Time-owned validator, lease/retention порядок не меняются.
+
+**Actual evidence:** IArtifactLeases.finish_preparation/recover/cancel возвращают bare OperationRecord; SqliteArtifactLeases._record возвращает SqliteOperationStore._load. OperationLedger.recover имеет terminal fast path через store.read и fallback leases.recover. cancel может вернуть ранее сохранённый terminal, а не только OperationCancelled. ArtifactStagingService.cancel повторно валидирует bare OperationRecord. Store создаёт bare OperationRecord, terminal codec фиксирует SnapshotApplyResult. Одних annotations недостаточно для H2.
+
+**Владение:** Publication определяет terminal write/read models, root dispatch, manifest, compatibility и единый construction binding store/ledger/codec[W,R]. Artifacts сохраняет R в operation observations, не выбирает roots и не создаёт второй terminal codec. OperationRecord[R] в existing dataModel/artifacts/lifecycle/operation/record.py сохраняет все поля и общие инварианты; terminal имеет R | PackActivationResult | GameplayStarted | OperationCancelled | None. R — Snapshot roots, а не повторный union всех terminal kinds. Time imports в общем Artifacts/Publication ядре запрещены.
+
+#### Exact signatures — proposed delta существующих модулей
+
+```python
+# app.application.artifacts.storage.artifactLeases
+class IArtifactLeases[R](Protocol):
+    async def finish_preparation(
+        self, lease: OperationLeaseRef, refs: tuple[ArtifactRef, ...]
+    ) -> OperationRecord[R]: ...
+    async def recover(self, operation_id: EntityUid) -> OperationRecord[R]: ...
+    async def cancel(self, operation_id: EntityUid, fence: int) -> OperationRecord[R]: ...
+
+# app.db.repositories.sqlite.artifacts.leaseStore
+class SqliteArtifactLeases[W, R]:
+    def __init__(
+        self, scopes: SqliteArtifactScope,
+        operations: SqliteOperationStore[W, R],
+        artifacts: SqliteOperationArtifacts,
+    ) -> None: ...
+    async def _record(
+        self, scope: CommitReadScope | CommitScope, operation_id: EntityUid
+    ) -> OperationRecord[R]: ...
+    # finish_preparation/recover/cancel: signatures идентичны IArtifactLeases[R].
+
+# app.application.artifacts.staging.artifactStaging
+class ArtifactStagingService[W, R]:
+    def __init__(
+        self, registry: ArtifactFormatRegistryBinding, catalog: IArtifactCatalog,
+        leases: IArtifactLeases[R], holders: IArtifactHolders,
+        gc: ArtifactGarbageCollector, ledger: OperationLedger[W, R],
+        log: ArtifactLifecycleLog, *, record_model: type[OperationRecord[R]],
+    ) -> None: ...
+    # finish_preparation/recover/cancel: signatures идентичны IArtifactLeases[R].
+```
+
+IArtifactStaging[R] в existing application/artifacts/contracts/stagingPort.py имеет те же три result signatures. Остальные методы IArtifactLeases/IArtifactStaging сохраняют existing inputs/outputs. Термин «reader-only leases[R]» означает отсутствие W в surface, а не read-only эффекты: finish/cancel по-прежнему изменяют lifecycle. Concrete SqliteArtifactLeases[W,R] зависит от write/read store и потому сохраняет оба параметра; запись OperationCancelled не превращается в W.
+
+Publication counterpart, согласуемый prerequisite (не самостоятельное переопределение foreign API): OperationLedger[W,R].__init__(operations: IOperationStore[W,R], leases: IArtifactLeases[R]); read(operation_id:EntityUid)->OperationRecord[R]|None; recover(operation_id:EntityUid)->OperationRecord[R]; cancel(operation_id:EntityUid,fence:int)->OperationRecord[R]. Store/codec record_refusal принимает W; read/decode возвращает R с отдельными Pack/Gameplay/Cancelled branches по Publication контракту.
+
+#### Construction, validation и nested calls
+
+- record_model — одна closed concrete specialization, предоставляемая той же Publication composition, что store/codec. Это proposed явная constructor dependency вместо bare OperationRecord.model_validate в staging wrapper; не новый DTO/token/registry. Полные неизменные поля валидируются через record_model, terminal concrete class/operands/category/order сохраняются. _record в lease adapter возвращает уже проверенный store result, не выполняет dict round-trip или old→new adaptation.
+- Composition должна проверить W входит в R, закрытость R, совпадение record_model и root/manifest policy у store/ledger/leases/staging adapter. Неподставленные generics и runtime Any/BaseModel не допускаются. Exact механизм проверки shared construction binding должен предоставить Publication; type annotations сами по себе это не обеспечивают. Это внешний OPEN H2-SIG, не обещание готового constructor guard.
+- Допустимая к согласованию lifecycle цепочка: OperationLedger[W,R] → IArtifactLeases[R] → SqliteArtifactLeases[W,R] → тот же SqliteOperationStore[W,R]. Ledger не вызывает публичный Artifacts OpenPipeline/ArtifactStagingService; lease adapter не вызывает ledger, Time, Source или Pack. Store/evidence/codec являются узкими infrastructure dependencies; их полная вложенная цепочка требует приёмки координатора.
+- Normal apply использует согласуемый узкий IOperationStore[W,R] port. recover/cancel/finish не добавляются в apply ради H2. Internal terminal read/replay не переносится в read_world или предыдущие ноды.
+
+#### Ошибки, проверки и статус переходов
+
+Входы остаются existing OperationLeaseRef, tuple[ArtifactRef,...], EntityUid и положительный fence; новых зеркальных request POJO нет. Existing validation/lease refusals, OperationBusyError, PublicationInfrastructureError, UnknownCommitOutcome и cancellation сохраняют разделение. H2 не объявляет proposed ArtifactLeaseFailure реализованным. Несовместимость composition отклоняется при construction; foreign persisted root/manifest и искажение terminal — Publication-owned infrastructure/contract fault, не Snapshot business refusal. Exact codec compatibility errors принадлежат Publication.
+
+| Переход | Вердикт | Условие закрытия |
+|---|---|---|
+| Store[W,R] → leases[W,R] → IArtifactLeases[R] | PROPOSED / OPEN | Один Publication binding, record R без пересборки diagnostics |
+| Ledger terminal fast path / leases fallback → OperationRecord[R] | PROPOSED / OPEN | Одинаковый R обеих ветвей, включая supported legacy root |
+| cancel existing terminal / OperationCancelled → OperationRecord[R] | PROPOSED / OPEN | Нет сужения до cancelled; existing release semantics сохранены |
+| Staging adapter[W,R] → IArtifactStaging[R] | PROPOSED / OPEN | Explicit concrete record_model, отсутствие bare model_validate |
+| Bare current codec/store → новый W | FAIL для H2 расширения | Дельта Publication codec/store необходима; это не оценка legacy поведения |
+
+Критерии будущей проверки: exact terminal concrete type, operands/category/order после store load, обеих recover ветвей и cancel уже terminal операции; foreign root rejection; constructor binding mismatch rejection; отсутствие повторного handler и old→new adaptation. finish exact holds/seals/READY, cancel fence/drain/release, rollback/unknown semantics неизменны. Новых tests/runtime PASS этим документом не заявляется.
+
+**Остаток:** H2-SIG — подтверждение Publication constructor binding и record_model dependency; H2-DISPATCH/REP/IDS — root dispatch, supported representations/manifest closure и IDs отдельно у владельцев. OperationRecord persistence reachability проверяется до назначения canonical ID; существование runtime model не доказывает сериализацию. Общий H2-документ этой правкой не меняется.
+
 ### Уточнение поручения: вернуть контракт Source — 2026-11-18
 
 Ответ «полного публичного контракта нет» является результатом аудита, но не результатом поручения. Artifacts обязан подготовить и вернуть конкретный owning proposal: exact public methods/Input/Result/Error, непрерывную retention guarantee, caller trace, recovery/cleanup и проверяемые критерии. Наличие gaps не перекладывает проектирование Artifacts на Source. Реализованное, принятые решения и новые proposals обозначаются раздельно; предложение не объявляется реализованным или принятым.

@@ -1,8 +1,12 @@
 # Реестр междоменных контрактов DAG
 
+**Положение Publication — зафиксировано пользователем 2026-11-21.** Publication является общей инфраструктурной частью ядра Snapshot, а не самостоятельным предметным доменом. Оно обслуживает operation identity/immutable request binding, lifecycle выполнения, транзакционную фиксацию, terminal persistence и exact replay для Snapshot apply, Pack activation и gameplay start. Выражение «владелец Publication» означает владельца этой инфраструктурной части; отдельные чат и каталог application/publication не задают отдельный домен. Snapshot владеет применением готовых изменений и моделью apply result; предметные домены — семантикой своих данных/diagnostics; Artifacts — хранением artifacts и их защитой; DAG — оркестрацией. Зависимость Snapshot → внутренний Publication operation store классифицируется как инфраструктурная связь внутри ядра, но exact capability, nested calls и H2 contracts ещё проверяются. Эта классификация не разрешает произвольные foreign public pipeline calls, не передаёт Publication доменную семантику и не закрывает H2.
+
 2026-11-19. Пользователь поручил сохранить таблицу и проработать все восемь направлений, затем явно разрешил адресный опрос всех необходимых владельцев. Координатор — Between domain operations. Это реестр контрактной работы, не разрешение реализации, новых NodeId или изменения утверждённого порядка.
 
 ## Сводная таблица
+
+**H2 update 2026-11-21:** пользователь принял encoding limits/error границу, разделение root extraction/full decode, W/R read policy без old→new adaptation и IDs 31007/31139/31140/20150. [Точное решение и остатки](interdomain-refusal-transport-h2.md). Legacy diagnostic roster, новая format/root pair и final signatures/API review ещё OPEN; H2 целиком не закрыт.
 
 **H2 — постановка и согласование 2026-11-20:** [отдельный план типизированных отказов](interdomain-refusal-transport-h2.md) фиксирует проблему, H2-1…H2-6 и владельцев PatchSet/Time/Snapshot/Publication. Направление generic carrier предложено, полная цепочка до terminal/replay OPEN. Это общая граница в текущих IC, не дополнительное девятое направление.
 

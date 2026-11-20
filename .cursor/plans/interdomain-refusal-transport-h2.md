@@ -1,8 +1,63 @@
 # H2: типизированный доменный отказ до результата и replay
 
+## Решения пользователя 2026-11-21 — encoding / representations / IDs
+
+### Итоговая сверка координатора 2026-11-21 — к приёмке
+
+Проверены ответы Publication/Snapshot и owning-планы; source-level сверены coreManifest registrations20306/20307/20137 и модель SnapshotApplyRelationIssue. Runtime/БД не проверялись.
+
+- SIG: прежние расхождения S-instance и staging record_model устранены в Publication proposal. Один PublicationResultBinding[W,R] содержит write model/format/manifest/readers/record_model/limits; read_models вычисляется из readers. Store/ledger/staging предъявляют тот же binding через read-only property; leases предъявляет record_model. Factory проверяет exact identity до IO, без private introspection. Proposed ApplySnapshotInput[S].patch_set → IWorldSnapshotApply[S,R].apply → ApplySnapshotOutput[R].value сохраняет R без adaptation. Локальная совместимость signatures подтверждена сверкой; final acceptance отдельно, общий cancellation/public-error transport остаётся IC-4.
+- DISPATCH: proposed validate_decode_limits(limits)->None + read_record_root_id(data,*,limits)->int конкретизируют принятую границу. Конфигурация проверяется до payload wrapper; header extraction не обещает проверки fields/items/всего nested graph. Full bounded decode обязателен. По прочитанным source и proposal конфликтов с принятой ответственностью не обнаружено; implementation edge-case evidence отдельно. Отдельный агент encoding не обязателен: координаторская проверка выполняется здесь, technical ownership остаётся encoding.
+- REP: подтверждённый production diagnostic roster default legacy composition — SnapshotApplyRelationIssue20307 + SnapshotApplyCode20306 и reachable shared types. FieldPathError20137 — carrier, не полный concrete roster. FakeTargetIssue90011/enum90010/path90012–90014 test-only, production manifest ими не расширяется. Неизвестные historical subclasses не считаются отсутствующими или поддержанными. Для одного (1,20124) один непротиворечивый legacy manifest, не несколько trial readers.
+- Новая pair (row format1, root20150) рекомендована к freeze: Publication source audit не выявил изменения row envelope/TLV-v1; old/new roots различимы explicit ID. Это рекомендация, не утверждение выполненного codec round-trip.
+
+Один внешний вопрос для завершения legacy roster: должны ли читаться production historical FieldPathError subclasses сверх SnapshotApplyRelationIssue20307? Нужен scope поддержки; если да — exact class/ID/manifest и безопасные fixtures. Без ответа whole legacy compatibility не объявляется закрытой. IDs31007/31139/31140/20150 уже приняты, повторно не назначаются.
+
+ACCEPTED после предъявления предложений координатора. Приоритет над историческими PROPOSED по перечисленным решениям; H2 целиком ещё OPEN, не code-go.
+
+- Конфигурацию DecodeLimits проверяет encoding при создании decoder/codec binding до чтения, значения задаёт application composition. Прямой публичный helper также гарантирует проверку конфигурации. Числовые budgets — strict положительные int без bool; collection bounds 0 ≤ minimum ≤ maximum, field limits соответствуют моделям/полям, противоречивые дубликаты запрещены. TypeError для неверного типа конфигурации, ValueError для неверного значения/отношений; CanonicalEncodingError для malformed bytes/tag/length и превышения корректного бюджета. Publication сохраняет cause при mapping в infrastructure failure, не business refusal.
+- Один shared parser. read_record_root_id проверяет размер и внешнюю RECORD-оболочку/границы/положительный canonical ID, применяет budgets к прочитанной части, не создаёт модель и не доказывает корректность nested payload. После dispatch обязателен полный bounded decode с manifest/model и всеми applicable field/items/node/depth checks.
+- Порядок terminal read: row/size → checksum → root extraction → exact (format_version, root_id) reader → full decode → row/body identity/category и owning operation checks. Нет пробных decode, fallback или копии parser в SQL codec. Техническая граница остаётся в encoding; coordinator review API и Publication consumer review, без назначения нового предметного домена.
+- Принято направление W/R: новая запись W, replay возвращает исходный поддерживаемый concrete член R без old→new adaptation. Сохраняются старые root20124 format1 и roots20125/20126/20127 в существующем формате. Старый root20124 сохраняет declaration/identity/meaning; generic/new W его не подменяет. Полный legacy diagnostic manifest roster должен быть предъявлен отдельно; чтение любого неизвестного historical subclass не обещано. БД не обследованы, отсутствие legacy не предполагается.
+- Приняты новые canonical IDs: TimeCommitIssueCode ENUM=31007; PrepareTimeAdvanceSection RECORD=31139; TimeCommitRelationIssue RECORD=31140; TimeSnapshotApplyResult RECORD=20150. Альтернативные 31108/31109 не приняты. Ранее принятые native IDs и 20124/20128/20131 не переназначаются. Runtime-only TimeSectionRefused/validator errors IDs не получают. Это принятие назначений, не evidence runtime registrations/round-trip и не глобальный audit всех внешних хранилищ.
+- Новая пара row format/root ещё требует freeze: format1 + root20150 допустим как предложение при подтверждённо неизменной оболочке/encoding; automatic bump не вводится. Самостоятельная serialization support 20128/20131 требует отдельного подтверждённого consumer, не выводится из terminal path.
+
+Остатки: финальная сверка signatures/configuration/node output, encoding API review, полный legacy diagnostic roster и exact новая format/root pair. Реализация/миграции не разрешены этой приёмкой.
+
+**Положение Publication — зафиксировано пользователем 2026-11-21.** Publication является общей инфраструктурной частью ядра Snapshot, а не самостоятельным предметным доменом. Оно обслуживает operation identity/immutable request binding, lifecycle выполнения, транзакционную фиксацию, terminal persistence и exact replay для Snapshot apply, Pack activation и gameplay start. Выражение «владелец Publication» означает владельца этой инфраструктурной части; отдельные чат и каталог application/publication не задают отдельный домен. Snapshot владеет применением готовых изменений и моделью apply result; предметные домены — семантикой своих данных/diagnostics; Artifacts — хранением artifacts и их защитой; DAG — оркестрацией. Зависимость Snapshot → внутренний Publication operation store классифицируется как инфраструктурная связь внутри ядра, но exact capability, nested calls и H2 contracts ещё проверяются. Эта классификация не разрешает произвольные foreign public pipeline calls, не передаёт Publication доменную семантику и не закрывает H2.
+
 2026-11-20. Постановка и вопросы сохранены по поручению пользователя. Статус: OPEN / предложения к согласованию, не code-go. Координатор — Between domain operations. H2 является общей границей, используемой IC-1; не новый девятый контракт. Локальный H3 на готовых SQL-данных принят отдельно.
 
 ## Проблема и граница
+
+## Апдейт контракта — сводка ответов 2026-11-20
+
+### Координаторская сверка 2026-11-21 — SIG/DISPATCH в работе
+
+Положение Publication уточнено: инфраструктурная часть Snapshot. После сверки owning-планов к финализации SIG остаются конкретные дельты: (1) Publication должен синхронизировать свой apply port с Snapshot-owned IWorldSnapshotApply[S,R], где S связан с экземпляром; (2) подтвердить ArtifactStagingService keyword record_model и exact identity с record_model store; (3) предъявить проверяемую typed construction configuration W/R/readers/record_model без private introspection; (4) Snapshot предъявляет exact existing apply_snapshot output binding для R. Адресные вопросы направлены Publication/Snapshot. Эти сигнатуры ещё proposal к итоговой приёмке.
+
+DISPATCH: координатор прочитал existing DecodeLimits и boundedCanonicalDecode._Reader. Shared header parser действительно проверяет node/depth/length; proposed read_record_root_id отсутствует. DecodeLimits — dataclass без собственного admission положительных budget значений; контракт нового entry point должен явно назвать место проверки limits, а не считать их автоматически валидными. Root extraction проверяет только внешний record header/type id и структуру оболочки, не canonical validity вложенных полей; полное bounded decode обязательно после выбора reader. Не вводить лишний общий parser или менять формат ради dispatch. Exact limits/error contract и owning encoding review остаются OPEN.
+
+По поручению пользователя фиксируется текущий стейт и следующий проход согласования. **H2 OPEN, не code-go.** Согласие владельцев с направлением не подменяет окончательную приёмку пользователем.
+
+Приняты ранее: reuse TimeSectionRefused без второго carrier; Time-owned validator проверяет набор diagnostics; Registry/Snapshot не копируют Time predicates; H3 и порядок внутренних чтений отдельно приняты.
+
+Сведённое предложение: D — закрытый набор diagnostic types; W — concrete Snapshot result для новых записей; R — закрытый набор читаемых Snapshot roots, включающий W. Publication рекомендует R = прежний root20124 | W без old→new adaptation; Snapshot поддержал. OperationRecord[R]/claims/leases несут читаемый результат; store/ledger/codec, одновременно пишущие и читающие, используют W,R. Exact новые результаты после confirmed rollback сохраняются record_refusal(W); replay возвращает сохранённый R до state reads/handlers. Pack/Gameplay/Cancelled сохраняют свои roots и отдельные правила.
+
+PatchSet и Snapshot сошлись на proposed placement app/composition/snapshotTime/{contracts.py,binding.py}: отдельный TimeSnapshotApplyResult, reuse TimeSectionRefused, один binding registry/result/codec. Назначение владельца и полный construction contract ещё не frozen. TimeRefusalValidator.validate(refusal,expected_request)->None предъявлен; exact API ещё proposed.
+
+Предложенная узкая infrastructure boundary Snapshot → IOperationStore[W,R] ограничена claim/read/terminal persistence и owning SQL/evidence/codec; весь OperationLedger не внедряется, recover/cancel/finish не добавляются в обычный apply. Artifacts подтвердил topology отдельного ledger→leases→store пути для lifecycle, но final nested-call приёмка ещё OPEN.
+
+| Gate | Что свести / закрыть | Владелец |
+|---|---|---|
+| H2-SIG | Artifacts старые store/ledger[R] согласовать с Publication[W,R]; reader-only leases[R] отличить от concrete adapters[W,R]. Snapshot выбирает final apply[S,R] binding: S у экземпляра либо метода. Единая таблица exact constructors/methods/returns и errors | Publication, Artifacts, Snapshot; PatchSet сверяет registry boundary |
+| H2-DISPATCH | Bounded canonical root-tag API owning encoding с exact Input/Output/Error; dispatch по version/root без копии parser или пробных decode. Checksum/unknown/foreign root правила | Publication; encoding owner требуется подтвердить |
+| H2-REP | Конкретный список supported format/root/diagnostic manifests, прежний root20124 и новое W; как replay R выходит в DAG. Источники/fixtures отдельно от реально сохранённых БД; неизвестные данные не считаются отсутствующими | Publication, Snapshot |
+| H2-IDS | Minimal Time request/issue/enum + W root; collision audit, proposed номера и closure. Старые 20124/20128/20131 не переопределять. OperationRecord persist reachability проверить; runtime refusal/binding/exception не регистрировать без serialization path | Time, PatchSet, Snapshot, Publication |
+
+Следующий порядок: свести signatures → отдельно предъявить root dispatch → поддерживаемые representations → identities и итоговую совместимость. Независимые source inventory допустимы одновременно, зависимые решения не объявляются закрытыми заранее. Нет разрешения на реализацию, migration или изменение storage versions по умолчанию.
+
+### Исходная постановка
 
 **Фиксация границ write flow пользователем 2026-11-20.** Terminal read/replay относится к внутреннему выполнению Snapshot.apply под нодой apply_snapshot, не к отдельной read_world цепочке. Metadata принадлежат Snapshot; Time handler принадлежит Time и подключается registry/composition, готовая section поступает через assembler. Terminal persistence/replay принадлежат Publication, apply result model — Snapshot, semantic diagnostics — доменам. Metadata/terminal не приходят outputs предыдущих DAG-нод. Общий operation store/claim — рассматриваемая infrastructure dependency; H2 обязан проверить допустимость exact internal port и вложенных вызовов. Полностью согласованным этот путь ещё не объявлен; прямой foreign public pipeline call не разрешён. [Общая карта и таблица](dag-multidomain-patch-publication-draft.md).
 
