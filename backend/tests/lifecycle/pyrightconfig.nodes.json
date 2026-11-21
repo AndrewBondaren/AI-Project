@@ -1,5 +1,9 @@
 {
-  "include": ["support/nodeContracts.py", "support/nodeBindings.py"],
+  "include": [
+    "support/nodeContracts.py",
+    "support/nodeBindings.py",
+    "../../app/application/lifecycle/changes/changeBuilder.py"
+  ],
   "extraPaths": ["../.."],
   "venvPath": "../..",
   "venv": ".venv",
