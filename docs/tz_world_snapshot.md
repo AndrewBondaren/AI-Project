@@ -420,16 +420,42 @@ commit outcome — отдельное recovery состояние операци
    turn_id — следующий тик active timeline, первый тик timeline имеет
    turn_id=1; родитель из другого timeline допустим только как уже
    явно закреплённая точка ветвления, apply сам ветку не создаёт.
-5. Handler.validate всех секций в явном порядке на согласованной базе.
+5. По принятой поправке H3/C2-R1 (2026-11-20), после expected-context checks
+   Snapshot разрешает необходимые section sources до handler.validate.
+   Exact source metadata читается в read facet той же transaction и сохраняется
+   на текущую попытку; она задаёт адрес, но не доказывает валидность payload.
+   Payload читает owning participant в своём persistence через borrowed scope.
+   Source infrastructure fault может опередить semantic refusal; дальнейшие
+   diagnostics не выдумываются. Конкретный binding Time не переносится на Lifecycle.
+   Затем Handler.validate всех секций в явном порядке на согласованной базе.
    Если среди полученных refusals есть REJECTED, основной исход REJECTED;
    иначе при любом CONFLICT — CONFLICT. Diagnostics возвращаются в порядке
    секций и порядке producer, не сортируются по message/code.
-6. Только после успешной validation всех секций вызываются handler.apply
-   и domain storage в той же transaction. Защитный отказ любого apply
+6. После успешной validation всех секций Snapshot дочитывает остальные exact
+   pinned bases до первого handler.apply: world, затем players в принятом порядке;
+   None head не требует snapshot lookup. Уже прочитанные metadata переиспользуются
+   без повторного IO. Empty sections не отменяют нужные reads для наследования.
+   Validation refusal исключает дочитывание остальных bases, но source reads уже
+   могли состояться. Missing/corrupt required base — infrastructure fault до apply.
+   Затем handler.apply и собственный domain storage выполняются в той же transaction.
+   Successful output проходит PatchSet output admission и немедленную Snapshot C2
+   проверку receipt до accumulator, следующего handler и metadata. Receipt fault
+   — execution failure, не business refusal. Защитный отказ или fault любого apply
    откатывает весь набор; завершение остальных apply после отказа запрещено.
 7. Snapshot storage записывает общую metadata/refs, holder handoff, новый
    publication record и COMMITTED outcome в этой же transaction.
    COMMIT подтверждается до возврата результата COMMITTED и success log.
+
+Эта детализация сохраняет принятый порядок атомарной операции, не вводит новые
+DAG-ноды. Receipt.changed проверяется по полным PatchRef как допустимое подмножество
+входа; доменная cardinality не выводится из числа SectionHistoryRef. В частности,
+Lifecycle history ref может адресовать bundle нескольких переходов; один переход
+не обязан иметь отдельный section history ref. Повтор change_uid и смысловое
+равенство проверяет Lifecycle, не Snapshot. Empty changed запрещает замену state
+новым assigned state. Общее правило Snapshot не запрещает history только из-за
+пустого changed: любой history ref обязан адресовать assigned snapshot.
+Для exact Lifecycle повторения отсутствие новой history operation проверяет
+Lifecycle; inherited state retention проверяет C2, inherited history receipt запрещён.
 
 При одновременных причинах более ранняя неуспешная общая фаза определяет
 основной исход. При IO failure во время проверки не изобретается более

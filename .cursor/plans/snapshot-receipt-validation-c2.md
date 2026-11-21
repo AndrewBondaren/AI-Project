@@ -1,5 +1,9 @@
 # Snapshot C2: проверка результата применения секции
 
+**Уточнение R3/R4/R5 после повторного ревью, 2026-11-21:** [точный контракт admitted facts и диагностики](snapshot-receipt-facts-diagnostics.md) заменяет прежние недетализированные предложения fully-valid-only extraction и подавления FOREIGN_OPERATION. Это PROPOSED для приёмки, не код. Общий no-op запрет касается нового state, а не history с assigned ref; Lifecycle no-op history — owning правило Lifecycle.
+
+Синхронизация 2026-11-21: принятый trace source reads → all validations → remaining bases → apply/immediate receipt checks отражён в docs/tz_world_snapshot.md. Lifecycle-specific synthetic scope и обязанности добавлены в §8; это не пересмотр общих C1/C2/H2 и не code-go.
+
 2026-11-19. Пользователь принял предложение и поручил закрепить его, расписать план, затем отдельно проверить противоречия. Архитектура C2 ACCEPTED; код не начат. Это документальная детализация, не разрешение обходить Snapshot ARCH-0 или открытые gates ниже.
 
 Источники: [C2](section-codec-receipt-contract.md), [Snapshot ARCH-0](world-domain-patches-snapshots.md), docs/tz_world_snapshot.md §«Snapshot.apply, результаты и порядок проверок», existing SectionApplyReceipt, SnapshotMetadataBuilder и receiptProvenance. Применяется implement-plan перед кодом. При расхождении с ТЗ зависимый код не начинается; ТЗ не исправляется попутно.
@@ -41,11 +45,11 @@ Invalid receipt — execution contract fault, не SectionRefused/business refus
 
 | Тип | Точные поля | Смысл и проверка |
 |---|---|---|
-| ReceiptSectionMismatch | expected_section_key:SectionKey; actual_section_key:SectionKey | Ключи различаются; association с входной секцией. Frozen/strict/extra-forbid/revalidate-always; нет IO |
-| ReceiptChangedPatchNotInInput | section_key:SectionKey; changed_index:Annotated[StrictInt,Field(ge=0)]; patch_ref:PatchRef | Полный changed ref отсутствует во входе. Индекс — receipt.changed, bool/negative запрещены; членство проверяет validator, не POJO |
+| ReceiptSectionMismatch | section_index:Annotated[StrictInt,Field(ge=0)]; expected_section_key:SectionKey; actual_section_key:SectionKey | Ключи различаются; original input section index, bool запрещён. Frozen/strict/extra-forbid/revalidate-always; нет IO |
+| ReceiptChangedPatchNotInInput | section_index:Annotated[StrictInt,Field(ge=0)]; section_key:SectionKey; changed_index:Annotated[StrictInt,Field(ge=0)]; patch_ref:PatchRef | Полный ref отсутствует во входе; section/nested indices различаются, bool/negative запрещены; членство проверяет validator |
 | ReceiptContractIssue | alias: ReceiptSectionMismatch \| ReceiptChangedPatchNotInInput \| SnapshotMetadataFieldIssue \| SnapshotMetadataRelationIssue | Alias не новый envelope; exact admitted classes, не произвольный FieldPathError/BaseModel |
 
-Existing metadata issues переиспользуются для прежних malformed/provenance причин; поля/code semantics не дублируются. Новые records описывают сравнение с input section, которого прежняя metadata диагностика не выражала. Existing FOREIGN_OPERATION не требуется дополнительно выдавать за тот же changed ref, если exact membership уже сообщает нарушение; окончательная карта совместимости диагностики — gate §6, не разрешение молча удалить existing reports.
+Existing metadata issues переиспользуются для прежних malformed/provenance причин; поля/code semantics не дублируются. Новые records описывают сравнение с input section. Уточнение R5: FOREIGN_OPERATION сохраняется независимо от input membership; прежнее предложение подавления отозвано. Точный early/builder/final порядок и carriers заданы в snapshot-receipt-facts-diagnostics.md, PROPOSED для приёмки.
 
 SectionStateRetention/SectionHistoryRetention, SnapshotEnvelope, SnapshotApplyContext и PatchRef используются без зеркал. Context с capability остаётся application-only. Новый public admission fault/enum не создаётся. Persisted terminal/canonical IDs этих новых diagnostics не назначаются: contract fault не terminal result. Если внешнему transport нужны новые поля, это отдельная согласуемая дельта.
 
@@ -100,3 +104,32 @@ Fault выходит из outer transaction; подтверждённый rollba
 ## 7. Статус отдельной проверки противоречий
 
 Отдельный review выполнен: [C2-R1…R5](snapshot-receipt-validation-c2-review.md). R1 закрыт на уровне выбора owner/фазы/приоритета ошибок принятием варианта А; R2 закрыт по источнику и передаче section_index. Internal wiring и evidence ещё требуются. Детальный implementation contract OPEN: malformed aggregation, exact extraction map и diagnostic compatibility/упаковка адресов требуют уточнения. Архитектурное согласие не является PASS реализации или всех деталей. Не менять C1 и ТЗ ради устранения найденного расхождения без соответствующего согласования.
+
+## 8. Lifecycle synthetic integration — 2026-11-21
+
+Уточнение source review 2026-11-21: [R4 extraction](snapshot-provenance-extraction-r4.md). Inherited retention в receipt допускается для state, не history. History всегда адресует assigned snapshot; для Lifecycle exact duplicate/no-op history=(), changed=(), states=() либо exact inherited state. Общий C2 не вводит правила history-count == changed-count; отсутствие новой history при Lifecycle повторе обеспечивает Lifecycle. Прежние обобщённые формулировки «inherited entries» этого раздела не разрешают inherited history.
+
+PROPOSED локальный evidence-срез по [Lifecycle atomic boundary](snapshot-lifecycle-atomic-boundary.md), не новая реализация validator и не общий code-go. Порядок поставки C2-I1 → C2-I2 сохраняется: pure receipt assertions входят в evidence I1, fake transaction/service call-order/rollback — в I2. Это можно проверить без real domains/SQL/DDL/producers/checkpoint. Exact local Lifecycle capture/evidence/closed types/idempotence по owning контракту обязательны, отсутствие OUT не blocker.
+
+### Receipt obligations
+
+| Сценарий | Lifecycle обязанность | Snapshot C2 обязанность |
+|---|---|---|
+| 100 independent Creates | 100 native patches и при первом successful apply 100 history operations; projections по typed участникам | Полные changed refs принадлежат исходным patches, правильные section/assigned refs и retention provenance; НЕ требовать 100 SectionHistoryRef |
+| Один Replacement со 100 участниками | Один native patch/одна history operation; projections по участникам | Не выводить число patches/history operations из числа участников или retention entries |
+| Mixed synthetic A/B | Сохранить concrete typed inputs и входной порядок; не пересекать участников | Generic receipt validator не ветвится по виду сущности |
+| Same change_uid/same semantics | Lifecycle подтверждает повтор по complete accepted history; нет второй history operation, выдаёт owning changed/retention outcome | Проверить subset membership и exact inherited entries; не сравнивать semantic payload/change_uid самостоятельно |
+| Same change_uid/different semantics | Typed Lifecycle conflict, не успешный receipt | Общий rollback/business path без receipt validation refused output |
+| Empty/partial changed | Lifecycle доказывает соответствующий no-op/частично новые transitions по своему контракту | Не требовать equality changed=input; empty changed запрещает новый state; history проверяется по assigned ref независимо от changed; inherited state closure должен совпадать |
+
+SectionHistoryRef адресует retained section history, который может быть bundle; его cardinality не равна cardinality history operations. C2 проверяет metadata/provenance, но не читает внутренние Lifecycle rows ради пересчёта операций. History-count assertions относятся к owning fake Lifecycle store. LifecycleAppendResult/no-op retention exact mapping остаётся local contract owner, а не новая Snapshot policy.
+
+### Synthetic evidence I1 / I2
+
+I1: valid bundled history receipt; один full PatchRef вне входа; чужой section/assigned target; изменение inherited retention; empty changed с недопустимым новым state. Отдельный положительный общий случай — empty changed с history на assigned ref; запрет такой history для Lifecycle exact повторения проверяется owning Lifecycle тестом. Проверяются исходный section_index и независимые diagnostics по общему C2 контракту. Без копирования predicates в Lifecycle или новых fake-specific validator branches.
+
+I2: fake transaction owner удерживает immutable accepted baseline Q и отдельный staged workspace для Lifecycle и второго synthetic participant. Отдельный namespace writer каждого участника не может писать чужие данные или самостоятельно commit/rollback. Проверить: отказ второго handler после writes первого; invalid receipt до следующего handler; CAS conflict; complete rollback всех namespaces; успешный один commit; lost acknowledgement при физическом commit и при отсутствии commit → unknown без ложного rollback. Exact operation replay не вызывает handlers/source reads. Cancellation требует drain перед revoke; expired capability отвергается. Никакого автоматического деления 100 переходов на commits.
+
+Fake participant — test implementation узкого owning persistence protocol. Регистрация/DI сами по себе не разрешают foreign public pipeline или writer; permitted nested chain задаётся atomic-boundary планом. Snapshot-owned generic checks и Lifecycle semantic checks проверяются раздельно. Fake evidence не доказывает production SQL durability/cleanup и не называется production readiness.
+
+**Приёмка среза:** Snapshot предъявляет call trace/receipt/fault/rollback assertions; Lifecycle подтверждает complete capture, duplicate semantic comparison и evidence/no-op mapping; PatchSet подтверждает closed native union/output admission. Gate local IN закрывается по этим контрактам и synthetic evidence, не по наличию реальных NPC/producer/adapters. Полный C2 остаётся OPEN по ранее указанным G1–G4; новый срез не переоткрывает принятый H3 Time и не объявляет его универсальным Lifecycle binding.

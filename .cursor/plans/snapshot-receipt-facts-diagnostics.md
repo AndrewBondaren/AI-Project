@@ -1,0 +1,54 @@
+# C2 R3/R4/R5: admitted facts, единые predicates и порядок diagnostics
+
+2026-11-21. PROPOSED исправление повторного ревью. Заменяет fully-valid-only extraction из snapshot-provenance-extraction-r4.md и незамкнутые R3/R5. Не меняет порядок transaction, H2 output admission или public DTO. Код не пишется.
+
+## 1. Внутренние типизированные факты
+
+Новый internal модуль `application/worldSnapshot/validation/receiptFacts.py`; frozen dataclasses, не wire records/публичные POJO и без canonical IDs. Это результат structural admission для доступных фактов, не второй SectionApplyReceipt. Все indices strict int>=0 без bool; factory проверяет их, constructor также отвергает неверные значения. Вложенные ref/retention — строго валидированные existing owning модели, не копии их полей.
+
+| Класс | Поля и смысл |
+|---|---|
+| AdmittedChanged | index:int; ref:PatchRef |
+| AdmittedState | index:int; ref:SectionStateRef; retention:SectionStateRetention \| None. None означает closure не прошёл admission, а не пустой artifacts |
+| AdmittedHistory | index:int; ref:SectionHistoryRef; retention:SectionHistoryRetention \| None, тот же смысл None |
+| ReceiptFacts | section_index:int; section_key:SectionKey \| None; changed_empty:bool \| None; changed:tuple[AdmittedChanged,...]; states:tuple[AdmittedState,...]; history:tuple[AdmittedHistory,...]; validated:SectionApplyReceipt \| None; structural_issues:tuple[SnapshotBuilderIssue,...] |
+
+`ReceiptFactsAdmission.admit(raw: object, *, section_index:int) -> ReceiptFacts` — pure internal метод. object допускается только на этой unchecked structural boundary; наружу выходят закрытые typed facts. Метод сначала применяет existing SectionApplyReceipt.model_validate(strict=True). При успехе validated заполнен и все facts из валидной модели. При ValidationError сохраняет structural issues в исходном порядке Pydantic; known field → existing SnapshotMetadataFieldIssue/CheckedPath; root/unknown location → SnapshotMetadataRelationIssue(code=INVALID_RECEIPT,location='receipts',address=(section_index,*loc)). Фиктивный FieldPath не создаётся. TypeError/неожиданные programmer errors не blanket-map в malformed receipt.
+
+Если raw не SectionApplyReceipt и owning model validation завершилась неуспешно, зависимые facts пусты: это сохраняет current builder continue для неправильного root/dict. Если raw — повреждённый SectionApplyReceipt, factory независимо валидирует section_key, каждый PatchRef, каждый nested state/history ref и каждый полный retention entry. Неверный tuple-контейнер не обходится как iterable. Missing fields не заполняются фиктивным default. Original indices сохраняются, не enumerate отфильтрованного списка. Валидный ref доступен даже при повреждённых artifacts: retention=None. Отдельный extraction не добавляет повторные structural issues — их уже дал whole-model admission.
+
+changed_empty=True только для структурно допустимого пустого changed tuple; False для валидного непустого changed tuple; None если поле changed не допущено. None запрещает вывод NOOP_STATE, но не мешает FOREIGN_OPERATION для отдельно допустимых changed refs. Parent/base failure не превращается в UNREACHABLE_STATE: зависимая проверка пропускается, owning base diagnostic остаётся.
+
+## 2. Единые pure predicates
+
+В existing `validation/receiptProvenance.py`, без IO/context capability:
+
+`patch_matches_operation(ref:PatchRef, expected_operation_id:EntityUid) -> bool` — одна equality проверка полного operation_id. Все три consumers (early validator, builder, final provenance) вызывают её; expected берётся из context.validation.operation_id либо явного аргумента final checker, не из receipt. UID admission принадлежит owning model/boundary.
+
+`history_uses_assigned(ref:SectionHistoryRef, assigned:SnapshotRef) -> bool` — exact ref.snapshot==assigned для уже выбранного owner. Unknown owner проверяет global caller, выдаёт FOREIGN_HISTORY без вызова owner predicate.
+
+`state_provenance_codes(state:AdmittedState, *, assigned:SnapshotRef, base:SnapshotEnvelope|None, changed_empty:bool|None, replaces_same_owner_section:bool) -> tuple[SnapshotMetadataCode,...]` — единственный алгоритм state rules для early/builder/final. Preconditions: ref того же owner, assigned/base identity допущены caller-ом; None base означает отсутствие parent, не failed read. Assigned new state + changed_empty=True → NOOP_STATE. Inherited state + replacement → SUPERSEDED_STATE. Inherited ref отсутствует в base либо admitted retention не равен base entry → UNREACHABLE_STATE. При retention=None проверить допустимый ref membership, но не объявлять artifact closure совпавшим. Порядок кодов SUPERSEDED_STATE → UNREACHABLE_STATE; assigned state не проходит inherited branch.
+
+Owner identity/ref selection — один shared pure helper (existing _same_owner/_owner унифицировать), не отдельные copies в callers. `replaces_same_owner_section` вычисляется по admitted state refs с exact assigned snapshot, как existing builder; malformed sibling closure не скрывает известный replacement ref.
+
+`collect_owned_receipt_provenance(facts:ReceiptFacts, assigned:SnapshotRef, base:SnapshotEnvelope|None) -> tuple[SnapshotMetadataRelationIssue,...]` — adapter перечисленных predicates для одного owner. Его аргумент теперь facts, не fully validated receipt. Возвращает адреса с facts.section_index и original nested index; structural issues и operation mismatch не добавляет. Final append сначала имеет strict validated receipt, затем получает facts через тот же admission; early и builder используют его также на partial inputs. Нет fallback с копией predicates.
+
+Global adapter проверяет неизвестных owners и выбирает owner/base; final caller только одного envelope не получает несуществующие global guarantees. Final envelope↔receipts↔base coverage, metadata.operation/parent, duplicate receipt keys остаются отдельными postconditions. Не строить fake SnapshotApplyContext для final check.
+
+## 3. Стабильная диагностика
+
+Builder сохраняет existing sequence: предварительные turn/context/base issues → для каждого receipt: structural issues → duplicate section → FOREIGN_OPERATION по original changed index → FOREIGN_HISTORY по original history index → state issues по original state index (SUPERSEDED перед UNREACHABLE) → заключительные context/pack checks. Owner-local outputs объединяются по фазе/исходному индексу, а не по порядку owners. Внутри malformed structural issues не сортируются. Общая duplicate receipt проверка не переезжает в per-receipt helper.
+
+Early C2 sequence: structural issues → association → input membership по changed index → FOREIGN_OPERATION по changed index → history по original index → states по original index. **FOREIGN_OPERATION не подавляется:** прежнее предложение «membership достаточно» отозвано. Это разные отношения (input membership и expected operation), независимые факты сохраняются; порядок явно указан. Не сортировать по code/message/UID или состоянию dict. Результаты owner helpers агрегируются с фиксированными phase/index slots, без нового persisted diagnostic envelope.
+
+Existing SnapshotMetadataFieldIssue/RelationIssue и codes переиспользуются. Для новых input-association records в proposed receiptContract.py добавить обязательный section_index:StrictInt>=0 без bool в ReceiptSectionMismatch и ReceiptChangedPatchNotInInput; changed_index остаётся отдельным nested адресом. Это новая ещё не реализованная diagnostic модель, не расширение SectionApplyReceipt/PatchSet. Нет выдуманного field path для relation. SnapshotReceiptContractError.diagnostics остаётся закрытым union указанных records и existing metadata issues.
+
+Final validate_receipt_provenance сохраняет внешний ValueError и порядок собственных prechecks. На shared predicate failure выбирается первая причина в прежнем final traversal (receipt, history, states), её code имеет явное соответствие existing ValueError message; final не начинает выдавать builder aggregation. При наличии нескольких ошибок caller-specific порядок может различаться, но каждый predicate имеет один алгоритм. SnapshotMetadataBuilder сохраняет SnapshotMetadataFailure с полным ordered tuple. Новый early путь выдаёт SnapshotReceiptContractError. Эти adapters не переинтерпретируют бизнес-ошибки и не пишут terminal refusal.
+
+## 4. Ответственность и приёмка
+
+ReceiptFactsAdmission отвечает только за structural admission и доступность независимо валидных фактов; не читает base/operation/section input. Facts constructor не вычисляет lifecycle/provenance. Predicates отвечают только за отдельные relations. Adapters отвечают за owner coverage/address/order и owning error carrier. Builder строит envelopes; final checker проверяет итоговое покрытие. Отказ в приёмке при IO в этих компонентах, копии predicates, фиктивных closure defaults, потере original indices, swallowed programmer error или переносе Time/Lifecycle семантики в C2.
+
+Обязательные scenarios: malformed artifact + valid foreign state ref даёт structural и независимый provenance issue; malformed changed не порождает выдуманный NOOP_STATE; wrong root даёт INVALID_RECEIPT relation без fake path; interleaved world/player history/state сохраняют original phase/index order; wrong operation+outside-input дают оба reports; empty changed+assigned history допустим общему Snapshot при прочих валидных условиях; exact Lifecycle retry отдельно требует no new history. Final и early дают одинаковый verdict каждого общего predicate; existing builder order/independent reports сохраняются. Runtime H2 malformed output останавливается раньше C2, но standalone builder partial-admission coverage не удаляется.
+
+Это закрывает пропущенные declarations в proposal R3/R4/R5, а не объявляет реализацию или архитектурную приёмку. Требуются отдельная документальная сверка owning классов и последующее evidence реализации; новые DTO/порядок reports предъявлены явно. Numeric IDs, transaction order и принятые C1/H2 не меняются.

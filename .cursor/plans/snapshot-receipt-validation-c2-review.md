@@ -1,5 +1,7 @@
 # C2: отдельная проверка противоречий
 
+**Исправления повторного ревью 2026-11-21 предъявлены:** [R3/R4/R5 facts/diagnostics](snapshot-receipt-facts-diagnostics.md). Устранены ошибочный общий no-op history запрет в ТЗ, fully-valid-only input boundary, неявный owner-order diagnostics и отсутствие signature operation predicate. Added section_index в proposed input-association issues, FOREIGN_OPERATION не подавляется. Статус — исправленный PROPOSED, не автоматический PASS: независимая документальная сверка нового internal facts contract и evidence реализации впереди. Старые OPEN ниже объясняют происхождение замечаний, не отсутствие нынешнего предложения.
+
 2026-11-19. Scope: [детализация C2](snapshot-receipt-validation-c2.md), принятый section-codec-receipt-contract.md, Snapshot owning plan, docs/tz_world_snapshot.md §«Snapshot.apply, результаты и порядок проверок» и фактические service/builder/provenance/receipt declarations. Проверка документов и кода чтением; тесты не запускались, runtime не менялся.
 
 **Итог: C2 architecture ACCEPTED; детальный implementation contract OPEN, готовность к реализации не подтверждена.** Ниже конкретные пробелы, не повторная приёмка C1/ядра PatchSet.
@@ -23,6 +25,8 @@ Existing builder при ValidationError сохраняет доступные н
 Gate C2-G2/G3: определить structural admission/доступные проверки и точный typed путь для wrong root. Existing collector принимать только перечисленные concrete types. Нельзя ловить любой TypeError/ValueError как invalid receipt, применять зависимый predicate к повреждённому полю или молча перейти к first-error semantics.
 
 ## C2-R4: две provenance-границы требуют exact extraction map — OPEN
+
+2026-11-21: [предложение extraction](snapshot-provenance-extraction-r4.md) задаёт общий owner-local helper(receipt,assigned,base,section_index), пригодный early и final callers без fake apply context. Карта правил и границы global/final checks предъявлены. R4 остаётся PROPOSED до разбора R3 malformed aggregation и R5 carriers/order. Source review выявил ошибку Lifecycle proposal: inherited history в receipt запрещён существующим contract; owning atomic-boundary документ исправлен на history=() при exact no-op.
 
 Existing validate_receipt_provenance получает один metadata/base и полный tuple receipts; proposed collect_receipt_provenance получает apply context и все bases. Первому недостаёт полного context/assigned targets, поэтому прямое переиспользование нового helper не следует из одной ссылки. План запрещает копии predicates, но exact общая pure input boundary ещё не задана.
 
