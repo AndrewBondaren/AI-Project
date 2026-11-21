@@ -66,6 +66,10 @@ class TimeCoreTests(unittest.TestCase):
             contract = SectionContract(key=section.header.key, section_model=TimeAdvanceSection,
                 supported_versions=frozenset({1}), manifest=TIME_SECTION_SCHEMA)
             codec = TimeSectionCodec(contract)
+            for versions in (frozenset({2}), frozenset({1, 2})):
+                with self.assertRaises(ValueError):
+                    TimeSectionCodec(SectionContract(key=section.header.key, section_model=TimeAdvanceSection,
+                        supported_versions=versions, manifest=TIME_SECTION_SCHEMA))
             self.assertIs(codec.contract, contract)
             encoded = codec.encode(section)
             self.assertEqual(codec.decode(encoded, 1), section)
@@ -91,6 +95,25 @@ class TimeCoreTests(unittest.TestCase):
             update={"ref": section.patches[0].header.ref.model_copy(update={"ordinal": 1})})})
         with self.assertRaises(ValidationError):
             TimeAdvanceSection(header=section.header, patches=(bad_patch,))
+        bad_patch = section.patches[0].model_copy(update={"header": section.patches[0].header.model_copy(
+            update={"format_version": 2, "ref": section.patches[0].header.ref.model_copy(
+                update={"ordinal": 1, "operation_id": "other"})})})
+        with self.assertRaises(ValidationError) as caught:
+            type(bad_patch).model_validate(bad_patch)
+        patch_paths = (("header", "ref", "ordinal"), ("header", "format_version"),
+                       ("header", "ref", "operation_id"))
+        self.assertEqual(tuple(error["loc"] for error in caught.exception.errors()), patch_paths)
+        invalid = section.model_copy(update={"patches": (bad_patch,),
+            "header": section.header.model_copy(update={"format_version": 2})})
+        for validate in (lambda: TimeAdvanceSection.model_validate(invalid),
+                         lambda: TimeAdvanceSection.model_validate_json(invalid.model_dump_json()),
+                         lambda: TimeAdvanceSection(header=invalid.header, patches=invalid.patches)):
+            with self.assertRaises(ValidationError) as caught:
+                validate()
+            paths = tuple(error["loc"] for error in caught.exception.errors())
+            self.assertEqual(paths[0], ("header", "format_version"))
+            for path in patch_paths:
+                self.assertIn(("patches", 0, *path), paths)
 
     def test_publication_state_tracks_active_branch_before_first_snapshot(self):
         state = TimeClockState(point=point())

@@ -52,6 +52,16 @@ class AttemptContextTests(unittest.TestCase):
         context = self.builder.build(self.request, scope=self.scope, resolved_dependencies=())
         self.assertIs(context.admitted_sections.require(self.key, model=FakeSection), self.request.sections[0])
         self.builder.assert_bound(context, request=self.request, scope=self.scope)
+        with self.assertRaises(PublicationInfrastructureError):
+            self.builder.assert_bound(replace(context), request=self.request, scope=self.scope)
+        replacement_dependency = PreparedSectionDependency(section_key=self.key, section_fingerprint="c" * 64)
+        with self.assertRaises(PublicationInfrastructureError):
+            self.builder.assert_bound(replace(context, resolved_dependencies=(replacement_dependency,)),
+                request=self.request, scope=self.scope)
+        other_builder = SnapshotAttemptContextBuilder(registry=self.registry)
+        with self.assertRaises(PublicationInfrastructureError):
+            self.builder.assert_bound(other_builder.build(self.request, scope=self.scope, resolved_dependencies=()),
+                request=self.request, scope=self.scope)
         for request, scope in ((self.request.model_copy(), self.scope), (self.request, ReadScope())):
             with self.assertRaises(PublicationInfrastructureError):
                 self.builder.assert_bound(context, request=request, scope=scope)

@@ -1,5 +1,5 @@
 """Synthetic subject behavior; payload semantics belong only to this mock."""
-from typing import Literal
+from app.dataModel.lifecycle.evidence.effects import LifecycleEffectKind
 from app.dataModel.fields.checkedPath import CheckedPath
 from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.patch.results.sectionResult import SectionAccepted
@@ -13,7 +13,7 @@ from tests.lifecycle.support.mixedContracts import RefA, RefB, EffectA, EffectB
 from tests.lifecycle.support.snapshotContracts import MockSubjectSectionRefused
 
 
-def _effect(before: bool | None, after: bool) -> Literal["create", "end", "reactivate"] | None:
+def _effect(before: bool | None, after: bool) -> LifecycleEffectKind | None:
     if before is None and after is True:
         return "create"
     if before is True and after is False:
@@ -29,7 +29,7 @@ def _verify(section: TestDomainSectionA | TestDomainSectionB) -> SectionAccepted
         lambda: type(section), lambda value: value.patches)
     patches = patches_ref.select(section)
     path = CheckedPath.root(type(section)).field(patches_ref)
-    slots: dict[tuple[RefA | RefB, str, str], set[str]] = {}
+    slots: dict[tuple[RefA | RefB, str, LifecycleEffectKind], set[str]] = {}
     seen: set[tuple[RefA | RefB, str]] = set()
     actions: dict[RefA | RefB, str] = {}
     for index, patch in enumerate(patches):

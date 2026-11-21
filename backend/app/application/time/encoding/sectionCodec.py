@@ -1,7 +1,7 @@
 from app.application.patch.contracts.sectionCodec import SectionCodec
 from app.application.patch.contracts.sectionHandler import SectionContract
 from app.dataModel.patch.values import FormatVersion
-from app.dataModel.time.changes.section import TimeAdvanceSection
+from app.dataModel.time.changes.section import TimeAdvanceSection, TIME_ADVANCE_SECTION_FORMAT
 from app.dataModel.time.storage.state import CLOCK_SECTION
 from app.encoding.canonicalCodec import CanonicalEncodingError, decode, encode
 
@@ -10,6 +10,8 @@ class TimeSectionCodec(SectionCodec[TimeAdvanceSection]):
     def __init__(self, contract: SectionContract[TimeAdvanceSection]) -> None:
         if contract.section_model is not TimeAdvanceSection or contract.key != CLOCK_SECTION:
             raise ValueError("Time codec requires its concrete native section contract")
+        if contract.supported_versions != frozenset({TIME_ADVANCE_SECTION_FORMAT}):
+            raise ValueError("Time codec requires exactly the native section version")
         self._contract = contract
 
     @property

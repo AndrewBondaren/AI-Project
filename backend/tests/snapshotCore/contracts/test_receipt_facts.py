@@ -213,12 +213,12 @@ class ReceiptWiringTests(unittest.IsolatedAsyncioTestCase):
                 format_version=1, depends_on=(), artifacts=())),),
         })
         request = f.request.model_copy(update={"sections": (f.section, second)})
-        validation = replace(f.context.validation, admitted_sections=AdmittedSectionView(request, self.scope, request.sections))
         outcome = SectionApplyReceipt(section_key=KEY, states=(), history=(),
             changed=(f.patch.model_copy(update={"ordinal": 9}),))
         handler = SimpleNamespace(apply=AsyncMock(return_value=outcome))
         next_handler = SimpleNamespace(apply=AsyncMock())
         self.registry.resolve = lambda section: handler if section.header.key == KEY else next_handler
+        validation = self.service._contexts.build(request, scope=self.scope, resolved_dependencies=())
         self.service._world = SimpleNamespace(compare_append=AsyncMock())
         scope = SimpleNamespace(read_scope=self.scope)
         with self.assertRaises(SnapshotReceiptContractError):

@@ -15,7 +15,8 @@ from app.dataModel.registryKey import RegistryKey
 from app.dataModel.worldSnapshot.identity.refs import WorldSnapshotRef, PlayerSnapshotRef
 from app.dataModel.worldSnapshot.metadata.envelope import WorldSnapshotMetadata, PlayerSnapshotMetadata
 from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
-from app.dataModel.worldSnapshot.results.apply import SnapshotApplyResult, SnapshotCommitRefs
+from app.dataModel.worldSnapshot.results.apply import SnapshotCommitRefs
+from tests.snapshotCore.support.publicationBinding import SnapshotTestResult
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
 from app.dataModel.worldSnapshot.sections.refs import SectionStateRef, SectionHistoryRef
 from app.dataModel.worldSnapshot.sections.retention import SectionStateRetention, SectionHistoryRetention
@@ -59,7 +60,7 @@ class SnapshotHistoryTests(unittest.TestCase):
                 async with commits.transaction("op") as scope:
                     await history.append(scope, base, (receipt(states=(state,)),))
                     await world.compare_append(scope, expected, publication)
-                    await operations.record_terminal(scope, SnapshotApplyResult(operation_id="op", request_fingerprint="b" * 64,
+                    await operations.record_terminal(scope, SnapshotTestResult(operation_id="op", request_fingerprint="b" * 64,
                         category=SnapshotApplyOutcomeKind.COMMITTED, diagnostics=(),
                         committed=SnapshotCommitRefs(world_snapshot=old, player_snapshots=(), publication=publication)))
                 await operations.claim_publication(OperationKind.SNAPSHOT_APPLY, "next", "w1", "a" * 64, "b" * 64)

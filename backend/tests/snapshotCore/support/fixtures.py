@@ -1,5 +1,5 @@
 from app.db.repositories.sqlite.snapshotCore.operations.terminalCodec import StoredTerminalCodec
-from tests.snapshotCore.support.diagnostics import TEST_ISSUE_SCHEMA
+from tests.snapshotCore.support.publicationBinding import TEST_PUBLICATION_BINDING, SnapshotTestResult
 from app.db.repositories.sqlite.snapshotCore.operations.publicationEvidence import SqlitePublicationEvidence
 from app.db.repositories.sqlite.artifacts.operationArtifacts import SqliteOperationArtifacts
 """Temporary SQLite fixtures only; no production adapter or Container binding."""
@@ -221,8 +221,9 @@ async def live_database(path=None, seed=True):
         world = SqliteWorldPublicationStore(commits, access)
         players = SqlitePlayerPublicationStore(commits, access)
         history = SqliteSnapshotHistoryStore(commits, access)
-        operations = SqliteOperationStore(commits, access, StoredTerminalCodec(TEST_ISSUE_SCHEMA),
-            SqlitePublicationEvidence(commits, world, players, access), SqliteOperationArtifacts(access))
+        operations = SqliteOperationStore(commits, access, StoredTerminalCodec(binding=TEST_PUBLICATION_BINDING),
+            SqlitePublicationEvidence(commits, world, players, access), SqliteOperationArtifacts(access),
+            record_model=TEST_PUBLICATION_BINDING.record_model)
         yield db, commits, world, players, history, operations
     finally:
         await db.disconnect()
@@ -280,7 +281,7 @@ async def live_tick(bundle, operation_id="tick", *, fail=False, entered=None, ho
         created_at=STAMP, envelope_format_version=1, states=(), history=())
     publication = WorldPublicationRef(world_uid="w1", publication_id=operation_id + "-pub", pack_hash="d" * 64,
         snapshot_head=world_ref, active_timeline_id="t1", gameplay_started=True)
-    result = SnapshotApplyResult(category=SnapshotApplyOutcomeKind.COMMITTED, operation_id=operation_id,
+    result = SnapshotTestResult(category=SnapshotApplyOutcomeKind.COMMITTED, operation_id=operation_id,
         request_fingerprint="b" * 64, committed=SnapshotCommitRefs(world_snapshot=world_ref,
             player_snapshots=(player_ref,), publication=publication), diagnostics=())
     async with commits.transaction(operation_id) as scope:

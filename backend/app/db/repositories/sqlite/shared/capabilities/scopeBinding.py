@@ -9,14 +9,18 @@ if TYPE_CHECKING:
 
 
 class SqliteCommitScopeBinding(CommitScope, CommitReadScope):
-    __slots__ = ("_registry",)
+    __slots__ = ("_registry", "_read_scope")
 
     def __init__(self, registry: "SqliteScopeRegistry") -> None:
         self._registry = registry
+        self._read_scope: CommitReadScope | None = None
 
     def assert_active(self) -> None:
         self._registry.check(self)
 
     @property
     def read_scope(self) -> CommitReadScope:
-        return self._registry.read_only(self)
+        self.assert_active()
+        if self._read_scope is None:
+            self._read_scope = self._registry.read_only(self)
+        return self._read_scope

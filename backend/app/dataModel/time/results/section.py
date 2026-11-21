@@ -12,6 +12,8 @@ class TimeSectionIssueCode(StrEnum):
     INVALID_KEY = "time.section.invalid_key"
     UNSUPPORTED_VERSION = "time.section.unsupported_version"
     DEPENDENCIES_FORBIDDEN = "time.section.dependencies_forbidden"
+    INVALID_ORDINAL = "time.section.invalid_ordinal"
+    ARTIFACTS_FORBIDDEN = "time.section.artifacts_forbidden"
 
 
 class TimeSectionFieldIssue(FieldPathError[TimeSectionIssueCode]):

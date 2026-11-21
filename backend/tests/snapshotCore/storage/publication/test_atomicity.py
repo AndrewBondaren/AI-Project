@@ -14,7 +14,18 @@ from unittest.mock import patch
 from app.application.publication.errors import UnknownCommitOutcome
 from app.dataModel.artifacts.lifecycle.operation.kinds import OperationPhase, OperationKind
 from app.dataModel.artifacts.lifecycle.operation.claim import PublicationTerminal
-from app.dataModel.worldSnapshot.results.apply import SnapshotApplyResult
+from tests.snapshotCore.support.publicationBinding import SnapshotTestResult as SnapshotApplyResult
+from tests.snapshotCore.support.fakeSection import FakeSectionRefused, FakeTargetIssue, HeaderOnlyPatch
+from app.dataModel.patch.request.patchSet import PatchSet
+from app.dataModel.patch.sections.section import DomainSection, SectionHeader
+from app.dataModel.patch.changes.header import PatchHeader
+
+
+def attempt_request(operation_id, expected, heads=(), sections=()):
+    return PatchSet[DomainSection[HeaderOnlyPatch]](format_version=1, operation_id=operation_id,
+        preparation_fingerprint="a" * 64, world_uid=expected.world_uid,
+        timeline_id=expected.active_timeline_id, turn_id=2, expected_world=expected,
+        expected_players=heads, sections=sections)
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
 from tests.snapshotCore.support.diagnostics import target_issue
 from app.db.mapper import from_row, to_row
@@ -34,7 +45,7 @@ class AtomicSnapshotCommitTests(unittest.TestCase):
             async with live_database() as bundle:
                 await live_started(bundle)
                 _, result = await live_tick(bundle)
-                codec = StoredTerminalCodec()
+                codec = StoredTerminalCodec(binding=bundle[-1].result_binding)
                 row = codec.encode(result)
                 self.assertEqual(codec.decode(row), result)
                 for changes in ({"outcome_checksum": "0" * 64}, {"outcome_kind": "unknown"},
@@ -399,7 +410,9 @@ class AssignedPublicationTests(unittest.TestCase):
                 await operations.claim_publication(OperationKind.SNAPSHOT_APPLY, op, "w1", "a"*64, "b"*64)
                 assigned = WorldSnapshotRef(world_uid="w1", timeline_id="t1", snapshot_id="candidate-world")
                 registry = Mock(spec=SectionRegistry)
-                service = WorldSnapshotService(registry, world, player_store, history)
+                registry.diagnostic_types = frozenset({FakeTargetIssue})
+                service = WorldSnapshotService(registry, world, player_store, history,
+                    publication_binding=operations.result_binding, operations=operations)
                 player_refs = ()
                 expectations = ()
                 if mode in ("players", "conflict", "player_conflict", "player_error", "player_cancel"):
@@ -410,8 +423,7 @@ class AssignedPublicationTests(unittest.TestCase):
                                         for uid in ("p2", "p1"))
                     stale = PlayerSnapshotRef(player_uid="p2", snapshot_id="stale")
                     expectations = (PlayerHeadExpectation(player_uid="p1", expected_head=None),
-                                    PlayerHeadExpectation(player_uid="p2", expected_head=stale
-                                                          if mode == "player_conflict" else None))
+                                    PlayerHeadExpectation(player_uid="p2", expected_head=None))
                 committed = mode in ("success", "players")
                 sections = []
                 handlers = []
@@ -436,18 +448,25 @@ class AssignedPublicationTests(unittest.TestCase):
 
                 for key in ("one", "two", "three"):
                     header = SectionHeader(key=RegistryKey[PatchSectionRegistry](key), format_version=1, depends_on=())
-                    sections.append(Mock(header=header))
+                    sections.append(DomainSection[HeaderOnlyPatch](header=header, patches=(
+                        HeaderOnlyPatch(header=PatchHeader(ref=PatchRef(operation_id=op, section_key=header.key, ordinal=0),
+                            format_version=1, depends_on=(), artifacts=())),)))
                     handler = Mock(spec=BoundSectionHandler)
                     handler.apply = AsyncMock(side_effect=apply)
+                    from app.dataModel.patch.results.sectionResult import SectionAccepted
+                    handler.validate = AsyncMock(return_value=SectionAccepted())
                     handlers.append(handler)
-                registry.resolve.side_effect = handlers
+                registry.resolve.side_effect = lambda section: handlers[[s.header.key for s in sections].index(section.header.key)]
+                request = attempt_request(op, base, expectations, tuple(sections))
 
                 async def execute():
                     nonlocal outer_scope
                     async with commits.transaction(op) as scope:
                         outer_scope = scope
-                        validation = SnapshotValidationContext(op, base, expectations, (), scope.read_scope)
-                        async with service._apply_to_target(scope, validation, tuple(sections), assigned, player_refs) as (ctx, receipts):
+                        validation = await service._validate_sections(request, scope=scope.read_scope, resolved_dependencies=())
+                        bases = await service._load_pinned_bases(validation, scope=scope.read_scope, source_bases={})
+                        async with service._apply_to_target(scope, validation, request.sections, assigned, player_refs,
+                                bases=bases, request=request) as (ctx, receipts):
                             await history.append(scope, WorldSnapshotMetadata(ref=assigned, parent=base.snapshot_head,
                                 operation_id=op, turn_id=1, created_at=STAMP, envelope_format_version=1,
                                 base_pack_hash=base.pack_hash, states=(), history=()), receipts)
@@ -460,6 +479,8 @@ class AssignedPublicationTests(unittest.TestCase):
 
                 compare_player = player_store.compare_append
                 async def compare_or_fail(scope, head, ref, operation_id):
+                    if mode == "player_conflict" and head.player_uid == "p2":
+                        return await compare_player(scope, head.model_copy(update={"expected_head": stale}), ref, operation_id)
                     if mode in ("player_error", "player_cancel") and head.player_uid == "p2":
                         # Observe p1's real new head inside the still-uncommitted writer transaction.
                         self.assertEqual(await player_store.read("p1", scope=scope.read_scope), player_refs[1])
@@ -497,7 +518,7 @@ class AssignedPublicationTests(unittest.TestCase):
                         else:
                             self.assertEqual([s.target for s in trace.steps[1:]], list(reversed(player_refs)))
                             self.assertEqual([s.decision.value for s in trace.steps], ["applied", "applied", "mismatch"])
-                            self.assertEqual(mismatch.expected, expectations[1])
+                            self.assertEqual(mismatch.expected, expectations[1].model_copy(update={"expected_head": stale}))
                             self.assertIsNone(mismatch.observed)
                             self.assertIsNone(mismatch.publication)
                     self.assertEqual(len(targets), 2 if mode == "refuse" else 3)
@@ -553,13 +574,17 @@ class AssignedPublicationTests(unittest.TestCase):
                 snapshot = base.snapshot_head.model_copy(update={"snapshot_id": "candidate-world"})
                 head = PlayerHeadExpectation(player_uid=observed.player_uid, expected_head=None)
                 await operations.claim_publication(OperationKind.SNAPSHOT_APPLY, op, "w1", "a"*64, "b"*64)
-                service = WorldSnapshotService(SectionRegistry(), world, players, history)
+                service = WorldSnapshotService(SectionRegistry(FakeSectionRefused), world, players, history,
+                    publication_binding=operations.result_binding, operations=operations)
+                request = attempt_request(op, base, (head,))
                 with self.assertRaises(SnapshotCasConflict) as error:
                     async with commits.transaction(op) as scope:
-                        validation = SnapshotValidationContext(op, base, (head,), (), scope.read_scope)
-                        async with service._apply_to_target(scope, validation, (), snapshot, (target,)) as (ctx, receipts):
+                        validation = await service._validate_sections(request, scope=scope.read_scope, resolved_dependencies=())
+                        bases = await service._load_pinned_bases(validation, scope=scope.read_scope, source_bases={})
+                        async with service._apply_to_target(scope, validation, request.sections, snapshot, (target,),
+                                bases=bases, request=request) as (ctx, receipts):
                             # Only the tentative world CAS needs a persisted target.
-                            parent = await history.read(base.snapshot_head, scope=scope.read_scope)
+                            parent = bases[base.snapshot_head]
                             metadata = parent.model_copy(update={"ref": snapshot, "parent": base.snapshot_head,
                                                                  "operation_id": op, "turn_id": 2})
                             await history.append(scope, metadata, receipts)
@@ -585,24 +610,28 @@ class AssignedPublicationTests(unittest.TestCase):
             async with live_database() as bundle:
                 base = await live_started(bundle)
                 registry = Mock(spec=SectionRegistry)
+                registry.diagnostic_types = frozenset({FakeTargetIssue})
                 registry.resolve.side_effect = AssertionError("invalid participants reached handler dispatch")
                 p1 = PlayerSnapshotRef(player_uid="p1", snapshot_id="s1")
                 p2 = PlayerSnapshotRef(player_uid="p2", snapshot_id="s2")
                 h1 = PlayerHeadExpectation(player_uid="p1", expected_head=None)
                 h2 = PlayerHeadExpectation(player_uid="p2", expected_head=None)
                 snapshot = WorldSnapshotRef(world_uid="w1", timeline_id="t1", snapshot_id="assigned")
-                service = WorldSnapshotService(registry, bundle[2], bundle[3], bundle[4])
+                service = WorldSnapshotService(registry, bundle[2], bundle[3], bundle[4],
+                    publication_binding=bundle[-1].result_binding, operations=bundle[-1])
                 with (patch.object(bundle[2], "compare_append", new_callable=AsyncMock) as world_cas,
                       patch.object(bundle[3], "compare_append", new_callable=AsyncMock) as player_cas):
                     for case, heads, refs in (
                         ("missing", (h1, h2), (p1,)), ("extra", (h1,), (p1, p2)),
-                        ("duplicate ref", (h1,), (p1, p1)), ("duplicate expectation", (h1, h1), (p1,)),
+                        ("duplicate ref", (h1,), (p1, p1)),
                     ):
                         with self.subTest(case=case):
                             async with bundle[1].transaction("candidate") as scope:
-                                ctx = SnapshotValidationContext("candidate", base, heads, (), scope.read_scope)
+                                request = attempt_request("candidate", base, heads)
+                                ctx = service._contexts.build(request, scope=scope.read_scope, resolved_dependencies=())
                                 with self.assertRaisesRegex(ValueError, "expected participants"):
-                                    async with service._apply_to_target(scope, ctx, (Mock(),), snapshot, refs):
+                                    async with service._apply_to_target(scope, ctx, request.sections, snapshot, refs,
+                                            bases={}, request=request):
                                         self.fail("invalid participants reached metadata block")
                             registry.resolve.assert_not_called()
                             world_cas.assert_not_awaited()
@@ -625,13 +654,17 @@ class AssignedPublicationTests(unittest.TestCase):
                 parent = prior.committed.player_snapshots[0]
                 snapshot = expected.snapshot_head.model_copy(update={"snapshot_id": "next-world"})
                 player = parent.model_copy(update={"snapshot_id": "next-player"})
-                service = WorldSnapshotService(SectionRegistry(), world, players, history)
+                service = WorldSnapshotService(SectionRegistry(FakeSectionRefused), world, players, history,
+                    publication_binding=operations.result_binding, operations=operations)
+                request = attempt_request("next", expected,
+                    (PlayerHeadExpectation(player_uid=parent.player_uid, expected_head=parent),))
                 await operations.claim_publication(OperationKind.SNAPSHOT_APPLY, "next", "w1", "a"*64, "b"*64)
                 async with commits.transaction("next") as scope:
-                    validation = SnapshotValidationContext("next", expected,
-                        (PlayerHeadExpectation(player_uid=parent.player_uid, expected_head=parent),), (), scope.read_scope)
-                    async with service._apply_to_target(scope, validation, (), snapshot, (player,)) as (ctx, receipts):
-                        await service._append_metadata(ctx, 2, STAMP, receipts)
+                    validation = await service._validate_sections(request, scope=scope.read_scope, resolved_dependencies=())
+                    bases = await service._load_pinned_bases(validation, scope=scope.read_scope, source_bases={})
+                    async with service._apply_to_target(scope, validation, request.sections, snapshot, (player,),
+                            bases=bases, request=request) as (ctx, receipts):
+                        await service._append_metadata(ctx, 2, STAMP, receipts, bases=bases)
                 for ref, pinned in ((snapshot, expected.snapshot_head), (player, parent)):
                     envelope = await peer[4].read(ref)
                     self.assertEqual((envelope.parent, envelope.turn_id, envelope.operation_id), (pinned, 2, "next"))
@@ -665,17 +698,21 @@ class AssignedPublicationTests(unittest.TestCase):
                 snapshot = WorldSnapshotRef(world_uid="w1", timeline_id="t1", snapshot_id="new-world")
                 player = PlayerSnapshotRef(player_uid="p1", snapshot_id="new-player")
                 head = PlayerHeadExpectation(player_uid="p1", expected_head=None)
-                service = WorldSnapshotService(SectionRegistry(), world, players, history)
+                service = WorldSnapshotService(SectionRegistry(FakeSectionRefused), world, players, history,
+                    publication_binding=operations.result_binding, operations=operations)
+                request = attempt_request(lease.operation_id, expected, (head,))
 
                 async def publish(transferred):
                     async with commits.transaction(lease.operation_id) as scope:
-                        validation = SnapshotValidationContext(lease.operation_id, expected, (head,), (), scope.read_scope)
-                        async with service._apply_to_target(scope, validation, (), snapshot, (player,)) as (ctx, receipts):
+                        validation = await service._validate_sections(request, scope=scope.read_scope, resolved_dependencies=())
+                        bases = await service._load_pinned_bases(validation, scope=scope.read_scope, source_bases={})
+                        async with service._apply_to_target(scope, validation, request.sections, snapshot, (player,),
+                                bases=bases, request=request) as (ctx, receipts):
                             receipts = (SectionApplyReceipt(section_key="test.holds", changed=(), states=(),
                                 history=tuple(SectionHistoryRetention(history=SectionHistoryRef(snapshot=dest,
                                     section_key="test.holds", format_version=1), artifacts=(artifact,))
                                     for dest, artifact in ((snapshot, a), (player, b)))),)
-                            await service._append_metadata_and_handoff(ctx, 1, STAMP, receipts,
+                            await service._append_metadata_and_handoff(ctx, 1, STAMP, receipts, bases=bases,
                                 holders=holders, lease=owner.lease, transferred=transferred)
                     return ctx.next_publication
 
@@ -716,32 +753,27 @@ class AssignedPublicationTests(unittest.TestCase):
                 self.assertEqual(await peer_holders.holders(leftover), (OperationHolder(lease=lease),))
         run_async(check())
 
-    def test_missing_persisted_bases_preserve_independent_receipt_diagnostics(self):
-        from app.application.worldSnapshot.validation.missingPersistedSnapshotBase import MissingPersistedSnapshotBase
-        from app.dataModel.worldSnapshot.metadata.metadataIssues import SnapshotMetadataFieldIssue, SnapshotMetadataRelationIssue
-        from app.dataModel.validation.diagnostics.validatorAggregationHelper import ValidatorAggregationHelper, IssueAdmissionError
-        from unittest.mock import AsyncMock
-        from app.application.patch.registry.sectionRegistry import SectionRegistry
+    def test_missing_bases_stop_loader_and_pure_builder_retains_independent_diagnostics(self):
         from app.application.publication.errors import PublicationInfrastructureError
-        from app.application.worldSnapshot.contracts.context import SnapshotApplyContext, SnapshotValidationContext
+        from app.application.patch.registry.sectionRegistry import SectionRegistry
+        from app.application.worldSnapshot.contracts.context import SnapshotApplyContext
         from app.application.worldSnapshot.service.worldSnapshotService import WorldSnapshotService
-        from app.dataModel.patch.results.sectionResult import SectionApplyReceipt
+        from app.application.worldSnapshot.service.snapshotMetadataBuilder import SnapshotMetadataBuilder, SnapshotMetadataFailure
         from app.dataModel.worldSnapshot.identity.refs import WorldSnapshotRef, PlayerSnapshotRef
         from app.dataModel.worldSnapshot.identity.publication import PlayerHeadExpectation
-        from app.dataModel.worldSnapshot.sections.refs import SectionHistoryRef
-        from tests.snapshotCore.support.artifactFixtures import descriptor
         from tests.snapshotCore.support.fixtures import STAMP
 
         async def check():
             async with live_database() as bundle:
-                _, commits, world_store, player_store, history, _ = bundle
+                _, commits, world, players, history, operations = bundle
                 active = await live_started(bundle)
                 old = WorldSnapshotRef(world_uid="w1", timeline_id="t1", snapshot_id="old")
                 new = old.model_copy(update={"snapshot_id": "new"})
                 player = PlayerSnapshotRef(player_uid="p1", snapshot_id="p-new")
                 expected = active.model_copy(update={"snapshot_head": old})
                 target = active.model_copy(update={"snapshot_head": new, "publication_id": "q"})
-                service = WorldSnapshotService(SectionRegistry(), world_store, player_store, history)
+                service = WorldSnapshotService(SectionRegistry(FakeSectionRefused), world, players, history,
+                    publication_binding=operations.result_binding, operations=operations)
                 entry = SectionHistoryRetention(history=SectionHistoryRef(snapshot=old, section_key="a",
                     format_version=1), artifacts=())
                 a = SectionApplyReceipt(section_key="a", changed=(), states=(), history=(entry,))
@@ -750,34 +782,23 @@ class AssignedPublicationTests(unittest.TestCase):
                     changed=(PatchRef(operation_id="foreign", section_key="b", ordinal=0),))
                 for player_parent in (None, player.model_copy(update={"snapshot_id": "p-old"})):
                     heads = (PlayerHeadExpectation(player_uid="p1", expected_head=player_parent),)
+                    request = attempt_request("candidate", expected, heads)
                     async with commits.transaction("candidate") as scope:
-                        ctx = SnapshotApplyContext(SnapshotValidationContext("candidate", expected, heads, (), scope.read_scope),
-                                                   new, (player,), scope, target)
-                        with (patch.object(history, "append", new_callable=AsyncMock) as append,
-                              patch("app.application.worldSnapshot.service.snapshotMetadataBuilder.ValidatorAggregationHelper",
-                                    wraps=ValidatorAggregationHelper) as builder_collector,
-                              patch("app.application.worldSnapshot.service.worldSnapshotService.ValidatorAggregationHelper",
-                                    wraps=ValidatorAggregationHelper) as service_collector):
-                            with self.assertRaises(PublicationInfrastructureError) as caught:
-                                await service._append_metadata(ctx, 2, STAMP, (a, b))
-                            append.assert_not_awaited()
-                            builder_collector.assert_called_once_with((SnapshotMetadataFieldIssue, SnapshotMetadataRelationIssue))
-                            admitted = (MissingPersistedSnapshotBase, SnapshotMetadataFieldIssue, SnapshotMetadataRelationIssue)
-                            service_collector.assert_called_once_with(admitted)
-                    causes = caught.exception.args[0]
-                    self.assertEqual([type(item) for item in causes],
-                        [MissingPersistedSnapshotBase] * (2 if player_parent else 1) +
-                        [SnapshotMetadataFieldIssue, SnapshotMetadataRelationIssue, SnapshotMetadataRelationIssue])
-                    self.assertEqual([(c.snapshot, c.player_index) for c in causes[:-3]],
-                                     [(old, None)] + ([(player_parent, 0)] if player_parent else []))
-                    for invalid in (object(), causes[-1].model_copy(update={"address": []})):
-                        with self.assertRaises(IssueAdmissionError):
-                            ValidatorAggregationHelper(admitted).add(invalid)
-                    issues = [("missing_persisted_base", ("validation", "expected_world", "snapshot_head"))]
-                    if player_parent:
-                        issues.append(("missing_persisted_base", ("validation", "expected_players", 0, "expected_head")))
-                    self.assertEqual([(i.code.removeprefix("snapshot.metadata."), i.diagnostic_path) for i in caught.exception.args[0]],
-                                     issues + [("invalid_receipt", ("receipts", 0, "history", 0, "artifacts", 0)),
-                                               ("foreign_history", ("receipts", 0, "history", 0, "history", "snapshot")),
-                                               ("foreign_operation", ("receipts", 1, "changed", 0, "operation_id"))])
+                        validation = await service._validate_sections(request, scope=scope.read_scope, resolved_dependencies=())
+                        with self.assertRaises(PublicationInfrastructureError) as caught:
+                            await service._load_pinned_bases(validation, scope=scope.read_scope, source_bases={})
+                        self.assertEqual([(i.snapshot, i.player_index) for i in caught.exception.args[0]],
+                            [(old, None)] + ([(player_parent, 0)] if player_parent else []))
+                        context = SnapshotApplyContext(validation, new, (player,), scope, target)
+                        with self.assertRaises(SnapshotMetadataFailure) as malformed:
+                            SnapshotMetadataBuilder.build(context, 2, STAMP, (a, b), {})
+                        diagnostics = malformed.exception.diagnostics
+                        self.assertEqual([i.code.removeprefix("snapshot.metadata.") for i in diagnostics],
+                            ["missing_base"] * (2 if player_parent else 1) +
+                            ["invalid_receipt", "foreign_history", "foreign_operation"])
+                        self.assertEqual([i.diagnostic_path for i in diagnostics[-3:]], [
+                            ("receipts", 0, "history", 0, "artifacts", 0),
+                            ("receipts", 0, "history", 0, "history", "snapshot"),
+                            ("receipts", 1, "changed", 0, "operation_id")])
+                        self.assertIsNone(await history.read(new, scope=scope.read_scope))
         run_async(check())
