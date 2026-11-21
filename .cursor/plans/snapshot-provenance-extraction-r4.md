@@ -1,5 +1,7 @@
 # C2-R4: общий источник provenance predicates
 
+**Актуальный статус 2026-11-21:** координаторская документальная сверка уточнённого facts/predicate/address/order контракта — PASS; точные обязательства и сохранение final first-error фаз в начале [R3/R4/R5](snapshot-receipt-facts-diagnostics.md). Старый fully-valid-only вариант и прежние OPEN об отсутствии механизма ниже superseded. Подключение трёх consumers и runtime evidence ещё не выполнены.
+
 **Исправление повторного ревью 2026-11-21:** [R3/R4/R5 exact facts/diagnostics](snapshot-receipt-facts-diagnostics.md) заменяет fully-valid-only signature ниже: `collect_owned_receipt_provenance(facts:ReceiptFacts, assigned:SnapshotRef, base:SnapshotEnvelope|None)`. section_index принадлежит facts. Общие predicates operation/history/state объявлены там отдельно; partial refs не требуют unchecked receipt. Order aggregation задан по фазе/original index, не owner iteration. Старые формулировки «общая граница ещё не задана» ниже — история исходного предложения. Статус уточнения PROPOSED, требуется сверка, не code-go.
 
 2026-11-21, PROPOSED. Source review: application/worldSnapshot/validation/receiptProvenance.py и service/snapshotMetadataBuilder.py. Код не меняется; R3/R5 остаются отдельными вопросами. Текущий helper с apply context нельзя напрямую вызвать из history append: последний располагает одним metadata/base, не полной картой transaction.

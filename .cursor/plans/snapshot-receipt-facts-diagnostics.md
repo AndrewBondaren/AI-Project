@@ -1,5 +1,28 @@
 # C2 R3/R4/R5: admitted facts, единые predicates и порядок diagnostics
 
+## Итог координаторской сверки P1 — 2026-11-21
+
+PASS документальной сверки уточнённого R3/R4/R5 в области facts/provenance/address/order. Основание: прочитаны actual SnapshotMetadataBuilder и validation/receiptProvenance.py, сопоставлены независимые partial-ref checks, operation/history/state predicates и final postconditions. Пользователь поручил принять уточнённый контракт перед подключением consumers. Ниже фиксируется целевой контракт к этому подключению; прежнее «граница не определена» superseded. Это не PASS реализации: код ещё содержит независимые проверки, runtime tests не выполнены. Полная реализация выполняется только через implement-plan с отдельной проверкой scope.
+
+### Обязательное уточнение адаптеров и приоритетов
+
+- retention=None означает «полная closure недопущена», никогда «пустая валидная closure». Valid ref позволяет owner/assigned/membership/replacement проверки; сравнение artifacts closure пропускается, structural issue сохраняется и не допускает успешного builder result.
+- changed_empty=None не превращается в True из-за пустой отфильтрованной коллекции. Независимые valid changed refs всё ещё проверяются на operation и input membership с исходными индексами.
+- Полностью недопущенный root не используется для извлечения guessed/default полей. Partial facts принадлежат только допускаемой повреждённой owning receipt-модели. Fact collection не заменяет raw receipt реконструированной «валидной» моделью.
+- Early получает section_index из исходного enumerate sections. Builder — исходный index receipts. Final — index своего неизменённого receipts tuple; filtered receipts не получают исходные PatchSet адреса без отдельного explicit mapping.
+- Один owner helper переиспользует existing _same_owner семантику; owner-selection не сортирует diagnostics по владельцам. Adapters объединяют по phase и original indices, включая world/player interleaving.
+- Final checker не выбирает первый код общего helper без учёта прежней фазы. Сохраняются prechecks metadata.operation/parent/duplicate keys/FOREIGN_OPERATION, затем metadata-history equality, затем прежний receipt traversal history→states (new-state NOOP и inherited closure), затем metadata-state equality и final missing/superseded membership. SUPERSEDED_STATE из общего predicate используется в соответствующей final postcondition-фазе, не переносится перед прежним UNREACHABLE или metadata mismatch. SnapshotMetadataBuilder и early используют свой явно заданный агрегирующий порядок ниже. Один predicate может быть вызван/его результат выбран разными adapters без копирования условия.
+
+### План подключения — без изменения общего apply-порядка
+
+1. ReceiptFactsAdmission выделяется из существующей structural/partial admission логики; не создаёт IO, fake closure или новые public receipt поля.
+2. Pure predicates operation/owner/history/state получают один источник в validation/receiptProvenance.py. Caller-specific context/base/association/metadata coverage остаются у соответствующего caller.
+3. SnapshotReceiptValidator, SnapshotMetadataBuilder и final validate_receipt_provenance переходят на эти facts/predicates; старые параллельные условия удаляются в той же реализации, без fallback с копией правил.
+4. Early receipt validation остаётся немедленно после successful handler.apply, перед accumulation/следующим handler. H2 может отвергнуть malformed handler output раньше C2; standalone builder partial diagnostics всё равно сохраняются.
+5. Проверки реализации: malformed artifacts + valid foreign ref; несколько независимых причин в одном/нескольких receipts; gaps indices 0/2 после malformed index1; interleaved world/player; wrong operation и outside-input одновременно; changed malformed без ложного NOOP; root mismatch без fake path; verdict parity predicates и сохранение first-error final/order builder. No-op history при assigned ref не запрещается общим Snapshot; Lifecycle owning правило отдельно.
+
+После этих проверок можно заявлять implementation PASS, а не по одному наличию helper. Новые numeric IDs и production domain интеграции не требуются для этой внутренней pure границы.
+
 2026-11-21. PROPOSED исправление повторного ревью. Заменяет fully-valid-only extraction из snapshot-provenance-extraction-r4.md и незамкнутые R3/R5. Не меняет порядок transaction, H2 output admission или public DTO. Код не пишется.
 
 ## 1. Внутренние типизированные факты

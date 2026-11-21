@@ -4,7 +4,7 @@
 
 2026-11-19. Scope: [детализация C2](snapshot-receipt-validation-c2.md), принятый section-codec-receipt-contract.md, Snapshot owning plan, docs/tz_world_snapshot.md §«Snapshot.apply, результаты и порядок проверок» и фактические service/builder/provenance/receipt declarations. Проверка документов и кода чтением; тесты не запускались, runtime не менялся.
 
-**Итог: C2 architecture ACCEPTED; детальный implementation contract OPEN, готовность к реализации не подтверждена.** Ниже конкретные пробелы, не повторная приёмка C1/ядра PatchSet.
+**Актуализация 2026-11-21:** C2 architecture ACCEPTED; уточнённый R3/R4/R5 facts/predicate/address/order контракт прошёл документальную сверку координатора. См. snapshot-receipt-facts-diagnostics.md, включая сохранение final first-error фаз. Следующие OPEN объясняют исторические замечания и не означают отсутствие предъявленного механизма. Implementation PASS не заявлен: consumers ещё не подключены к общим predicates, runtime regression evidence отсутствует. C1/H2 и общий transaction order не переоткрываются.
 
 ## C2-R1: источник и фаза bases — вариант А ACCEPTED
 

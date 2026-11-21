@@ -1,6 +1,6 @@
 # Snapshot C2: проверка результата применения секции
 
-**Уточнение R3/R4/R5 после повторного ревью, 2026-11-21:** [точный контракт admitted facts и диагностики](snapshot-receipt-facts-diagnostics.md) заменяет прежние недетализированные предложения fully-valid-only extraction и подавления FOREIGN_OPERATION. Это PROPOSED для приёмки, не код. Общий no-op запрет касается нового state, а не history с assigned ref; Lifecycle no-op history — owning правило Lifecycle.
+**Уточнение R3/R4/R5, 2026-11-21:** [точный контракт admitted facts и диагностики](snapshot-receipt-facts-diagnostics.md) прошёл координаторскую документальную сверку, включая final first-error фазу. Он заменяет fully-valid-only extraction и подавление FOREIGN_OPERATION. Следующий этап — подключение early validator, builder и final checker к одним predicates с regression evidence, не новая архитектурная развилка. Код не изменён. Общий no-op запрет касается нового state, а не history с assigned ref; Lifecycle no-op history — owning правило Lifecycle. Исторические OPEN ниже superseded только в указанном объёме.
 
 Синхронизация 2026-11-21: принятый trace source reads → all validations → remaining bases → apply/immediate receipt checks отражён в docs/tz_world_snapshot.md. Lifecycle-specific synthetic scope и обязанности добавлены в §8; это не пересмотр общих C1/C2/H2 и не code-go.
 

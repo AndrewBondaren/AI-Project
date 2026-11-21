@@ -4,6 +4,32 @@
 
 ## Решения пользователя и источники
 
+### Completion: один public entry и scoped acquisition/finish — PROPOSED 2026-11-21
+
+**Сверка координатора (2):** ответ получен и прочитан. Координатор рекомендует предъявить пользователю именно эту границу одного public completion и одного scoped Artifacts port; полной приёмки нет. Подчёркнуто: предварительный admission не заменяет повторной проверки mutable fences/cancel/source lifetime/writers внутри UOW. Три exact prerequisites Publication: concrete Input/Result/Error с reuse candidate; пригодность OperationLeaseRef для source protection, issuer/target authority/lifetime; outcomes повторов после cancel/publication и durable reconciliation evidence, в том числе после освобождения holds. H2 standalone finish этого не закрывает. Пакет остаётся PROPOSED до owning ответа и пользовательской приёмки.
+
+Адресное поручение пользователя: согласовать один публичный completion Publication и внутреннюю scoped-операцию Artifacts, не новую систему holders. Existing SqliteArtifactLeases.finish_preparation проверяет exact holds==refs, но не приобретает inherited refs; _transaction требует unbound context. Обёртка bind(scope) вокруг existing standalone finish не присоединяет транзакцию. Это ограничение сохраняется, не обходится.
+
+**Owning предложение Artifacts:** TARGET `application/artifacts/contracts/preparationCompletion.py::IArtifactPreparationCompletion[R]`; concrete `db/repositories/sqlite/artifacts/preparationCompletion.py::SqliteArtifactPreparationCompletion[R]`. Одна внутренняя операция `async acquire_and_finish(self, scope:CommitScope, request:ArtifactPreparationCompletionInput)->OperationRecord[R]`. TARGET `dataModel/artifacts/lifecycle/preparationCompletion.py::ArtifactPreparationCompletionInput`: `target:OperationLeaseRef`, `source_protections:tuple[OperationLeaseRef,...]`, `inherited_refs:tuple[ArtifactRef,...]`, `target_refs:tuple[ArtifactRef,...]`. Это proposal storage request, не Source proof, public authority token или новый holder. Существующие OperationHolder/lease/ref переиспользуются. Concrete representation source protection lifecycle ещё подтверждает Publication; если existing operation lease для него непригоден, этот input не freeze по предположению.
+
+Preconditions: caller Publication уже выполнил authoritative admission exact candidate/evidence и связи target/source owners; scope выдан текущей task/connection, writable, operation_id соответствует target. Source protections — отдельные владельцы исходного superset, не target. Для каждого inherited ref требуется действующий exact source operation hold хотя бы одного admitted source owner. Ref должен входить в target_refs; все tuples имеют явные duplicate checks. Нельзя использовать произвольный существующий hold как caller authority. Structural/lease ошибки reuse existing proposed ArtifactInputError/ArtifactLeaseFailure; uncovered inherited ref, extra target hold и incomplete target set требуют именованных completion refusals при freeze. Error roster остаётся OPEN, не ValueError как целевой public transport.
+
+В одном borrowed scope: recheck target writable/fence и source protection lifetime → отсутствие active target writers (BUSY без частичного результата) → проверить все source memberships/seals/sets → acquire inherited target OperationHolders через existing holder append → повторно проверить exact target operation holds==target_refs и seals → закрыть admission и записать READY. Локальные проверки/операции используют existing catalog/holders/leases/storage primitives; adapter не открывает транзакцию, не делает commit/rollback, не вызывает Source/Pack/public pipelines и не снимает source protection или extra target holds. Общий finish algorithm извлекается во внутреннюю scoped реализацию; existing standalone finish остаётся wrapper собственной transaction без inherited acquisition. Public DAG entry не раскрывает этот port.
+
+**Publication boundary:** единый proposed public `application/publication/preparation/preparationCompletionOpenPipeline.py::PreparationCompletionOpenPipeline` с методом `async complete(request:PreparationCompletionInput)->PreparationCompletionResult`. Имена/расположение предложены для owning согласования, не объявлены принятыми. Full fields/result/error должны быть предъявлены Publication с concrete Pack candidate/evidence reuse: target lease, admitted source protection bindings, полный target set и immutable candidate binding. Generic Any/dict/новый candidate mirror не допускается. Именно Publication владеет UOW, durable candidate persistence и проверкой повтора; candidate append и scoped acquisition/READY выполняются в одной transaction. Возвращённый scoped OperationRecord до confirmed commit — provisional, не public success и не exact candidate receipt.
+
+| Исход | Обязательное поведение |
+|---|---|
+| Ошибка до/внутри acquisition/candidate/READY, confirmed rollback | Откатываются все новые target holds, candidate запись и READY вместе; прежние staging/source holds сохраняются. Business refusal возвращается лишь после confirmed rollback |
+| UnknownCommitOutcome, включая неизвестный rollback | Не success/refusal и не отсутствие effects; исходная защита не снимается. Quarantine/recovery existing Publication, fresh confirmed connection; проверить durable exact candidate/READY/holds, не повторять handler/Source |
+| Cancel первым закрыл target admission или сменил fence | Completion при повторной проверке отвергается без новых effects; проверка сериализована тем же transaction coordinator, включая независимые connections |
+| Completion первым committed READY | Cancel далее действует по принятому lifecycle и может отменить ещё не опубликованную подготовку; success completion доказывает состояние на commit, не бессрочную protection. При unknown порядке — reconciliation; запрещено возвращать cached success после подтверждённого cancel как будто подготовка ещё готова |
+| Точный повтор после lost ACK | Public completion сверяет persisted full candidate binding, target set и lifecycle; при подтверждённом READY возвращает тот же owning candidate без повторного acquisition/Source/пересборки. Existing finish writable check для replay не вызывается |
+| Повтор с иным candidate/set/binding при той же identity | Typed conflict без изменений; одного fingerprint недостаточно вместо exact persisted comparison |
+| Повтор после cancel или дальнейшей publication | Не создавать preparation заново. Owning Publication должен определить exact terminal/result mapping; новое implicit retry/fence запрещено |
+
+Source protection cleanup — отдельный explicit lifecycle шаг после confirmed outcome и drain readers/workers; после успеха target holds защищают exact набор, после cancel/unknown применяются правила выше. Exact public completion errors, candidate representation, source protection kind/issuer и post-publication replay mapping согласуются через координатора. Проверки обязательны с fault injection после каждого acquire/candidate append/READY и до/после COMMIT; concurrent cancel с обеими очередностями, independent connections, partial-acquire rollback, lost ACK, mismatched replay, unknown с отсутствием premature cleanup. Это design, не выполненные тесты; guarantees atomicity не ослабляются незакрытыми signatures.
+
 ### Карта приоритетов редакций и границы приёмки — 2026-11-21
 
 1. Явные актуальные решения пользователя и обязательные правила проекта имеют приоритет; междоменные изменения сверяет назначенный координатор. Ранее принятые неизменные решения повторно не согласуются.
@@ -17,6 +43,18 @@
 Полный read/protection/completion, H2 и CRUD всего домена не являются автоматическими prerequisites ARCH-STAGE, если конкретный срез их не меняет и не обещает их guarantees. Конкретные зависимости среза всё равно обязательны. После явной пользовательской приёмки ARCH-STAGE отдельное поручение реализации разрешает только перечисленный срез по implement-plan; согласованная архитектура сама по себе не code-go. Runtime tests P1/P2 можно создать в разрешённом срезе, но регистрация specialization и приёмка реализации запрещены до требуемого evidence. Это разделяет архитектурную спецификацию тестов и их выполнение, не создавая цикла «нельзя писать тест до уже пройденного теста».
 
 **ARCH-0 — полная приёмка Artifacts.** Требует полного CRUD/disposition настроек, всех предоставляемых read/retention/lifecycle границ, class/POJO closure и сквозного согласования. ARCH-STAGE PASS не означает готовность Source/Time/Pack маршрута, publication или всего домена. В настоящий момент ни ARCH-STAGE, ни ARCH-0 этим уточнением не принимаются.
+
+**Однозначное правило частичной приёмки:** решение ARCH-STAGE должно перечислять concrete C/format/version, public methods/IO/Error, изменяемые классы/файлы, неизменные dependency contracts, фактический caller route и обязательные проверки. Формулировка «staging принят» без этого перечня не code-go. Междоменные стыки данного перечня сверяет координатор; остальные OPEN фиксируются как исключённые из среза без обещаний их реализации.
+
+| Состояние | Допустимое действие |
+|---|---|
+| ARCH-STAGE OPEN, ARCH-0 OPEN | Исследование/дизайн и подготовка ограниченного пакета приёмки; код не разрешён |
+| ARCH-STAGE принят, поручения реализации нет | Подготовить implementation-план среза; архитектурная приёмка сама по себе не разрешает код |
+| ARCH-STAGE принят и явно поручена его реализация, ARCH-0 OPEN | Реализовать только перечисленный срез по implement-plan; чужие read/CRUD/H2 OPEN не блокируют неизменные зависимости |
+| При реализации обнаружена необходимость менять исключённый контракт | Не расширять scope молча; согласовать затронутую дельту через координатора и пользователя, независимую разрешённую работу продолжать |
+| Локальные тесты/реализация среза приняты | Не объявлять весь Artifacts или end-to-end Source/Pack/Time маршрут принятым; регистрация каждой specialization требует P1 и применимых P2 |
+
+Полная приёмка домена по всем обязательным критериям остаётся ARCH-0. Эта таблица заменяет остаточные исторические blanket-требования «весь ARCH-0 до любого кода» только для явно принятого и разрешённого ARCH-STAGE. Гарантии scoped hold/IO protection/atomic completion не ослабляются; они не приписываются автономному stage как уже реализованные.
 
 ### P2 — concrete SQL_ROWS binding и стоимость encoding
 
