@@ -1,5 +1,49 @@
 # PatchSet: Lifecycle mixed section и closed node bindings
 
+## Section fingerprint: подтверждённые границы — 2026-11-21
+
+ACCEPTED пользователем через [решение координатора](gen-dag-lifecycle-node-contracts.md#подтверждённое-решение-пользователя--fingerprint-и-admitted-view): actual section fingerprint проверяется после claim/exact terminal replay только в новой попытке dependency binding до первого handler.validate; единственный helper — SectionFingerprint; delivery — Snapshot-owned AdmittedSectionView от SnapshotAttemptContextBuilder. Прежние до-claim размещение, альтернативный BoundSectionCodec.fingerprint и внешний LifecycleMockPreparedEvidenceBinding.from_request SUPERSEDED. Три выбора больше не OPEN; code-go/runtime acceptance этим не выданы.
+
+Ответ на вопрос 3 координатора; согласовать со Snapshot вопросом 2. Evidence actual: application/patch/encoding/patchSetCodec.py::fingerprint хэширует целый request и НЕ подходит. application/patch/registry/boundSectionCodec.py::encode(section:DomainSection)->bytes уже проверяет exact model, strict nested structure, key/supported version и bytes result, затем вызывает owning SectionCodec.encode. encoding/canonicalCodec.py::content_digest(data:bytes)->bytes — SHA-256 exact bytes. Actual section fingerprint comparison в Snapshot здесь не подтверждён; новый алгоритм не выдаётся за existing.
+
+### Public pure helper, минимальная application дельта
+
+Принятый target application/patch/encoding/sectionFingerprint.py::SectionFingerprint, владелец Patch representation (не заявление наличия реализации):
+
+```python
+class SectionFingerprint:
+    def __init__(self, registry: SectionRegistry) -> None: ...
+    def fingerprint(self, section: DomainSection) -> RevisionHex: ...
+```
+
+Одна точная формула: `content_digest(self.registry.resolve_codec(section).encode(section)).hex()`. Это standalone pure representation utility, не DAG pipeline, не semantic handler, не новый registry/codec формат. Registry — тот же checked C1 binding, frozen состав composition на время вызовов; никаких service/storage/callback dependencies. Public input — готовая native section, output — 64-char lower-case SHA-256 RevisionHex. Existing общий core/assembler/POJO не меняются. Единственный нормативный вычислитель — SectionFingerprint; Snapshot вызывает его, второй алгоритм/serializer или BoundSectionCodec.fingerprint не вводится.
+
+Errors: wrong exact section model/не-bytes output — existing TypeError; неизвестный key/unsupported version — existing ValueError; malformed nested instance — Pydantic ValidationError; canonical representation failure — CanonicalEncodingError с cause. Helper не ловит их как business refusal. C1 construction wrong contract identity — configuration TypeError/ValueError до fingerprint. Snapshot отображает ошибки representation/admission своим existing transport; declared-vs-actual hash mismatch — отдельная owning dependency-admission диагностика, не exception самого fingerprint helper.
+
+**Хэшируемые bytes:** ровно owning canonical encode полной section, включая её native SectionHeader и ordered patches; для LifecycleSection также весь domain_evidence (types/values/order). Не PatchSet envelope/projection, не отдельно payload одного patch, не JSON/model_dump, не digest самого manifest. Model RECORD identity и версии, представленные в owning bytes, участвуют через encode; Python object identity SectionContract не хэшируется. Exact contract/model/key/version проверяются отдельно admission. Для local v1 codec обязан сериализовать всю native section без read-upgrade/reprojection и без опускания header/evidence; эта codec гарантия проверяется synthetic round-trip/field-change tests. Метод не принимает произвольные bytes, которые нельзя связать с admitted section. FormatVersion секции не равен format terminal1; numeric Lifecycle/subject codec versions здесь не назначаются.
+
+### Producer / declared / admitted comparison
+
+1. Synthetic subject preparation получает готовую immutable subject section с окончательными header/operation refs; через свой согласованный representation binding вызывает SectionFingerprint.fingerprint(section). Из этого результата создаёт PreparedSectionDependency(section_key=section.header.key, section_fingerprint=hash) в owning PreparedEffectBinding. Section объект и эти refs передаются далее как ready inputs. Это synthetic preparation/composition обязанность, не foreign codec вызов из Lifecycle и не hash алгоритм в DAG. До вычисления section должна быть окончательной; последующая смена header/payload требует нового declared hash.
+2. Lifecycle prepare_section проверяет отношения supplied evidence и переносит domain_evidence exact tuple; fingerprints не пересчитывает. Header.depends_on — stable unique projection уже проверенных declared dependencies. Lifecycle codec сериализует только собственную section; чужой codec не вызывается.
+3. Snapshot request/dependency admission после exact structural/registry/key/version/core/prepared-order checks находит единственную immutable subject section в том же request по dependency.section_key. Snapshot через тот же SectionFingerprint вычисляет actual RevisionHex и сравнивает с declared section_fingerprint каждой PREPARED зависимости. Не подменяет declared actual значением. Missing/ambiguous target и mismatch не дают validated dependency view. PUBLISHED dependencies используют собственную границу, эта формула их не переопределяет.
+4. Actual digest comparison выполняется после claim/exact terminal replay, только для новой попытки в общей dependency-binding фазе до первого handler.validate. На terminal replay section digests не пересчитываются и handlers не вызываются. Прежнее размещение этой проверки в до-claim SnapshotRequestValidator отменено. Expected-context/source bindings/H3 и all-validate-before-apply сохраняются; остальные стадии не переставляются. Mismatch — owning Snapshot dependency refusal; codec/contract failure не маскируется business refusal.
+5. SnapshotAttemptContextBuilder создаёт Snapshot-owned AdmittedSectionView из admitted request внутри attempt. Один immutable view через validation context используется validate/apply с exact request/scope/lifetime binding и результатом проверки dependencies. Existing resolved_dependencies сам по себе такой гарантии не создаёт. Внешний LifecycleMockPreparedEvidenceBinding.from_request, повторный request/context holder и mutable proof-cache/trusted flag не вводятся. Lifecycle получает typed operands; hash equality подтверждает содержимое, не subject effect truth; predicates и достаточность evidence принадлежат Lifecycle/subject.
+
+### Representation consumer / индексы
+
+Consumer применяет LifecycleSectionAB.domain_evidence[i]; closed union CoverageA|CoverageB и nested refs/effects сохраняются при prepare -> native -> assembler -> codec/decode. source request index i остаётся native section index i; PatchRef ordinal — отдельный адрес, не индекс evidence. Диагностические paths должны быть domain_evidence[i].patch_refs[k]/effect/section по реальному нарушенному operand. Старые patches[i].evidence[j] в historical Lifecycle apply table несовместимы с выбранной representation и требуют owning синхронизации; PatchSet не вводит второй carrier/код ошибки. Hash mismatch общий Snapshot admission адресует исходную dependency, а ложный subject effect диагностирует owning subject/Lifecycle relation, не hash helper.
+
+### Проверки и точный остаток
+
+- Same PatchRef + changed subject payload: actual bytes/hash меняется, старый declared hash не принимается (кроме теоретической SHA-256 collision; это стандартное cryptographic binding, не математическая уникальность).
+- Wrong section model/key/version или contract identity: отказ C1 admission до выдачи fingerprint/view.
+- Well-formed неверный declared hash: dependency admission отказ; запрещены исправление declared, handler/apply до successful admission.
+- Корректный hash и существующие refs, но ложный claimed effect/action/entity: hash check проходит, subject owner verification и owning relation должны отказать до commit. Никакого semantic PASS на основании hash.
+- Поменять domain_evidence entry/ref/order: round-trip сохраняет новую representation, original fingerprint не переиспользуется; evidence paths адресуют реальные section поля.
+
+Закрыты пользовательским решением положение проверки после replay, единственный helper API и Snapshot ownership/delivery view. Остаток — синхронизация exact owning declarations/diagnostics и evidence реализации: full-section codec/manifest closure, section.domain_evidence round-trip, wrong binding/version/hash, отсутствие digest/handler calls при replay, lifetime view. Старый smoke patch.evidence не проверяет текущую section.domain_evidence. Runtime готовность и code-go не объявлены; реальные producers/SQL/production wiring OUT и не gates. Ни кода, ни тестов этот документ не выполняет.
+
 ## Trace producer / evidence / witness — сверка 2026-11-21
 
 Координатор поддержал section-level evidence, Q/P binding и plain union; это техническое сведение к owning freeze, не code-go. Принятая граница ответственности из snapshot-lifecycle-atomic-boundary.md имеет приоритет: Lifecycle задаёт predicates/достаточность evidence, synthetic предметный владелец — truth своих effects, Snapshot — общие boundary/transaction guarantees. PatchSet отвечает только за native compatibility/сохранение данных.

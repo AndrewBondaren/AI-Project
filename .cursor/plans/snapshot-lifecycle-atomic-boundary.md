@@ -1,6 +1,84 @@
 # Snapshot / Lifecycle: ограниченная atomic boundary
 
+## Exact контракт вопросов 2/3 — подтверждённое решение пользователя
+
+2026-11-21. Источник принятия: gen-dag-lifecycle-node-contracts.md, «Подтверждённое решение пользователя — fingerprint и admitted view», переданное назначенным координатором. Приняты три выбора: проверка actual fingerprint после claim/exact replay в dependency-binding фазе до первого validate; единственный PatchSet helper SectionFingerprint; общий Snapshot-owned view/builder вместо externally supplied Lifecycle context. Эти выборы больше не OPEN. Ниже целевой документальный контракт, не утверждение реализации или общей runtime-приёмки. Принятые H2, D1–D7, no-legacy, expected-context/source bindings/H3 и all-validate-before-apply сохраняются. Источники деталей: entity-lifecycle-binding-apply-contract.md, patch-set-lifecycle-section-typing-proposed.md; actual contracts/context.py, contracts/commitScope.py, patch/registry/sectionRegistry.py, patch/registry/boundSectionCodec.py, encoding/canonicalCodec.py и worldSnapshot/results/applyIssues.py (относительно backend/app). Противоположные варианты и статусы ниже superseded этим разделом.
+
+### 2. Producer и общий context seam
+
+Принятый целевой application/worldSnapshot/contracts/admittedSectionView.py::AdmittedSectionView — внутренний read-only application capability, не wire POJO и не proof предметной семантики. Не содержит lifecycle/effect fields, writer, registry или codec. Его private state: exact admitted request reference, immutable sections/index по SectionKey, exact registered model roster и CommitReadScope. Общий shape admission до этого подтверждает closed native models и глубоко immutable поля; frozen outer record с mutable nested payload не удовлетворяет контракту. Входные модели после admission не изменяются; revalidation/decode до этой границы могут создавать новые instances.
+
+```python
+class AdmittedSectionView:
+    def require[S: DomainSection](self, key: SectionKey, *, model: type[S]) -> S: ...
+
+class SnapshotAttemptContextBuilder:
+    def __init__(self, *, registry: SectionRegistry) -> None: ...
+    def build[S: DomainSection](
+        self, request: PatchSet[S], *, scope: CommitReadScope,
+        resolved_dependencies: tuple[SectionDependency, ...],
+    ) -> SnapshotValidationContext: ...
+    def assert_bound[S: DomainSection](
+        self, context: SnapshotValidationContext,
+        *, request: PatchSet[S], scope: CommitReadScope,
+    ) -> None: ...
+```
+
+SnapshotValidationContext получает одно обязательное поле `admitted_sections:AdmittedSectionView`; остальные поля сохраняются. Это общий context, не generic context rewrite и не Lifecycle-specific branch. SnapshotApplyContext использует existing `validation` и не вводит второй view. Builder — конкретный Snapshot-owned класс в application/worldSnapshot/service/attemptContextBuilder.py, создаваемый сервисом из своего registry; внешний factory/callback/подкласс builder не является construction input.
+
+`build` вызывается только WorldSnapshotService внутри новой попытки после claim/replay, открытия scope, expected-context checks и предусмотренного dependency/source binding, до первого validate. Input request — сохранённый результат строгого admission, используемый для request fingerprint/claim и последующего dispatch; не исходный unchecked Python object. Builder проверяет scope.assert_active(), общие identities и declared dependencies, берёт sections именно request.sections и связывает view с этим request/scope. Ни отдельный request внутри handler, ни независимо supplied view не принимаются. Внутренний конструктор view вызывается только этим builder; создание экземпляра само по себе не признаётся доказательством provenance.
+
+`assert_bound` перед каждым bound validate/apply проверяет active scope, identity сохранённого admitted request и read_scope, exact sections/model roster и равенство operation/expectations контексту request. Это проверки общей границы, не повторная domain validation. Подмена равноценным, но независимо созданным view/request после admission отвергается; равенство operation_id или digest недостаточно. Локальный state attempt содержит один созданный validation context: service передаёт именно его, а не контекст caller. Произвольное конструирование тестом контекста не заменяет проход через этот seam.
+
+`view.require(key, model=...)` проверяет свой read_scope.assert_active(), наличие key, exact identity зарегистрированного concrete model и type результата; возвращает неизменную секцию того же admitted request. Это общий exact-type lookup, не выбор subject алгоритма. Missing key/wrong model/expired scope дают внутренний contract fault, не None/пустую успешную секцию. Revalidation у BoundSectionHandler может создать равный section instance: требование identity относится к admitted source view/request и context, а handler section должен сохранять exact class/values; нельзя требовать `handler_section is request.sections[i]` вопреки actual checked().
+
+Actual seam уже существует в SectionRegistry.resolve(section) → BoundSectionHandler.validate(section,context) / apply(section,context); bound wrapper передаёт context handler без преобразования. В WorldSnapshotService._apply_to_target actual dispatch — `await self._registry.resolve(section).apply(section, context)`. Target integration добавляет assert_bound перед dispatch и передаёт один validation context в existing SnapshotApplyContext(validation=validation,...). Validate loop использует тот же общий resolve/validate, в принятом исходном порядке; это целевая часть ещё не реализованного полного apply flow, не утверждение наличия validate loop в текущем service файле.
+
+Owning local потребители — LifecycleSectionHandler.validate(N,context) и apply(N,context): они читают соответственно context.admitted_sections и context.validation.admitted_sections. Для каждого evidence.section.section_key handler получает нужную synthetic секцию через require(key,model=TestDomainSectionA/B), выбирая exact модель по closed owning typed evidence binding, а не вызывая subject handler. Именованные subject models, mapping и relational predicates принадлежат Lifecycle/subject. Прежний `LifecycleMockPreparedEvidenceBinding.from_request` как отдельный внешний producer контекста не нужен: повторное хранение request в supplied binding отменяется этим предложением. Если владельцу нужна внутренняя typed projection, она читает данный view внутри handler и не является новым authority token или context factory.
+
+Не требуется source validate первым: Lifecycle читает immutable заявленные operands, subject самостоятельно валидирует own payload/effects. Только conjunction всех successful validates разрешает первую запись. Ни один validate не пишет proof-cache. Apply читает тот же view; view не читает latest/accepted/staged storage вообще. Accepted lifecycle Q/V по-прежнему читаются отдельными собственными readers в том же scope. После scope expiry view access запрещён; уже полученные immutable значения не отзываются из памяти, но не дают права читать storage или писать после expiry.
+
+### 3. Section fingerprint: формула, владелец, ошибки, фаза
+
+Единственный нормативный API — PatchSet-owned application/patch/encoding/sectionFingerprint.py::SectionFingerprint(registry).fingerprint(section:DomainSection) -> RevisionHex. Helper использует registry.resolve_codec(section), existing checked codec.encode(section) и `content_digest(exact_bytes).hex()`. Это SHA-256 exact bytes зарегистрированного section codec, включая native fields/header/version; не digest всего PatchSet, не JSON/model_dump и не hash одних refs. Один helper используют producer declared fingerprint и Snapshot; второй алгоритм/serializer запрещён. Альтернатива BoundSectionCodec.fingerprint отменена в этом срезе. Codec детерминированно кодирует concrete section/version и сохраняет все declared поля; evidence меняет digest соответствующей секции.
+
+Snapshot-owned application/worldSnapshot/validation/preparedDependencyValidator.py:
+
+```python
+class SnapshotPreparedDependencyValidator:
+    def __init__(self, *, fingerprints: SectionFingerprint) -> None: ...
+    def validate[S: DomainSection](
+        self, request: PatchSet[S],
+    ) -> tuple[SnapshotApplyRelationIssue, ...]: ...
+```
+
+Composition создаёт SectionFingerprint(registry) с тем же registered representation binding и передаёт helper как fingerprints в SnapshotPreparedDependencyValidator; callable/factory или альтернативный serializer не принимается. Validator проверяет PreparedSectionDependency из section.header.depends_on, не интерпретирует domain_evidence. После общего exact model/key/version, uniqueness и prepared-order admission для каждой declared dependency в исходном порядке source section/dependency находит единственную target section того же request, вызывает self._fingerprints.fingerprint(target), сравнивает полное значение с declared section_fingerprint. Digest каждой target вычисляется один раз за вызов; local cache не является proof-cache между handlers. PublishedSectionDependency остаётся в существующем source-resolution контракте. Lifecycle сам проверяет relation своего domain_evidence с проверенным header dependency; отсутствие этой relation не исправляется Snapshot.
+
+Mismatch возвращает existing `SnapshotApplyRelationIssue(code=SnapshotApplyCode.DEPENDENCY_MISMATCH, section_key=source.header.key, player_uid=None, artifact=None)`. Один issue на source section с хотя бы одним несовпадением, порядок source sections; форма existing issue не позволяет выдумывать dependency_index/expected/actual поля. Mapping — existing Snapshot отказ category=REJECTED, через выбранный H2 result binding. Это общий input dependency mismatch, не Lifecycle EVIDENCE_MISMATCH/CONFLICT. Missing/duplicate target и неверный order ловятся прежним structural/core admission; если они обнаружены после успешного admission, это broken internal invariant → PublicationInfrastructureError с cause, не ложный fingerprint mismatch. Ошибка codec после успешной shape/registration admission, malformed codec output либо невозможность вычислить digest также → PublicationInfrastructureError с cause → existing public INFRASTRUCTURE_FAILURE после выхода через rollback. Cancellation не перехватывается как business outcome.
+
+Helper сохраняет owning exceptions: TypeError для wrong model/non-bytes, ValueError для unknown key/version, ValidationError для malformed nested model, CanonicalEncodingError для encoding failure. После успешного request/registration admission Snapshot переводит эти failures только на узкой границе вызова helper в PublicationInfrastructureError с исходным cause; existing PublicationInfrastructureError проходит без переупаковки. Внешний mapping INFRASTRUCTURE_FAILURE выполняется после rollback по H2. Cancellation и unknown commit не превращаются в dependency refusal; их existing пути сохраняются. Declared/actual mismatch — возвращаемая relation issue выше, не exception helper. Construction errors helper/registry до попытки остаются fail-fast configuration errors C1.
+
+**Принятое размещение:** после claim/exact terminal replay, только в новой попытке, в общей dependency-binding фазе до первого handler.validate. Expected-context checks и согласованный взаимный порядок source bindings/H3 сохраняются; проверка не даёт разрешения переставить их. Replay не вычисляет section digests, не создаёт view и не вызывает handlers. Отказ запрещает все handler calls/writes; rollback и отдельная refusal persistence используют existing H2 путь. После завершения предусмотренных dependency/source bindings создаётся общий context, затем все validates → оставшиеся C2 bases → apply с immediate receipt checks → metadata/CAS/commit. Прежняя формулировка, безусловно ставившая dependency check перед всеми source bindings, не нормативна.
+
+Общая проверка fingerprint ничего не утверждает о subject effect truth и не вызывает foreign codec из Lifecycle. Кодек вызывает только common registry/representation boundary, semantic verifier остаётся отдельным subject handler.
+
+### Критерии и оставшиеся IN
+
+| Класс / ответственность | Приёмка / признак нарушения |
+|---|---|
+| SnapshotAttemptContextBuilder | Один admitted request/read scope/context на attempt; отказ при substituted request/view/scope. Нарушение: Lifecycle branch, внешний callback, сборка effects |
+| AdmittedSectionView | Exact typed immutable lookup без IO и storage; assert_active на каждом доступе. Нарушение: latest/staged data, mutable nested values, write authority |
+| SnapshotPreparedDependencyValidator | Только header dependency → actual target digest; deterministic existing diagnostic. Нарушение: предметный predicate или PatchSet digest вместо section |
+| SectionFingerprint (PatchSet) | Один checked encode + existing content_digest; shared producer/checker helper. Нарушение: второй алгоритм в Snapshot/BoundSectionCodec, другой byte representation или пропуск native fields |
+| WorldSnapshotService / bound handler | Existing dispatch, все validates до apply, тот же view в apply, C2/CAS/rollback сохранены. Нарушение: validate Lifecycle вызывает subject, skipped subject после Lifecycle no-op |
+
+Negative suite при реализации: заменить request/view при том же operation_id; binding другого attempt с равными значениями; неверный model/key; доступ после expired scope; view changes между validate/apply; forged section fingerprint; верный общий request digest при неверном section digest; codec fault; valid fingerprint с неверным subject effect; subject отказ после ранее successful Lifecycle validate не допускает ни одного apply; no-op Lifecycle не подавляет subject отказ. Отдельно terminal replay не вызывает validator/view/readers. Порядок production sections не переставлять ради негативного теста: scenario Lifecycle-validate-first проверяется на допустимой synthetic handler harness без изменения accepted dependency order.
+
+**Закрыто решением пользователя:** post-replay placement fingerprint, API SectionFingerprint и общий AdmittedSectionView/SnapshotAttemptContextBuilder с единственным validation view. Повторное согласование этих трёх выборов не требуется. **Оставшиеся IN:** owning semantic evidence/subject verifier и достаточность typed operands, синхронизация section.domain_evidence/paths/category и concrete registrations; при разрешённой реализации — актуальные round-trip/negative/static/runtime проверки scope/view/receipt/atomic guarantees. Старый smoke patch.evidence не доказывает работу section.domain_evidence. Это не code-go и не полная runtime-приёмка. OUT: реальные domains/producers/SQL/production wiring, вариант Б/checkpoint; они не prerequisites. Код, fixture и tests здесь не реализованы; обратной рассылки нет.
+
 ## Сверка section-level evidence и typed view — 2026-11-21
+
+Исторический результат до подтверждённого решения в начале документа. OPEN о выборе delivery/context seam и fingerprint API/phase ниже сняты этим решением; externally supplied Lifecycle context/binding и BoundSectionCodec.fingerprint не являются альтернативами действующего контракта. Доменные evidence obligations сохраняются за владельцами.
 
 Источники: [общая рекомендация координатора](gen-dag-lifecycle-node-contracts.md#сведение-с-первым-координатором-representation-и-coverage), [новая owning редакция](entity-lifecycle-binding-apply-contract.md) §§2,4,7 и actual backend/app/application/worldSnapshot/contracts/context.py. Этот раздел уточняет статус нижних технических proposals; распределение ответственности пользователя остаётся в силе.
 

@@ -1,5 +1,15 @@
 # Lifecycle: локальные ноды варианта А и пакет согласования
 
+## Подтверждённое решение пользователя — fingerprint и admitted view
+
+2026-11-21: пользователь поручил вернуть три рекомендации координатора доменам как подтверждённое решение.
+
+1. Actual section fingerprint проверяется после claim/exact terminal replay, в новой попытке в общей фазе dependency binding, до первого handler.validate. Replay не запускает новую проверку section digests или handlers. Сохраняются expected-context checks, согласованный порядок source bindings/H3 и all-validate-before-apply; это не разрешение переставлять остальные стадии. Несовпадение dependency fingerprint — owning Snapshot dependency refusal; codec/contract failure не маскируется бизнес-отказом.
+2. Единственный нормативный API — PatchSet-owned application/patch/encoding/sectionFingerprint.py::SectionFingerprint(registry).fingerprint(section)->RevisionHex, через existing checked bound codec encode и content_digest(exact_bytes). Snapshot использует этот helper. Альтернативное добавление BoundSectionCodec.fingerprint в данном срезе отменено; второй serializer/алгоритм не создаётся.
+3. Доставка принятого immutable набора — Snapshot-owned AdmittedSectionView, создаваемый SnapshotAttemptContextBuilder из admitted request внутри attempt. Один view через validation context используется validate/apply, с exact request/scope/lifetime binding. Lifecycle читает необходимые typed operands; внешний LifecycleMockPreparedEvidenceBinding.from_request, повторно хранящий request/создающий контекст, отменён. Lifecycle/subject semantic predicates и достаточность evidence остаются у их владельцев; Snapshot получает только common delivery/admission/transaction responsibilities.
+
+Lifecycle, PatchSet и Snapshot должны синхронизировать active signatures и пометить противоположные варианты superseded. Это закрытие трёх архитектурных разногласий, не утверждение runtime readiness или code-go. D1–D7 и текущий scope неизменны. Codec smoke старой patch.evidence representation не считается проверкой section.domain_evidence; актуальные round-trip/negative/runtime/static проверки выполняются при реализации.
+
 2026-11-21. Поручение пользователя: завершить POJO, предложить типизацию секции, точно определить node contracts и выдать владельцам ограниченные задания. Это проектирование до реализации, не code-go. Основной план — entity-lifecycle.md; развитие Б — lifecicle-todo.md.
 
 ## Фиксированный scope

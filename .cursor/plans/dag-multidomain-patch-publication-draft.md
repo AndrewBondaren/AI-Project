@@ -1,5 +1,89 @@
 # DAG: общая карта междоменных процессов и контрактов
 
+## Актуальный общий write flow — Time и Lifecycle, 2026-11-21
+
+Этот раздел обновлён после синхронизации владельцев Lifecycle/PatchSet/Snapshot и имеет приоритет над прежними OPEN/картой ниже. Прежние Time-диаграммы далее сохраняются как локальный IC-1, а не полный перечень участников. Порядок общий: write_changes → prepare_changes → assemble_patch_set → apply_snapshot. Lifecycle/Time подключаются по выбранному сценарию, не обязательны для любой записи.
+
+**Scope:** вариант А Lifecycle, готовые typed inputs, mock_lifecycle_world и synthetic A/B. Production domains/producers/SQL adapters, read_world, bulk, checkpoint и пересекающиеся переходы вне текущего scope. Вариант Б над теми же leaf — [lifecicle-todo.md](lifecicle-todo.md), не блокер А. Проверены и синхронизированы три стыка fingerprint API/фаза/admitted view: PASS документационной сверки, не runtime PASS/code-go. Остальные конкретные регистрации/manifest и aggregate node wrappers завершаются в своих границах; не объявлять весь DAG реализованным.
+
+### Ноды, семейства и публичные контракты
+
+| Нода | Роль и семейство | Input → Output | Публичная цель |
+|---|---|---|---|
+| write_changes | Корень оркестрации записи | Общий ready input → результат подготовки/сборки либо T; named aggregate wrappers ещё OPEN | CALL prepare_changes, assemble_patch_set, apply_snapshot |
+| prepare_changes | Orchestration, ребёнок write_changes | Готовые typed domain inputs/context → sections либо owning отказ; aggregate wrappers OPEN | CALL выбранных leaf, перенос результатов, без доменных predicates |
+| prepare_time_section | Самостоятельный operation leaf Time, без Time parent | PrepareTimeSectionInput.request:PrepareTimeAdvanceSection → PrepareTimeSectionOutput.value:TimeAdvanceSection или TimeSectionContextMismatch | ITimeAdvancePipelineOpenPipeline.prepare_section |
+| prepare_lifecycle_create/replacement/end/reactivate | Четыре самостоятельных logical operation leaf Lifecycle | PrepareLifecycleXInput.request:exact PrepareLifecycleX[T,R] → PrepareLifecycleXOutput.value:exact PreparedLifecycleX[T,R] или LifecycleFieldError или LifecycleLogicError | Соответствующий LifecycleXPipelineOpenPipeline.prepare_x |
+| prepare_lifecycle_section | Самостоятельный operation leaf Lifecycle | PrepareLifecycleSectionInput.request:PrepareLifecycleSectionAB → PrepareLifecycleSectionOutput.value:LifecycleSectionAB или LifecycleSectionRefused | LifecycleSectionPipelineOpenPipeline.prepare_section |
+| assemble_patch_set | Operation leaf семейства записи | PatchSetAssemblyInput[S] → PatchSet[S] или PatchSetAssemblyRefused; engine wrappers отдельно | IPatchSetAssembly[S].assemble |
+| apply_snapshot | Самостоятельный operation leaf Snapshot | ApplySnapshotInput[S].patch_set → ApplySnapshotOutput[T].value; fault отдельно | await IWorldSnapshotApply[S,T].apply |
+
+T в Lifecycle mock composition — отдельный closed result с согласованными Lifecycle/subject diagnostics; он не подменяет и не расширяет молча TimeSnapshotApplyResult/root20150. S — закрытый union действительно участвующих секций (LifecycleAB и subject A/B для данного mock); не только LifecycleSectionAB, когда evidence требует subject patches. Пара Time format1/root20150 принята и не назначается новым synthetic roots.
+
+Lifecycle: T в обозначении prepared — вид сущности, R — основание; это не generic T результата Snapshot. Concrete named children закрывают оба параметра. В одном mixed test graph предлагаются девять distinct registrations: четыре операции × A/B плюс section AB, пять logical leaf. Synthetic classes/registration только test-support. Exact карта и E=Never/error_types=()/calls=() для pure leaf — [node-план](gen-dag-lifecycle-node-contracts.md); финальная регистрационная приёмка не выводится из наличия таблицы. Business refusals — Output.value; runtime failure/cancellation не маскируются успешным результатом.
+
+```mermaid
+flowchart TD
+    W["write_changes · orchestration"] -->|"CALL: готовый контекст и domain inputs"| P["prepare_changes · orchestration"]
+    P -->|"CALL: PrepareTimeSectionInput"| T["prepare_time_section · Time leaf"]
+    T -->|"PUBLIC CALL: request"| TP["Time.prepare_section"]
+    TP -->|"TimeAdvanceSection / refusal через leaf"| P
+    P -->|"CALL: конкретный PrepareLifecycleXInput"| L["Lifecycle create / replacement / end / reactivate leaf"]
+    L -->|"PUBLIC CALL: typed request"| LP["LifecycleXPipeline.prepare_x"]
+    LP -->|"PreparedLifecycleX / refusal через leaf"| P
+    P -->|"CALL: changes + context + domain_evidence"| LS["prepare_lifecycle_section · Lifecycle leaf"]
+    LS -->|"PUBLIC CALL: PrepareLifecycleSectionAB"| LSP["LifecycleSectionPipeline.prepare_section"]
+    LSP -->|"LifecycleSectionAB / refusal через leaf"| P
+    P -->|"RETURN: полный набор sections либо отказ"| W
+    W -->|"CALL после успеха: PatchSetAssemblyInput S"| A["assemble_patch_set"]
+    A -->|"PUBLIC CALL"| AP["IPatchSetAssembly.assemble"]
+    AP -->|"PatchSet S / refusal через leaf"| W
+    W -->|"CALL после успеха: ApplySnapshotInput S"| S["apply_snapshot · Snapshot leaf"]
+    S -->|"PUBLIC CALL await: patch_set"| SP["IWorldSnapshotApply.apply"]
+    SP -->|"T либо public fault/cancellation через leaf"| W
+```
+
+Диаграмма не задаёт обязательный выбор обеих ветвей или их параллельность. Готовые transitions можно передать сразу в section producer; повторный prepare не нужен. Готовые subject sections/evidence приходят через declared вход текущего среза; их получение показано в owning mock fixture, новые domain DAG-ноды этим не назначаются. При отказе обязательной подготовки зависимые assembly/apply не выполняются.
+
+### Lifecycle: точный перенос данных
+
+Pure request = intent + capture + admission. Pure prepared = base + transition, без PatchHeader. Общий operation_id поступает в PrepareLifecycleSection вместе с expected_world, changes и domain_evidence; change_uid идентифицирует переход и не заменяет operation_id.
+
+Native wrapper LifecycleTransitionPatch[P] = inherited header + prepared:P. LifecycleSection[P,C] = inherited section header/patches + domain_evidence:tuple[C,...]. Closed A/B union сохраняет concrete classes. Каждый request.domain_evidence[i] переносится целиком в section.domain_evidence[i], без сортировки/фильтрации/дублирования по patches. Header dependencies — согласованная projection, не замена effect→PatchRef mapping.
+
+100 independent Create → 100 transitions/patches; один Replacement со 100 участниками → один transition/patch. История при первом принятии имеет одну operation на переход; число receipt history refs может быть другим (bundle). NoDomainMutation запрещён в v1, explicit many-to-many обязателен. D1–D7 приняты; equal semantic retry не добавляет историю, но не отменяет проверок других participants и exact Publication request binding.
+
+### Внутренняя граница Snapshot.apply — не новые DAG-ноды
+
+```text
+request admission / immutable fingerprint / claim
+  ├─ exact terminal replay → прежний T, без handlers/view/section digest checks
+  └─ новая попытка: общий scope + expected-context checks
+       → dependency/source binding в принятом порядке
+         (actual section fingerprint до первого handler.validate)
+       → SnapshotAttemptContextBuilder → один AdmittedSectionView
+       → все handler.validate
+       → оставшиеся C2 bases в принятой фазе
+       → handler.apply + немедленная C2 receipt проверка
+       → metadata / CAS / terminal / confirmed commit
+```
+
+Единственный fingerprint API: application/patch/encoding/sectionFingerprint.py::SectionFingerprint(registry).fingerprint(section)->RevisionHex = content_digest(registry.resolve_codec(section).encode(section)).hex(). Full-section exact bytes, не PatchSet digest. Используется synthetic preparation/composition для declared значения и SnapshotPreparedDependencyValidator(fingerprints=helper) для actual. Альтернативный BoundSectionCodec.fingerprint отменён. Mismatch → Snapshot DEPENDENCY_MISMATCH/REJECTED; codec/contract fault → infrastructure, не доменный отказ.
+
+SnapshotAttemptContextBuilder.build(request, scope, resolved_dependencies) создаёт SnapshotValidationContext.admitted_sections:AdmittedSectionView; assert_bound перед dispatch проверяет exact admitted request/scope. require(key,model=...)->exact S проверяет key/model/lifetime. Lifecycle.validate читает context.admitted_sections, apply — context.validation.admitted_sections. Внешний LifecycleMockPreparedEvidenceBinding.from_request отменён; view неизменен и не читает latest/staged storage. Предметные сущности/эффекты Snapshot не интерпретирует.
+
+Subject mock verifier проверяет payload→effect и свои accepted preconditions. Lifecycle проверяет effect→transition/coverage, own current captures и отдельный AcceptedChangesQuery/lookup_accepted_changes. Snapshot — общие refs/fingerprint/receipt/transaction. Valid hash не semantic proof. Все validates должны пройти до первой записи; subject validate не обязан предшествовать Lifecycle validate. Отказ subject запрещает apply даже при equal Lifecycle retry.
+
+Pure LifecycleSectionRefused не apply carrier: apply использует owning LifecycleApplyIssue в existing SectionRefused/H2; source corruption и contract failure не business refusal. All-equal Lifecycle append: state=None/history=None/changed=(); mixed: changed только новые входные refs, история только новых переходов, state поверх current Q. Receipt не commit. Unknown не означает rollback; отмена сохраняет owning drain/unknown правила. Durable cancellation engine transport ранее отложен отдельно.
+
+### Источники и остаток
+
+Нормативные подробности: [Lifecycle binding/apply](entity-lifecycle-binding-apply-contract.md), [Lifecycle POJO](entity-lifecycle-local-contracts.md), [PatchSet representation](patch-set-lifecycle-section-typing-proposed.md), [Snapshot capability](snapshot-lifecycle-atomic-boundary.md), [Lifecycle node contracts](gen-dag-lifecycle-node-contracts.md), [Time node contracts](gen-dag-time-local-node-contracts.md).
+
+Три последних междоменных расхождения устранены и синхронизированы владельцами: PASS документальной сверки. Не считать их OPEN повторно. До полной поставки остаются итоговая приёмка регистраций/closed result/manifest и aggregate wrappers в их scope, затем реализация и synthetic evidence: exact typed round-trip актуальной section.domain_evidence, wrong type/view/fingerprint/effect, retry/no-op, rollback/CAS/cancellation. Старый smoke patch.evidence не доказывает новую форму. Реальные домены/SQL и вариант Б в эти gates не возвращаются. Ни код, ни production readiness этой редакцией не объявлены.
+
+## Предыдущая локальная карта IC-1 Time (уточнения выше приоритетны)
+
 **Актуальная редакция схем — 2026-11-21, по поручению пользователя.** Три диаграммы ниже заменяют старые схемы: внутренняя граница Snapshot.apply, семейства нод и последовательность публичных вызовов. Карточки контрактов этого раздела приоритетнее исторических таблиц K и статусов первого круга ниже. Схемы конкретизируют Time/IC-1; другие домены подключаются через собственные согласованные bindings по необходимости. Source/Pack/Artifacts/Cache/Lifecycle не объявляются обязательными стадиями и не исключаются из каталога семейств. Отдельные read_world, initial-read и подготовка Pack вне текущего write flow.
 
 S — закрытый набор concrete sections, для локального IC-1 TimeAdvanceSection. T — одна текущая concrete модель TimeSnapshotApplyResult для новой записи и её replay. Legacy union/readers не вводятся. OPEN означает отсутствие завершённого контракта, PROPOSED — предложение, не утверждённый NodeId/binding. Фиксация схем не закрывает эти gaps и не разрешает код.
