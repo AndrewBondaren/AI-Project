@@ -4,7 +4,140 @@
 
 ## Решения пользователя и источники
 
-### H2-SIG: propagation W/R через Artifacts — 2026-11-20, PROPOSED
+### Актуальная граница read/protection/completion — исправления ревью 2026-11-21
+
+Этот раздел сохраняет гарантии, предъявленные координатору Between domain operations, и имеет приоритет над историческими PACK-ART-READ и ART-Q1 ниже. Гарантии обязательны для целевой реализации; proposals не объявляются принятыми или реализованными. Междоменные signatures и Output→Input проходят interdomain-contract-coordination.mdc; локальное исправление не закрывает общую приёмку.
+
+**Неослабляемые гарантии:** authoritative admission и непрерывная защита catalog/body до завершения IO; cancellation сначала drain, затем release; защита всего допущенного исходного набора до первого Source read и до подтверждённой передачи либо подтверждённого прекращения работы с drain; Source владеет semantic closure; target acquisition/exact set/candidate binding/READY — один completion UOW без Source calls; unknown outcome требует reconciliation до cleanup; final target retention и публикация атомарны. Completion подготовки и публикация — разные операции, не одна длинная транзакция.
+
+#### Protected read — предложение вместо ref/holder-only формы
+
+TARGET `application/artifacts/read/artifactReadOpenPipeline.py::ArtifactReadOpenPipeline[A]`, interface `application/artifacts/contracts/artifactReadOpenPipeline.py::IArtifactReadOpenPipeline[A]`: `async read_verified(self, request:ArtifactReadInput[A])->ArtifactReadOutput[A]`.
+
+В ранее предложенном `dataModel/artifacts/read/read.py` уточняются, а не дублируются: Input(ref:ArtifactRef,authority:A,max_bytes:Annotated[StrictInt,Field(gt=0)]); Output(request:ArtifactReadInput[A],payload:bytes). A — конкретный owning тип; Any/BaseModel или самостоятельно сконструированный token не authority. Holder выбирает/проверяет согласованный binding. Pack input-кандидат — existing ManifestPinRead с store/execution/invocation/logical_read_key/pin/world; перенос admission требует согласования. Initial AcceptedInitialStateBinding вместе с PublicationHolder НЕ доказывает право текущего caller: он доказывает Q→reference, а hold — удержание. Initial и Source preparation authority producers остаются OPEN. Неподтверждённая specialization не регистрируется; foreign public calls из reader/DI/callback запрещены.
+
+Output связывает полный exact request/ref с проверенными size/hash bytes. Effective limit = min(caller limit,trusted binding limit), проверка до allocation/IO. Числа/configuration disposition OPEN; безлимитный default запрещён. Защита непрерывна от authoritative admission до завершения IO; после возврата owned bytes pure decode не требует guard, новый IO требует новой admission.
+
+SQL_ROWS — отдельный TARGET `application/artifacts/read/artifactRowsReadOpenPipeline.py::ArtifactRowsReadOpenPipeline[A,C]`, одноимённый interface с I в contracts: `async read_verified(self, request:ArtifactRowsReadInput[A])->ArtifactRowsReadOutput[A,C]`. TARGET `dataModel/artifacts/read/rowsRead.py`: Input(ref:ArtifactRef,authority:A,max_bytes,max_rows), оба limit strict positive int; Output(request,content:C). C — existing concrete owning frozen row-set, не второй SourceCaptureWitness и не dict. Требуются coherent rows, exact row_count и canonical descriptor verification без Source traversal. Concrete witness binding и row-limit errors OPEN.
+
+Reuse ошибок: ArtifactInputRejected/ArtifactInputError, proposed ArtifactReadRejected/ArtifactReadRefusal с request specialization, existing CorruptBlobError/PublicationInfrastructureError/UnknownCommitOutcome; cancellation отдельно. Stale/revoked mapping и budget leaf с effective limit требуют freeze. Потеря обязательного initial artifact/hold — нарушение owning guarantee, не successful absence; классификация не переносится в DAG. Старый readErrors roster ниже не является полным Error freeze.
+
+Cache-hit не authority/hold: cached path требует актуальной owning admission и exact cached identity, Pack владеет semantic admission. Cold path выполняет protected IO. Existing ManifestCachedRead/VerifiedManifestBytes не копируются общими semantic DTO. Public cached binding OPEN; живой scope/guard callback через DAG не передаётся.
+
+#### Source protection и target completion
+
+Proposal координатору: source protection owner отделён от target preparation owner. Первый удерживает superset исходных refs, второй — exact target candidate set. Existing lifecycle representation этих владельцев подтверждает Publication; новый kind/ID/holder type не назначается. Нельзя удержать весь superset под target и молча trim/release перед finish: existing finish требует exact holds == refs.
+
+TARGET `application/artifacts/retention/artifactProtectionOpenPipeline.py::ArtifactProtectionOpenPipeline[A]`, interface с I в contracts: `async protect(self, request:ArtifactProtectionInput[A])->ArtifactProtectionResult[A]`. TARGET `dataModel/artifacts/retention/protection.py`: Input(lease:OperationLeaseRef,origins:tuple[A,...]); Result(request,refs:tuple[ArtifactRef,...]). Lease принадлежит source protection owner, не автоматически target. Origins дают authoritative retained membership; произвольный caller список refs не доказывает покрытие. Все исходные наборы закрепляются атомарно до первого read; partial acquire не success. Exact A/Error и lifecycle binding OPEN; input/lease errors переиспользуются, infrastructure/unknown отдельно.
+
+Обязательный отдельный public retain ОТОЗВАН из предложения: он не заменяет atomic acquisition→READY. Preliminary target holds без самостоятельного основания не вводятся; existing stage holds сохраняются. Public completion предоставляет Publication: готовые owning candidate/evidence → inherited target acquisition → exact set check → candidate binding/READY в одном UOW. Target set не обязательно равен Source closure. Source не вызывается. Artifacts выполняет scoped acquisition без собственного commit; Publication владеет transaction/rollback/recovery. Exact public completion IO/Error остаётся owning prerequisite, internal finish не DAG entry.
+
+Rollback отменяет новые target acquisitions вместе с READY/candidate changes, не объявляя автоматически снятыми прежние stage holds. Source protection сохраняется до confirmed outcome и drain readers/workers. Cancel закрывает admission новых действий; cleanup следует подтверждённому lifecycle outcome. Unknown требует reconciliation до release. Снимается только временная защита данного выполнения, не чужие исходные или target holds. Independent invocations сохраняют task/connection isolation; scope не передаётся workers автоматически.
+
+#### Оставшаяся приёмка
+
+#### Собственная дельта Artifacts: budgets/errors/verification — PROPOSED 2026-11-21
+
+**Ответ координатора (2) прочитан:** public initial/Source authority и public completion в проверенных источниках не подтверждены; separate source/target protection owners поддержаны как направление, exact lifecycle не принят; обязательный retain не возвращается; CRUD-исключения Artifacts нет. По сообщённому координатором последнему решению пользователя H2 и внешние read/retention уточняются отдельно от независимого переноса записи, не блокируют независящие срезы и не разрешают выдумать transport/authority. Это не разрешение реализации Artifacts и не отмена критериев полной приёмки ARCH-0. Новый доказанный single-R mismatch координатором не предъявлен; полноценная constructor/output сверка остаётся отдельной.
+
+Для последующего пользовательского решения по authority остаются два варианта: reuse exact existing execution/session POJO после предъявления owning provenance; либо trusted invocation binding с явными callers/origins без сериализуемого grant. Вариант не выбран. Artifacts не выбирает его молча; до выбора initial/Source read specialization не регистрируется. Для completion требуются owning Publication representation source owner, lease issuer, cancel/recover/drain/cleanup и public Input/Output/Error, не внутренний port вместо публичного метода. Внешние вопросы остаются зависимостями конкретных маршрутов, а не заявлением о завершённом контракте.
+
+По поручению пользователя начата доработка открытых вопросов. Адресный запрос направлен назначенному пользователем для этого уточнения чату Between domain operations (2), `01a1f529-898c-7342-82f4-1e68983b3a9c`: authority producers, source protection lifecycle, exact completion/candidate evidence, H2 и наличие CRUD-исключений. Это не самостоятельная замена координатора в общем правиле. Ответ/приёмка не подразумеваются из отправки. Artifacts сохраняет ответственность за собственные guards, ошибки и лимиты.
+
+**Повторный inventory:** existing ArtifactFormatMetadata описывает key/versions, не budgets; ArtifactFormatContract[C] связывает kind/model/codec/row_count; GcReport/ArtifactGcFailure описывают GC outcome, не read refusal; VerifiedArtifactRef не содержит bytes или authority; ManifestPinRead/ManifestCachedRead и VerifiedManifestBytes принадлежат Pack и не становятся generic read DTO. Новых existing Artifacts budget POJO в проверенных dataModel/application/artifacts не обнаружено. Это ограниченный inventory этих модулей, не декларация проверки всех доменов.
+
+**Budget policy proposal:** `dataModel/artifacts/read/readLimits.py::ArtifactBlobReadLimits(max_bytes:Annotated[StrictInt,Field(gt=0)])` и `ArtifactRowsReadLimits(max_bytes:Annotated[StrictInt,Field(gt=0)],max_rows:Annotated[StrictInt,Field(gt=0)])`. Frozen/strict/extra-forbid; численные значения предоставляет composition, универсальный default не назначается. Это разные kind-specific конфигурации без nullable max_rows для BLOB. Лимиты requests — ограничения отдельного вызова; limits POJO — доверенный верхний предел binding, не копия caller request. Public CRUD/disposition этих настроек ещё требует решения, static lifetime не объявляется исключением автоматически.
+
+В BLOB read effective bytes = min(request.max_bytes,binding.max_bytes). Проверка descriptor до IO; physical reader читает не более admitted nbytes плюс один контрольный байт, не возвращаемый в payload. Extra byte — corruption, не разрешение увеличить успешный payload. Budget не означает точную верхнюю границу RSS: bytearray/bytes и временные buffers учитываются отдельно при capacity planning.
+
+В SQL_ROWS effective rows/bytes ограничиваются аналогично. Недостаточно проверить только ref.row_count/nbytes: storage adapter читает bounded rows с контролем лишней строки и ограничивает реально материализуемые поля/данные до построения всего row-set. После coherent read owning canonical verification сверяет count/size/hash с полным descriptor. Превышение descriptor при допустимом descriptor — integrity/infrastructure fault, не caller budget refusal. Если конкретный adapter/codec умеет только unbounded fetch/encode, его нельзя зарегистрировать в bounded read до появления проверяемого ограничения; обещание generic SQL_ROWS reader не закрывает этот gate. Canonical nbytes само по себе не равно размеру SQL row в памяти.
+
+**Уточнение planned readErrors, не второй error family:** ArtifactReadRefusal[A] хранит request:ArtifactReadInput[A] и reason из закрытого union typed leaves: ArtifactReadUnavailable(reason: Literal[UNSUPPORTED_FORMAT,NOT_FOUND,UNSEALED,HOLD_MISSING,NOT_AUTHORIZED]) либо ArtifactReadByteBudgetExceeded(actual_bytes:StrictInt>=0,limit_bytes:StrictInt>0), actual>limit. В rows specialization request:ArtifactRowsReadInput[A], тот же byte leaf и отдельный ArtifactReadRowBudgetExceeded(actual_rows:StrictInt>=0,limit_rows:StrictInt>0), actual>limit. Размещение — existing proposed dataModel/artifacts/read/readErrors.py; прежний reason-only BUDGET_EXCEEDED заменён этими leaves, не существует параллельно. Exact generic request binding/carrier freeze зависит от concrete A; semantics fault/absence не меняется. Shared field errors не копируются. Stale/revoked authority mapping ждёт owning контракта, не выдумывается код READ_STALE без смысла.
+
+Порядок отказов: structural admission → supported fixed kind/format/version → descriptor budget → authoritative admission и защищённые catalog/seal/hold checks → actual read verification. Исход NOT_AUTHORIZED не даёт bytes. Отсутствие обязательного held объекта по гарантированному owning контексту — owning infrastructure fault; эту специализацию классифицирует admitted Artifacts implementation boundary по согласованной гарантии, не DAG и не boolean caller flag. IO failure/descriptor mismatch/corrupt chain не маскируются NOT_FOUND. Exact initial guarantee mapping остаётся внешним prerequisite.
+
+**Критерии внутренних компонентов для закрытия A1/A4/A5:**
+
+| Компонент | Ответственность / зависимости | Приёмка / отказ |
+|---|---|---|
+| ArtifactReadOpenPipeline[A] | Одна read операция через admitted implementation; owning public input/output | Нет decode Time/Pack, выбора следующей операции, callbacks соседнего pipeline |
+| ArtifactRowsReadOpenPipeline[A,C] | Один typed coherent read; concrete row-set/format binding | Нельзя generic dict, unbounded rows/fields или независимые reads без coherent lifetime |
+| ReadableBlobBackend / read_verified_file | Bounded физические bytes и hash/size; backend validates path | Extra/truncated/hash mismatch не success; cancellation IO drained до release |
+| SqliteArtifactScope | Standalone guard или validated borrowed lifetime по явной policy | Не reentrant, не чужая task/connection, не собственный commit borrowed UOW |
+| Owning authority admission implementation | Durable факты разрешённого вызова и coverage | Exact класс/deps OPEN до concrete authority; нельзя заменить holders lookup или foreign public call |
+| ArtifactProtectionOpenPipeline[A] | Атомарная фиксация всего admitted origin set | Partial acquire не success; нет Source semantic traversal; конкретный atomic storage binding OPEN |
+
+Проверки с управляемыми точками остановки: (1) release/GC между admission и IO блокируется либо read отвергается до IO; (2) GC во время body/rows read не удаляет используемые данные; (3) cancellation ждёт drain; (4) independent connections не обходят исключение; (5) rows/bytes превышение descriptor не маскируется budget; (6) exact type/ref/authority mismatch не возвращает bytes; (7) rollback target completion сохраняет source protection; (8) unknown commit не запускает cleanup; (9) restart заново проверяет durable authority/holds; (10) exact replay не пересобирает candidate/diagnostics. Это test design, не результаты тестов.
+
+**CRUD disposition для решения, не самовольное исключение:** immutable content нельзя перезаписывать под прежней identity; новая версия — новый ref. Смена ссылки потребителя принадлежит его owning контракту, retention changes — lifecycle, удаление held content запрещено. Existing collect возвращает GcReport и не снимает hold. Полный публичный update/delete/settings API либо узкое исключение ещё нужно согласовать; отсутствие этих методов не исправляется опасным overwrite/delete или фиктивным no-op update. Этот gate относится к полной приёмке Artifacts, а scope независимого среза определяют пользователь и координатор.
+
+Read pipeline выполняет одну операцию admission/protected read; protection pipeline фиксирует retained set, не вычисляет Source closure и не запускает completion. Backend владеет bounded IO/hash, catalog/holders — storage facts, Publication — UOW/recovery. Concrete внутренние admission/protection classes, dependency/failure criteria и полный POJO/error inventory остаются OPEN; facade/callback не закрывает отсутствие контракта. H2 — отдельный срез ниже.
+
+CRUD gaps данных/настроек требуют exact owning API либо явного узкого пользовательского исключения; фиктивные методы и автоматические исключения запрещены. До этого полная приёмка FAIL. Проверки: GC race catalog/body/transfer, multiple connections, stale/replay, rollback/unknown, cancellation drain, cleanup без снятия чужих holds. Документальная правка не runtime evidence.
+
+### H2-SIG: одна текущая specialization — 2026-11-21, актуальный PROPOSED
+
+**Принятое решение пользователя: БЕЗ LEGACY.** По [актуальному H2](interdomain-refusal-transport-h2.md) одна concrete Snapshot result model обслуживает запись и exact replay текущего маршрута. Ниже используется один параметр R, обозначающий эту модель, а не union прежнего и нового Snapshot roots. Исторический W/R-раздел ниже SUPERSEDED в части раздельных write/read наборов, legacy manifests/readers/corpus, старого root20124 как поддерживаемого replay и отдельного dispatch ради legacy. Финальные signatures ещё требуют координаторской сверки; H2 целиком не принят и код не разрешён.
+
+**Актуальная цепочка:** PublicationResultBinding[R] → StoredTerminalCodec[R] / IOperationStore[R] / SqliteOperationStore[R] / OperationLedger[R] → IArtifactLeases[R] / SqliteArtifactLeases[R] → ArtifactStagingService[R] / IArtifactStaging[R]. Publication владеет binding/codec/expected-root/representation policy, Artifacts только сохраняет concrete terminal type. Это упрощение Publication counterpart предлагается владельцу, не объявляется самостоятельной приёмкой foreign API.
+
+OperationRecord[R] сохраняет existing operation/phase/fence/refs поля и terminal: R | PackActivationResult | GameplayStarted | OperationCancelled | None. Остальные актуальные terminal kinds не удаляются. R — одна closed concrete Snapshot model; нет OldSnapshotApplyResult union, old→new adaptation, fallback, пробных decode и migration для совместимости. Core не импортирует Time.
+
+```python
+# app.application.artifacts.storage.artifactLeases
+class IArtifactLeases[R](Protocol):
+    async def finish_preparation(
+        self, lease: OperationLeaseRef, refs: tuple[ArtifactRef, ...]
+    ) -> OperationRecord[R]: ...
+    async def recover(self, operation_id: EntityUid) -> OperationRecord[R]: ...
+    async def cancel(self, operation_id: EntityUid, fence: int) -> OperationRecord[R]: ...
+
+# app.db.repositories.sqlite.artifacts.leaseStore
+class SqliteArtifactLeases[R]:
+    def __init__(
+        self, scopes: SqliteArtifactScope,
+        operations: SqliteOperationStore[R],
+        artifacts: SqliteOperationArtifacts,
+    ) -> None: ...
+    @property
+    def record_model(self) -> type[OperationRecord[R]]: ...
+    async def _record(
+        self, scope: CommitReadScope | CommitScope, operation_id: EntityUid
+    ) -> OperationRecord[R]: ...
+    # Три lifecycle метода имеют signatures IArtifactLeases[R].
+
+# app.application.artifacts.staging.artifactStaging
+class ArtifactStagingService[R]:
+    def __init__(
+        self, registry: ArtifactFormatRegistryBinding, catalog: IArtifactCatalog,
+        leases: IArtifactLeases[R], holders: IArtifactHolders,
+        gc: ArtifactGarbageCollector, ledger: OperationLedger[R],
+        log: ArtifactLifecycleLog, *, record_model: type[OperationRecord[R]],
+    ) -> None: ...
+    @property
+    def result_binding(self) -> PublicationResultBinding[R]: ...
+    @property
+    def record_model(self) -> type[OperationRecord[R]]: ...
+    # Три lifecycle метода имеют signatures IArtifactLeases[R].
+```
+
+IArtifactLeases[R] также предъявляет read-only property record_model: type[OperationRecord[R]] для construction проверки без private introspection. IArtifactStaging[R] в existing contracts/stagingPort.py возвращает OperationRecord[R] из finish_preparation/recover/cancel. Все остальные входы/выходы lease/staging методов неизменны. Протокол не становится read-only по эффектам: finish/cancel сохраняют lifecycle writes.
+
+PublicationResultBinding[R] — предлагаемый однопараметрический counterpart existing proposal application/publication/contracts/resultBinding.py. Никакой собственной копии binding/codec в Artifacts нет. Staging result_binding возвращает тот же binding, что ledger; leases.record_model происходит из operations.result_binding.record_model. IArtifactStaging[R] и ArtifactStagingService[R] предъявляют read-only property record_model: type[OperationRecord[R]], равную binding.record_model. Явный constructor record_model staging сохраняется как проверяемый аргумент, а не независимая настройка: identity должна совпадать с binding.record_model и leases.record_model. Store/ledger/codec используют один result_binding. Проверки выполняются factory/constructors до IO через публичные read-only properties; exact Publication constructor/factory signatures сверяет владелец. Неподставленные generics, Any/BaseModel как runtime carrier и несовпадение closed result models отклоняются.
+
+_record возвращает validated store observation без dict round-trip; staging revalidation использует именно согласованный record_model, а не bare OperationRecord. Обе recover ветви и cancel уже terminal операции сохраняют ту же concrete R, identity, category, operands и порядок diagnostics. Replay не вызывает handler повторно, не пересчитывает state и не пересобирает refusal. Новая Snapshot запись принимает только R; cancellation/Pack/Gameplay остаются своими типами.
+
+**Nested path неизменен:** OperationLedger[R] → IArtifactLeases[R] → SqliteArtifactLeases[R] → тот же SqliteOperationStore[R]. Нет вызова публичного Artifacts pipeline из ledger, обратного вызова ledger из leases или foreign Time/Source/Pack вызовов. Normal apply использует узкий Publication IOperationStore[R]; recover/cancel/finish не добавляются внутрь apply. Допустимость полной infrastructure цепочки остаётся предметом сверки координатора.
+
+**Ошибки и decode:** unsupported persisted root/format — явная Publication infrastructure incompatibility, не None/missing terminal, business refusal или разрешение повторить операцию. Strict expected-root/full bounded decode, checksum и budgets обязательны. Новый root-dispatch API не требуется только ради legacy; нужность иной dispatch-функции между актуальными kinds определяет Publication, не Artifacts. Existing validation/lease errors, OperationBusyError, cancellation и UnknownCommitOutcome не меняют смысл. При unknown outcome нет cleanup по предположению rollback.
+
+**IDs:** принятые 31007/31139/31140/20150 сохраняются; старые IDs не переназначаются. Artifacts не назначает ID OperationRecord по одному факту generic propagation: persistence reachability проверяется отдельно. Никаких удаления данных/миграций/кодовых правок это решение не разрешает.
+
+**Остаток H2-SIG:** подтвердить у Publication однопараметрический binding/store/ledger/codec и construction equality через публичные properties; затем сверить с Snapshot result/DAG output. Legacy roster/corpus и old/new reader mapping больше не gates. Нужны проверки текущего result round-trip/replay, foreign-root rejection, несовпадающего binding и обеих recover/cancel ветвей. Lifecycle exact-holds/seals/READY, fence/drain/release, retention-порядок и H3 не меняются. Runtime PASS не заявляется.
+
+### H2-SIG: propagation W/R через Artifacts — 2026-11-20, HISTORICAL / SUPERSEDED
+
+**Исторический proposal.** Противоположные актуальной редакции 2026-11-21 положения о двух W/R наборах и legacy compatibility ниже не действуют. Не использовать этот раздел как freeze signatures или prerequisite legacy corpus.
 
 Owning дельта для координатора Between domain operations по [H2-SIG](interdomain-refusal-transport-h2.md). Не code-go и не приёмка H2. Заменяет прежнее однопараметрическое предложение store/ledger/конкретных adapters[R]. W — concrete текущий Snapshot write result; R — закрытый набор читаемых Snapshot roots, включающий W. Reader policy legacy root20124 | W остаётся предложением Publication до пользовательской приёмки. D принадлежит result composition и отдельно в leases не передаётся. H3, reuse TimeSectionRefused, Time-owned validator, lease/retention порядок не меняются.
 
@@ -153,7 +286,9 @@ Pack выдаёт готовые bytes через DAG и получает Artifa
 
 ## Предложение Artifacts: публичный срез V1.1
 
-### PACK-ART-READ — публичное bounded verified чтение (проект 2026-11-18)
+### PACK-ART-READ — исторический проект 2026-11-18, форма Input SUPERSEDED
+
+Ref/holder-only форма ниже заменена актуальным proposal в начале документа. Authority/lifetime и ошибки здесь — исходный анализ, не разрешение использовать недостаточный вход. BLOB/SQL_ROWS и cache boundaries см. актуальный раздел; гарантия непрерывной защиты IO сохраняется.
 
 **Статус: CONTRACT PROPOSAL, не принят.** Физическое bounded read и GC exclusion существуют; generic публичная authority admission не существует в проверенном контуре. Ниже конкретная форма операции и guarantees, а не обещание готовой универсальной авторизации. Новые public ноды не назначаются.
 
@@ -401,7 +536,7 @@ Structural errors переводятся существующим pydantic_issue
 | IArtifactCatalog / SqliteArtifactCatalog, storage/artifactCatalog.py / db/repositories/sqlite/artifacts/catalogStore.py | Guard, reservation, seal и catalog facts | Seal без согласованного descriptor; SQL в caller → FAIL |
 | IArtifactLeases / SqliteArtifactLeases, storage/artifactLeases.py / db/repositories/sqlite/artifacts/leaseStore.py | Fences, admission, writer drain, READY и cancel; локальные транзакции | Принят stale fence, release до drain или own domain computation → FAIL |
 | IArtifactHolders / SqliteArtifactHolders, contracts/holderPort.py / db/repositories/sqlite/artifacts/holderStore.py | Acquire/release/query/handoff в утверждённом scope | Разрыв atomic handoff на ноды или release чужого holder → FAIL |
-| SqliteArtifactScope, db/repositories/sqlite/artifacts/access/artifactScope.py | Проверка borrowed scope и доступ к artifact tables | Самостоятельный внешний pipeline/UOW вместо borrowed scope → FAIL |
+| SqliteArtifactScope, db/repositories/sqlite/artifacts/access/artifactScope.py | Standalone unbound guard/transaction открывает собственный UOW; bind заимствует выданный scope без commit; проверяет task/connection/lifetime | Собственный commit при borrowed scope, reentrant guard или release защиты до IO drain → FAIL; standalone UOW сам по себе допустим |
 | SqliteOperationArtifacts, db/repositories/sqlite/artifacts/operationArtifacts.py | Read-only operation-holder projection | Writer/GC внутри read → FAIL |
 | OperationLedger, application/publication/service/operationLedger.py | Bookkeeping через IOperationStore/leases, не оркестрация повторной подготовки | Recover запускает producer → FAIL |
 | ContentAddressedBlobBackend, storage/artifacts/blobBackend.py | Физическое хранение bytes под DI root, writer lifecycle, verify/read/delete | Изменение published bytes, утечка пути в ArtifactRef или новая state machine → FAIL |
@@ -439,7 +574,7 @@ TARGET disposition (уточнение по existing контракту): Pack-o
 
 Протокол междоменного CRUD: потребитель Artifacts.stage требует подготовленный content от Pack; existing функция не предоставляет отдельного публичного prepare-контракта. Обратный потребитель Pack требует ArtifactRef, формат/версию/hash/nbytes и membership evidence; exact public Pack consumer также ещё не определён. Поэтому PACK-PREPARED-API — OPEN: нужен owning Pack контракт с конкретными POJO/ошибками. Не назначать эти методы Pack из Artifacts. Другие доменные producer contracts нельзя вывести из наличия registry.
 
-Согласованных NodeId для этой новой границы нет. Маршрут выше — proposal операций, не утверждённый граф. По GEN-NODE-JOINT-REVIEW привязка остаётся OPEN до совместной карты и согласования; никаких invented NodeId и прямого Pack→Artifacts pipeline как обхода.
+Роли prepare_artifact/stage_artifact согласованы пользователем; источник — gen-dag-artifacts-node-contracts.md. Concrete специализации, регистрации, producers/consumers и включение в общий маршрут остаются OPEN. Это не повод переоткрывать роли или назначать новые ноды; прямой Pack→Artifacts pipeline как обход запрещён.
 
 #### CRUD disposition и остаточные blockers
 
@@ -485,6 +620,8 @@ Root/backend registration — existing composition configuration, а не осн
 По ART-Q1 2026-11-17 получены ответы отдельных чатов: Pack `01a1ea8d-1751-70d3-970e-df20d38779f4` и Publication/Artifacts `01a1ea8d-2bdb-7152-bb40-925c86c041d8`. Каждый сначала сверил собственные доменные источники и код. Результат уточнения ниже не означает приёмку предложенного API; ART-Q1 остаётся OPEN.
 
 #### ART-Q1 — результат уточнения владельцев
+
+**HISTORICAL / SUPERSEDED для internal Source adoption.** IPackPreparationRetention.adopt_and_finish/SourceClosureAdoption и цепочка internal Source adopts ниже отозваны, включая return SourceFailure из такой композиции. Это история исследования, не действующий proposal. Актуальный вариант A: Source preparation через DAG, затем Publication completion с atomic target acquisition/exact set/READY без Source calls; источник — актуальная граница в начале документа. Existing finish evidence сохраняется, публичный completion ещё OPEN.
 
 **Existing, подтверждено обоими:** `finish_preparation(lease: OperationLeaseRef, refs: tuple[ArtifactRef, ...]) -> OperationRecord` проверяет writable lease, отсутствие writers, уникальный набор refs, его точное равенство operation holds и seals; закрывает admission и записывает READY в собственной транзакции. Это не доказательство Source closure или корректности Pack manifest. `SqliteArtifactLeases._transaction` требует unbound connection: bind(scope) вокруг existing finish не присоединяет его к внешнему UOW, а отвергается.
 

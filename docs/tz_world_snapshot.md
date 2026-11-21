@@ -352,24 +352,38 @@ DataModel не читает часы; значение назначает applic
 
 ### Snapshot.apply, результаты и порядок проверок
 
-`IWorldSnapshotApply.apply(patch_set: PatchSet[S]) -> SnapshotApplyResult`
+H2 target sync 2026-11-21: принято решение без legacy и новые IDs;
+exact signatures/representation/error binding проходят финальную приёмку через
+координатора по `.cursor/plans/interdomain-refusal-transport-h2.md`. Это целевой
+дизайн, не разрешение реализации.
+
+`IWorldSnapshotApply[S,T].apply(patch_set: PatchSet[S]) -> T`
 — async единственный публичный runtime publication entry. Реализация —
-WorldSnapshotService. PatchSet не содержит validate_only: этот режим
+WorldSnapshotService[S,D,T]. S привязан к экземпляру. T — одна named concrete
+SnapshotApplyResult[D] для записи и replay; IC-1: S=TimeAdvanceSection,
+D=TimeCommitRelationIssue, T=TimeSnapshotApplyResult (ID20150).
+OldSnapshotApplyResult union/legacy readers/adaptation отсутствуют;
+неподдерживаемый root/format — инфраструктурная несовместимость, не повторный apply.
+PatchSet не содержит validate_only: этот режим
 заканчивается в той же DAG/domain preparation до вызова apply.
 Самостоятельные create/update/delete, capture после доменного commit
 и вызов domain persist из debug route не являются альтернативами apply.
 
-`SnapshotApplyResult` — frozen record с category: SnapshotApplyOutcomeKind,
+`SnapshotApplyResult[D]` — generic форма frozen record с category: SnapshotApplyOutcomeKind,
 operation_id: EntityUid, request_fingerprint: RevisionHex,
 committed: SnapshotCommitRefs | None,
-diagnostics: tuple[FieldPathError | SnapshotApplyRelationIssue, ...].
+diagnostics: tuple[SnapshotApplyRelationIssue | D, ...].
+D — закрытые concrete owning field/relation records, не bare FieldPathError;
+в IC-1 D=TimeCommitRelationIssue. Generic форма не wire root и не переназначает20124.
 SnapshotApplyRelationIssue — strict/frozen record с обязательными code: SnapshotApplyCode,
 section_key: SectionKey | None, player_uid: EntityUid | None, artifact: ArtifactRef | None.
 SECTION_BINDING_MISMATCH/DEPENDENCY_MISMATCH требуют только section_key;
 PLAYER_EXPECTATION_MISMATCH — только player_uid; ARTIFACT_UNAVAILABLE — только artifact.
 OPERATION_BINDING_MISMATCH, UNSUPPORTED_REQUEST_FORMAT, WORLD_EXPECTATION_MISMATCH,
 GAMEPLAY_NOT_STARTED, ACTIVE_TIMELINE_MISMATCH, TURN_SEQUENCE_MISMATCH не имеют context fields.
-Field diagnostics сохраняют concrete owner/code; SectionRefused не меняется.
+Field diagnostics сохраняют concrete owner/code; общий carrier — SectionRefused[D].
+IC-1 переиспользует TimeSectionRefused; Time validator проверяет семантику набора
+до возврата handler, Registry/Snapshot не копируют Time predicates.
 Immutable binding mismatch передаётся внутренним OperationBindingMismatchError
 с typed requested/stored binding и превращается в REJECTED предъявленного запроса
 без записи terminal исходной операции. Остальные ValueError не классифицируются по тексту.
@@ -559,12 +573,16 @@ failed: tuple[ArtifactGcFailure, ...])` сообщает фактические 
 
 `OperationPhase(StrEnum)` — PREPARING, READY, APPLYING, TERMINAL,
 RECOVERY_REQUIRED (wire lowercase). Phase отделена от enum итогов apply.
-`OperationRecord` содержит operation_id/world_uid, kind: OperationKind,
+Целевая H2 форма `OperationRecord[T]` содержит operation_id/world_uid, kind: OperationKind,
 preparation_fingerprint, publication_fingerprint: RevisionHex | None,
 phase: OperationPhase,
 fence, leased_artifacts: tuple[ArtifactRef, ...],
-terminal: SnapshotApplyResult | PackActivationResult | GameplayStarted |
+terminal: T | PackActivationResult | GameplayStarted |
 OperationCancelled | None.
+T совпадает с current result_model в apply и PublicationResultBinding[T].
+Record/claim propagation не переназначает wire identity20128.
+record_refusal(claim,T) допустим только после confirmed rollback; неизвестный
+исход не становится отказом. Pack/Gameplay/Cancelled сохраняют отдельные kinds.
 `OperationCancelled` — отдельный frozen record с operation_id и reason:
 OperationCancellationReason (StrEnum, REQUESTED="requested"); это управляющий
 исход F06, не ошибка поля и не четвёртый SnapshotApplyOutcomeKind. TERMINAL требует

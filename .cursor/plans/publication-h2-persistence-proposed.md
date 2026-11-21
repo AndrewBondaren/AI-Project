@@ -1,6 +1,106 @@
 # Publication H2: signatures, dispatch, representations
 
-## Принято пользователем 2026-11-21 — приоритет над историческими proposals
+**УТВЕРЖДЕНО пользователем 2026-11-21: current Snapshot pair `(format_version=1, root_id=20150)`.** Concrete модель `TimeSnapshotApplyResult` применяется для новой записи и exact replay текущего Snapshot-маршрута. Архитектурный выбор пары закрыт; прежние пометки «кандидат», «freeze OPEN» и «требуется утверждение пары» ниже заменены этим решением. Legacy fallback не вводится, прежние IDs не переназначаются, актуальные Pack/Gameplay/Cancelled не меняются. Runtime binding, полный manifest closure/collision audit, strict bounded decode, round-trip/replay и отказ на неподдерживаемые root/format без повторного apply ещё требуют реализации и проверки. Утверждение пары не означает приёмку всего H2 или разрешение на код/миграции.
+
+**Последнее решение пользователя 2026-11-21 — БЕЗ LEGACY.** Поддержка прежних Snapshot terminal representations не требуется. Это заменяет прежнюю W/R compatibility policy: одна целевая concrete модель результата для новой записи и replay текущего маршрута, без OldSnapshotApplyResult union, legacy readers/manifests, old→new adapters, fallback и migration ради совместимости. Вводить два независимых набора W/R только ради legacy больше не нужно; точные упрощённые signatures сводят владельцы. Replay текущих операций сохраняется: те же данные/типы/identity, без повторного handler. Неподдерживаемый сохранённый root/format — явная инфраструктурная несовместимость, не отсутствие terminal и не разрешение повторить операцию. Принятые новые IDs31007/31139/31140/20150 сохраняются; прежние IDs не переназначаются. Pack/Gameplay/Cancelled — отдельные актуальные kinds, не legacy Snapshot, автоматически не удаляются. Legacy roster/corpus больше не gate H2. Новый root-dispatch API не вводится только ради выбора legacy readers: необходимость пересмотреть, сохранив strict expected root/full bounded decode и budgets. Решение не разрешает удалять данные, писать код или миграции; финальная упрощённая цепочка ещё требует сверки.
+
+## Актуальная упрощённая цепочка — 2026-11-21, PROPOSED signatures
+
+Единственный параметр R — current concrete Snapshot result для записи и replay данного маршрута; в IC-1 это TimeSnapshotApplyResult с canonical root20150. Это НЕ прежний read-union R. D остаётся owning closed diagnostic composition внутри result; в Publication отдельно не передаётся. W, OldSnapshotApplyResult, readers table и read_models исключены из текущего construction contract. PackActivationResult, GameplayStarted, OperationCancelled — отдельные текущие outcomes, сохраняются.
+
+```python
+# application/publication/contracts/resultBinding.py
+@dataclass(frozen=True)
+class PublicationResultBinding[R]:
+    result_model: type[R]
+    snapshot_format_version: FormatVersion
+    manifest: CanonicalSchemaManifest
+    record_model: type[OperationRecord[R]]
+    limits: DecodeLimits
+
+# db/repositories/sqlite/snapshotCore/operations/terminalCodec.py
+class StoredTerminalCodec[R]:
+    def __init__(self, *, binding: PublicationResultBinding[R]) -> None: ...
+    @property
+    def result_binding(self) -> PublicationResultBinding[R]: ...
+    def encode(self, outcome: R | PackActivationResult | GameplayStarted | OperationCancelled
+    ) -> PublicationOutcomeRow: ...
+    def decode(self, row: PublicationOutcomeRow
+    ) -> R | PackActivationResult | GameplayStarted | OperationCancelled: ...
+
+# application/publication/contracts/operationStore.py
+class IOperationStore[R](Protocol):
+    @property
+    def result_binding(self) -> PublicationResultBinding[R]: ...
+    @property
+    def record_model(self) -> type[OperationRecord[R]]: ...
+    async def read(self, operation_id: EntityUid) -> OperationRecord[R] | None: ...
+    async def claim_publication(self, kind: OperationKind, operation_id: EntityUid,
+        world_uid: EntityUid, preparation_fingerprint: RevisionHex,
+        request_fingerprint: RevisionHex) -> OperationClaim[R]: ...
+    async def record_terminal(self, scope: CommitScope,
+        outcome: R | PackActivationResult | GameplayStarted | OperationCancelled) -> None: ...
+    async def record_refusal(self, claim: PublicationOwner, outcome: R) -> None: ...
+
+# db/repositories/sqlite/snapshotCore/operations/operationStore.py
+class SqliteOperationStore[R]:
+    def __init__(self, commits: SqlitePublicationCommitStore,
+        access: ScopedSqliteAccess, codec: StoredTerminalCodec[R],
+        evidence: SqlitePublicationEvidence[R], artifacts: SqliteOperationArtifacts,
+        *, record_model: type[OperationRecord[R]]) -> None: ...
+    # Properties и четыре операции точно IOperationStore[R]; recover/cancel не добавляются.
+
+# application/publication/service/operationLedger.py
+class OperationLedger[R]:
+    def __init__(self, operations: IOperationStore[R], leases: IArtifactLeases[R]) -> None: ...
+    @property
+    def result_binding(self) -> PublicationResultBinding[R]: ...
+    # read/claim_publication/record_terminal/record_refusal точно IOperationStore[R].
+    async def recover(self, operation_id: EntityUid) -> OperationRecord[R]: ...
+    async def cancel(self, operation_id: EntityUid, fence: int) -> OperationRecord[R]: ...
+
+# application/worldSnapshot/contracts/applyPort.py
+class IWorldSnapshotApply[S: DomainSection, R](Protocol):
+    async def apply(self, patch_set: PatchSet[S]) -> R: ...
+```
+
+OperationRecord[R] сохраняет поля operation_id/world_uid/kind/preparation_fingerprint/publication_fingerprint/phase/fence/leased_artifacts/terminal; terminal = R | PackActivationResult | GameplayStarted | OperationCancelled | None. PublicationTerminal[R], PublicationBusy[R], OperationClaim[R] сохраняют состав из signature block ниже, но R теперь один current root. PublicationOwner неизменен. Их own canonical serialization не вводится, root20128 не переназначается.
+
+Окончательная constructor-матрица адаптеров (заменяет все исторические W,R):
+
+| Класс | Constructor / методы |
+|---|---|
+| SqlitePublicationEvidence[R] | __init__(commits: SqlitePublicationCommitStore, world: SqliteWorldPublicationStore, players: SqlitePlayerPublicationStore, access: ScopedSqliteAccess) -> None; check(scope: CommitReadScope \| CommitScope, result: R \| PackActivationResult \| GameplayStarted \| OperationCancelled) -> None, async |
+| SqliteArtifactLeases[R] | __init__(scopes: SqliteArtifactScope, operations: SqliteOperationStore[R], artifacts: SqliteOperationArtifacts) -> None |
+| SqliteArtifactCatalog[R] | Та же signature constructor, что SqliteArtifactLeases[R] |
+| SqliteArtifactHolders[R] | __init__(scopes: SqliteArtifactScope, operations: SqliteOperationStore[R], artifacts: SqliteOperationArtifacts, history: SqliteSnapshotHistoryStore) -> None |
+| ArtifactStagingService[R] | __init__(registry: ArtifactFormatRegistryBinding, catalog: IArtifactCatalog, leases: IArtifactLeases[R], holders: IArtifactHolders, gc: ArtifactGarbageCollector, ledger: OperationLedger[R], log: ArtifactLifecycleLog, *, record_model: type[OperationRecord[R]]) -> None |
+| IArtifactLeases[R] / concrete leases | open_operation/assert_writable/writer без смены IO; async finish_preparation(lease: OperationLeaseRef, refs: tuple[ArtifactRef,...]) -> OperationRecord[R]; async recover(operation_id: EntityUid) -> OperationRecord[R]; async cancel(operation_id: EntityUid, fence: int) -> OperationRecord[R]; read-only record_model: type[OperationRecord[R]] |
+| IArtifactStaging[R] / service | Три result-bearing метода finish_preparation/recover/cancel с теми же signatures; read-only record_model. Service также result_binding: PublicationResultBinding[R] |
+
+Factory создаёт один frozen binding. Codec/store/ledger/staging возвращают именно этот object через публичное для composition read-only property. Store и staging record_model аргументы обязаны быть `is binding.record_model`; ledger проверяет leases.record_model identity. Нет второго списка roots или независимой read configuration. Binding validator проверяет current result_model/root/manifest, exact record terminal union и budgets через public model_fields/type APIs, без private introspection. Положение Publication — инфраструктурная часть Snapshot; Snapshot получает узкий IOperationStore[R], не весь ledger; internal terminal replay остаётся внутри apply_snapshot.
+
+### Direct expected-model bounded decode вместо DISPATCH
+
+Отдельные StoredSnapshotResultReader, readers table и read_record_root_id НЕ входят в текущую поставку H2: их необходимость отпала с legacy selection. Применяется existing application/encoding/boundedCanonicalDecode.py::decode_bounded[T](encoded: bytes, expected: type[T], manifest: CanonicalSchemaManifest, *, limits: DecodeLimits) -> T.
+
+Publication сначала проверяет row discriminator и его допустимый format; для snapshot_apply выбирает единственный binding.result_model, для pack_activation/gameplay_start/cancelled — соответственно existing PackActivationResult/GameplayStarted/OperationCancelled. Затем row size → checksum → decode_bounded с exact expected model → row/body ID/category → operation kind/fingerprint/evidence. Это выбор по текущему owning kind, не legacy fallback и не пробные decode.
+
+Actual evidence: _Reader.value отвергает unexpected canonical record относительно expected; decode_bounded выполняет preflight build=False, build=True, проверяет type(result) is expected и canonical encode equality. Поэтому старый root20124 отвергается при expected TimeSnapshotApplyResult20150 даже если старый declaration технически присутствует в общем manifest. Наличие declaration не означает supported reader. Не копировать parser и не заменять expected type открытой union/BaseModel. Unknown discriminator/version/root и foreign diagnostic — PublicationInfrastructureError с причиной; read не возвращает None, claim не начинает новую попытку при unreadable terminal. Внешний replay сохраняет exact current result без повторного handler.
+
+Принятые configuration guarantees сохраняются: strict budgets проверяются encoding при construction/прямом entry до payload wrapper; TypeError/ValueError configuration отдельно от CanonicalEncodingError malformed payload/превышение корректного budget. Existing decoder пока не реализует полноценный admission DecodeLimits: соответствующая узкая API delta остаётся implementation prerequisite. Full decode применяет все applicable bytes/nodes/depth/items/field checks. Root-extraction-only guarantees больше не часть H2.
+
+### Текущая representation и остатки
+
+IDs31007/31139/31140/20150 приняты. Предлагаемая current Snapshot pair — (format1,root20150), freeze пары всё ещё отдельный пункт: row envelope/TLV-v1 не меняются. Pack/Gameplay/Cancelled сохраняют current format1 и roots20125/20126/20127. Root20124 не поддерживается в текущем Snapshot terminal path; IDs20124/20128/20131 не переиспользуются. Никаких data deletions/migrations/old→new adaptations. Historical legacy inventory ниже остаётся evidence, НЕ acceptance gate и НЕ список обещанной поддержки.
+
+Остатки: сверка этих single-R signatures с Snapshot/Artifacts и composition; current W-переименованный-в-R model/manifest closure; freeze (1,20150); encoding budget admission/full decode review; будущие current round-trip/replay/unknown-root tests. Вопрос владельцу о legacy corpus снят. H2 остаётся OPEN до координатора/пользователя; код не разрешён.
+
+## Исторический архив — SUPERSEDED в части W/R, legacy readers, roster gate и root extraction
+
+Все следующие противоположные предложения сохранены только для истории. Их signatures/configuration/acceptance matrix НЕ применяются вместо текущего single-R блока выше. Неизменные semantic guarantees (rollback перед refusal, no unknown→refusal, strict typing, Time-owned semantics) сохраняются.
+
+## Историческое решение 2026-11-21 до отмены legacy
 
 Прочитано полное решение в начале [H2](interdomain-refusal-transport-h2.md). Приняты W/R policy (новая запись W, old replay concrete root без adaptation); preservation format1/root20124 и existing roots20125/20126/20127; encoding config TypeError/ValueError отдельно от payload/budget CanonicalEncodingError; shared parser extraction с обязательным full decode и порядок row/size → checksum → extraction → exact reader → full decode → identity/category/operation checks. Это accepted boundaries, не готовая реализация.
 

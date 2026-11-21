@@ -58,16 +58,16 @@
 
 `ArtifactInputRejected.error` переносится без изменения в соответствующий error POJO ноды; `ArtifactLeaseRefused.failure` — в `StageArtifactError.error`. Пути ошибок остаются относительно публичного request; оболочка не переписывает их и не добавляет второй список issues. Конкретное подключение к существующему механизму PythonNodeError проверяется до реализации.
 
-`ArtifactIntegrityError`, `OperationBusyError`, `PublicationInfrastructureError`, `UnknownCommitOutcome` и `CancelledError` не превращаются в успешный output или input/lease refusal. Сохраняются публичная категория и cause; cancellation распространяется согласно owning drain. Нода не вводит retries, recovery, rollback, fallback или дополнительное логирование. Отозванные `ArtifactStageFailure` и `ArtifactStageRefused` не используются.
+`ArtifactCodecError`, `ArtifactDescriptorConflictError`, `ArtifactStorageInvariantError` (подтипы PublicationInfrastructureError), existing `CorruptBlobError`, `OperationBusyError`, `PublicationInfrastructureError`, `UnknownCommitOutcome` и `CancelledError` не превращаются в успешный output или input/lease refusal. Exact применимость следует owning операции; pure prepare имеет codec fault, не storage IO. Сохраняются категория и cause; cancellation распространяется после owning drain. Нода не вводит retries/recovery/rollback/fallback/повторный log. ArtifactIntegrityError отозван; ArtifactStageFailure/ArtifactStageRefused не используются.
 
-`prepare_artifact`: pure; без IO, lease, holds и мутаций registry. `stage_artifact`: owning staging IO. Успех — sealed ref, равный descriptor, с operation hold на момент завершения. Это не публикация и не бессрочное удержание. Закрытый/READY lease не разрешает повторный stage; completed replay принадлежит lifecycle-владельцу. Частичная запись и unknown outcome не означают отсутствие эффекта.
+`prepare_artifact`: pure; без IO, lease, holds и мутаций registry. `stage_artifact`: owning staging IO. Успех — ref, равный descriptor; seal и operation hold подтверждены в момент seal commit при live writer claim. После освобождения claim concurrent cancel может снять hold до доставки ответа. Нода не усиливает эту гарантию до «hold при return» или «до apply». Непрерывную защиту между стадиями и atomic target acquisition→READY обеспечивает отдельный согласуемый protection/completion contract; эта обязанность не снимается уточнением stage. Закрытый/READY lease не разрешает повторный stage; exact replay принадлежит lifecycle-владельцу. Частичная запись и unknown outcome не означают отсутствие эффекта.
 
 ## 5. Карта контрактов, не граф исполнения
 
 ```mermaid
 flowchart LR
   P["prepare_artifact<br/>PrepareArtifactInput[C] → PrepareArtifactOutput[C]<br/>Error: PrepareArtifactError"]
-  PP["Artifacts: prepare_stage<br/>ArtifactPrepareStageInput[C] → PreparedArtifact[C]<br/>ArtifactInputRejected / ArtifactIntegrityError"]
+  PP["Artifacts: prepare_stage<br/>ArtifactPrepareStageInput[C] → PreparedArtifact[C]<br/>ArtifactInputRejected / ArtifactCodecError"]
   S["stage_artifact<br/>StageArtifactInput[C] → StageArtifactOutput<br/>Error: StageArtifactError"]
   SP["Artifacts: stage<br/>ArtifactStageInput[C] → ArtifactRef<br/>InputRejected / LeaseRefused / infrastructure / unknown / cancellation"]
   P -->|"один публичный вызов"| PP

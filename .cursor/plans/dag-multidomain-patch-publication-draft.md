@@ -1,5 +1,97 @@
 # DAG: общая карта междоменных процессов и контрактов
 
+**Актуальная редакция схем — 2026-11-21, по поручению пользователя.** Три диаграммы ниже заменяют старые схемы: внутренняя граница Snapshot.apply, семейства нод и последовательность публичных вызовов. Карточки контрактов этого раздела приоритетнее исторических таблиц K и статусов первого круга ниже. Схемы конкретизируют Time/IC-1; другие домены подключаются через собственные согласованные bindings по необходимости. Source/Pack/Artifacts/Cache/Lifecycle не объявляются обязательными стадиями и не исключаются из каталога семейств. Отдельные read_world, initial-read и подготовка Pack вне текущего write flow.
+
+S — закрытый набор concrete sections, для локального IC-1 TimeAdvanceSection. T — одна текущая concrete модель TimeSnapshotApplyResult для новой записи и её replay. Legacy union/readers не вводятся. OPEN означает отсутствие завершённого контракта, PROPOSED — предложение, не утверждённый NodeId/binding. Фиксация схем не закрывает эти gaps и не разрешает код.
+
+## Карточки POJO и публичных целей — 2026-11-21
+
+| Нода | Тип / отношение | IN → OUT | Связи и публичная цель |
+|---|---|---|---|
+| write_changes | Orchestration, корень семейства записи | Готовые типизированные изменения и контекст → owning отказ подготовки/сборки либо T; именованные Input/Output union OPEN | Engine CALL prepare_changes, assemble_patch_set, затем межсемейный CALL apply_snapshot; прямых domain calls нет |
+| prepare_changes | Orchestration, ребёнок write_changes | Готовые доменные изменения + контекст → полный обязательный набор native sections либо owning отказ; aggregate POJO OPEN | Engine CALL доменных нод; Time leaf ниже. Не вычисляет изменения, не собирает PatchSet |
+| Time preparation leaf (NodeId OPEN) | Operation leaf семейства Time; immediate parent OPEN | PrepareTimeAdvanceSection → TimeAdvanceSection либо TimeSectionContextMismatch; собственный node-wrapper/error binding OPEN | Один PUBLIC CALL ITimeAdvancePipelineOpenPipeline.prepare_section; реализация TimeAdvancePipelineOpenPipeline |
+| assemble_patch_set | Operation leaf, ребёнок write_changes | PatchSetAssemblyInput[S] → PatchSet[S] либо PatchSetAssemblyRefused; node-wrapper/error binding OPEN | Один PUBLIC CALL IPatchSetAssembly[S].assemble; реализация PatchSetAssembler; без sorting/conversion/fingerprint в DAG |
+| apply_snapshot | Самостоятельная operation leaf семейства Snapshot, не ребёнок write_changes | ApplySnapshotInput[S] → ApplySnapshotOutput[T]; SnapshotNodeError, cancellation transport OPEN | Один PUBLIC CALL await IWorldSnapshotApply[S,T].apply(input.patch_set); concrete owner WorldSnapshotService |
+
+Owning вход Time:
+
+```python
+PrepareTimeAdvanceSection:
+    proposal: TimeAdvanceProposal
+    operation_id: EntityUid
+    expected_world: WorldPublicationRef
+
+TimeAdvanceSection:
+    header: SectionHeader
+    patches: tuple[TimeAdvancePatch]  # ровно один
+
+TimeAdvancePatch:
+    header: PatchHeader
+    proposal: TimeAdvanceProposal
+
+TimeSectionContextMismatch:
+    issues: tuple[TimeSectionFieldIssue, ...]
+```
+
+Это схема полей, не новый код. Native key=time_clock, ordinal=0, общий operation_id; отдельные patch/section versions=1. Пустые depends_on/artifacts сохраняются по принятому Time-контракту. prepare_section проверяет operation/publication mismatch; native admission отдельно. Готовую section повторно не готовить, prepare_advance не обязательная стадия записи.
+
+Owning вход assembler и поля успешного PatchSet:
+
+```python
+PatchSetAssemblyInput[S]:
+    format_version: FormatVersion
+    operation_id: EntityUid
+    preparation_fingerprint: RevisionHex
+    world_uid: EntityUid
+    timeline_id: EntityUid
+    turn_id: StrictInt  # >= 1
+    expected_world: WorldPublicationRef
+    expected_players: tuple[PlayerHeadExpectation, ...]
+    sections: tuple[S, ...]
+
+PatchSetAssemblyRefused:
+    diagnostics: tuple[PatchSetAssemblyRelationIssue, ...]  # непустой
+```
+
+PatchSet[S] сохраняет те же поля и порядок sections/patches после owning проверок. Неверный concrete request class/структура не превращаются в business refusal; точный node error transport ещё OPEN.
+
+Проектные node-контракты Snapshot (dataModel/engine/nodes/snapshot/contracts.py):
+
+```python
+ApplySnapshotInput[S]:
+    patch_set: PatchSet[S]
+
+ApplySnapshotOutput[T]:
+    value: T
+
+SnapshotNodeError:
+    error: SnapshotPublicFault
+```
+
+PUBLIC mapping: input.patch_set → await IWorldSnapshotApply[S,T].apply → output.value без изменения результата. SnapshotPublicError(fault) → PythonNodeError(SnapshotNodeError(error=fault)); exact public fault proposal и сохранённая cancellation boundary ещё не закрыты. Обычная cancellation сохраняет runtime mapping; SnapshotOperationCancelledError(OperationCancelled) нельзя подменять отказом.
+
+PROPOSED именованные IC-1 специализации в composition/snapshotTime/contracts.py: TimeApplySnapshotInput(ApplySnapshotInput[TimeAdvanceSection]) и TimeApplySnapshotOutput(ApplySnapshotOutput[TimeSnapshotApplyResult]), без новых полей/NodeId. Generic shapes самостоятельно не регистрируются. Для node POJO сохраняются strict/frozen/extra-forbid/revalidate-always; scope/services/callbacks не передаются.
+
+Целевой current T = TimeSnapshotApplyResult:
+
+```python
+category: SnapshotApplyOutcomeKind  # COMMITTED / CONFLICT / REJECTED
+operation_id: EntityUid
+request_fingerprint: RevisionHex
+committed: SnapshotCommitRefs | None
+diagnostics: tuple[SnapshotApplyRelationIssue | TimeCommitRelationIssue, ...]
+
+SnapshotCommitRefs:
+    world_snapshot: WorldSnapshotRef
+    player_snapshots: tuple[PlayerSnapshotRef, ...]
+    publication: WorldPublicationRef
+```
+
+COMMITTED требует committed refs и пустые diagnostics; refusal — diagnostics и committed=None. SectionApplyReceipt(states,history,changed) — внутренний результат до commit, не T и не выход отдельной DAG-ноды. Metadata/terminal читаются внутри apply; Time handler подключён registry/composition, а не output предыдущей ноды. Прямые foreign public calls этой схемой не разрешаются.
+
+Источники: [Snapshot node contracts](gen-dag-snapshot-node-contracts.md), [Time](time-domain.md), [H2](interdomain-refusal-transport-h2.md), [верхний процесс TODO](multidomain-write-input-preparation-todo.md). Главный остаток node-карты: именованные aggregate POJO write_changes/prepare_changes, Time leaf identity/parent/wrappers и assemble node wrappers; public error/cancellation mapping и final composition также OPEN.
+
 **Положение Publication — зафиксировано пользователем 2026-11-21.** Publication является общей инфраструктурной частью ядра Snapshot, а не самостоятельным предметным доменом. Оно обслуживает operation identity/immutable request binding, lifecycle выполнения, транзакционную фиксацию, terminal persistence и exact replay для Snapshot apply, Pack activation и gameplay start. Выражение «владелец Publication» означает владельца этой инфраструктурной части; отдельные чат и каталог application/publication не задают отдельный домен. Snapshot владеет применением готовых изменений и моделью apply result; предметные домены — семантикой своих данных/diagnostics; Artifacts — хранением artifacts и их защитой; DAG — оркестрацией. Зависимость Snapshot → внутренний Publication operation store классифицируется как инфраструктурная связь внутри ядра, но exact capability, nested calls и H2 contracts ещё проверяются. Эта классификация не разрешает произвольные foreign public pipeline calls, не передаёт Publication доменную семантику и не закрывает H2.
 
 Единый [реестр восьми открытых контрактных направлений](interdomain-contract-register.md) содержит владельцев, общие зависимости без дублей, конкретные предложения и критерии закрытия. Общая карта ниже показывает процессы; реестр — состояние контрактной работы.
@@ -27,44 +119,19 @@ Publication operation store рассматривается как общая и�
 Основной предмет работы — общая картина процессов и междоменные контракты. Карта ниже показывает публичные границы, не внутренние алгоритмы доменов. Схема семейств и детализация записи ниже сохраняются как отдельные представления. Имена процессных блоков чтения/Pack не назначают NodeId. Все переходы между доменами организует DAG; стрелки не разрешают прямые междоменные вызовы.
 
 ```mermaid
-flowchart TB
-    subgraph WRITE["Общая запись — установленный порядок DAG"]
-        W["write_changes"] --> P["prepare_changes"]
-        P -->|"Готовые native sections + общий контекст"| A["assemble_patch_set → PatchSetAssembler.assemble"]
-        A -->|"Успех: PatchSet"| S["apply_snapshot → Snapshot.apply"]
-        S --> O["SnapshotApplyResult → caller"]
-    end
-    subgraph PREP["Условные доменные контракты подготовки — не обязательная очередь"]
-        SRC["Source: proof / evidence"]
-        LC["Lifecycle: native section — OPEN"]
-        TIME["Time: prepare_section — локально принят; integration OPEN"]
-        PACK["Pack: owning операции по необходимости — binding OPEN"]
-        ART["Artifacts: prepare_stage / stage при необходимости"]
-        CACHE["Cache: get / create / update / evict по сценарию"]
-    end
-    P -. "CALL / owning result, если нужен" .-> SRC
-    P -. "CALL / owning result, если нужен" .-> LC
-    P -. "CALL / owning result, если нужен" .-> TIME
-    P -. "CALL / owning result, если нужен" .-> PACK
-    P -. "CALL / owning result, если нужен" .-> ART
-    P -. "CALL / owning result, если нужен" .-> CACHE
-    subgraph READ["Отдельное exact initial-read — вариант 2 принят"]
-        Q["Запрос точной initial Q"] --> B["Snapshot: read_initial_binding"]
-        B -->|"Binding найден: exact artifact"| R["Artifacts: protected verified read — OPEN"]
-        B -->|"Binding отсутствует"| N["Отсутствие: без dependent reads"]
-        R -->|"Binding + связанный verified read result"| T["Time: одна публичная read-операция; decode внутри — exact API OPEN"]
-        T --> CAP["TimeCapture initial Q"]
-    end
-    subgraph PP["Самостоятельная подготовка Pack — маршрут PROPOSED / OPEN"]
-        PM["Pack: готовые bytes + состав / evidence"] --> ST["Artifacts: prepare_stage → stage"]
-        ST --> PA["Pack: admission результата staging"]
-        PA --> FIN["Publication / Artifacts: protection + completion READY; public entry OPEN"]
-        FIN --> CAND["Pack: candidate по confirmed READY; replay binding OPEN"]
-        PROOF["Source: proof / closure evidence — mapping OPEN"] -. "Входы через DAG; authority / adoption OPEN" .-> FIN
-    end
+flowchart LR
+    N["apply_snapshot"] -->|"PUBLIC CALL: PatchSet[S] → T"| S["Snapshot.apply"]
+    S -->|"Internal bookkeeping: identity / claim / terminal"| PUB["Publication: инфраструктура Snapshot"]
+    S -->|"Internal exact reads в общей transaction"| M["Snapshot metadata ports"]
+    S -->|"Registered participant: section + context"| H["TimeSectionHandler"]
+    H -->|"Time-owned read / append, borrowed scope"| DB["Time storage"]
+    H -->|"SectionApplyReceipt или TimeSectionRefused"| S
+    PUB -->|"Сохранённый текущий T; без повторного handler"| S
 ```
 
-Легенда: сплошные стрелки — последовательность/передача результата под управлением DAG; пунктир — условная потребность в контракте, не обязательный этап и не установленный порядок между семействами. Родство нод показано отдельно ниже. Для успешной записи отказ подготовки/сборки исключает dependent apply; схема не заменяет полный Error/retry/cancel contract.
+Легенда этой диаграммы: только apply_snapshot — DAG-нода; остальные блоки являются публичной целью или внутренними компонентами атомарной операции. Подписи отличают PUBLIC CALL, infrastructure bookkeeping, metadata reads и registered transaction participation. Это не родство нод и не разрешение domain public orchestration. Отказ подготовки/сборки исключает dependent apply; полный Error/retry/cancel contract схема не заменяет.
+
+**Смежные процессы вынесены отдельно 2026-11-21:** [exact initial-read и самостоятельная подготовка Pack](interdomain-adjacent-processes.md). Там сохранены схемы, назначение, владельцы и OPEN IC-5/IC-6. Они не являются обязательными этапами текущей записи; строки связей ниже служат указателем на эти контракты, а не расширением скоупа. Import/export остаётся отдельно отложенным.
 
 | Граница | Передаваемый контракт / гарантия | Статус и оставшаяся работа |
 |---|---|---|
@@ -108,55 +175,23 @@ Gameplay, его запуск, сценарии хода и генераторы
 ```mermaid
 flowchart TB
     subgraph WRITE["Семейство записи изменений"]
-        ROOT["write_changes<br/>Оркестрация записи"]
-        PREP["prepare_changes<br/>Оркестрация подготовки"]
-        BUILD["assemble_patch_set<br/>Только сборка PatchSet"]
-        ROOT -->|"Ребёнок"| PREP
-        ROOT -->|"Ребёнок"| BUILD
+        W["write_changes<br/>Orchestration: корень<br/>IN: запрос записи, POJO OPEN<br/>OUT: T или refusal, union OPEN"]
+        P["prepare_changes<br/>Orchestration: ребёнок write_changes<br/>IN: изменения + контекст, POJO OPEN<br/>OUT: полный набор sections или refusal, POJO OPEN"]
+        A["assemble_patch_set<br/>Operation leaf: ребёнок write_changes<br/>IN: PatchSetAssemblyInput[S]<br/>OUT: PatchSet[S] или PatchSetAssemblyRefused<br/>Node-wrapper binding OPEN"]
+        W ---|"Родство: ребёнок"| P
+        W ---|"Родство: ребёнок"| A
     end
-    subgraph CACHE["Семейство Cache"]
-        CR["read_cache"]
-        CW["write_cache"]
-        CG["read_cache_entry"]
-        CC["create_cache_entry"]
-        CU["update_cache_entry"]
-        CE["evict_cache_entry"]
-        CR --> CG
-        CW --> CC
-        CW --> CU
-        CW --> CE
+    subgraph TIME["Семейство Time"]
+        TP["Подготовка Time section<br/>Operation leaf; NodeId и parent OPEN<br/>IN: PrepareTimeAdvanceSection<br/>OUT: TimeAdvanceSection или TimeSectionContextMismatch<br/>Node-wrapper binding OPEN"]
     end
-    subgraph SOURCE["Семейство Source"]
-        SR["read_source"]
-        SL["Ноды отдельных операций"]
-        SR --> SL
+    subgraph SNAPSHOT["Семейство Snapshot"]
+        AP["apply_snapshot<br/>Самостоятельная operation leaf<br/>IN: ApplySnapshotInput[S]<br/>OUT: ApplySnapshotOutput[T]<br/>ERROR: SnapshotNodeError; cancellation OPEN"]
     end
-    subgraph PACK["Семейство Pack"]
-        PW["write_pack"]
-        PL["Ноды отдельных операций"]
-        PW --> PL
-    end
-    subgraph ART["Семейство Artifacts"]
-        AP["prepare_artifact"]
-        AS["stage_artifact"]
-    end
-    subgraph OTHER["Семейства Time и Lifecycle — проектируются"]
-        OPS["Ноды требуемых операций"]
-    end
-    subgraph SNAP["Семейство Snapshot"]
-        APPLY["apply_snapshot<br/>Только вызов Snapshot.apply"]
-    end
-    PREP -.->|"CALL в cache-ветви"| CR
-    PREP -.->|"CALL в cache-ветви"| CW
-    PREP -.->|"CALL по необходимости"| SR
-    PREP -.->|"CALL по необходимости"| PW
-    PREP -.->|"CALL по необходимости"| AP
-    PREP -.->|"CALL по необходимости"| AS
-    PREP -.->|"CALL по необходимости"| OPS
-    ROOT -.->|"CALL после сборки"| APPLY
+    P -.->|"Engine CALL: подготовить Time section"| TP
+    W -.->|"Engine CALL после успешной сборки"| AP
 ```
 
-Сплошные связи показывают родство, пунктирные — межсемейные CALL. Вызов не переносит ноду в семейство caller-а. SL/PL/OPS — обозначения групп, не универсальные новые NodeId; Time и Lifecycle остаются разными семействами. Конкретные leaf-карточки и bindings существующих семейств не объявляются завершёнными этой фиксацией.
+Сплошные связи показывают родство, пунктирные — межсемейные engine CALL. Вызов не переносит ноду в семейство caller-а. Time leaf обозначена ролью без назначения NodeId/parent. Остальные семейства остаются в каталоге ниже; их обязательная очередь не назначается. OPEN/PROPOSED bindings не становятся принятыми из-за фиксации рисунка.
 
 Поток данных под управлением write_changes: запрос → prepare_changes → подготовленные доменные изменения → assemble_patch_set → PatchSet → apply_snapshot → результат операции DAG. Вызовы выполняются через engine, результаты возвращаются caller-у. Отказ подготовки или сборки исключает запуск следующего зависимого шага. Точные deps, регистрация, внутренний порядок подготовки, ошибки и отмена ещё требуют контрактов.
 
@@ -175,39 +210,32 @@ flowchart TB
 
 ```mermaid
 sequenceDiagram
-    participant Caller as Вызывающая нода
-    participant Write as write_changes
-    participant Prepare as prepare_changes
-    participant Domains as Ноды доменных семейств
-    participant Assemble as assemble_patch_set
-    participant Apply as apply_snapshot
-    participant Snapshot as Snapshot.apply (TARGET)
-    participant Validator as SnapshotRequestValidator.validate (TARGET)
-    participant Checker as PatchSetInvariants.check_prepared_order
-    Caller->>Write: Изменения + контекст операции
-    Write->>Prepare: CALL: подготовить изменения
-    Prepare->>Domains: Необходимые операции по зависимостям
-    Domains-->>Prepare: Типизированные результаты
-    Prepare-->>Write: Полный подготовленный набор
-    Write->>Assemble: CALL: результаты + контекст публикации
-    Assemble-->>Write: PatchSet
-    Write->>Apply: CALL: PatchSet
-    Apply->>Snapshot: Публичный apply(PatchSet)
-    Note over Snapshot: Structural revalidation / check_core
-    Snapshot->>Validator: Dependency admission: validate(PatchSet)
-    Validator->>Checker: Прямой вызов общего pure helper
-    Checker-->>Validator: tuple[PatchSetInvariantViolation, ...]
-    Note over Validator: Owning diagnostics; без копии predicates
-    Validator-->>Snapshot: Успешный admission
-    Note over Snapshot: Request fingerprint → immutable binding / claim
-    alt Exact terminal replay
-        Note over Snapshot: Сохранённый исход; без target checks и handlers
-    else Новая попытка
-        Note over Snapshot: Проверки базы → validation/apply → metadata/handoff/CAS/terminal → confirmed commit
-    end
-    Snapshot-->>Apply: SnapshotApplyResult
-    Apply-->>Write: SnapshotApplyResult
-    Write-->>Caller: Результат операции DAG
+    participant Caller as Вызывающая сторона
+    participant W as write_changes
+    participant P as prepare_changes
+    participant TN as Time operation node: NodeId OPEN
+    participant Time as Time public pipeline
+    participant A as assemble_patch_set
+    participant PS as PatchSet public API
+    participant AN as apply_snapshot
+    participant SN as Snapshot public API
+    Caller->>W: Запрос записи — POJO OPEN
+    W->>P: Engine CALL: подготовить полный набор sections
+    P->>TN: Engine CALL: PrepareTimeAdvanceSection
+    TN->>Time: prepare_section(request)
+    Time-->>TN: TimeAdvanceSection или TimeSectionContextMismatch
+    TN-->>P: Owning результат без изменения семантики
+    P-->>W: Native sections или owning отказ
+    W->>A: Engine CALL: PatchSetAssemblyInput[S]
+    A->>PS: IPatchSetAssembly[S].assemble(request)
+    PS-->>A: PatchSet[S] или PatchSetAssemblyRefused
+    A-->>W: Owning результат сборки
+    W->>AN: Engine CALL: ApplySnapshotInput[S](patch_set)
+    AN->>SN: await IWorldSnapshotApply[S,T].apply(patch_set)
+    SN-->>AN: T — текущее выполнение или replay
+    AN-->>W: ApplySnapshotOutput[T](value=result)
+    W-->>Caller: Результат записи — wrapper OPEN
+    Note over W,SN: Отказ подготовки исключает сборку; отказ сборки исключает apply.<br/>Успех ноды не равен COMMITTED.
 ```
 
 Уточнение пользователя 2026-11-19: общий маршрут дополнен вложенной Snapshot admission-цепочкой по [SN-Q1-I1](world-domain-patches-snapshots.md#sn-q1-i1-методы-и-проверка-ответственности-после-реализации). Snapshot/Validator/Checker на sequence-диаграмме — доменные классы и вызовы, не новые DAG-ноды и не изменение семейств. `validate` прямо вызывает `PatchSetInvariants.check_prepared_order`; отдельный `_check_prepared_order` не требуется. Constructor/decode сохраняет только check_core; повторного assemble внутри Snapshot нет. Место проверки принято, реализация TARGET; exact diagnostics/transport и полный dependency coverage остаются OPEN. При отказе admission дальнейшие зависимые этапы не запускаются; отказ не объявляется автоматически durable REJECTED. Prepared fingerprints и mutable-state проверки не переносятся в общий helper.

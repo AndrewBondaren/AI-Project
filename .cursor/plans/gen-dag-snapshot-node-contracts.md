@@ -1,10 +1,14 @@
 # Snapshot: POJO четырёх согласованных DAG-нод
 
+**Решение пользователя 2026-11-21:** exact mapping SnapshotOperationCancelledError(OperationCancelled) в engine разрешено уточнить после реализации основного H2. OPEN в §3 остаётся отложенным вопросом сквозной приёмки durable cancellation, а не блокером локального H2 transport. До согласования нельзя объявлять этот сценарий принятым, терять operation_id или превращать его в business result/обычный успешный output. Обычная runtime cancellation и unknown/drain semantics сохраняются. Новые transport fields/enum по предположению не вводятся.
+
 2026-11-14. Состав согласован пользователем: read_snapshot над read_snapshot_metadata/read_snapshot_publication; apply_snapshot самостоятельно, без write_snapshot. Текущий документ предъявляет POJO и mapping для совместной приёмки. Код и регистрация не выполняются. Другие callers, generators, detailed_initialization и legacy-ноды не подключаются.
 
 Основания: snapshot-public-methods-contract.md (публичные signatures/read/fault proposals); snapshot-retention-cancel-diagnostics-contract.md (актуальная принятая R1–R3, исторические OPEN ниже её заголовка не переоткрываются); текущие PatchSet, DomainSection, SnapshotApplyResult и SnapshotOperationCancelledError. Публичных apply/read_snapshot/read_publication в просмотренном WorldSnapshotService ещё нет: внутренние методы не используются вместо них. Runtime поиск новых node names/classes коллизий в engine не выявил.
 
 ## 1. Собственные контракты operation нод
+
+**H2 target sync 2026-11-21, PROPOSED:** S-bound instance, одна current T без legacy union. В `backend/app/composition/snapshotTime/contracts.py` предлагаются `TimeApplySnapshotInput(ApplySnapshotInput[TimeAdvanceSection])` и `TimeApplySnapshotOutput(ApplySnapshotOutput[TimeSnapshotApplyResult])`, без новых полей. Это named input_type/output_type existing planned apply_snapshot, не дополнительный envelope/NodeId. Factory в соседнем binding.py проверяет exact output.value model против service/Publication result_model до регистрации. Generic shape самостоятельно не регистрируется; имена специализаций требуют координаторской приёмки. Историческое отсутствие concrete input proposal ниже заменено этим IC-1 предложением; полный production union не назначается. Cancellation OPEN в §3 остаётся явным условием полной приёмки ноды.
 
 Проектный модуль backend/app/dataModel/engine/nodes/snapshot/contracts.py. Все модели strict=True, frozen=True, extra="forbid", revalidate_instances="always"; все поля обязательны, без defaults. Owning records используются вложенно. Никаких Any, dict, services, scope, callbacks в POJO.
 
@@ -15,7 +19,7 @@
 | ReadSnapshotPublicationInput | kind: Literal["read_snapshot_publication"]; request: SnapshotPublicationReadInput |
 | ReadSnapshotPublicationOutput | kind: Literal["read_snapshot_publication"]; value: SnapshotPublicationReadResult |
 | ApplySnapshotInput[S: DomainSection] | patch_set: PatchSet[S] |
-| ApplySnapshotOutput | value: SnapshotApplyResult |
+| ApplySnapshotOutput[T] | value: T — current concrete Snapshot result для записи и replay |
 | SnapshotNodeError(NodeError) | error: SnapshotPublicFault |
 
 kind у двух read пар нужен для закрытого command/result union верхней ноды. Это предложение конкретных полей поверх согласованного состава, не изменение owning read API. Apply отдельный, поэтому лишний discriminator операции ему не нужен.
@@ -24,7 +28,7 @@ kind у двух read пар нужен для закрытого command/result
 |---|---|---|
 | read_snapshot_metadata | ReadSnapshotMetadataInput → ReadSnapshotMetadataOutput; SnapshotNodeError | await WorldSnapshotService.read_snapshot(input.snapshot); result → output.value, kind сохраняется |
 | read_snapshot_publication | ReadSnapshotPublicationInput → ReadSnapshotPublicationOutput; SnapshotNodeError | await WorldSnapshotService.read_publication(input.request); result → output.value, kind сохраняется |
-| apply_snapshot | конкретный named ApplySnapshotInput → ApplySnapshotOutput; SnapshotNodeError и отдельная граница отмены ниже | await WorldSnapshotService.apply(input.patch_set); result → output.value |
+| apply_snapshot | named ApplySnapshotInput[S] → ApplySnapshotOutput[T]; SnapshotNodeError и отдельная граница отмены ниже | await IWorldSnapshotApply[S,T].apply(input.patch_set); тот же concrete result → output.value |
 
 Read result metadata/publication=None — успешное отсутствие exact записи. Ошибка не преобразуется в None. read_publication — exact world_uid/publication_id, не latest. SnapshotApplyResult COMMITTED/CONFLICT/REJECTED сохраняется целиком; SUCCESS исполнения ноды не означает COMMITTED операции. Следующий caller обязан различать owning category. Нода не вычисляет fingerprints, не собирает section payload и не вмешивается в transaction/retention/CAS.
 

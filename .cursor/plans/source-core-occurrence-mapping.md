@@ -1,5 +1,19 @@
 # Source — occurrence mapping для closure
 
+## Проверка методов автором — 2026-11-21
+
+Статус **CHANGES REQUIRED**, не независимая приёмка. Проверены приведённые ниже signatures/preconditions и соответствие последнему решению пользователя:
+
+1. `collect(scope, request, ...)` предполагает IO внутри Source. Для выбранного пути «Artifacts получает данные → DAG передаёт Source» эта signature не финальная. Нужен actual owning input с данными/evidence; не добавлять неизвестный тип-заглушку. Ни эта signature, ни старый scoped caller не разрешают реализацию до дельты.
+2. `project_origins` фильтрует ключи atoms, но не определяет фильтрацию capture occurrences по оставшимся dependencies. Сценарий: capture C в use0 содержит A, в use1 содержит B; SELECT оставляет только B. Нельзя автоматически локализовать отказ выбранного capture также на use0. Требуется точное правило: сохранять capture occurrences только тех original uses, которые содержат хотя бы один выбранный atom; отдельные полномасштабные capture failures не должны выдумывать связь с исключённым use.
+3. Общий текст обещает canonical ordering всех функций, а index_* явно сохраняют порядок первого появления. Уточнение: index_* сохраняют original order; только project_origins задаёт canonical key order. Эти два порядка не смешиваются с порядком diagnostics.
+4. `locate_logic` принимает произвольный SourceLogicIssue и способен затереть уже значимые group/use. Нужен проверяемый prerequisite: issue до локализации не содержит original indices, а контекст capture/atom однозначно известен вызывающему владельцу. Нарушение — programming failure. Он не применяется к selection/proof-level issues.
+5. Для полного storage closure capture v1 могут потребоваться bodies, отсутствующие среди logical selected atoms. Atom maps их не покрывают. До приёмки требуется явное отнесение таких ошибок к owning capture, а не поиск несуществующего logical atom либо первого artifact match.
+
+Index/project функции по ответственности остаются отдельными pure преобразованиями existing facts. `unique_logic_issues` допускается только после окончательной локализации; она не исправляет неверную привязку ошибки. Existing публичные POJO этим review не изменены. Требуются проверочные сценарии пунктов 2/4/5 и проверка всех callers после замены collector; исправление сигнатуры зависит от owning data-input контракта через координатора.
+
+## Предыдущий проект для адресной доработки
+
 2026-11-17. Proposal АР-1; не принятая дельта spec §12.1 и не разрешение кода. Публичные Source POJO и imports Pack неизменны. Основание — source-core-public-boundaries.md, раздел occurrence mapping.
 
 ## Переиспользование и представление

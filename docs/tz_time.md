@@ -18,8 +18,9 @@ publication, historical capture к snapshot. Head ветки может быть
 ## Календарь и настройки мира
 
 Нормативная схема данных и операций задана §§29–31 с уточнениями §§33, 36,
-38–39 и принятой границей §46 owning-плана. Мир владеет часами суток,
-реестрами календарей и эпох, выбранным календарём и начальным anchor.
+38–39 и принятой границей §46 owning-плана. Настройки принадлежат конкретному
+миру; домен Time владеет операциями над длиной суток, реестрами календарей
+и эпох, выбранным календарём и начальным anchor.
 Имена календарей, месяцев и эпох расширяются записями реестра. Закрыты только
 семантики предикатов, преобразований и режимов. Настройки используют общую
 POJO policy для missing/null и REF-W. Проекция и обратное преобразование
@@ -39,8 +40,12 @@ POJO policy для missing/null и REF-W. Проекция и обратное �
 ## Размещение и зависимости
 
 Карта пакетов задана §31. Time values не зависят от World settings. Чистые
-преобразования календаря читают World POJO. World preparation получает
-валидатор и projector через зависимости §38. Прямые операции ядра работают
+преобразования календаря читают World POJO. Runtime settings preparation
+принадлежит Time: World в существующих именах и путях обозначает scope,
+а не foreign owner. Validator/projector/resolver внутри этой операции —
+локальные алгоритмы Time. DAG выбирает публичную операцию, но не управляет
+её внутренними стадиями. Отдельный принятый initial маршрут передаёт
+PreparedInitialSettings через DAG в Time initial preparation. Прямые операции ядра работают
 без логгера. Emitter и server route из §47 подключаются при интеграции.
 
 ## Правила проекции
@@ -75,7 +80,7 @@ hours_per_day × 3600 секунд. Дни с counts_in_week=false имеют we
 | TimeAdvancePipelineOpenPipeline | prepare_advance принимает operation_id, текущий capture и длительность. Повтор на том же входе даёт тот же proposal. |
 | CalendarValidator и CalendarProjector | validate проверяет полные настройки. project и resolve вычисляют дату или координату по явной версии. |
 | WorldTimeSettingsReader и WorldCalendarResolver | Текущий или исторический capture включает версию каждого календаря. resolve_at выбирает версию по registry key. |
-| World preparation | prepare_calendar_create/update/select/remove, prepare_epoch_create/update/remove и prepare_hours_change возвращают before, after, expected publication, effective_at и operation_id. |
+| Time settings preparation (существующие World* классы) | prepare_calendar_create/update/select/remove, prepare_epoch_create/update/remove и prepare_hours_change возвращают PreparedTimeSettingsChange с before, after, expected publication, effective_at и operation_id. |
 | World initialization | prepare_initial получает STANDARD или AUTHORED, заранее захваченный UTC и бюджет. AUTHORED требует явных anchors. В STANDARD отсутствие origin означает использовать переданный UTC. |
 
 Изменение длины суток привязывает каждый календарь к моменту изменения. Для
@@ -97,33 +102,41 @@ Time обязан предоставить DAG типизированные пу
 Для версионированных настроек удаление из действующей версии сохраняет
 данные, необходимые для чтения удерживаемых исторических версий.
 
-Для самостоятельного изменения настроек предусмотрен публичный
-TimeSettingsWriteOpenPipeline с методами set_hours_per_day,
-create_calendar, update_calendar, select_calendar, delete_calendar,
-create_epoch, update_epoch и delete_epoch. Подтверждение записи содержит
-SnapshotApplyResult категории COMMITTED и назначенную publication для
-повторного чтения. При участии в общем действии его секции принимаются
-одним вызовом Snapshot. Конкретные POJO, отказы каждого метода, пути классов
-и статус реализации приведены в [контракте методов Time](../.cursor/plans/time-domain.md#публичные-методы-time-для-записей-и-настроек).
+Самостоятельное изменение настроек использует тот же путь, что и изменение
+в составе действия: доменные операции через DAG подготавливают owning section,
+DAG передаёт готовые секции в публичную assembly и затем в Snapshot.apply.
+Producer не вызывает Snapshot.apply и не возвращает подтверждение commit.
+Подтверждение возвращает Snapshot: COMMITTED и назначенная publication.
+Сохраняются операции смены длины суток, создания/обновления/выбора/удаления
+календаря и создания/обновления/удаления эпохи. Исторический
+TimeSettingsWriteOpenPipeline с вложенным apply отозван. Сами настройки и
+восемь существующих prepare-методов сохраняются. Exact proposed producer
+секции и отдельный batch-контракт приведены в S2–S4 owning-плана;
+они требуют проверки DAG-координатором и решения пользователя. Статусы приведены в
+[owning-плане](../.cursor/plans/time-domain.md#публичные-методы-time-для-записей-и-настроек).
 
-При смене длины суток Time проверяет ключи замен и обходит календари в порядке
-capture. Для явной замены операция использует переданный origin, иначе
-проецирует дату по прежней версии и проверяет час. При обновлении определения
-календаря проекция старой версии предшествует проверке replacement anchor.
-Домен валидирует полный кандидат перед возвратом proposal.
+При смене длины суток Time проверяет ключи замен и обходит календари в
+порядке capture. Для явной замены используется переданный origin, иначе
+Time выполняет внутреннюю проекцию прежней версии и проверяет допустимость
+часа. При обновлении календаря проекция старой версии предшествует проверке
+replacement anchor, включая явную замену. Time валидирует полный кандидат
+и возвращает PreparedTimeSettingsChange либо предусмотренный отказ.
+Эти вычисления остаются внутри одной публичной операции.
 
 ## Части суток
 
-Полный входной документ WorldTimeSettings проходит через
-`resolve_world_time_settings(raw, ctx, budget)`. В режиме validate
+Существующий `resolve_world_time_settings(raw, ctx, budget)` объединяет
+structural resolution и semantic validation внутри Time-owned операции.
+Разделение этих внутренних стадий через DAG не требуется. В режиме validate
 недопустимое переданное значение даёт диагностику с кодом и путём.
-В runtime World разрешает две замены: ошибочный hours_per_day получает
+В runtime resolver разрешает две замены: ошибочный hours_per_day получает
 штатные 24 часа, ошибочный from_minute — 0 минут. Общий resolver
 регистрирует WarningError для каждого восстановленного поля. Отсутствие этих
 полей применяет тот же default без предупреждения. Остальные обязательные
 значения и ссылки при ошибке блокируют получение настроек.
 
-После структурного разрешения доменная операция вызывает CalendarValidator.validate. Валидатор проверяет весь кандидат,
+После структурного разрешения resolver передаёт полный кандидат во внутренний
+CalendarValidator.validate. Валидатор проверяет весь кандидат,
 включая уникальность границ периодов после замены минуты. Независимые
 ошибки календарей, выбранного ключа и эпох возвращаются общим отчётом.
 Бюджет вычислений принадлежит вызывающей стороне. Эта политика применяется
