@@ -1,3 +1,5 @@
+from app.dataModel.fields.checkedPath import CheckedPath
+from app.dataModel.fields.fieldRef import FieldRef
 from app.application.time.calendar.validation import CalendarValidator
 from app.dataModel.world.calendar.projection.errors import CalendarBudgetExceeded
 from app.dataModel.world.settings.timeOperations.results import PreparedTimeSettingsChange, SettingsInvalid
@@ -23,7 +25,7 @@ class WorldHoursSettingsPipelineOpenPipeline:
         replacements = {item.calendar: item.origin for item in request.anchors}
         keys = {e.definition.system_calendar for e in settings.calendars.entries}
         if len(replacements) != len(request.anchors) or replacements.keys() - keys:
-            return issue(request, "anchors", "duplicate or unknown calendar")
+            return issue(CheckedPath.root(HoursChange).field(FieldRef(lambda: HoursChange, lambda value: value.anchors)), "duplicate or unknown calendar")
         entries = []
         for entry in settings.calendars.entries:
             key = entry.definition.system_calendar

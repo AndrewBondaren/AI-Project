@@ -1,3 +1,5 @@
+from app.dataModel.fields.checkedPath import CheckedPath
+from app.dataModel.fields.fieldRef import FieldRef
 from app.application.time.calendar.validation import CalendarValidator
 from app.dataModel.world.calendar.projection.errors import CalendarBudgetExceeded
 from app.dataModel.world.settings.timeOperations.results import PreparedTimeSettingsChange, SettingsInvalid
@@ -15,7 +17,7 @@ class WorldEpochSettingsPipelineOpenPipeline:
         entries = settings.epochs.entries
         key = request.epoch.system_epoch
         if any(e.system_epoch == key for e in entries):
-            return issue(request, "epoch", "epoch already exists")
+            return issue(CheckedPath.root(EpochCreate).field(FieldRef(lambda: EpochCreate, lambda value: value.epoch)), "epoch already exists")
         registry = WorldCalendarEpochRegistry(entries=(*entries, request.epoch))
         return prepare(request.base, settings.model_copy(update={"epochs": registry}), self._validator)
 
@@ -24,7 +26,7 @@ class WorldEpochSettingsPipelineOpenPipeline:
         entries = settings.epochs.entries
         key = request.epoch.system_epoch
         if not any(e.system_epoch == key for e in entries):
-            return issue(request, "epoch", "unknown epoch")
+            return issue(CheckedPath.root(EpochUpdate).field(FieldRef(lambda: EpochUpdate, lambda value: value.epoch)), "unknown epoch")
         registry = WorldCalendarEpochRegistry(entries=tuple(request.epoch if e.system_epoch == key else e for e in entries))
         return prepare(request.base, settings.model_copy(update={"epochs": registry}), self._validator)
 
@@ -33,6 +35,6 @@ class WorldEpochSettingsPipelineOpenPipeline:
         entries = settings.epochs.entries
         key = request.epoch
         if not any(e.system_epoch == key for e in entries):
-            return issue(request, "epoch", "unknown epoch")
+            return issue(CheckedPath.root(EpochRemove).field(FieldRef(lambda: EpochRemove, lambda value: value.epoch)), "unknown epoch")
         registry = WorldCalendarEpochRegistry(entries=tuple(e for e in entries if e.system_epoch != key))
         return prepare(request.base, settings.model_copy(update={"epochs": registry}), self._validator)

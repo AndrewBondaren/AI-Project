@@ -4,6 +4,8 @@ from contextlib import suppress
 from app.application.time.logging.timeOperationLog import TimeOperationLog
 from app.dataModel.time.diagnostics.events import ProjectLogContext
 from pydantic import BaseModel
+from app.dataModel.fields.checkedPath import CheckedPath
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.world.calendar.projection.errors import CalendarFieldIssue, CalendarIssueCode
 from app.application.time.calendar.projection import CalendarProjector
 from app.application.time.calendar.validation import CalendarValidator
@@ -19,8 +21,8 @@ from app.dataModel.world.settings.timeOperations.results import PreparedTimeSett
 from ...reader import WorldCalendarResolver
 
 
-def issue(request: BaseModel, field: str, message: str) -> SettingsInvalid:
-    return SettingsInvalid(issues=(CalendarFieldIssue.at(type(request), tuple(field.split(".")), CalendarIssueCode.INVALID_SETTINGS_CHANGE, message),))
+def issue[M: BaseModel, T](path: CheckedPath[M, T], message: str) -> SettingsInvalid:
+    return SettingsInvalid(issues=(CalendarFieldIssue(path=path.freeze(), code=CalendarIssueCode.INVALID_SETTINGS_CHANGE, message=message),))
 
 
 def projected(base: SettingsPreparationBase, key: RegistryKey[WorldCalendarRegistry], projector: CalendarProjector) -> CalendarProjection | SettingsInvalid | CalendarBudgetExceeded:
@@ -48,7 +50,9 @@ def projected(base: SettingsPreparationBase, key: RegistryKey[WorldCalendarRegis
         return result
     if isinstance(result, CalendarInvalid):
         return SettingsInvalid(issues=result.issues)
-    return issue(base, "capture", "inconsistent projection source")
+    return issue(CheckedPath.root(SettingsPreparationBase).field(
+        FieldRef(lambda: SettingsPreparationBase, lambda value: value.capture)
+    ), "inconsistent projection source")
 
 
 def prepare(base: SettingsPreparationBase, candidate: WorldTimeSettings, validator: CalendarValidator) -> PreparedTimeSettingsChange | SettingsInvalid | CalendarBudgetExceeded:

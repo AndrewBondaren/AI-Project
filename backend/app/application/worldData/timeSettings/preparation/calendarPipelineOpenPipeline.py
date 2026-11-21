@@ -1,3 +1,5 @@
+from app.dataModel.fields.checkedPath import CheckedPath
+from app.dataModel.fields.fieldRef import FieldRef
 from app.application.time.calendar.validation import CalendarValidator
 from app.dataModel.world.calendar.projection.errors import CalendarBudgetExceeded
 from app.dataModel.world.settings.timeOperations.results import PreparedTimeSettingsChange, SettingsInvalid
@@ -22,7 +24,7 @@ class WorldCalendarSettingsPipelineOpenPipeline:
         settings = request.base.capture.settings
         entries = settings.calendars.entries
         if any(e.definition.system_calendar == request.entry.definition.system_calendar for e in entries):
-            return issue(request, "entry", "calendar already exists")
+            return issue(CheckedPath.root(CalendarCreate).field(FieldRef(lambda: CalendarCreate, lambda value: value.entry)), "calendar already exists")
         registry = WorldCalendarRegistry(entries=(*entries, request.entry))
         return prepare(request.base, settings.model_copy(update={"calendars": registry}), self._validator)
 
@@ -38,7 +40,7 @@ class WorldCalendarSettingsPipelineOpenPipeline:
         explicit = (entry.anchor.coordinate_seconds, entry.anchor.coordinate_nanoseconds) == point.coordinate
         previous = settings.calendars.entry_for(key)
         if not explicit and previous is not None and entry.anchor != previous.anchor:
-            return issue(request, "entry.anchor", "replacement anchor must be at the effective point")
+            return issue(CheckedPath.root(CalendarUpdate).field(FieldRef(lambda: CalendarUpdate, lambda value: value.entry)).field(FieldRef(lambda: CalendarEntry, lambda value: value.anchor)), "replacement anchor must be at the effective point")
         if not explicit:
             anchor = CalendarAnchor(coordinate_seconds=point.seconds, coordinate_nanoseconds=point.nanoseconds,
                                     origin=CalendarOrigin(date=current.date, time=current.time))
@@ -60,7 +62,7 @@ class WorldCalendarSettingsPipelineOpenPipeline:
         settings = request.base.capture.settings
         keys = {e.definition.system_calendar for e in settings.calendars.entries}
         if request.calendar not in keys or request.replacement not in keys - {request.calendar}:
-            return issue(request, "replacement", "existing distinct replacement required")
+            return issue(CheckedPath.root(CalendarRemove).field(FieldRef(lambda: CalendarRemove, lambda value: value.replacement)), "existing distinct replacement required")
         if any(epoch.calendar == request.calendar for epoch in settings.epochs.entries):
             return SettingsInUse(calendar=request.calendar)
         entries = tuple(e for e in settings.calendars.entries if e.definition.system_calendar != request.calendar)

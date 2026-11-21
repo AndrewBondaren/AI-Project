@@ -60,6 +60,31 @@ Global adapter проверяет неизвестных owners и выбира�
 
 ## 3. Стабильная диагностика
 
+### Уточнение архитектурного ревью: общий owner/base adapter
+
+2026-11-21, по поручению пользователя «Правь». Детализация принятого pure контракта, без изменения predicates, фаз или публичного API. Старый global helper с raw receipt заменяется следующими signatures в receiptProvenance.py:
+
+```python
+def receipt_owner(ref: SnapshotRef, assigned: tuple[SnapshotRef, ...]) -> SnapshotRef | None: ...
+
+def collect_receipt_provenance(
+    facts: ReceiptFacts, context: SnapshotApplyContext,
+    bases: Mapping[SnapshotRef, SnapshotEnvelope],
+) -> tuple[SnapshotMetadataRelationIssue, ...]: ...
+```
+
+`receipt_owner` использует один existing same-owner predicate (world_uid для WorldSnapshotRef, player_uid для PlayerSnapshotRef, kind обязателен). Возвращает единственный assigned ref либо None; дубли owner в assigned — внутренний ValueError, не произвольный первый match. Existing _owner/_same_owner приводятся к одному источнику этой семантики; owner identity не включает равенство snapshot_id. Функция не проверяет ancestry, provenance или metadata и не получает scope.
+
+`collect_receipt_provenance` принимает уже admitted facts, не запускает ReceiptFactsAdmission повторно. Из context берёт только assigned refs/ожидаемые parent refs, не обращается к capability. Context/assigned participant coherence проверяется caller до этого вызова (standalone builder сохраняет собственные предварительные diagnostics). Mapping bases keyed exact pinned SnapshotRef; builder сохраняет свой existing Mapping контракт, early validator принимает такой же Mapping вместо tuple. Не требуется конвертировать bases через потерю ключей или реконструировать fake context в final checker.
+
+Для каждого owner adapter сопоставляет parent из expectation: None parent означает отсутствие базы; non-None parent с отсутствующим entry либо entry.ref!=parent означает недоступную/некорректную базу. Existing missing/base-identity diagnostics остаются у caller и здесь не добавляются. При такой базе adapter всё равно проверяет независимые assigned history, NOOP_STATE и SUPERSEDED_STATE, но не выполняет зависимую inherited reachability/closure проверку. В частности, нельзя передать base=None в state predicate так, будто parent действительно отсутствует. Чтобы не копировать SUPERSEDED условие в adapter, `state_provenance_codes` получает дополнительный keyword-only `base_available:bool=True`; при False требует base=None, сохраняет assigned/replacement проверки и пропускает только inherited base reachability/closure. False не означает успешную проверку closure; caller обязан сохранить собственный base failure. Final всегда передаёт True после exact parent admission.
+
+Global adapter: history с неизвестным owner → FOREIGN_HISTORY; history известного owner проверяется единым history predicate; state с неизвестным owner → UNREACHABLE_STATE без guessed base; для известного owner выбираются exact parent/base и вызываются единые state predicates. Owner-local `collect_owned_receipt_provenance` принимает тот же keyword-only base_available=True и использует тот же state predicate. Replacement set вычисляется из admitted state refs того же receipt, assigned owner/key, даже если sibling retention недопущен. Алгоритм replacement принадлежит owner-local helper, global adapter его не копирует.
+
+Adapter собирает результаты owner-local checks в порядке history original index, затем state original index с принятой внутри-index последовательностью кодов; не по порядку owners. Original facts.section_index остаётся неизменным. Structural issues, association, input membership, FOREIGN_OPERATION, duplicate receipts и metadata coverage здесь не формируются. Early и builder получают общий tuple provenance issues и включают его в свои заданные фазы. Final использует owner-local predicates с собственными first-error фазами, не global adapter с отсутствующими ему данными.
+
+Критерии ответственности: adapter не читает storage, не строит envelopes, не определяет domain validity и не создаёт второй history/state predicate; неверный base не превращается в UNREACHABLE_STATE, independent replacement issue не теряется. Тест с одновременно missing base, valid inherited ref и valid assigned replacement должен сохранить base failure/SUPERSEDED и пропустить dependent closure issue. Interleaved owners сохраняют original indices. Это точный механизм, а не новое правило принятия ошибочных входов.
+
 Builder сохраняет existing sequence: предварительные turn/context/base issues → для каждого receipt: structural issues → duplicate section → FOREIGN_OPERATION по original changed index → FOREIGN_HISTORY по original history index → state issues по original state index (SUPERSEDED перед UNREACHABLE) → заключительные context/pack checks. Owner-local outputs объединяются по фазе/исходному индексу, а не по порядку owners. Внутри malformed structural issues не сортируются. Общая duplicate receipt проверка не переезжает в per-receipt helper.
 
 Early C2 sequence: structural issues → association → input membership по changed index → FOREIGN_OPERATION по changed index → history по original index → states по original index. **FOREIGN_OPERATION не подавляется:** прежнее предложение «membership достаточно» отозвано. Это разные отношения (input membership и expected operation), независимые факты сохраняются; порядок явно указан. Не сортировать по code/message/UID или состоянию dict. Результаты owner helpers агрегируются с фиксированными phase/index slots, без нового persisted diagnostic envelope.

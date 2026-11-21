@@ -1,6 +1,8 @@
 # DAG: общая карта междоменных процессов и контрактов
 
-## Актуальный общий write flow — Time и Lifecycle, 2026-11-21
+Порядок поставки нод, локальные gates и проверки: [план реализации](dag-write-nodes-implementation.md). Диаграмма задаёт контракты процесса; этот отдельный план не объявляет отсутствующие bindings принятыми.
+
+## Актуальный общий write flow — Time, настройки Time и Lifecycle, 2026-11-21
 
 Этот раздел обновлён после синхронизации владельцев Lifecycle/PatchSet/Snapshot и имеет приоритет над прежними OPEN/картой ниже. Прежние Time-диаграммы далее сохраняются как локальный IC-1, а не полный перечень участников. Порядок общий: write_changes → prepare_changes → assemble_patch_set → apply_snapshot. Lifecycle/Time подключаются по выбранному сценарию, не обязательны для любой записи.
 
@@ -13,6 +15,10 @@
 | write_changes | Корень оркестрации записи | Общий ready input → результат подготовки/сборки либо T; named aggregate wrappers ещё OPEN | CALL prepare_changes, assemble_patch_set, apply_snapshot |
 | prepare_changes | Orchestration, ребёнок write_changes | Готовые typed domain inputs/context → sections либо owning отказ; aggregate wrappers OPEN | CALL выбранных leaf, перенос результатов, без доменных predicates |
 | prepare_time_section | Самостоятельный operation leaf Time, без Time parent | PrepareTimeSectionInput.request:PrepareTimeAdvanceSection → PrepareTimeSectionOutput.value:TimeAdvanceSection или TimeSectionContextMismatch | ITimeAdvancePipelineOpenPipeline.prepare_section |
+| prepare_world_time_settings_changes | Проектируемый orchestrator подготовки настроек, вызывается prepare_changes; NodeId/wrappers OPEN | Typed single/batch commands → PreparedTimeSettingsChange либо owning refusal | Один single leaf для одиночной команды либо один batch leaf для нескольких; не вычисляет промежуточные settings |
+| Settings single operation leaf | Лист выбранной операции настроек; engine binding OPEN | Concrete Hours/Calendar/Epoch request → PreparedTimeSettingsChange либо concrete owning refusal | Соответствующий публичный single preparation method Time |
+| Settings batch operation leaf (имя/NodeId OPEN) | Лист пакетной подготовки, вызывается orchestrator настроек | PrepareTimeSettingsBatch → PreparedTimeSettingsChange либо SettingsBatchInputMismatch либо SettingsBatchRefused | TimeSettingsBatchPipelineOpenPipeline.prepare_batch |
+| Settings section operation leaf (имя/NodeId OPEN) | Лист упаковки настроек, вызывается prepare_changes после успешной подготовки | PrepareTimeSettingsSection(change,operation_id,expected_world) → WorldTimeSettingsSection либо SettingsSectionContextMismatch | TimeSettingsSectionPipelineOpenPipeline.prepare_section |
 | prepare_lifecycle_create/replacement/end/reactivate | Четыре самостоятельных logical operation leaf Lifecycle | PrepareLifecycleXInput.request:exact PrepareLifecycleX[T,R] → PrepareLifecycleXOutput.value:exact PreparedLifecycleX[T,R] или LifecycleFieldError или LifecycleLogicError | Соответствующий LifecycleXPipelineOpenPipeline.prepare_x |
 | prepare_lifecycle_section | Самостоятельный operation leaf Lifecycle | PrepareLifecycleSectionInput.request:PrepareLifecycleSectionAB → PrepareLifecycleSectionOutput.value:LifecycleSectionAB или LifecycleSectionRefused | LifecycleSectionPipelineOpenPipeline.prepare_section |
 | assemble_patch_set | Operation leaf семейства записи | PatchSetAssemblyInput[S] → PatchSet[S] или PatchSetAssemblyRefused; engine wrappers отдельно | IPatchSetAssembly[S].assemble |
@@ -28,6 +34,17 @@ flowchart TD
     P -->|"CALL: PrepareTimeSectionInput"| T["prepare_time_section · Time leaf"]
     T -->|"PUBLIC CALL: request"| TP["Time.prepare_section"]
     TP -->|"TimeAdvanceSection / refusal через leaf"| P
+    P -->|"CALL: typed settings commands; wrappers OPEN"| SO["prepare_world_time_settings_changes · orchestration"]
+    SO -->|"одна команда: concrete request"| SL["Settings single operation leaf · binding OPEN"]
+    SL -->|"PUBLIC CALL: owning request"| SM["Time single preparation method"]
+    SM -->|"PreparedTimeSettingsChange / owning refusal через leaf"| SO
+    SO -->|"несколько команд: PrepareTimeSettingsBatch"| BL["Settings batch leaf · NodeId OPEN"]
+    BL -->|"PUBLIC CALL: request"| BM["TimeSettingsBatchPipelineOpenPipeline.prepare_batch"]
+    BM -->|"PreparedTimeSettingsChange / SettingsBatchInputMismatch / SettingsBatchRefused через leaf"| SO
+    SO -->|"RETURN: один prepared либо refusal"| P
+    P -->|"после success: PrepareTimeSettingsSection"| SS["Settings section leaf · NodeId OPEN"]
+    SS -->|"PUBLIC CALL: request"| SSP["TimeSettingsSectionPipelineOpenPipeline.prepare_section"]
+    SSP -->|"WorldTimeSettingsSection / SettingsSectionContextMismatch через leaf"| P
     P -->|"CALL: конкретный PrepareLifecycleXInput"| L["Lifecycle create / replacement / end / reactivate leaf"]
     L -->|"PUBLIC CALL: typed request"| LP["LifecycleXPipeline.prepare_x"]
     LP -->|"PreparedLifecycleX / refusal через leaf"| P
@@ -44,6 +61,18 @@ flowchart TD
 ```
 
 Диаграмма не задаёт обязательный выбор обеих ветвей или их параллельность. Готовые transitions можно передать сразу в section producer; повторный prepare не нужен. Готовые subject sections/evidence приходят через declared вход текущего среза; их получение показано в owning mock fixture, новые domain DAG-ноды этим не назначаются. При отказе обязательной подготовки зависимые assembly/apply не выполняются.
+
+### Настройки Time: семантика и границы сверки
+
+Обновление 2026-11-21: пользователь выбрал последовательную Time-owned batch preparation; диаграмма отражает выбранное направление, но не утверждает отсутствующие NodeId/engine wrappers. Batch содержит непустой tuple восьми concrete типов команд HoursChange/CalendarCreate/CalendarUpdate/CalendarSelect/CalendarRemove/EpochCreate/EpochUpdate/EpochRemove. Все base проверяются до исполнения; эталон commands[0].base, сравниваются operation_id/capture/clock/budget. SettingsBatchInputMismatch.indices содержит исходные возрастающие уникальные i>=1 с отличающимся base; SettingsBatchRefused.command_index — исходный индекс первой execution-refused команды, reason сохраняет concrete тип. Последовательные промежуточные кандидаты и cumulative budget обрабатывает Time, не DAG. Итог — один PreparedTimeSettingsChange и одна settings section; после отказа producer/assembly не запускаются.
+
+Совместные settings+advance проверяют одну исходную publication; effective_at настроек — исходная clock.point, duration advance независима от календаря. Все handler.validate выполняются до apply; settings apply не читает изменённый sibling clock. Exact base/effective_at bindings и section dependencies остаются на сверке Snapshot; пустые dependencies не приняты. Порядок ветвей на рисунке не задаёт order handlers.
+
+При before==after команда остаётся в общей операции и проверяет expected version, новая settings version не создаётся. Concrete receipt.changed=(), не boolean. Time предложил history=(): календарного события нет, факт операции сохраняет общий ledger. Exact states/retention прежнего состояния и history policy ожидают сверки Snapshot; states=() не предполагается. Receipt не означает committed. Совместный closed result/diagnostic binding для новых settings отказов не выводится автоматически из принятого Time clock root20150.
+
+### Source: отдельная граница подготовки, не обязательная стадия этого среза
+
+Выбранные пять публичных owners: proof admission/read/group admission/group verification/selection; единый SourceProofPipelineOpenPipeline отозван. Разделение request/persisted validation принято. Направление варианта А: Artifacts подготовка данных/защиты → DAG → Source semantic result → DAG → publication с атомарным target retention. Это карта ответственности, не новые NodeId или окончательные signatures. Snapshot/Publication → Source collect_for_adoption/adopt/preflight запрещены; переименование в facade не разрешает этот путь. Data-input/protection/constructors и X-READ/X-RET остаются OPEN, поэтому завершённой исполнимой веткой Source на основной диаграмме не показан. Источники: source-s1-s2-adoption-disposition.md и source-core-public-boundaries.md.
 
 ### Lifecycle: точный перенос данных
 

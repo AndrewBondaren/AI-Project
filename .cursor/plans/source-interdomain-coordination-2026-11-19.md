@@ -13,9 +13,9 @@
 
 ## 2. Публичный proof-контракт
 
-Baseline spec §9.1: `app.application.worldData.sourceVersioning.sourceProofPipelineOpenPipeline.SourceProofPipelineOpenPipeline`, интерфейс `app.application.worldData.sourceVersioning.interfaces.sourceProofPipelineOpenPipeline.ISourceProofPipelineOpenPipeline`. Это design, не доступный runtime.
+Superseded historical — прежний baseline spec §9.1: `app.application.worldData.sourceVersioning.sourceProofPipelineOpenPipeline.SourceProofPipelineOpenPipeline`, интерфейс `app.application.worldData.sourceVersioning.interfaces.sourceProofPipelineOpenPipeline.ISourceProofPipelineOpenPipeline`. Единый класс отозван как целевая структура; эта строка сохраняет только историю design, не доступный runtime и не инструкцию к реализации.
 
-Target proposal: отдельные owners в `app.application.worldData.sourceVersioning.operations`. Все методы async; signature каждого `method(self, request: Input) -> Output | SourceFailure`.
+Принятый пользователем 2026-11-21 layout: пять отдельных owners в `app.application.worldData.sourceVersioning.operations`, перечисленных ниже; он синхронизирован с актуальным spec §9.1. Все методы async; signature каждого `method(self, request: Input) -> Output | SourceFailure`. Принятие layout не означает готовность runtime или принятие оставшихся bindings.
 
 | Модуль / класс | Метод / Input | Output |
 |---|---|---|
@@ -25,7 +25,7 @@ Target proposal: отдельные owners в `app.application.worldData.sourceV
 | proofGroupVerificationPipelineOpenPipeline / SourceProofGroupVerificationPipelineOpenPipeline | verify_groups / SourceProofGroupsVerifyInput | SourceProofGroupsResult |
 | proofSelectionPipelineOpenPipeline / SourceProofSelectionPipelineOpenPipeline | select / SourceProofSelectInput | SourceProofResult |
 
-Разделение owners согласовано как направление, замена baseline и полные constructors не приняты. Не реализовывать оба layout.
+Открыты полные constructors, owning data-input binding и protection-контракт; выбор layout и разделение request/persisted validation уже приняты и не являются OPEN. Не реализовывать исторический единый класс параллельно принятому layout.
 
 POJO prefix `app.dataModel.sourceVersioning`: sourceProofInput — Input/ReadInput; sourceProofGroups — GroupsInput/GroupsVerifyInput/GroupsResult; sourceProofSelection — SelectInput/Selection; sourceProofResult — Result; sourceErrors — SourceFailure/SourceFieldIssue/SourceLogicIssue. Имена в этой строке сокращены только для навигации; полные имена — таблица и actual modules. SourceDurableProof — sourceDurableProof; SourceCaptureUsage — sourceCaptureUsage; SourceCaptureRef — sourceCaptureRef.
 

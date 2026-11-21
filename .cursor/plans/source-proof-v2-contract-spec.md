@@ -446,7 +446,17 @@ Metadata передаётся таким же способом как готов
 
 Внешний import proof: `app.dataModel.sourceVersioning.sourceDurableProof.SourceDurableProof`.
 
-Concrete публичный IO класс: `app.application.worldData.sourceVersioning.sourceProofPipelineOpenPipeline.SourceProofPipelineOpenPipeline`; интерфейс с префиксом I в `interfaces.sourceProofPipelineOpenPipeline`. Методы async, возвращают указанный result либо единый SourceFailure из `sourceErrors`:
+**Принятый пользователем layout 2026-11-21:** пять отдельных публичных пайплайнов. Общий префикс модулей — `app.application.worldData.sourceVersioning.operations`. Единый SourceProofPipelineOpenPipeline/ISourceProofPipelineOpenPipeline отозван как целевой layout; его дальнейшие упоминания в исторических разделах не задают дополнительный фасад или runtime import.
+
+| Модуль | Concrete класс | Единственный публичный метод |
+|---|---|---|
+| proofAdmissionPipelineOpenPipeline | SourceProofAdmissionPipelineOpenPipeline | admit |
+| proofReadPipelineOpenPipeline | SourceProofReadPipelineOpenPipeline | read |
+| proofGroupAdmissionPipelineOpenPipeline | SourceProofGroupAdmissionPipelineOpenPipeline | admit_groups |
+| proofGroupVerificationPipelineOpenPipeline | SourceProofGroupVerificationPipelineOpenPipeline | verify_groups |
+| proofSelectionPipelineOpenPipeline | SourceProofSelectionPipelineOpenPipeline | select |
+
+Методы async, возвращают result либо единый SourceFailure из sourceErrors. Это публичные Python-методы/пайплайны, не frontend API. Таблица ниже сохраняет semantic IO; выбор layout не подтверждает реализацию. Защищённый data-input путь Artifacts → DAG → Source требует уже зарегистрированной owning IO-дельты через координатора: proof-only inputs не объявляются достаточным transport данных/evidence и не разрешают скрытые storage calls. Этот технический binding OPEN, выбор пяти owners закрыт.
 
 | Метод | Request | Success | Проверяемая гарантия |
 |---|---|---|---|
