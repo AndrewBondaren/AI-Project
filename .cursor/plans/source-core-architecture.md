@@ -16,16 +16,16 @@
 | …/proof/validation | World, identity, usage conflict, canonical, selection, membership checkers — каждый свой инвариант | Existing values, shared rules/paths/issues; no IO | Normalization/lookup latest/holds внутри checker, дублирование правил |
 | …/proof/validation/requests | Пять request checkers: check(request) → SourceFailure либо None | Общие checkers; original root и indices; no transformation/IO | Mode dispatcher, потеря независимых diagnostics, запуск преобразования после refusal |
 | …/proof | SourceProofNormalizer.normalize; AtomIndex.enumerate; GroupUnionBuilder.build; SelectionExtractor.extract; GroupMatcher.match | Проверенные inputs; shared алгоритмы; pure | Несколько implementations union/atom order, synthetic durable refs |
-| …/proof/closure и read bindings | SourceProofClosureCollector — полный exact durable closure; read binding — проверенное чтение | Подтверждённые Source/Artifacts read ports; read IO | Latest вместо exact, неполный closure, public READ как вложенный вызов |
+| …/proof/closure | SourceProofClosureCollector — проверка полного exact closure по данным, переданным через DAG | Owning результат Artifacts; без hidden IO и borrowed scope | Дочитывание чужого storage, latest fallback, неполный closure |
 | …/revision | SourceRevisionTransitionBuilder — вычисление revision по previous и semantic evidence | Existing revision/hash values; pure | Commit, projector или самостоятельный выбор latest |
 | …/mutation | Batch validation/preparation, scoped apply, outcome resolution — отдельные владельцы | Typed prepared changes; подтверждённые writer/terminal ports | Один service скрывает preparation/apply/recovery; provisional выдаётся как committed |
 | …/capture | Candidate relation checks; SourceCaptureFinalizer.finalize — atomic witness finalization | Общие relation checks, exact read/retention binding | Constructor объявлен finalization; второй mapping validator; fabricated witness |
-| …/capture/adoptionPreflight.py (proposal) | SourceAdoptionPreflight.collect_for_adoption — read-only preflight | Borrowed scope/collector, bind/reset | Acquire или собственный commit в preflight |
-| …/capture/retentionBinding.py (design) | SourceCaptureRetentionBinding.adopt — acquire после повторной проверки | Подтверждённый borrowed scope; acquire, без outer commit | Пропущенная repeat check, отдельный UOW; scoped call без принятого DAG решения |
 | …/operations | Отдельный public owner каждой операции | Собственные internal collaborators; прямой DAG caller после согласования | Public→public вызовы, mode switch, внешняя оркестрация |
 | db/repositories/sqlite/sourceVersioning (proposal) | Exact revision/witness persistence adapters | Принятые scoped DB ports; только оговорённые effects | Новый transaction/receipt/holder engine, обход owning writer |
 
 Это не окончательный roster mutation/prune/configuration классов: их exact gaps перечислены ниже. Пока хотя бы один такой gap остаётся, вся архитектура не принимается.
+
+Disposition 2026-11-21: SourceAdoptionPreflight и SourceCaptureRetentionBinding.adopt исключены из целевого roster. Их старый scoped маршрут и SRP-релокация — история отклонённого S1/S2 design, не шаг реализации. Source сохраняет semantic proof/coverage/closure алгоритмы; acquisition/handoff принадлежит согласуемой Artifacts/Publication границе варианта А через координатора. Переименование этих классов или перенос их acquire в другой Source owner запрещён.
 
 ### Публичные границы и последовательности
 

@@ -69,16 +69,18 @@
 
 ## Карта внешних связей (PS-R2)
 
+**Актуализация 2026-11-21:** локальный Time producer ACCEPTED: application/time/changes/advancePipelineOpenPipeline.py::TimeAdvancePipelineOpenPipeline.prepare_section(request:PrepareTimeAdvanceSection) -> TimeAdvanceSection | TimeSectionContextMismatch. Вход содержит proposal, operation_id, expected_world; результат — native TimeAdvancePatch внутри секции, header создаёт Time. Источники: Time-план и interdomain-contract-register.md, IC-1. Повторное согласование producer/необходимости операции не требуется. Отдельный остаток — production registration/composition, concrete manifest и runtime wiring/evidence; их статус не означает отсутствия контракта. Исторические записи ниже «producer не подтверждён» заменены этой фиксацией.
+
 Повторно проверены `.cursor/plans/time-domain.md`, `docs/tz_entity_lifecycle.md`, actual `dataModel/time`, `application/time`, existing Snapshot apply port и refs. Наличие планируемой section модели не доказывает готовность публичного producer.
 
 | Потребность | Найденное evidence | Чего не хватает для приёмки |
 |---|---|---|
-| Time section | Time plan описывает TimeAdvanceSection как DomainSection[TimeAdvanceProposal], один proposal на acceptance group; registration и integration имеют OPEN | Exact публичного производителя native section, его Input/Output/Error и подтверждённого mapping с current Time preparation; не конструировать это внутри DAG/PatchSet |
+| Time section | Принятый prepare_section(PrepareTimeAdvanceSection) -> TimeAdvanceSection \| TimeSectionContextMismatch; native payload TimeAdvancePatch, не голый proposal | Production registration/composition, manifest/runtime wiring и evidence реализации; контракт producer повторно не открывается |
 | Lifecycle section | ТЗ Lifecycle: proposed publication/section.py, LifecycleSection; LC-C09 и LC-C11 сохраняют native binding OPEN | Полей concrete section/patch, публичного producer, cardinality/coverage и связи change_uid с publication operation_id; их нельзя приравнять |
 | Expected world | Existing WorldPublicationRef; owning Snapshot план имеет read_publication/read_current_publication контракты | Выбор конкретного capture для этого сценария и доказательство согласованности с другими inputs; одиночное current-read не даёт автоматически coherent batch |
 | Expected players | Existing PlayerHeadExpectation | Exact метода capture игроков и согласованности с expected_world; не выводится из существования DTO |
 | Preparation identity | Existing operation_id/preparation_fingerprint поля; Lifecycle явно отделяет change_uid от общей операции | Публичного producer общего binding и правила повторного использования identity; домен PatchSet не назначает его |
-| Consumer | Existing `IWorldSnapshotApply.apply[S: DomainSection](patch_set: PatchSet[S]) -> SnapshotApplyResult` | Native closed union и owning public lifecycle readiness; сама сигнатура подтверждена |
+| Consumer | Target H2: IWorldSnapshotApply[S:DomainSection,T], async apply(self,patch_set:PatchSet[S])->T; S instance-bound, T concrete result. Actual старый порт method-generic | Runtime migration/wiring отдельно; проектирование нод по target Snapshot H2, TimeSnapshotApplyResult без legacy wrapper |
 
 Запрос к владельцам для следующего согласования: для каждого producer предоставить class/module/full method signature, именованные Input/Output/Error, состав native section и identity binding, гарантии coherent base и mapping конкретных output fields в унаследованные поля PatchSetAssemblyInput. Для Time/Lifecycle отдельно подтвердить необходимость producer section как собственной публичной операции; PatchSet не назначает её за владельца.
 

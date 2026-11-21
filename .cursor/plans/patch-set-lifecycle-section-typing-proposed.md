@@ -1,5 +1,9 @@
 # PatchSet: Lifecycle mixed section и closed node bindings
 
+## Mock H2 carrier — синхронизация 2026-11-21
+
+Координатор подтвердил PASS узкой совместимости с existing H2: Lifecycle handler/append/validator возвращают exact MockLifecycleSectionRefused, subject A/B handler/verifier — MockSubjectSectionRefused; registry с MockSectionRefused проверяет local subset и сохраняет category/diagnostics/types/paths/order. Все три runtime carriers и MockSnapshotApplyResult объявляются единожды в tests/lifecycle/support/snapshotContracts.py, не resultContracts.py. MockSubjectIssue/Code находятся только в domainSections.py. Pure outputs/девять node contracts не меняются; carriers не получают wire IDs. [Finite roster](patch-set-lifecycle-mock-manifest-roster.md) синхронизирован. Test allocation/pair(1,94001) пока PROPOSED; Time pair неизменна. Runtime проверки относятся к реализации и не переоткрывают архитектурные решения; отдельное ранее данное разрешение реализации этой записью не отзывается.
+
 ## Шаги 1/2 — named node contracts и finite mock manifest
 
 2026-11-21: девять exact node cards из начала gen-dag-lifecycle-node-contracts.md подтверждены на уровне source-compatible proposal (version1, Never, empty errors/reads/calls, named Q/P). Полный class/module/kind/test-ID roster и consumers/reachability опубликованы в [owning manifest roster](patch-set-lifecycle-mock-manifest-roster.md): 64 новые test declarations, exact shared reuse, отдельный MockSnapshotApplyResult/root94001 как предложение; production Time20150 не меняется. Runtime-only node/checkpoint/claim/capture/request carriers не зарегистрированы. Scope allocation — итоговая таблица 94001–94062 и94090/94091; это не production reservation/code-go. Runtime merge/round-trip/static tests ещё не выполнены.

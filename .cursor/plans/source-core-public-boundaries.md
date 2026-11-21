@@ -125,16 +125,16 @@ Normalizer/union не выбирает один origin среди повторо
 
 Closure evaluation — общий internal алгоритм из spec, а не вызов публичного read. Перенос диагностик в original request принадлежит request-specific стадии, без синтетического read input как diagnostic root. Проверки witness/captured mapping выполняются до утверждения durable result. Concrete IO ports и constructor wiring принимаются отдельно; до этого эти operation owners не могут быть реализованы с fake refs или stub collectors. Дальнейшая реализация следует только после завершения архитектуры целого ядра; нового независимого кандидата этот документ не разрешает.
 
-## 4. Проверка полноты по принятой S1/S2 дельте
+## 4. Disposition прежней S1/S2 дельты
 
 При сверке spec §13 обнаружены две обязанности, которые нельзя потерять при декомпозиции:
 
 - `SourceProofSelector.check_coverage(input: SourceProofCoverageCheckInput) -> None | SourceFailure` — принятый internal контракт S1. Предложение разделения: отдельный `SourceProofCoverageChecker.check_coverage` с тем же input/result/semantics. Это отдельная проверка включения, не group matching и не origin authority. Перенос требует явного принятия дельты S1; прежнее размещение автоматически не меняется, forwarding facade ради сохранения смешанной ответственности не предлагается.
-- `SourceCaptureRetentionBinding.collect_for_adoption(scope, request)` и `adopt(scope, request, sources, target)` — разные функции: read-only preflight внутри borrowed writer scope и acquire удержаний после повторной проверки. Предложение: preflight вынести в отдельный `SourceAdoptionPreflight`, adopt оставить в retention binding. Сохранить sequential scope lifetime, reset/finally и повторную проверку при adopt. Точные ports и перенос требуют отдельной дельты S2, а не молчаливой смены принятого интеграционного контракта.
+- `SourceCaptureRetentionBinding.collect_for_adoption/adopt` и предложенный `SourceAdoptionPreflight` — исторические компоненты отклонённого scoped маршрута. Они исключены из целевого Source roster; SRP-перенос не является заданием реализации. Semantic checks остаются в Source, acquisition/target retention — в согласуемой границе Artifacts/Publication без вызова Source из publication.
 
 Эти обнаруженные границы уточняют декомпозицию пункта 1. Они не разрешают менять код Pack/Snapshot/DAG или начинать S1/S2 runtime.
 
-Адресная дельта S1/S2 для следующего согласования: Source предлагает `SourceProofCoverageChecker.check_coverage` вместо `SourceProofSelector.check_coverage`; `SourceAdoptionPreflight.collect_for_adoption` вместо одноимённого метода retention binding; `SourceCaptureRetentionBinding.adopt` остаётся владельцем acquire. Input/Result/Error и proof semantics прежние, holder authority не передаётся pure checker. Sequence collect/reset → register/resolve → повторные bind/collect/check/acquire/reset в adopt сохраняется. Общие read/check алгоритмы переиспользуются, второй collector не создаётся. Snapshot подтверждает constructor/scoped lifetime и calls; Pack — совместимость consumer результата. Перенос не считается принятым до этих подтверждений; forwarding facade не вводится. Разрешение междоменных scoped calls — отдельный обязательный INT-DAG-SCOPED gate, который SRP-перенос не закрывает.
+Сохраняется только предложение pure coverage checker с прежним semantic смыслом. Последовательность старого adopt не переносится в target; coordinator сверяет уже зарегистрированную замену варианта А. Эта корректировка устраняет противоречие текущей карты с решением пользователя, не открывает новый вопрос и не меняет чужие contracts самостоятельно.
 
 ## 5. Остальные операции ядра: точная граница дальнейшей работы
 

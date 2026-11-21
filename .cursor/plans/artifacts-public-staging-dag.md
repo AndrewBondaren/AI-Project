@@ -4,6 +4,26 @@
 
 ## Решения пользователя и источники
 
+### Первый срез — архитектура; запрет Blob-подхода — 2026-11-21
+
+Последнее уточнение пользователя: первый пункт — архитектура, критичны чёткие ответственности классов и методов; «blob методика под запретом». Не допускается Blob/God Object: класс/метод не собирает несвязанные validation, codec, storage, lifecycle, recovery и междоменную orchestration под одним фасадом. Переименование такого класса в Pipeline не исправляет ответственность. Одновременно предложение начать реализацию с BLOB bytes вместо архитектурного этапа отозвано. BLOB как существующий kind хранения не удаляется и не запрещается этим архитектурным ограничением.
+
+Текущая работа — завершить архитектурный пакет, а не выбрать удобный формат и достраивать архитектуру по ходу кода. ARCH-STAGE остаётся способом обозначить границы отдельной архитектурной приёмки, не автоматическим переходом к BLOB-first реализации. Согласованный порядок prepare → stage и ранее предоставленные гарантии остаются неизменными.
+
+Обязательный результат первого пункта:
+
+1. Карта ответственности Artifacts/Publication/owning producers/Engine: кто владеет данными, алгоритмом, side effects, transaction и порядком вызовов.
+2. Для КАЖДОГО класса — одна связная ответственность, разрешённые зависимости, запрещённые обязанности, причина существования и изменения; для existing фасадов отдельный retain/split/remove disposition с аргументом, без механического сохранения и без пустых wrappers.
+3. Для КАЖДОГО метода — exact signature/IO/Error, pre/postconditions, effect/transaction/claim lifetime, кто вызывает, что вызывает сам, отказ/rollback/cancel/unknown/replay и граница владения validation. Метод не выбирает следующую самостоятельную операцию.
+4. Раздельно public contract, тонкий pipeline и конкретная implementation: codec/digest остаются внутри owning алгоритма, SQL/holders/scopes не выходят в DAG. Dependency injection не разрешает foreign public calls.
+5. POJO/field/logic errors inventory с existing reuse и доказательством отсутствия зеркал; concrete format/transport bindings не угадываются. Source closure не вычисляется в Artifacts, Publication terminal semantics не переносятся в стейджер.
+6. Caller traces с неизменным порядком и проверяемыми gates P1 identity/P2 memory/performance. Отдельно standalone/borrowed UOW; нет неявного commit в borrowed scope.
+7. По каждому обязательному критерию PASS/OPEN/FAIL и точное основание; междоменные стыки — через координатора. Пакет предъявляется пользователю до реализации.
+
+Особое внимание existing ArtifactStagingService: нынешняя сводная строка «storage lifecycle facade» НЕ является доказательством SRP. open/finish/recover/cancel/collect и reserve/seal должны получить отдельный method-level disposition с owning dependencies; сохранить широкий фасад можно только после обоснования единой ответственности и отсутствия orchestration. Аналогично анализируются registry codec/backend binding, SqliteArtifactLeases, holder handoff и public completion. Здесь не предписывается новый набор классов по одному методу; декомпозиция должна следовать ответственности.
+
+До этого результата — архитектурная работа без runtime-кода. Наличие исторического implementation-порядка или отдельного BLOB примера не заменяет первый пункт.
+
 ### Completion: один public entry и scoped acquisition/finish — PROPOSED 2026-11-21
 
 **Сверка координатора (2):** ответ получен и прочитан. Координатор рекомендует предъявить пользователю именно эту границу одного public completion и одного scoped Artifacts port; полной приёмки нет. Подчёркнуто: предварительный admission не заменяет повторной проверки mutable fences/cancel/source lifetime/writers внутри UOW. Три exact prerequisites Publication: concrete Input/Result/Error с reuse candidate; пригодность OperationLeaseRef для source protection, issuer/target authority/lifetime; outcomes повторов после cancel/publication и durable reconciliation evidence, в том числе после освобождения holds. H2 standalone finish этого не закрывает. Пакет остаётся PROPOSED до owning ответа и пользовательской приёмки.
@@ -346,7 +366,7 @@ Pack выдаёт готовые bytes через DAG и получает Artifa
 | PACK-ART-COMPLETE | Завершение подготовки, подтверждённый READY и точный replay кандидата | Совместно с Publication/Lifecycle и Pack; отдельный от stage контракт, без повторной сборки candidate по предположению |
 | PACK-VERSION-OWNER | Соответствие wire/storage версий Pack правилу владения версиями DAG | Отдельное уточнение Pack/DAG. Записанные в ТЗ Pack значения не являются новым требованием к Artifacts и здесь не переутверждаются |
 
-Эта фиксация не назначает новые ноды, версии, DTO соседних доменов или внутренние storage-механизмы. Следующий собственный публичный контракт Artifacts для проработки — PACK-ART-READ.
+Эта фиксация не назначает новые ноды, версии, DTO соседних доменов или внутренние storage-механизмы. PACK-ART-READ — часть общего архитектурного пакета; не самостоятельный BLOB-first implementation-срез вместо первого пункта архитектуры.
 
 **Приоритет редакций:** раздел «Предложение Artifacts: публичный срез V1.1» ниже заменяет предварительные stage-specific failures и запросы другим доменам проектировать `_lease`, storage classification и logging. Эти вопросы решаются внутри Artifacts. Исторические записи исследования ниже не являются действующими внешними требованиями. Завершённость предложения среза не означает пользовательскую приёмку ARCH-0 всего домена, реализацию или закрытие CRUD.
 

@@ -1,5 +1,7 @@
 # Source / Pack S1–S2: единая редакция для приёмки
 
+**Приоритетная дельта 2026-11-21:** [disposition adoption](source-s1-s2-adoption-disposition.md). S2 collect_for_adoption/adopt и цепочка Snapshot→Source в §§3–5 отозваны; далее они сохранены только как история принятой редакции 2. Их перенос в SourceAdoptionPreflight не является заменой. Pure S1 semantics сохраняются внутри Source, без разрешения прямого foreign caller. Вариант А — единственное выбранное направление; exact replacement проходит координатора и не объявляется готовым.
+
 Редакция 2, 2026-11-14. Статус: ACCEPTED DESIGN в ограниченном S1/S2 scope, не IMPLEMENTED. Совместная статическая приёмка Source, Pack и Snapshot/Artifacts завершена; S2-TRACE-1 и S12-PACK-ERR-1 закрыты. Принятый Source proof design остаётся в source-proof-v2-contract-spec.md; этот документ добавляет две явно указанные internal операции. Public Source/Pack CRUD, DAG bindings, trusted acquisition admission/finalizer hookup, authored writer/bootstrap, Terrain/Regions и миграция старых форм не входят. Код до отдельного принятого implementation-плана через implement-plan не начинается.
 
 Этот документ сводит предложения source-pack-boundary-response-2026-11-14.md (PACK-S1/S2) и pack-preparation-source-authority-contract.md §9–11. Предыдущие обсуждения сохраняются как evidence, не как параллельные варианты S1/S2. При обнаружении расхождения с ними либо принятым proof контрактом остановить зависимую работу и исправить конкретное расхождение; выбирать удобную редакцию автоматически нельзя. Акт статической проверки — source-pack-s1-s2-acceptance-2026-11-14.md; S2-TRACE-1 закрыт. Совместные verdicts записываются отдельно по этой редакции.
@@ -45,7 +47,7 @@ None означает только логическое покрытие. Ни �
 
 Diagnostic root — ModelIdentity.of(SourceProofCoverageCheckInput), module app.application.worldData.sourceVersioning.proof.coverageCheckInput, qualname SourceProofCoverageCheckInput. Field paths строятся через CheckedPath/typed FieldRef к request/available, затем к полям существующих nested POJO; item(i) сохраняет исходный индекс. Для invalid whole available — путь его поля; неизвестный child адресуется содержащему известному полю. Existing CheckedPath.from_pydantic_loc сохраняет исходные validation locations. Synthetic argument root и handwritten string FieldSegment запрещены. Если failures восстанавливаются cold transport, exact root должен быть в его allowlist; persisted proof schema/type IDs не расширять.
 
-## 3. S2: preflight и неизменный adopt
+## 3. Исторический S2: отозванные preflight и adopt
 
 Класс: app.application.worldData.sourceVersioning.capture.retentionBinding.SourceCaptureRetentionBinding.
 

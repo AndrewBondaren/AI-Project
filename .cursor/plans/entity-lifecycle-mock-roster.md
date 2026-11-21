@@ -1,5 +1,8 @@
 # Lifecycle: конечный owning roster mock composition
 
+**Актуальная коррекция H2, PASS координатора 2026-11-21:** Lifecycle handler/append/validator возвращают exact MockLifecycleSectionRefused(SectionRefused[LifecycleApplyIssue]); subject handler/verifier/producer — MockSubjectSectionRefused(SectionRefused[MockSubjectIssue]). SectionRegistry[MockDiagnostic](MockSectionRefused) проверяет узкий local subset, затем переносит category/diagnostics в общий MockSectionRefused без потери типов/paths/order. Прежнее требование одинакового handler.refusal_model у всех handlers отменено. Эти named carriers runtime-only, без wire IDs. Composition declarations только в tests/lifecycle/support/snapshotContracts.py; MockSubjectIssue/Code — domainSections.py, subjectMock.py только behavior. Numeric allocation/pair(1,94001) остаётся PROPOSED, не препятствует независимой реализации моделей/pure операций. Источник: lifecycle-mock-result-manifest.md, итоговая сверка назначенного координатора.
+
+
 2026-11-21. Ответ владельца Lifecycle на шаги 1–2 координатора: gen-dag-lifecycle-node-contracts.md и lifecycle-mock-result-manifest.md. Документальный контракт для mock_lifecycle_world, без кода и numeric IDs. Этот файл уточняет concrete names/closure и единый apply carrier в entity-lifecycle-binding-apply-contract.md; предметная семантика, pure outputs и принятые fingerprint/view решения не меняются. Shared coordinator файлы не редактируются.
 
 ## 1. Девять Q/P bindings — подтверждены
@@ -18,9 +21,9 @@
 
 Все девять NodeContract[I,O,Never]: version=ContractVersion('1'), reads=(), calls=(), error_types=(); continuation/input_wait/retry_policy/error_policy/lifecycle/validator=None. Input только request; Output только value. Первые восемь value = exact P | LifecycleFieldError | LifecycleLogicError; последний = LifecycleSectionAB | LifecycleSectionRefused. Никакого MockSectionRefused в pure outputs. Runtime faults/cancellation — engine transport. Q/P exact class binding, единый exact contract object у executor/CallTarget, без payload dispatch и повторной сборки результата. Node wrappers находятся только в backend/tests/lifecycle/support/nodeContracts.py, bindings — nodeBindings.py. Их сериализация не требуется текущими native/terminal roots.
 
-## 2. Единый composition carrier — owning подтверждение
+## 2. H2 local carriers → единый composition carrier — PASS координатора
 
-Именованные composition declarations находятся только в backend/tests/lifecycle/support/resultContracts.py:
+Именованные composition declarations находятся только в backend/tests/lifecycle/support/snapshotContracts.py:
 
 ```python
 MockSectionUnion = LifecycleSectionAB | TestDomainSectionA | TestDomainSectionB
@@ -52,7 +55,7 @@ MockSnapshotApplyResult.diagnostics = tuple[SnapshotApplyRelationIssue | Lifecyc
 
 Ниже перечислены ВСЕ новые Lifecycle/subject concrete records, достижимые из native sections и двух owning terminal diagnostics. Сокращения A/B в описаниях обозначают пары явно перечисленных named классов, не runtime generic. Один literal kind T_A='test_entity_a', T_B='test_entity_b'; literals/aliases/tuple/NonEmpty не получают ENUM/RECORD ID. Generic parents тоже не регистрируются вместо named children.
 
-Synthetic declarations — backend/tests/lifecycle/support/mixedContracts.py (Lifecycle named closures), domainSections.py (subject native classes). Общие негeneric LifecycleTransitionRef, LifecycleOperation и LifecycleApplyIssue/Code — owning generic-domain declarations в ранее заданных dataModel/lifecycle модулях; тестовый manifest включает их, production composition этим не расширяется. MockSubjectIssue/Code — test-support subjectMock.py. Нижние concrete field annotations явно сужаются до named children, без анонимных параметризованных Pydantic типов.
+Synthetic declarations — backend/tests/lifecycle/support/mixedContracts.py (Lifecycle named closures), domainSections.py (subject native classes). Общие негeneric LifecycleTransitionRef, LifecycleOperation и LifecycleApplyIssue/Code — owning generic-domain declarations в ранее заданных dataModel/lifecycle модулях; тестовый manifest включает их, production composition этим не расширяется. MockSubjectIssue/Code — test-support domainSections.py (subjectMock.py содержит только behavior). Нижние concrete field annotations явно сужаются до named children, без анонимных параметризованных Pydantic типов.
 
 ### 3.1. Native operations: 32 RECORD
 

@@ -1,5 +1,7 @@
 # Source PACK-S1/S2 — план реализации принятой дельты
 
+**2026-11-21 — STOP старого adoption implementation:** действует [disposition S1/S2](source-s1-s2-adoption-disposition.md). Инструкции слоя B и старого composition C не исполнять: collect_for_adoption, adopt и SourceAdoptionPreflight отозваны как target. Старый порядок coverage→preflight→adopt исторический. Ранее открытый выбор разрешения Snapshot→Source уже решён отрицательно; повторно согласовывать исключение не требуется. Сохраняются pure Source algorithms, не acquisition. Замена — ранее выбранный вариант А через координатора, без новых локальных срезов.
+
 2026-11-14. **DRAFT / NOT EXECUTION-READY:** контракт S1/S2 принят, runtime prerequisites отсутствуют. Этот план не разрешает код до закрытия gates и отдельной приёмки по обязательным правилам проекта. Применять implement-plan; не расширять работу автоматически до базовой реализации всего Source.
 
 Уточнение ревью 2026-11-16: помимо runtime prerequisites открыты два design gates — INT-DAG-SCOPED (абсолютный запрет междоменных calls против Snapshot→Source scoped composition) и адресная SRP-дельта coverage/preflight/adopt из source-core-public-boundaries.md §4. Исторический ACCEPTED DESIGN не закрывает эти замечания. До решения и синхронизации нормативных документов не реализовывать старое размещение методов или proposed replacement; независимый срез invariants рассматривается отдельно.

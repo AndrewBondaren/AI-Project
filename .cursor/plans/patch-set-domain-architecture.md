@@ -43,7 +43,7 @@ type PatchSetAssemblyResult[S: DomainSection] = PatchSet[S] | PatchSetAssemblyRe
 | Existing `SectionRegistry`, `BoundSectionHandler` — `application/patch/registry/sectionRegistry.py` | Текущие registration/dispatch и representation bindings; не dependencies новой assemble | Отказ при использовании их semantic validate/apply из assembler |
 | Existing `DomainSectionHandler` — `application/patch/contracts/sectionHandler.py` | Семантика owning секции в Snapshot context; вне операции сборки | Refusal/receipt handler не использовать как результат сборки |
 | Existing `WorldSnapshotService` — `application/worldSnapshot/service/worldSnapshotService.py` | Существующая реализация механизмов применения; не вызывается assembler | Не добавлять обратный вызов assemble или подготовку секций внутри apply |
-| Existing `IWorldSnapshotApply` — `application/worldSnapshot/contracts/applyPort.py` | Потребитель результата через DAG: `async apply[S: DomainSection](patch_set: PatchSet[S]) -> SnapshotApplyResult` | Передаётся existing PatchSet без adapter DTO; реализация public lifecycle остаётся owning gate Snapshot |
+| `IWorldSnapshotApply` — `application/worldSnapshot/contracts/applyPort.py` | Target H2: `IWorldSnapshotApply[S: DomainSection,T]`, `async apply(self, patch_set:PatchSet[S])->T`; S связан с экземпляром, T — named concrete result. Actual старый порт ещё method-generic с SnapshotApplyResult | Передаётся PatchSet без adapter DTO; target/node composition проектировать по [актуальному Snapshot H2](snapshot-refusal-transport-h2.md), не по старому actual порту. Time result — TimeSnapshotApplyResult без legacy wrapper; runtime readiness отдельно |
 
 Split SectionCodec/BoundSectionCodec, предложенный в Snapshot ARCH-0 DEC-2, остаётся отдельным proposed изменением. PS-ARCH-0 не переносит эти классы, не принимает DEC-2 за пользователя и не создаёт конкурирующую схему registry. Причина исключения codec из assemble: сборка не обязана подтверждать canonical fingerprint зависимости или возможность её применения.
 
@@ -129,10 +129,10 @@ sequenceDiagram
 
 | Требуемые данные | Owning API / состояние контракта | Передача и незакрытая связь |
 |---|---|---|
-| Готовые native sections | Producers Time/Lifecycle/других доменов — конкретные методы ещё не подтверждены для закрытого union | Owning node → DAG → input.sections. Assembler не вызывает производителя и не конвертирует proposed prepared result |
+| Готовые native sections | Time local producer prepare_section принят (PS-R2 внешнего реестра); Lifecycle и другие bindings сверяются по owning планам, production union не объявлен готовым | Owning node → DAG → input.sections. Assembler не вызывает производителя и не конвертирует pure prepared result |
 | WorldPublicationRef и player expectations | Snapshot existing refs; конкретный источник coherent capture для этой операции OPEN | Результат чтения/подготовки → DAG → context; implicit latest внутри assemble запрещён |
 | operation_id/preparation_fingerprint/timeline/turn | Identity/preparation ownership должен быть подтверждён процессом подготовки; точный public method OPEN | DAG передаёт готовые значения. Assembler не вычисляет отсутствующие значения и не claim-ит ledger |
-| Собранный PatchSet | Existing `IWorldSnapshotApply.apply` с полной сигнатурой из §2 | Assembly result → DAG → apply_snapshot → Snapshot. No direct assembler → Snapshot |
+| Собранный PatchSet | Target H2 `IWorldSnapshotApply[S,T].apply(PatchSet[S])->T`, полная сигнатура и отличие actual в §2 | Assembly result → DAG → apply_snapshot → Snapshot; node output сохраняет concrete T. No direct assembler → Snapshot |
 
 Неустановленный upstream API не заменяется придуманным методом или NodeId. Доменные части можно обсуждать отдельно, но production маршрут не принимается до замыкания всех этих связей.
 

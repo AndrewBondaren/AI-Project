@@ -13,20 +13,20 @@ class SourceAdmissionRequestChecker:
     def __init__(self, worlds: SourceWorldChecker,
                  identities: SourceIdentityChecker,
                  conflicts: SourceUsageConflictChecker) -> None: ...
-    def check(self, request: SourceProofInput) -> SourceFailure | None: ...
+    def check(self, request: SourceProofInput) -> tuple[CaptureOrigins[SourceProofInput], ObjectOrigins[SourceProofInput], CollectionOrigins[SourceProofInput]] | SourceFailure: ...
 
 class SourceReadRequestChecker:
     def __init__(self, worlds: SourceWorldChecker,
                  identities: SourceIdentityChecker,
                  conflicts: SourceUsageConflictChecker,
                  canonical: SourceProofCanonicalChecker) -> None: ...
-    def check(self, request: SourceProofReadInput) -> SourceFailure | None: ...
+    def check(self, request: SourceProofReadInput) -> tuple[CaptureOrigins[SourceProofReadInput], ObjectOrigins[SourceProofReadInput], CollectionOrigins[SourceProofReadInput]] | SourceFailure: ...
 
 class SourceGroupAdmissionRequestChecker:
     def __init__(self, worlds: SourceWorldChecker,
                  identities: SourceIdentityChecker,
                  conflicts: SourceUsageConflictChecker) -> None: ...
-    def check(self, request: SourceProofGroupsInput) -> SourceFailure | None: ...
+    def check(self, request: SourceProofGroupsInput) -> tuple[CaptureOrigins[SourceProofGroupsInput], ObjectOrigins[SourceProofGroupsInput], CollectionOrigins[SourceProofGroupsInput]] | SourceFailure: ...
 
 class SourceGroupVerificationRequestChecker:
     def __init__(self, worlds: SourceWorldChecker,
@@ -35,7 +35,7 @@ class SourceGroupVerificationRequestChecker:
                  canonical: SourceProofCanonicalChecker,
                  result_values: SourceProofResultValueChecker,
                  selections: SourceSelectionChecker) -> None: ...
-    def check(self, request: SourceProofGroupsVerifyInput) -> SourceFailure | None: ...
+    def check(self, request: SourceProofGroupsVerifyInput) -> tuple[CaptureOrigins[SourceProofGroupsVerifyInput], ObjectOrigins[SourceProofGroupsVerifyInput], CollectionOrigins[SourceProofGroupsVerifyInput]] | SourceFailure: ...
 
 class SourceSelectionRequestChecker:
     def __init__(self, worlds: SourceWorldChecker,
@@ -43,10 +43,10 @@ class SourceSelectionRequestChecker:
                  conflicts: SourceUsageConflictChecker,
                  canonical: SourceProofCanonicalChecker,
                  selections: SourceSelectionChecker) -> None: ...
-    def check(self, request: SourceProofSelectInput) -> SourceFailure | None: ...
+    def check(self, request: SourceProofSelectInput) -> tuple[CaptureOrigins[SourceProofSelectInput], ObjectOrigins[SourceProofSelectInput], CollectionOrigins[SourceProofSelectInput]] | SourceFailure: ...
 ```
 
-Operation фиксирована классом: ADMIT, READ, ADMIT_GROUPS, VERIFY_GROUPS, SELECT соответственно. Нет mode/operation переключателя в public check, нет универсального класса на пять операций. None означает только завершение request-level проверки, не capture authority или доступность bytes. Pure processing исходного SourceProofReadInput при ADOPT/COVERAGE не должно вызывать этот READ-specific класс и затем переименовывать operation: такие owners используют общие инварианты с собственным root по своим принятым контрактам.
+Operation фиксирована классом: ADMIT, READ, ADMIT_GROUPS, VERIFY_GROUPS, SELECT соответственно. Нет mode/operation переключателя или универсального класса на пять операций. Успех — три immutable origin maps, не None и не authority/доступность bytes. Aliases определены в source-core-occurrence-mapping.md; нового DTO нет. После всех успешных checks request checker вызывает index_captures/index_objects/index_collections на локальных facts единственного traversal и возвращает maps. При failure maps наружу не возвращаются. VERIFY возвращает maps только presented стороны; expected facts использованы для независимых checks и не смешиваются с ними. Owner сохраняет результат в локальной переменной одного вызова, выполняет pure transformation, затем project_origins; повторного обхода request или hidden state нет. Пустой proof даёт успешный `((), (), ())`, отличный от refusal. Старые упоминания success=None ниже заменены этой дельтой; они не задают альтернативный контракт.
 
 Общая приватная механика обхода полей переиспользуется через typed функции, сохраняющие RootT/path. Она не содержит вторую реализацию инвариантов и не превращается в mode-dispatch service. Отдельный universal traversal/context DTO не нужен. Точные функции, их входы/результаты/ошибки и вложенные вызовы определяются в архитектуре АР-1 **до реализации**, а не в implementation-срезе. Negative typing проверяет принятое решение, не заменяет его.
 
@@ -59,7 +59,7 @@ Operation фиксирована классом: ADMIT, READ, ADMIT_GROUPS, VERI
 | Root boundary | Допустить известный concrete request root | Неизвестный root/непредставимая root error остаётся structural отказом; fake path не создаётся |
 | Typed traversal функции | Извлечь известные поля/элементы и установить их structural пригодность с исходным RootT/path | Пригодные facts и existing diagnostics; original indices не уплотняются, repaired request не создаётся |
 | Semantic checker | Проверить один Source-инвариант пригодных facts | Existing SourceFieldIssue/SourceLogicIssue; не обход другого request и не storage |
-| Request checker | Свести независимые проверки своего вида request | SourceFailure с фиксированной operation либо None; не transformation |
+| Request checker | Свести проверки своего request и выдать проверенное происхождение | SourceFailure либо три immutable origin maps из того же traversal; не proof transformation |
 | Public operation owner | После успешной проверки выполнить собственную принятую внутреннюю цепочку | Не запускать зависимый алгоритм после refusal; не вызывать public операции друг друга |
 
 Правила продолжения: повреждён `objects[0]` — выдать diagnostic его исходного поля, проверить `objects[1]`; отсутствующий/непригодный capture исключает только capture-dependent проверки, не проверки доступных соседних world/identity полей. Непригодный контейнер не заменяется пустым tuple. При неизвестной форме элемента используется существующий путь к содержащему полю; неизвестные child names не становятся выдуманными FieldRef. Вложенные forged/model_construct instances не считаются пригодными только по isinstance. Полная model_validate исходного request не должна обрывать независимые проверки semantic after-validator; точная structural leaf boundary должна быть определена в API функций.

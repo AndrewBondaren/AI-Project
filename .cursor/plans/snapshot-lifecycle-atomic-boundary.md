@@ -2,6 +2,8 @@
 
 ## Шаг 2: конечный mock result / record / refusal binding — owning ответ Snapshot
 
+Координаторская сверка 2026-11-21: PASS узкой поправки local → composition carrier по existing H2, источник lifecycle-mock-result-manifest.md. Это больше не ожидающая ответа поправка. Единый модуль composition declarations — backend/tests/lifecycle/support/snapshotContracts.py; MockSubjectIssue/MockSubjectCode объявляются только в backend/tests/lifecycle/support/domainSections.py, subjectMock.py содержит поведение producer/verifier. Дубли resultContracts.py или повторные issue declarations не создавать. Proposed roster PatchSet: 59 RECORD + 2 path RECORD + 3 ENUM = 64, allocation 94001–94062,94090–94091, pair (1,94001). Allocation/pair ещё не утверждены пользователем; Time (1,20150) неизменна. Разрешение пользователя начать реализацию сохраняется; зависимая wire allocation не блокирует независимые C2 facts/predicates. Runtime tests — проверка реализации, не повторный архитектурный prerequisite.
+
 2026-11-21. Сверены шаг 1 gen-dag-lifecycle-node-contracts.md (9 exact registrations, version1, E=Never) и lifecycle-mock-result-manifest.md. Шаг 1 не изменяется. Источники целевого H2: patch-set-refusal-transport-h2.md §§1–2 (local subset → composition carrier), snapshot-refusal-transport-h2.md (single publication binding и diagnostic annotation check), publication-h2-persistence-proposed.md (current R). Ниже документальное подтверждение совместимости и одна минимальная поправка, не code-go. Actual nongeneric runtime не объявляется реализующим target H2.
 
 ### Конечный roster Snapshot composition
@@ -76,7 +78,7 @@ MockSectionRefused, два local carriers, MockOperationRecord/claims и node wr
 
 Конкретные будущие negatives: Lifecycle возвращает MockSubjectIssue; subject возвращает LifecycleApplyIssue; wrong local/composition refusal exact type; receipt из validate; mismatched binding/record_model; unknown root/format, в том числе Time root в mock snapshot_apply; mixed concrete diagnostics round-trip сохраняет class/path/order; replay не повторяет writes; no-op и отказ subject не публикуют частичный успех. Старый patch.evidence smoke не считается проверкой актуального section.domain_evidence.
 
-**Результат:** MockSectionUnion/MockDiagnostic/T/exact record/binding и current format1 совместимы с принятым H2. Единственная поправка координатору — общий MockSectionRefused для registry плюс два local carriers с existing H2 conversion, чтобы не терять subset admission. После сведения этой поправки остаётся конкретный numeric schema roster/closure allocation у PatchSet, без независимых ID назначений Snapshot. Runtime checks выполняются при разрешённой реализации. Shared coordinator документы не изменены; рассылки/кода нет.
+**Результат:** MockSectionUnion/MockDiagnostic/T/exact record/binding совместимы с принятым H2; общий MockSectionRefused для registry плюс два local carriers подтверждены координаторской сверкой. Numeric schema roster предъявлен PatchSet; остаётся пользовательское утверждение proposed allocation/pair (1,94001), не новое независимое назначение Snapshot. Runtime checks выполняются при реализации; до их выполнения runtime PASS не заявляется. Shared coordinator документы не изменены; рассылки/кода в этой синхронизации нет.
 
 ## Exact контракт вопросов 2/3 — подтверждённое решение пользователя
 

@@ -14,6 +14,12 @@ Index/project функции по ответственности остаютс�
 
 ## Предыдущий проект для адресной доработки
 
+**Корректировка по ревью 2026-11-21:** пять request checkers теперь возвращают три typed origin maps либо SourceFailure; exact signatures — source-core-request-composition.md §1. Maps строятся index_* из локальных validated facts того же traversal только при успехе. Owner получает их явно, хранит только на время invocation и вызывает project_origins после transformation. VERIFY возвращает только presented maps. Повторный request traversal и состояние checker между вызовами не нужны.
+
+`project_origins` сохраняет capture occurrences только для original group/use, присутствующих среди оставленных object/collection occurrences данного capture; excluded uses не получают ошибки SELECT. Index-функции сохраняют original order, project задаёт canonical key order. `locate_logic` допускает только исходную issue с group_index=None/use_index=None; иное — programming failure, selection/proof-level issues сюда не подаются. Ошибки обязательных физических bodies без logical atom локализуются через owning capture map, не fabricated dependency. Shared body в нескольких captures обрабатывается в контексте каждого actual capture, не по первому artifact match.
+
+Scoped signature collect ниже **отозвана как target** после выбора data-input пути. Это исторический текст для сопоставления, не инструкция реализации. Действует ранее зарегистрированный gap точного owning data-input: Source не принимает CommitReadScope и не дочитывает Artifacts. Замена не объявляется готовой до уже запрошенного контракта через координатора. Нового вопроса, нового типа-заглушки и нового scope не вводится. Старые adoption callers не являются prerequisites нового collector.
+
 2026-11-17. Proposal АР-1; не принятая дельта spec §12.1 и не разрешение кода. Публичные Source POJO и imports Pack неизменны. Основание — source-core-public-boundaries.md, раздел occurrence mapping.
 
 ## Переиспользование и представление

@@ -1,5 +1,11 @@
 # Lifecycle mock manifest: finite PatchSet owning roster
 
+## Синхронизация координаторской сверки — 2026-11-21
+
+Источник — [mock result manifest, координаторская сверка](lifecycle-mock-result-manifest.md#координаторская-сверка-2026-11-21). Local -> composition carrier получил PASS совместимости с H2, не runtime PASS. Единый модуль composition — tests/lifecycle/support/snapshotContracts.py; прежний resultContracts.py заменён, дубли классов не создаются. MockSubjectIssue/Code остаются в domainSections.py; subjectMock.py — только behavior.
+
+Allocation 94001–94062,94090–94091 и mock pair(1,94001) остаются PROPOSED, явного принятия пользователем нет. Time pair(1,20150) неизменна. 59 owning/result RECORD + 2 shared path RECORD + 3 ENUM =64. Runtime merge/round-trip/static tests — evidence реализации, не дополнительный prerequisite архитектурного решения. Эта документальная синхронизация не отменяет уже выданное пользователем разрешение независимой реализации; зависимое назначение wire IDs согласуется отдельно. Историческое «не code-go» ниже означает только, что сам этот roster не выдаёт нового разрешения.
+
 2026-11-21. Ответ на шаг 2 [координатора](lifecycle-mock-result-manifest.md). PROPOSED test-only allocations, не production reservation/code-go. Проверены actual ARTIFACT_CORE_SCHEMA/PATCH_CORE_SCHEMA/SNAPSHOT_CORE_SCHEMA, snapshotCore support diagnostics, planning test path declarations и owning entity-lifecycle-binding-apply-contract.md. Общий coordinator файл не менялся.
 
 ## Roots / consumers
@@ -21,7 +27,7 @@ Module legend (полный путь, не новые package roots):
 
 - M = backend/tests/lifecycle/support/mixedContracts.py
 - S = backend/tests/lifecycle/support/domainSections.py
-- C = backend/tests/lifecycle/support/resultContracts.py (named composition result only)
+- C = backend/tests/lifecycle/support/snapshotContracts.py (named composition result и runtime carriers)
 - K = backend/app/dataModel/lifecycle/operations/kind.py (owning target)
 - I = backend/app/dataModel/lifecycle/identity.py (owning target)
 - E = backend/app/dataModel/lifecycle/results/applyIssue.py (owning target из local contracts C3)
@@ -131,7 +137,7 @@ Terminal closure: MockSnapshotApplyResult -> shared category/identity/commit ref
 
 Подтверждены девять строк начала gen-dag-lifecycle-node-contracts.md: create/replacement/end/reactivate × test_a/test_b и prepare_section AB. IDs уникальны внутри списка; version1, E=Never, error_types/reads/calls пустые; named request/success mapping Q/P совпадает с roster выше. I/O классы в tests/lifecycle/support/nodeContracts.py, регистрация в nodeBindings.py; domain synthetic models только mixedContracts.py/domainSections.py. Никаких numeric wire IDs для NodeContract/Input/Output/NodeError. Source admission допускает empty errors; static/runtime тесты ещё не выполнены.
 
-Composition result — MockSnapshotApplyResult в resultContracts.py, D=LifecycleApplyIssue|MockSubjectIssue; общий MockSectionRefused[D] runtime-only. Каждый handler сохраняет local diagnostic subset; BoundSectionHandler валидирует local refusal перед переносом в общий composition carrier. Не требовать local producer возвратить уже расширенный D и не путать pure LifecycleSectionRefused с handler refusal.
+Composition result — MockSnapshotApplyResult в snapshotContracts.py, D=LifecycleApplyIssue|MockSubjectIssue. В том же модуле три runtime-only carrier: MockLifecycleSectionRefused(SectionRefused[LifecycleApplyIssue]), MockSubjectSectionRefused(SectionRefused[MockSubjectIssue]), MockSectionRefused(SectionRefused[MockDiagnostic]). Lifecycle handler/append/validator используют первый; оба subject handler/verifier — второй; SectionRegistry[MockDiagnostic](MockSectionRefused) выдаёт третий после exact local carrier/subset проверки. Category/concrete diagnostic types/paths/order сохраняются. Общий carrier не требуется от всех handlers, None/чужой local class не coerced. Pure LifecycleSectionRefused и девять node outputs неизменны. Ни одному из этих трёх runtime carriers wire ID не назначается.
 
 Missing named declarations перечислены исчерпывающе таблицей, а не «closure позже»: TypeAdapters/annotations каждого existing generic child должны указывать на named nested модели (например CreateA.transition=CreateTransitionA, ParticipantA.before=AbsentA|PresentA, after=EntityStateA, CoverageA.effect=EffectA). Автоматические parameterized generic classes не заменяют эти owners и не получают fallback IDs. Все новые модели ещё TARGET; runtime merge нельзя доказать fake stand-ins. Source absence 94xxx — evidence отсутствия найденных collisions, не выполненный merge/round-trip.
 
