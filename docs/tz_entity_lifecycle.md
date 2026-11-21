@@ -6,6 +6,8 @@
 
 Локальная конкретизация варианта А по заданию координатора: [предложение exact контрактов](../.cursor/plans/entity-lifecycle-local-contracts.md), 2026-11-21. Предложенная граница представления: PreparedLifecycle — чистая запись перехода и базы, без PatchHeader; native wrapper на основе PatchData создаётся prepare_section и содержит prepared без копирования полей. Это устраняет прежнее смешение prepared/native; D1–D7 приняты; exact схемы и bindings проходят техническую сверку координатора. Production producers/adapters вне этого задания.
 
+Актуальная документальная сверка: [finite roster и сквозные критерии варианта А](../.cursor/plans/entity-lifecycle-mock-roster.md). Старые POJO ниже помечены superseded; production Hydrology/W3, SQL/adapters, read API и полный CRUD не являются условиями старта варианта А. Наличие карты не означает выполненных codec/runtime проверок новой section.domain_evidence.
+
 ## Критическое требование пользователя — границы приёмки и реализации
 
 2026-11-21: текущий план Lifecycle принимается и реализуется в согласованном scope. Детализация контрактов и интеграции, вынесенные пользователем в отдельный план, не блокируют его приёмку. Нельзя расширять критерии текущего плана задачами будущих работ без решения пользователя. Требование архитектуры до реализации относится к текущему объёму, а не ко всем будущим возможностям домена. Необходимые детали текущей реализации конкретизируются без расширения scope.
@@ -322,13 +324,11 @@ History Lifecycle не дублирует snapshot metadata. Использую�
 
 Проекция читается без replay всей истории и публикуется атомарно с переходом. Критерии приёмки: после Create/End/Reactivate активность и last-transition соответствуют последней опубликованной операции с участием сущности; ссылка не может вести на чужой переход или невидимую в выбранной публикации историю; повтор не изменяет её новым фиктивным переходом; failure не оставляет проекцию без соответствующей записи истории. History read сохраняет предшественников и все прошлые циклы, хотя этих полей нет в проекции. Это уточнение состава, не готовая физическая схема; LC-C02 остаётся PARTIAL до exact refs/invariants и read/publication binding.
 
-`LifecycleReplacement` (frozen POJO, dataModel/lifecycle/lifecycleReplacement.py):
+### Superseded: первоначальная схема LifecycleReplacement
 
-- `change_uid: str` — identity одной атомарной операции;
-- `predecessor_uids: tuple[str, ...]` — закрываемые сущности;
-- `successors: tuple[EntityLifecycle, ...]` — создаваемые сущности с новыми UID.
+Прежняя схема с change_uid:str, predecessor_uids и successors:tuple[EntityLifecycle,...] отменена и не является нормативным POJO. Исключение для str UID из этого старого описания также отменено. Не реализовывать её рядом с generic моделью и не вводить адаптер/зеркальный POJO.
 
-Это проекты типов, а не уже существующие Python-классы. `str` здесь — осознанное исключение для opaque UID сущностей/операций, не ключей реестра; значения не нормализуются, принадлежность scope и разрешение ссылок проверяются на application-границе. Контекст мира/scope, DI, техническая формула UID операции и result/report должны переиспользовать существующие механизмы после инвентаризации в отдельном плане. Локальные копии полей lifecycle в гидрологии не вводятся: доменный POJO содержит `lifecycle: EntityLifecycle`.
+Единственное актуальное определение полей: [локальный контракт — intents, requests и prepared outputs](../.cursor/plans/entity-lifecycle-local-contracts.md#канонические-intents-и-четыре-requests). LifecycleReplacement[T,R] содержит typed refs и обязательное R; participants с before/after принадлежат отдельному LifecycleTransition. Exact named замыкания и сериализуемая closure заданы в [owning mock roster](../.cursor/plans/entity-lifecycle-mock-roster.md#3-полный-новый-owning-wire-roster). Настоящий раздел ссылается на это определение, не дублирует его поля.
 
 ## Инварианты
 

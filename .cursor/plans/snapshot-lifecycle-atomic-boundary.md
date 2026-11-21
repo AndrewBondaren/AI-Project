@@ -1,5 +1,83 @@
 # Snapshot / Lifecycle: ограниченная atomic boundary
 
+## Шаг 2: конечный mock result / record / refusal binding — owning ответ Snapshot
+
+2026-11-21. Сверены шаг 1 gen-dag-lifecycle-node-contracts.md (9 exact registrations, version1, E=Never) и lifecycle-mock-result-manifest.md. Шаг 1 не изменяется. Источники целевого H2: patch-set-refusal-transport-h2.md §§1–2 (local subset → composition carrier), snapshot-refusal-transport-h2.md (single publication binding и diagnostic annotation check), publication-h2-persistence-proposed.md (current R). Ниже документальное подтверждение совместимости и одна минимальная поправка, не code-go. Actual nongeneric runtime не объявляется реализующим target H2.
+
+### Конечный roster Snapshot composition
+
+Все новые named mock declarations — backend/tests/lifecycle/support/snapshotContracts.py, runtime assembly — snapshotComposition.py рядом. Shared типы переиспользуются; нового production composition builder или доменного error DTO не вводится.
+
+| Имя | Exact declaration / ответственность |
+|---|---|
+| MockSectionUnion | Plain union LifecycleSectionAB \| TestDomainSectionA \| TestDomainSectionB |
+| MockDiagnostic | Plain union LifecycleApplyIssue \| MockSubjectIssue |
+| MockAssemblyInput | Named AssemblyInput[MockSectionUnion], без новых полей; exact section roster |
+| MockPatchSet | Named PatchSet[MockSectionUnion], без новых полей; результат assembler и input apply |
+| MockSectionRefused | Named SectionRefused[MockDiagnostic], без новых полей/semantic validators; общий registry carrier |
+| MockLifecycleSectionRefused | Named SectionRefused[LifecycleApplyIssue], без новых полей/semantic validators; local Lifecycle apply carrier |
+| MockSubjectSectionRefused | Named SectionRefused[MockSubjectIssue], без новых полей/semantic validators; общий local carrier subject A и B |
+| MockSnapshotApplyResult | Named SnapshotApplyResult[MockDiagnostic], без новых полей; diagnostics:tuple[SnapshotApplyRelationIssue \| LifecycleApplyIssue \| MockSubjectIssue,...] |
+| MockOperationRecord | Named OperationRecord[MockSnapshotApplyResult], без новых полей; существующие terminal kinds/invariants сохраняются |
+| MockApplySnapshotInput | Named ApplySnapshotInput[MockSectionUnion]; единственное inherited поле patch_set сужено до MockPatchSet |
+| MockApplySnapshotOutput | Named ApplySnapshotOutput[MockSnapshotApplyResult]; inherited value exact MockSnapshotApplyResult |
+
+У этих named children нет копирования owning полей/validators: сужение annotations сохраняет strict/frozen/extra-forbid/revalidate-always. MockOperationRecord — runtime model identity, не новый terminal root. OperationClaim[MockSnapshotApplyResult] и его existing generic branches закрываются тем же T; отдельные новые claim wire records не назначаются. Pure LifecycleFieldError/LifecycleLogicError/LifecycleSectionRefused остаются в leaf outputs, не входят в MockDiagnostic или apply carrier. MockSubjectIssue/Code и его semantic subset для A/B принадлежат subject; Snapshot не назначает им новые code/category rules.
+
+### Минимальная поправка к предложению единого refusal всех handlers
+
+В принятом H2 **разные local refusal_model совместимы с одним registry**. Registry получает MockSectionRefused; Lifecycle handler.refusal_model возвращает MockLifecycleSectionRefused, оба subject handler.refusal_model — MockSubjectSectionRefused. Owning handlers получают соответствующий concrete type через свой composition binding и создают именно его. Lifecycle append/validate/apply local SectionRefused[LifecycleApplyIssue] замыкается на MockLifecycleSectionRefused; subject local SectionRefused[MockSubjectIssue] — на MockSubjectSectionRefused. Это test-only именование existing carrier, не возврат отменённого доменного LifecycleApplyRefused DTO.
+
+Если все три handler.refusal_model сделать MockSectionRefused, извлекаемый H2 local roster станет всем MockDiagnostic: subject issue от Lifecycle пройдёт structural subset admission. Чтобы сохранить узкие subsets в таком варианте, потребовалось бы новое независимое diagnostic_types поле или новый validator в registry. Минимальная поправка — использовать уже принятый H2 local→composition mapping, без изменения H2.
+
+Exact registry construction: `SectionRegistry[MockDiagnostic](MockSectionRefused)`. Его public refusal_model is MockSectionRefused; diagnostic_types == frozenset({LifecycleApplyIssue, MockSubjectIssue}). Три регистрации: SectionContract[LifecycleSectionAB] + Lifecycle handler/codec; SectionContract[TestDomainSectionA] + subject A handler/codec; SectionContract[TestDomainSectionB] + subject B handler/codec. Каждая пара handler/codec содержит тот же exact contract object. Registry construction подтверждает local sets {LifecycleApplyIssue}/{MockSubjectIssue} ⊆ MockDiagnostic; error TypeError/ValueError до IO. Новых property или динамического route по kind нет.
+
+BoundSectionHandler.validate принимает exact SectionAccepted либо exact handler.refusal_model; apply — exact SectionApplyReceipt либо exact handler.refusal_model. Затем strict model/diagnostic admission с exact local classes. Local refusal переносится в MockSectionRefused(category=local.category,diagnostics=local.diagnostics), без dict/model_dump/семантической переоценки. Concrete diagnostic types, все fields/paths/order сохраняются, object identity не обещается. Wrong branch, subclass или чужой diagnostic после return → SectionHandlerContractError. Snapshot получает общий carrier и не повторяет local subset checks. Таким образом все три handlers проходят один registry без несовместимых exact checks.
+
+### Exact Publication/Snapshot constructor и properties
+
+```python
+T = MockSnapshotApplyResult
+binding = PublicationResultBinding[T](
+    result_model=MockSnapshotApplyResult,
+    snapshot_format_version=1,
+    manifest=MOCK_PUBLICATION_MANIFEST,
+    record_model=MockOperationRecord,
+    limits=mock_decode_limits,
+)
+registry = SectionRegistry[MockDiagnostic](MockSectionRefused)
+# operations: IOperationStore[MockSnapshotApplyResult], test fake within current scope
+service = WorldSnapshotService[MockSectionUnion, MockDiagnostic, MockSnapshotApplyResult](
+    registry, world, players, history,
+    publication_binding=binding, operations=operations,
+)
+```
+
+Это целевые signatures из H2, не executable recipe для actual nongeneric классов. Composition заполняет три registrations до service construction. PublicationResultBinding проверяет schema/manifest/format/limits/record_model при собственном construction; Snapshot не повторяет эти predicates и не вызывает чужой __post_init__.
+
+Required public identity mapping: operations.result_binding is binding; operations.record_model is binding.record_model is MockOperationRecord; codec.result_binding is binding. При использовании ledger/staging/leases их existing owning constructors сверяют тот же binding/record_model по принятому H2; новые сервисы ради этого mock не обязательны. Snapshot constructor проверяет первые две identities и exact result diagnostic annotation == {SnapshotApplyRelationIssue} ∪ registry.diagnostic_types. Result model берётся только из self._publication_binding.result_model; отдельные result_model/manifest/refusal настройки в Snapshot не вводятся. Composition дополнительно утверждает registry.refusal_model is MockSectionRefused. Неверные types/open annotations — TypeError; несовместимые identities/rosters — ValueError, до IO.
+
+Node input.patch_set:MockPatchSet → service.apply(PatchSet[MockSectionUnion]) → MockSnapshotApplyResult → MockApplySnapshotOutput.value. Тот же result T проходит record/claim/terminal/replay, без adaptation. Existing apply_snapshot NodeId/error mapping не изменяется; E=Never девяти pure leaf не переносится на effectful apply_snapshot.
+
+### No-op / business / infrastructure / replay
+
+- Equal Lifecycle retry: own append state=None/history=None/changed=(); пустой receipt, Snapshot наследует pinned state. Subject validation/apply и его idempotence остаются обязательными. Пустой Lifecycle receipt не является shortcut COMMITTED и не отменяет общий CAS/terminal/commit. Успех всей операции создаёт T(category=COMMITTED, committed=assigned refs, diagnostics=()) только по existing confirmed commit пути.
+- Business local refusal проходит BoundSectionHandler → MockSectionRefused → общий T с исходными exact diagnostics. Общая category aggregation H2: REJECTED если есть REJECTED, иначе CONFLICT. Domain categories не пересчитываются Snapshot. Validation refusal запрещает все apply; apply refusal откатывает прежние writes. После подтверждённого rollback: T → operations.record_refusal(claim,T) → подтверждённая persistence → return. У failure committed=None.
+- Wrong returned carrier/subset → SectionHandlerContractError → PublicationInfrastructureError с cause внутри transaction → rollback/drain/revoke → SnapshotPublicError(INFRASTRUCTURE_FAILURE). Business T/record_refusal из этого не создаются. Exceptions/cancellation внутри await handler не превращаются registry в output-shape failure. UnknownCommitOutcome → OUTCOME_UNKNOWN раньше общего infrastructure catch; ordinary cancellation распространяется. Deferred saved OperationCancelled engine mapping не закрывается этим шагом.
+- Exact terminal replay: operations возвращает проверенный MockOperationRecord с T; Snapshot возвращает тот же concrete T без state reads/view/section digests/handlers, сохраняя types/values/identity fields. PackActivationResult/GameplayStarted — existing отдельные kinds, не Snapshot success; OperationCancelled идёт отдельным existing путём. Unsupported persisted format/root, corrupted bytes или неверный row/body binding → PublicationInfrastructureError с cause; не None, не fallback и не reapply.
+
+### Test current format/root и wire roster
+
+Snapshot предъявляет current test format **1** для неизменной terminal row/canonical оболочки и **единственный expected root concrete MockSnapshotApplyResult**. Numeric root задаёт PatchSet в едином collision-checked roster: символ MOCK_SNAPSHOT_APPLY_RESULT_RECORD_ID должен указывать ровно на declaration MockSnapshotApplyResult в MOCK_PUBLICATION_MANIFEST. Никакого независимого назначения числа здесь нет. Этот ID обязан отличаться от Time20150 и всех shared/новых merged IDs; format1 не разрешает root20150 для mock. Until numeric roster fixed — test binding нельзя объявлять собранным; это одна конкретная allocation задача PatchSet, не новый выбор Snapshot API.
+
+MOCK_PUBLICATION_MANIFEST — test-only merge existing shared Publication/Snapshot closure и новых reachable MockSnapshotApplyResult, LifecycleApplyIssue/Code, MockSubjectIssue/Code, concrete path/ref/commit records. Existing Pack/Gameplay/Cancelled roots сохраняются для своих outcome_kind. Native section manifest включает актуальный section.domain_evidence и свои reachable schemas по owning PatchSet roster; не требуется включать его целиком в terminal manifest, если он не reachable из T. Snapshot не придумывает IDs generic parents/plain unions.
+
+MockSectionRefused, два local carriers, MockOperationRecord/claims и node wrappers — runtime-only в этом terminal пути; они не получают IDs автоматически. Serialized root — T, не OperationRecord envelope. При появлении отдельного serialization consumer расширение roster проверяется отдельно, checkpoint OUT. Shared existing IDs, включая 20128/20131, не переназначаются новым mock children. Codec выбирает expected T по snapshot_apply outcome_kind, выполняет full bounded decode/current format/row-body checks; отдельных read/write models и legacy readers нет.
+
+Конкретные будущие negatives: Lifecycle возвращает MockSubjectIssue; subject возвращает LifecycleApplyIssue; wrong local/composition refusal exact type; receipt из validate; mismatched binding/record_model; unknown root/format, в том числе Time root в mock snapshot_apply; mixed concrete diagnostics round-trip сохраняет class/path/order; replay не повторяет writes; no-op и отказ subject не публикуют частичный успех. Старый patch.evidence smoke не считается проверкой актуального section.domain_evidence.
+
+**Результат:** MockSectionUnion/MockDiagnostic/T/exact record/binding и current format1 совместимы с принятым H2. Единственная поправка координатору — общий MockSectionRefused для registry плюс два local carriers с existing H2 conversion, чтобы не терять subset admission. После сведения этой поправки остаётся конкретный numeric schema roster/closure allocation у PatchSet, без независимых ID назначений Snapshot. Runtime checks выполняются при разрешённой реализации. Shared coordinator документы не изменены; рассылки/кода нет.
+
 ## Exact контракт вопросов 2/3 — подтверждённое решение пользователя
 
 2026-11-21. Источник принятия: gen-dag-lifecycle-node-contracts.md, «Подтверждённое решение пользователя — fingerprint и admitted view», переданное назначенным координатором. Приняты три выбора: проверка actual fingerprint после claim/exact replay в dependency-binding фазе до первого validate; единственный PatchSet helper SectionFingerprint; общий Snapshot-owned view/builder вместо externally supplied Lifecycle context. Эти выборы больше не OPEN. Ниже целевой документальный контракт, не утверждение реализации или общей runtime-приёмки. Принятые H2, D1–D7, no-legacy, expected-context/source bindings/H3 и all-validate-before-apply сохраняются. Источники деталей: entity-lifecycle-binding-apply-contract.md, patch-set-lifecycle-section-typing-proposed.md; actual contracts/context.py, contracts/commitScope.py, patch/registry/sectionRegistry.py, patch/registry/boundSectionCodec.py, encoding/canonicalCodec.py и worldSnapshot/results/applyIssues.py (относительно backend/app). Противоположные варианты и статусы ниже superseded этим разделом.

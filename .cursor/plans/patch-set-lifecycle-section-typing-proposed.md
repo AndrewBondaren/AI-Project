@@ -1,5 +1,9 @@
 # PatchSet: Lifecycle mixed section и closed node bindings
 
+## Шаги 1/2 — named node contracts и finite mock manifest
+
+2026-11-21: девять exact node cards из начала gen-dag-lifecycle-node-contracts.md подтверждены на уровне source-compatible proposal (version1, Never, empty errors/reads/calls, named Q/P). Полный class/module/kind/test-ID roster и consumers/reachability опубликованы в [owning manifest roster](patch-set-lifecycle-mock-manifest-roster.md): 64 новые test declarations, exact shared reuse, отдельный MockSnapshotApplyResult/root94001 как предложение; production Time20150 не меняется. Runtime-only node/checkpoint/claim/capture/request carriers не зарегистрированы. Scope allocation — итоговая таблица 94001–94062 и94090/94091; это не production reservation/code-go. Runtime merge/round-trip/static tests ещё не выполнены.
+
 ## Section fingerprint: подтверждённые границы — 2026-11-21
 
 ACCEPTED пользователем через [решение координатора](gen-dag-lifecycle-node-contracts.md#подтверждённое-решение-пользователя--fingerprint-и-admitted-view): actual section fingerprint проверяется после claim/exact terminal replay только в новой попытке dependency binding до первого handler.validate; единственный helper — SectionFingerprint; delivery — Snapshot-owned AdmittedSectionView от SnapshotAttemptContextBuilder. Прежние до-claim размещение, альтернативный BoundSectionCodec.fingerprint и внешний LifecycleMockPreparedEvidenceBinding.from_request SUPERSEDED. Три выбора больше не OPEN; code-go/runtime acceptance этим не выданы.

@@ -1,5 +1,7 @@
 # H2: типизированный доменный отказ до результата и replay
 
+**P1 исправлен документально, 2026-11-21:** активный PatchSet H2 §3, матрица классов и таблица consumers теперь используют прямой PublicationResultBinding[T] в WorldSnapshotService; SnapshotApplyBinding/section_adapter и отдельные model поля удалены из active требований. Один TimeSnapshotBinding.publication_binding и узкий builder сохранены. В начале Publication H2 закреплён public validate_decode_limits(limits:DecodeLimits)->None и точный вызов при construction и первым шагом direct decode_bounded/validate_bounded вне payload exception wrapper. Следующие исторические выводы об отсутствии этого API/расхождении §3 superseded в данной части. Это исправление планов, не runtime evidence/code-go.
+
 ## Координаторская сверка последнего Snapshot construction proposal, 2026-11-21
 
 Локальный PASS совместимости с Publication: single-field TimeSnapshotBinding.publication_binding передаётся напрямую Snapshot/codec; operations предъявляет тот же binding и exact record_model; T сохраняется через record/claim/terminal/replay до ApplySnapshotOutput[T]. Generic Snapshot не импортирует Time. Diagnostics annotation против registry — локальная relation check Snapshot, не повторная schema/manifest/limits validation Publication. Output admission остаётся у PatchSet, semantic predicates у Time; дополнительный универсальный validator/factory для этой связи не требуется.

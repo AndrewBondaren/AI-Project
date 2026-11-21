@@ -1,8 +1,36 @@
 # Artifacts — публичный staging и граница с DAG
 
-Редакция 2026-11-18. **DESIGN OPEN. Первый обязательный этап — ARCH-0: целевая архитектура и её приёмка. До закрытия ARCH-0 реализация последующих этапов запрещена.** Этот документ не является разрешением писать код и не объявляет домен принятым.
+Редакция 2026-11-21. **DESIGN OPEN. Архитектура принимается до реализации: ARCH-STAGE — ограниченный самостоятельный prepare_stage → stage; ARCH-0 — полный Artifacts. Оба gate пока OPEN.** Принятие направления двух операций не закрывает ARCH-STAGE; его отдельная приёмка не закрывает ARCH-0. Этот документ не является разрешением писать код.
 
 ## Решения пользователя и источники
+
+### Карта приоритетов редакций и границы приёмки — 2026-11-21
+
+1. Явные актуальные решения пользователя и обязательные правила проекта имеют приоритет; междоменные изменения сверяет назначенный координатор. Ранее принятые неизменные решения повторно не согласуются.
+2. Актуальные уточнения в начале документа: ARCH-STAGE/ARCH-0, P1 identity, P2 SQL_ROWS/performance, read/protection/completion и H2 single-R. Метка PROPOSED не становится ACCEPTED из-за расположения выше.
+3. «Предложение Artifacts: публичный срез V1.1», особенно таблица «Предоставляемые операции» и единые ошибки, задаёт prepare/stage signatures в части, не изменённой актуальными уточнениями.
+4. gen-dag-artifacts-node-contracts.md задаёт mapping согласованных нод на эти операции, но не усиливает owning guarantees. Разночтение не разрешается молчаливым выбором: исправляется согласованно с координатором.
+5. HISTORICAL/SUPERSEDED, старые V1, W/R/legacy и internal Source adopts — только история, не действующие alternatives. Старые таблицы blockers читаются с учётом scope gate ниже, не как запрет независимых срезов.
+
+**ARCH-STAGE — отдельная ограниченная архитектурная приёмка.** Scope: конкретные prepare/stage specialization, публичные Input/Output/Error, typed admission/descriptor builder, существующие reserve/write/seal зависимости и их failure/cancellation semantics. Для принятия необходимы полный class/POJO/dependency inventory затронутого среза, согласованные concrete producer/content/format/version и lease input/consumer, неизменный порядок, mapping нод, проверки P1 и применимые P2. Нельзя объявить независимость, если фактически изменяются неподтверждённые lifecycle/transport/authority контракты.
+
+Полный read/protection/completion, H2 и CRUD всего домена не являются автоматическими prerequisites ARCH-STAGE, если конкретный срез их не меняет и не обещает их guarantees. Конкретные зависимости среза всё равно обязательны. После явной пользовательской приёмки ARCH-STAGE отдельное поручение реализации разрешает только перечисленный срез по implement-plan; согласованная архитектура сама по себе не code-go. Runtime tests P1/P2 можно создать в разрешённом срезе, но регистрация specialization и приёмка реализации запрещены до требуемого evidence. Это разделяет архитектурную спецификацию тестов и их выполнение, не создавая цикла «нельзя писать тест до уже пройденного теста».
+
+**ARCH-0 — полная приёмка Artifacts.** Требует полного CRUD/disposition настроек, всех предоставляемых read/retention/lifecycle границ, class/POJO closure и сквозного согласования. ARCH-STAGE PASS не означает готовность Source/Time/Pack маршрута, publication или всего домена. В настоящий момент ни ARCH-STAGE, ни ARCH-0 этим уточнением не принимаются.
+
+### P2 — concrete SQL_ROWS binding и стоимость encoding
+
+**SQL_ROWS readiness gate OPEN.** Generic ArtifactRowsReadOpenPipeline[A,C] — схема API, не доказанная bounded реализация. Для отдельной архитектурной приёмки SQL_ROWS предъявить хотя бы один законченный binding: точные C/format/version, concrete SQL adapter/module/method, authoritative read binding, connection/snapshot lifetime, SQL projection и способ bounded fetch, ограничения размеров полей, canonical codec/count/hash verification и cancellation drain. Ни ref.nbytes, ни LIMIT по числу строк не ограничивают размер отдельного поля автоматически.
+
+Обязательное evidence перед готовностью/регистрацией binding: воспроизводимый тест превышения rows и bytes/field budget, фиксирующий отказ ДО полной материализации; контроль фактически извлечённых строк/байтов и пика памяти; coherent row-set при concurrent writer/GC; descriptor mismatch и cancel/drain. Требуется проверка конкретного backend/driver поведения, не только stub, остановивший Python iterator после unbounded fetchall. Пока такой binding не предъявлен, SQL_ROWS не готов. BLOB read может проходить отдельную приёмку с собственными authority/GC/budget gates, без заявления о готовности SQL_ROWS.
+
+**Encoding performance gate:** для каждой допускаемой крупной concrete specialization измерить полный prepare_stage → все DAG wrappers → stage/backend verification. Instrument encode/row_count/digest calls, фиксировать их число по стадиям, размеры входа, peak memory (с указанием метода/RSS либо allocator и его ограничений), wall time отдельно prepare/stage и суммарно. Зафиксировать fixtures малый/типичный/крупный около допустимого лимита, команды, версии окружения и результаты повторов. Bytes и дорогой SQL_ROWS codec измеряются отдельно; простой BLOB benchmark не покрывает rows.
+
+Число проходов не угадывается из имени метода: current TypedArtifactStager вычисляет descriptor, backend выполняет собственную проверку; новый prepare добавляет проход, если stage/backend сохраняют проверки. Порог допустимого времени/памяти фиксируется для concrete workload перед performance acceptance; произвольный общий численный SLA здесь не назначается. До измерений нельзя объявлять передачу по identity доказательством отсутствия временных encoding allocations. Оптимизация обсуждается по evidence и сохраняет exact descriptor admission, integrity и immutable-content гарантии; кэш/новый payload envelope/устранение проверки не вводятся автоматически. Тесты пока не реализованы и PASS не заявляется.
+
+### P1 — обязательный identity gate регистрации, 2026-11-21
+
+По уточнению пользователя для каждой concrete specialization prepare_artifact/stage_artifact требуется воспроизводимый contract test фактического registration/execution пути. Полная спецификация — [P1 в плане нод](gen-dag-artifacts-node-contracts.md#p1--identity-contract-test-как-gate-каждой-specialization). Проверяются `content is original` после ВСЕХ nested Pydantic constructions/revalidations и `prepared is returned_prepared` на всех звеньях после public prepare до stage implementation/admission. Одного прямого DagReadView и проверки сразу после prepare недостаточно: workflow JSON reconstruction не сохраняет identity. Непройденный gate блокирует регистрацию конкретного binding. Engine changes/object registry/model_construct/отключение validation не разрешены. Код теста здесь не создаётся, runtime PASS не заявляется. ART-Q7 остаётся OPEN до evidence по каждой регистрируемой specialization; bytes-test не покрывает SQL_ROWS concrete model.
 
 ### Актуальная граница read/protection/completion — исправления ревью 2026-11-21
 
@@ -418,7 +446,7 @@ TARGET `application/artifacts/staging/artifactDescriptor.py::ArtifactDescriptorB
 
 ## 1. ARCH-0 — архитектура до реализации
 
-**Первый обязательный пункт исполнения плана.** Подготовить целевую архитектуру Artifacts и общей Publication-инфраструктуры в данном срезе, предъявить пользователю и получить явную приёмку. Наличие существующего кода, локальных PASS или принятого D2 не заменяет этот gate. До приёмки разрешены исследование и проектирование, но не создание каркасов API, перенос staging, изменение DAG или storage.
+**Архитектура обязательна до реализации.** Для полного домена действует ARCH-0, для конкретного независимого staging-среза — ARCH-STAGE по карте приоритетов выше. Наличие существующего кода, локальных PASS или принятого D2 не заменяет соответствующий gate. До явной приёмки применимого среза и поручения реализации разрешены исследование/проектирование, но не его кодовые изменения. Полный ARCH-0 не блокирует уже отдельно принятый и разрешённый независимый срез; локальная приёмка не разрешает работу вне его границ.
 
 ### Целевая граница
 
@@ -470,7 +498,7 @@ Pure prepare_stage выполняет format admission, encode/hash/размер
 
 Пути в таблице относительно backend/app. Таблица — старт исследования, не полный реестр для приёмки.
 
-## Последующие этапы — только после ARCH-0
+## Последующие этапы — после применимого архитектурного gate
 
 ### ARCH-0 — проработка по коду от 2026-11-17
 

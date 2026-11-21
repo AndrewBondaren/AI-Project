@@ -1,6 +1,6 @@
 # Lifecycle: локальные контракты варианта А
 
-Актуальный технический контракт construction/accepted lookup/apply: [единая редакция](entity-lifecycle-binding-apply-contract.md). Она заменяет прежние варианты C1–C3 ниже, включая пять independently supplied model classes, duplicate section_model, wrapper без сохранённого evidence и category REJECTED для apply evidence conflict. D1–D7 неизменны. Новая native evidence-дельта и способ передачи admitted prepared sections требуют сверки PatchSet/Snapshot, не выдаются за принятый runtime API.
+Актуальный технический контракт construction/accepted lookup/apply: [единая редакция](entity-lifecycle-binding-apply-contract.md), exact named classes/closed manifest и carrier: [конечный mock roster](entity-lifecycle-mock-roster.md). Они заменяют прежние варианты C1–C3 ниже, включая пять independently supplied model classes, duplicate section_model, старую representation evidence, category REJECTED для Lifecycle apply evidence conflict и раздельные concrete apply carriers. Единственные concrete coverage classes — CoverageA/B; исторические EffectBindingA/B не создаются вторым набором. Единый MockSectionRefused не меняет pure LifecycleSectionRefused. D1–D7 и подтверждённые fingerprint/view решения неизменны; runtime реализация не объявляется готовой.
 
 ## Решение пользователя 2026-11-21 — D1–D7 приняты
 

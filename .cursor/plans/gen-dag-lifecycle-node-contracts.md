@@ -1,5 +1,29 @@
 # Lifecycle: локальные ноды варианта А и пакет согласования
 
+## Шаг 1 — окончательная карта регистраций текущего mock scope
+
+2026-11-21, по поручению пользователя «Делаем 1, затем 2». Ниже конкретизирована карта для контрактной приёмки, без регистрации в runtime. Она заменяет сокращённые/proposed имена ниже. Семейство Lifecycle, пять logical operation leaf без собственного parent. В mock registry девять distinct registrations; все named synthetic classes только backend/tests/lifecycle/support/nodeContracts.py и nodeBindings.py. Общие реализации/owning wrappers остаются в ранее указанных application/dataModel путях.
+
+| NodeId = ContractId | Input class / request | Output class / success value | Bound public method |
+|---|---|---|---|
+| engine.lifecycle.test_a.prepare_create | CreateNodeInputA / CreateRequestA | CreateNodeOutputA / CreateA | LifecycleCreatePipelineOpenPipeline.prepare_create |
+| engine.lifecycle.test_b.prepare_create | CreateNodeInputB / CreateRequestB | CreateNodeOutputB / CreateB | LifecycleCreatePipelineOpenPipeline.prepare_create |
+| engine.lifecycle.test_a.prepare_replacement | ReplaceNodeInputA / ReplaceRequestA | ReplaceNodeOutputA / ReplaceA | LifecycleReplacementPipelineOpenPipeline.prepare_replacement |
+| engine.lifecycle.test_b.prepare_replacement | ReplaceNodeInputB / ReplaceRequestB | ReplaceNodeOutputB / ReplaceB | LifecycleReplacementPipelineOpenPipeline.prepare_replacement |
+| engine.lifecycle.test_a.prepare_end | EndNodeInputA / EndRequestA | EndNodeOutputA / EndA | LifecycleEndPipelineOpenPipeline.prepare_end |
+| engine.lifecycle.test_b.prepare_end | EndNodeInputB / EndRequestB | EndNodeOutputB / EndB | LifecycleEndPipelineOpenPipeline.prepare_end |
+| engine.lifecycle.test_a.prepare_reactivate | ReactivateNodeInputA / ReactivateRequestA | ReactivateNodeOutputA / ReactivateA | LifecycleReactivatePipelineOpenPipeline.prepare_reactivate |
+| engine.lifecycle.test_b.prepare_reactivate | ReactivateNodeInputB / ReactivateRequestB | ReactivateNodeOutputB / ReactivateB | LifecycleReactivatePipelineOpenPipeline.prepare_reactivate |
+| engine.lifecycle.prepare_section | SectionNodeInputAB / PrepareLifecycleSectionAB | SectionNodeOutputAB / LifecycleSectionAB | LifecycleSectionPipelineOpenPipeline.prepare_section |
+
+В первых восьми строках полный value union = указанный success | LifecycleFieldError | LifecycleLogicError. Последняя строка = LifecycleSectionAB | LifecycleSectionRefused. Input имеет только request, Output — только value, named fields сужают owning generic wrapper без дублирования данных. Классы strict/frozen/extra-forbid/revalidate-always; public target принимает именно named request и возвращает именно named success через принятый Q/P binding. Нельзя принять B вместо A, open generic или чужой subclass благодаря coercion. Нода не строит prepared повторно.
+
+Для каждой строки NodeContract[I,O,Never]: version=ContractVersion('1'), reads=(), calls=(), error_types=(); continuation/input_wait/retry_policy/error_policy/lifecycle/validator=None. Версия относится к node contract, не persisted format. E=Never означает отсутствие declared operation errors, не отсутствие runtime failures. Structural admission, runtime exceptions и cancellation обслуживает engine; нода не создаёт фиктивный PythonNodeError. Owning refusals — значения output. CallTarget/executor использует тот же exact NodeContract object; output contract проверяется до передачи родителю. Dependency между leaf задаёт orchestration caller, не reads/скрытые calls leaf.
+
+Регистрации привязывают по одному concrete node/executor binding к каждой строке; generic implementation переиспользуется, общая доменная логика не копируется. Никаких payload-based registry lookup или изменения engine key на (NodeId,T). По поиску backend существующих указанных NodeId нет. Actual NodeRegistry отвергает duplicate ID и требует exact contract identity; NodeContract допускает пустой error_types. Это source-level проверка совместимости. Static Never/wrong-T и runtime negative tests выполняются при реализации; PASS этих тестов не заявлен.
+
+Шаг 1 конкретизирован: все девять Input/Output/public targets/Error/contract IDs указаны; новые предметные решения не требуются. Далее шаг 2 — closed synthetic Snapshot result и manifest, отдельный от engine node contracts и production Time20150.
+
 ## Подтверждённое решение пользователя — fingerprint и admitted view
 
 2026-11-21: пользователь поручил вернуть три рекомендации координатора доменам как подтверждённое решение.

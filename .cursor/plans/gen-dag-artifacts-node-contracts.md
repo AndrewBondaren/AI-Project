@@ -2,11 +2,11 @@
 
 Дата: 2026-11-18.
 
-Статус: отдельный проект контрактов двух согласованных нод; НЕ принят к реализации. Публичный срез Artifacts остаётся DESIGN OPEN до ARCH-0. Согласование двух операций не означает принятия конкретных специализаций, регистрации или графа.
+Статус: отдельный проект контрактов двух согласованных нод; НЕ принят к реализации. Для самостоятельного prepare/stage действует ARCH-STAGE, для полного Artifacts — ARCH-0; оба пока OPEN. Локальная архитектурная приёмка и поручение реализации ограничены явным scope; согласование двух операций не означает приёмки специализаций, регистрации или всего домена.
 
 ## 1. Основание и границы
 
-Пользователь согласовал `prepare_artifact` и `stage_artifact`, затем поручил конкретно записать план. Источник публичных сигнатур — [Artifacts public staging](artifacts-public-staging-dag.md), верхний раздел «Завершённое предложение Artifacts: публичный срез V1». Этот раздел имеет приоритет над отозванными предложениями ошибок ниже в том документе.
+Пользователь согласовал `prepare_artifact` и `stage_artifact`, затем поручил конкретно записать план. Источник публичных сигнатур — [Artifacts public staging](artifacts-public-staging-dag.md): единая «Карта приоритетов редакций и границы приёмки», актуальные уточнения и V1.1 («Предоставляемые операции», единые ошибки). Старое название V1 и исторические разделы не задают параллельный контракт. Этот план переносит owning guarantees без усиления и не переоткрывает принятые роли нод.
 
 Только две новые листовые ноды. Укрупнённая нода не вводится. Legacy-ноды не используются и не изменяются. Reserve, backend write, seal, открытие lease, публикация, retention и GC не становятся дополнительными нодами этого плана. Производители content, источник lease, consumers результата, триггеры, deps и порядок нового графа определяются отдельно совместно с пользователем.
 
@@ -97,6 +97,22 @@ Stage требует `PreparedArtifact[C]` во входе. Это зависи�
 Источник внутреннего порядка — верхний публичный срез Artifacts; этот документ его сохраняет, но не объявляет утверждённым вместо ARCH-0. Междоменный порядок не задан: producer → DAG и DAG → Artifacts остаются требованиями к контрактам, пока совместно не назначены конкретные producers/callers и условия.
 
 ## 7. Обязательная приёмка и открытые пункты
+
+### P1 — identity contract test как gate каждой specialization
+
+Уточнение пользователя 2026-11-21: сохранение identity PreparedArtifact[C] в принятом in-memory маршруте обязательно. Регистрация каждой concrete specialization prepare_artifact/stage_artifact допускается только после воспроизводимого contract test именно её фактического caller/registration/execution пути и всех nested Pydantic wrappers. Пример прямого DagReadView или unit test одного prepare_stage не доказывает путь конкретной регистрации. Workflow DAGExecutor с JSON reconstruction не считается совместимым по равенству данных.
+
+Тест фиксирует concrete C, producer output, format/version binding обеих операций, transport/executor route и способ запуска. Используются настоящие модели/validators/wrappers и соответствующий execution/read путь; stub допустим на storage boundary для наблюдения входа stage, но не вместо Engine transport, validation или передачи между нодами. Для bytes нужен runtime-created payload; успешность одной bytes specialization не распространяется на frozen SQL_ROWS model с revalidate_instances=always.
+
+Проверяемая цепочка: original C → ArtifactPrepareStageInput[C] → PrepareArtifactInput[C] → owning prepare admission → PreparedArtifact[C] → PrepareArtifactOutput[C] → Engine output admission/catalog/read → ArtifactStageInput[C] → StageArtifactInput[C] → owning stage admission/implementation. Проверки после каждого construction/revalidation:
+
+- Вложенный content в каждом звене `is original`, не только `==`.
+- С момента получения prepared от public prepare он является контрольным экземпляром: output.value, извлечённое Engine значение и все последующие prepared-поля до stage сохраняют `is prepared`. Создание initial PreparedArtifact не обязано возвращать content в качестве envelope; это разные типы.
+- Проверяется именно аргумент, полученный stage implementation после его admission, а не только DTO до вызова. Повторные model_validate при реальном route включаются в наблюдения.
+- Отдельно сохраняются проверки rejection malformed/mutable/wrong concrete C: identity не достигается через model_construct, отключение validation или доверие любому экземпляру.
+- Фактический route не делает JSON/model_dump/encode-decode round-trip для передачи content/prepared. Owning storage encoding внутри prepare/stage допустим и не является transport.
+
+При FAIL registration не принимается. Не изменять Engine, не вводить object registry/side channel и не обходить validators ради этого gate; несовместимый route остаётся OPEN для отдельного согласования. Restart/durable replay не обещает Python identity. Изменение wrapper/validator/execution route/конкретного C требует повторной проверки соответствующей specialization. В evidence нужны test path/command, concrete binding и результат; пока тестов нет, gate OPEN. Этот документ задаёт обязательную будущую проверку, не разрешает код или регистрацию.
 
 Критерии — [dag-generator-interface.mdc](../rules/dag-generator-interface.mdc#обязательная-приёмка-плана-любого-домена). Отсутствие сведений означает отказ в приёмке, а не условный PASS.
 
