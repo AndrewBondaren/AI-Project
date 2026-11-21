@@ -12,7 +12,7 @@ manifest/HTTP тестов прошли, включая побайтовую в�
   `world-bundle-archive-done.md` C-5 (UID-layout).
 - **Файлы:** `fixtures/packs/user_library.wpack`, `engine_library.wpack`,
   `README.md`; `backend/scripts/build_library_test_fixtures.py`;
-  `backend/tests/test_library_archive_fixtures.py`.
+  `backend/tests/libraries/test_library_archive_fixtures.py`.
 - **Контракт:** user = `user.relief.smoke_003`, 4 relief тела, не default;
   engine = `engine.structures.base`, 13 structures, существующий trusted
   default UID. Оба standalone архива `kind=library_pack`; UID и исходные
@@ -28,8 +28,8 @@ manifest/HTTP тестов прошли, включая побайтовую в�
   Mapping, transport regression и ТЗ исправляются в этом же шаге.
 - **Проверка:** генератор из backend:
   `python -m scripts.build_library_test_fixtures`; затем
-  `python -m unittest tests.test_library_archive_fixtures
-  tests.test_bundle_library_archive`; default/user различаются правильно,
+  `python -m unittest tests.libraries.test_library_archive_fixtures
+  tests.bundles.test_bundle_library_archive`; default/user различаются правильно,
   manifests/UID/bodies совпадают с sources, сохранённые архивы воспроизводимы.
 - **Done:** оба архива существуют, читаются codec, проходят domain validation;
   README содержит состав, исходники, команду пересборки и текущие точки входа.

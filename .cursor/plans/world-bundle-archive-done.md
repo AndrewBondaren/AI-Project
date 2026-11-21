@@ -188,7 +188,7 @@ SQL-семантика паков архиву не нужна. Шаг 4d librar
 - **Контракт:** `BundleManifest` POJO (`kind`, `format_version`,
   `source`, `sections` index); `SECTION_PATHS` и обратное отображение;
   unknown path → reject.
-- **Проверка:** `python -m unittest tests.test_bundle_manifest` —
+- **Проверка:** `python -m unittest tests.bundles.test_bundle_manifest` —
   round-trip serialize/deserialize, покрытие всех ключей
   `BundleSection.SKELETON`.
 - **Результат:** 13 тестов нового контракта; вместе с
@@ -210,7 +210,7 @@ SQL-семантика паков архиву не нужна. Шаг 4d librar
 - **ТЗ:** §4.2.
 - **Файлы:** `backend/app/application/worldData/bundle/archive/` —
   `writer.py`, `reader.py`, `errors.py`, `validation.py`, `contents.py`,
-  `__init__.py`; `backend/tests/test_bundle_archive.py`.
+  `__init__.py`; `backend/tests/bundles/test_bundle_archive.py`.
 - **Уточнение C-3:** исходная пара результата reader теряла `pack_blobs`.
   Reader возвращает `ArchiveContents(manifest, sections, blobs)`; codec
   принимает точный trusted allowlist blob-путей от layout-слоя C-5/C-6,
@@ -221,10 +221,10 @@ SQL-семантика паков архиву не нужна. Шаг 4d librar
   `*.zst`, DEFLATED для JSON; детерминированный порядок entries.
 - **Проверка:** unittest round-trip `dict → zip → dict` идентичен;
   reject на неизвестные файлы / битый zip / отсутствующий manifest.
-- **Результат:** `python -m unittest tests.test_bundle_archive
-  tests.test_bundle_manifest tests.test_bundle_remap
-  tests.test_bundle_named_location_wire tests.test_pack_import_levels
-  tests.test_fixture_bundle_import` — 52 теста зелёные (26 новых codec-тестов).
+- **Результат:** `python -m unittest tests.bundles.test_bundle_archive
+  tests.bundles.test_bundle_manifest tests.bundles.test_bundle_remap
+  tests.bundles.test_bundle_named_location_wire tests.worldPack.test_pack_import_levels
+  tests.bundles.test_fixture_bundle_import` — 52 теста зелёные (26 новых codec-тестов).
   Проверены побайтовая воспроизводимость, raw blob round-trip с явным
   allowlist, Windows path normalization и сохранность предыдущего файла
   при ошибке записи. `git diff --check` без ошибок. C-4 разблокирован;
@@ -285,17 +285,17 @@ SQL-семантика паков архиву не нужна. Шаг 4d librar
   только при коллизии; 4d подключает default copy операции целого мира
   и перенос библиотек. C-4 не объявляет целевой импорт §4.1 завершённым.
   Allowlist subtree не выводится из недоверенного списка entries архива.
-- **Файлы проверки:** новый `backend/tests/test_bundle_archive_routes.py`;
+- **Файлы проверки:** новый `backend/tests/bundles/test_bundle_archive_routes.py`;
   при необходимости тонкий API helper источника/ответа рядом с routes.
 - **Приёмка:** HTTP-тесты без запуска backend: оба формата × оба источника,
   registry/skeleton export, бинарный download и JSON-preview,
   skeleton export → import round-trip, `validate_only` без записи,
   malformed archive и чужой kind → 422, ошибки выбора источника/path,
   очистка временных файлов после ответа и при сбоях.
-  Команда: `python -m unittest tests.test_bundle_archive_routes
-  tests.test_bundle_archive tests.test_bundle_manifest tests.test_bundle_remap
-  tests.test_bundle_named_location_wire tests.test_pack_import_levels
-  tests.test_fixture_bundle_import`; затем `git diff --check`.
+  Команда: `python -m unittest tests.bundles.test_bundle_archive_routes
+  tests.bundles.test_bundle_archive tests.bundles.test_bundle_manifest tests.bundles.test_bundle_remap
+  tests.bundles.test_bundle_named_location_wire tests.worldPack.test_pack_import_levels
+  tests.bundles.test_fixture_bundle_import`; затем `git diff --check`.
 - **База перед исполнением:** 52 существующих bundle-теста прошли
   2026-10-12. Эти проверки подтверждают C-2/C-3 и прежний pipeline;
   HTTP-приёмка C-4 выполняется после реализации.
@@ -320,7 +320,7 @@ SQL-семантика паков архиву не нужна. Шаг 4d librar
   дублируется.
 - **Файлы:** `dataModel/worldBundle/libraryArchive.py` (archive manifest
   DTO и mapping); `bundle/archive/libraryLayout.py` (проверки manifests,
-  UID-path mapping); reader/writer/contents; `tests/test_bundle_library_archive.py`.
+  UID-path mapping); reader/writer/contents; `tests/bundles/test_bundle_library_archive.py`.
   Guard в `WorldBundleService.read_archive` запрещает потерю библиотек
   до подключения доменного импорта в 4d.
 - **UID:** member `template_uid`/`pack_uid` при импорте — по
@@ -361,9 +361,9 @@ SQL-семантика паков архиву не нужна. Шаг 4d librar
   молчаливого отбрасывания. C-4 export пока даёт прежние sections;
   C-5 проверяется синтетическими fixtures без SQL. Подключение мировых
   библиотек к export/import pipeline — 4d, не скрытая часть C-5.
-- Проверка: `python -m unittest tests.test_bundle_library_archive
-  tests.test_bundle_archive tests.test_bundle_manifest
-  tests.test_bundle_archive_routes`; multi-domain/world/standalone
+- Проверка: `python -m unittest tests.bundles.test_bundle_library_archive
+  tests.bundles.test_bundle_archive tests.bundles.test_bundle_manifest
+  tests.bundles.test_bundle_archive_routes`; multi-domain/world/standalone
   round-trip, одноимённые копии и паки, provenance/refs, точный inventory,
   детерминированные bytes и отсутствие потерь на HTTP-границе.
 

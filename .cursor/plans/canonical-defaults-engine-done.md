@@ -140,7 +140,7 @@ global fill-missing вместо replace-upsert, доступность на в�
 - **ТЗ:** `tz_json_validation.md` § «Wire projection → WorldSlice»;
   `tz_template_library_packs.md` §2–7.
 - **Файлы:** `backend/app/application/canonicalLibrary/*.py`,
-  `backend/tests/test_canonical_library.py`.
+  `backend/tests/libraries/test_canonical_library.py`.
 - **Контракт:** `CanonicalLibrarySpec` (identity key, canonical source
   provider, scope, attach policy + domain source/persistence adapters) —
   immutable, typed scope/policy. `canonical_merge(spec, raw) -> raw` — pure,
@@ -151,7 +151,7 @@ global fill-missing вместо replace-upsert, доступность на в�
   атомарно делает insert-missing в контексте БД; engine не валидирует
   семантику доменных тел и не читает raw dict global-источника. World
   partial gating остаётся у caller; engine не читает сохранённый мир.
-- **Проверка (cwd=backend):** `python -m unittest tests.test_canonical_library` —
+- **Проверка (cwd=backend):** `python -m unittest tests.libraries.test_canonical_library` —
   absent/empty/partial реестр, world-override по ключу, N+1 ключ, явные false/0,
   порядок строк; global fill-missing, конфликт canonical UID с user override,
   конкурентный attach, ошибка/rollback/повтор, частичная библиотека и восстановление
@@ -185,8 +185,8 @@ global fill-missing вместо replace-upsert, доступность на в�
   Одноимённый 3-аргументный `_merge_registry_list` в
   `scripts/build_world_test_all_fixture.py` — отдельный helper сборки
   fixture, не затрагивается.
-- **Проверка (cwd=backend):** `python -m unittest tests.test_world_registry_defaults
-  tests.test_fixture_bundle_import` — без регрессии семантики. Зафиксировать отдельно
+- **Проверка (cwd=backend):** `python -m unittest tests.validation.test_world_registry_defaults
+  tests.bundles.test_fixture_bundle_import` — без регрессии семантики. Зафиксировать отдельно
   absent-registry partial и replacement переданного списка.
 - **Baseline анализа:** 13 тестов, одна ошибка `FileNotFoundError` для отсутствующего
   `fixtures/world_test_gen.json`. Восстановить согласованный baseline до миграции;

@@ -66,7 +66,7 @@ interim-метод `ReliefWorldImportService.import_library_uid_into_world`
   поведение `canon.get(key) is None → continue` сохраняется). Лог —
   `relief_warning("r34_terrain_upsert", world_uid, system_terrain,
   source="pack_instantiate"|"relief_import", …)`.
-- **Проверка:** `python -m unittest tests.test_library_packs_4b` —
+- **Проверка:** `python -m unittest tests.libraries.test_library_packs_4b` —
   новый кейс: relief member с `conditions` на terrain, отсутствующий в
   `world.terrain_registry` → после `instantiate_pack` ключ добавлен
   canonical-рядом, чужие ряды нетронуты; member без conditions — no-op.
@@ -99,7 +99,7 @@ interim-метод `ReliefWorldImportService.import_library_uid_into_world`
   world-owned пака → 422 («only engine libraries instantiate»); члена
   default-пака → 422 («already available»); ownerless-тело без member
   (LIBPACK-T-1) → 404.
-- **Проверка:** `python -m unittest tests.test_library_packs_4b` (+ кейс
+- **Проверка:** `python -m unittest tests.libraries.test_library_packs_4b` (+ кейс
   member→pack resolve → instantiate, `created=False` при повторе);
   `python -m compileall`; grep `import_library_uid_into_world` — ноль
   ссылок. Smoke мастера: POST с `?template_uid=` на реальном мире.

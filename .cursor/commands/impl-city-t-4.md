@@ -53,7 +53,7 @@ description: >-
 
 ## Стиль
 
-Минимум файлов. Узкие unit в `tests/test_city_three_axes.py` (или рядом), не `debug_settlement.py`. После слоя: что сделано / что осталось / что запустить мастеру.
+Минимум файлов. Узкие unit в `tests/settlements/test_city_three_axes.py` (или рядом), не `debug_settlement.py`. После слоя: что сделано / что осталось / что запустить мастеру.
 
 ## Старт
 

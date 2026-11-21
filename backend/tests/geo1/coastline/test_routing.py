@@ -10,8 +10,8 @@ from app.application.worldData.generators.hydrology.placement.waterPlacementPass
 from app.application.worldData.generators.hydrology.hydrologyGeneratorService import HydrologyGeneratorService
 from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
-from tests.test_water_placement_adapter import basin, coast, context
-from tests.hydrology_fixtures import hydro_world, flat_heightmap
+from tests.hydrology.test_water_placement_adapter import basin, coast, context
+from tests.hydrology.hydrology_fixtures import hydro_world, flat_heightmap
 
 
 def boundary(uid="boundary", target="water-source"):

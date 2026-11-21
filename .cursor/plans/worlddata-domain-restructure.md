@@ -144,7 +144,7 @@ caller'ов (routes, тесты) не меняется — шаг чисто м�
 - **ТЗ:** `docs/project_data_storage_tz.md` § DET-1; `docs/tz_template_library_packs.md` §2.
 - **Файлы:** `worldData/ids/{__init__,deterministicIds,uidKind}.py` → `app/ids/`; rewrite `app.application.worldData.ids` → `app.ids` (~50 файлов: application, dataModel-adjacent нет — dataModel не импортирует; tests; scripts; `core/`).
 - **Контракт:** модульный путь; API без изменений.
-- **Проверка:** `grep "worldData.ids" backend` = 0; `python -m compileall backend/app`; `python -m unittest tests.test_deterministic_ids tests.test_library_packs_b3` (+ test_canonical_library).
+- **Проверка:** `grep "worldData.ids" backend` = 0; `python -m compileall backend/app`; `python -m unittest tests.identity.test_deterministic_ids tests.libraries.test_library_packs_b3` (+ test_canonical_library).
 - **Done:** пакет `app/ids` импортируется; старого пути нет.
 
 ### Шаг 2 — `context/` → `application/cascade/` — выполнен 2026-10-09
@@ -153,7 +153,7 @@ caller'ов (routes, тесты) не меняется — шаг чисто м�
 - **ТЗ:** `docs/tz_cascade_context.md` §2, §4.
 - **Файлы:** `worldData/context/*.py` → `application/cascade/`; rewrite `worldData.context` → `application.cascade` (~28 файлов: generators, settlementOutdoor, api/routes/debug, core/loggingConfig, core/generationLogging, tests). Внутри `locationScope` импорты `worldData.locationPayloadAccess` / `settlementSkeletonAccess` / `ids` → новые пути (`app.ids`; worldData-пути после шагов 8–9).
 - **Контракт:** путь; `extend()`, `scope_sequence()`, `debug_building_context` без изменений.
-- **Проверка:** grep = 0; compileall; `python -m unittest tests.test_context_extend tests.test_cascade_context_baseline tests.test_cascade_migration_m2`.
+- **Проверка:** grep = 0; compileall; `python -m unittest tests.cascade.test_context_extend tests.cascade.test_cascade_context_baseline tests.cascade.test_cascade_migration_m2`.
 - **Done:** `application/cascade` импортируется; `worldData/context/` удалён.
 
 ### Шаг 3 — templateLibrary домен — выполнен 2026-10-17 (b7e36b53, 947f7332)
@@ -164,7 +164,7 @@ caller'ов (routes, тесты) не меняется — шаг чисто м�
 - Плоские файлы → `application/templateLibrary/`: `buildingTemplateLibraryService`, `plotTemplateLibraryService`, `structureTemplate{LibraryService,FsImport,Errors}`, `relief{TemplateLibraryService,TemplateFsImport,WorldImportService,Errors,GeomWarn,TerrainSync,WorldRefValidation}`, `loadReliefTemplatesForWorld`, `templateContracts`, `templateSnapshotLoader` (15 файлов; последние 5 добавлены против исходного списка — потребители только в домене). `worldData/errors.py` (`WorldDataError`) **остаётся** — общая ошибка worldData.
 - Rewrite `worldData.libraryPacks` + плоские пути (~65 потребителей: api/{errorMapping,libraryWrite}, routes {libraryArchives,libraryPacks,reliefTemplates,structureTemplates}, bundle/*, worldBundleService, core/{app,container,templateRepositories}, dataModel/worldBuildingLayoutDefaults, scripts, ~30 tests).
 - **Контракт:** пути; сервисные классы и FS-layout доменов (`structures_templates/`, `relief_templates/`) не меняются.
-- **Проверка:** `grep "worldData.libraryPacks\|worldData\.<flat>" backend` = 0; compileall; `python -m unittest tests.test_library_packs_schema tests.test_canonical_library tests.test_library_packs_b3` (+ write/legacy/reinstantiate профили по grep).
+- **Проверка:** `grep "worldData.libraryPacks\|worldData\.<flat>" backend` = 0; compileall; `python -m unittest tests.libraries.test_library_packs_schema tests.libraries.test_canonical_library tests.libraries.test_library_packs_b3` (+ write/legacy/reinstantiate профили по grep).
 - **Done:** `application/templateLibrary` собран; worldData корень очищен от template-library файлов.
 
 ### Шаг 4 — `application/worldBundle/` — выполнен 2026-10-17 (b7e36b53, 947f7332)
@@ -173,7 +173,7 @@ caller'ов (routes, тесты) не меняется — шаг чисто м�
 - **ТЗ:** `docs/tz_world_bundle.md` WB-1/WB-9/WB-11/WB-13/WB-14.
 - **Файлы:** `worldData/bundle/*` → `application/worldBundle/` (плоско: `handler/registry/order/errors/copyTokens/legacyTemplateBodies/worldCopyImport/worldLibraries` + подпакеты `archive/entity/library`); + `worldBundleService`, `bundleRemapService`, `deriveWorldUid`, `connectionGraphService`; rewrite (~30 файлов: routes `libraryArchives/perks/races/worlds`, `templateLibrary/packs/archive/archiveService` + `reliefWorldImportService`, `worldData/{raceService,worldPerkService}`, container, scripts, ~11 tests). Также правится `_EXEMPT` в `test_deterministic_ids.py` — slash-path `application/worldData/deriveWorldUid.py` → `application/worldBundle/deriveWorldUid.py`.
 - **Контракт:** пути; `build_bundle_handlers`, `WorldBundleService`, `derive_world_uid` без изменений.
-- **Проверка:** grep = 0; compileall; `python -m unittest tests.test_bundle_remap`.
+- **Проверка:** grep = 0; compileall; `python -m unittest tests.bundles.test_bundle_remap`.
 - **Done:** `application/worldBundle` импортируется.
 
 ### Шаг 5 — `application/session/` — выполнен 2026-10-17 (b7e36b53, 947f7332)
@@ -189,7 +189,7 @@ caller'ов (routes, тесты) не меняется — шаг чисто м�
 - **Цель:** оркестрация материализации поверхности в одну папку.
 - **ТЗ:** `docs/tz_terrain_generation.md` § TR-PAR; `docs/tz_climate.md` § CL-PAR.
 - **Файлы:** `materializationContext`, `parallelPolicy`, `chunkComputePool`, `serialPersistQueue`, `terrainParallelLog`, `loadingProgress`, `persistResult`, `terrainBatchOrchestrator`, `climateBatchOrchestrator`, `worldSurfaceMaterializationOrchestrator`; rewrite (pack/*, routes/map, scripts/bake_world_pack, tests).
-- **Проверка:** compileall; `python -m unittest tests.test_materialization_parallel tests.test_pack_climate_parallel`.
+- **Проверка:** compileall; `python -m unittest tests.worldPack.test_materialization_parallel tests.worldPack.test_pack_climate_parallel`.
 - **Done:** корень без materialize-файлов.
 
 ### Шаг 7 — `worldData/mapCells/` — выполнен 2026-10-17 (5273e35f)
@@ -205,7 +205,7 @@ caller'ов (routes, тесты) не меняется — шаг чисто м�
 - **Цель:** settlement/connection/relief persist в одну папку.
 - **ТЗ:** `docs/tz_city_generation.md` §11.5; `docs/tz_terrain_relief.md` §8c/R43.
 - **Файлы:** `settlementPersistService`, `settlementPersistScope`, `connectionPersistService`, `connectionUids`, `persistReliefGrades`; rewrite (container, settlementOutdoor, pack/*).
-- **Проверка:** compileall; `python -m unittest tests.test_settlement_topology` (+ найти persist-тесты).
+- **Проверка:** compileall; `python -m unittest tests.settlements.test_settlement_topology` (+ найти persist-тесты).
 - **Done:** корень без persist-файлов.
 
 ### Шаг 9 — `worldData/locations/` + `worldData/registries/` — выполнен 2026-10-17 (b440cc8f, 15767e4e)
@@ -213,7 +213,7 @@ caller'ов (routes, тесты) не меняется — шаг чисто м�
 - **Цель:** location-доступ и world-реестры развести по папкам.
 - **ТЗ:** `docs/tz_locations.md` § Payload per type; `docs/tz_world_bundle.md` WB-13/WB-14 (reестры).
 - **Файлы:** locations — `namedLocationService`, `locationPayloadAccess`, `settlementSkeletonAccess`, `settlementMapOccupancy`; registries — `worldService`, `raceService`, `worldPerkService`, `stateService`, `seedService`, `repairWorldDefaults`, **`worldColumnWrite`, `worldLookup`** (+2 к плану: W2 column-write seam и world lookup — потребители только worldService-семейство + templateLibrary, явный registries-домен); rewrite (container, routes, cascade/locationScope, scripts/debug_settlement).
-- **Проверка:** compileall; `python -m unittest tests.test_location_payload_schema` (+ registry-тесты по grep).
+- **Проверка:** compileall; `python -m unittest tests.rendering.test_location_payload_schema` (+ registry-тесты по grep).
 - **Done:** корень без locations/registries файлов.
 
 ### Шаг 10 — `worldData/relief/` + хвост — выполнен 2026-10-17 (b440cc8f, 15767e4e)

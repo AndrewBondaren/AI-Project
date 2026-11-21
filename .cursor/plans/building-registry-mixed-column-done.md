@@ -129,10 +129,10 @@ pointer-строки и world-override layout-строки (interim, CITY-T-2b/5
 
 **Проверка.** Шаг-2 тесты зелёные + регрессия:
 `python -m unittest tests.test_building_registry_mixed
-tests.test_library_packs_4a tests.test_library_packs_4b
-tests.test_library_packs_b3 tests.test_library_packs_schema
-tests.test_world_row_t28 tests.test_bundle_remap
-tests.test_import_validation_policy` + `python -m compileall app`.
+tests.libraries.test_library_packs_4a tests.libraries.test_library_packs_4b
+tests.libraries.test_library_packs_b3 tests.libraries.test_library_packs_schema
+tests.validation.test_world_row_t28 tests.bundles.test_bundle_remap
+tests.validation.test_import_validation_policy` + `python -m compileall app`.
 
 **Done.** Микс проходит все пути записи; потребители typed; ни один
 `worlds.update` не падает на мире с layout-строками.

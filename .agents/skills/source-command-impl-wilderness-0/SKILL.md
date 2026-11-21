@@ -40,7 +40,7 @@ Use this skill when the user asks to run the migrated source command `impl-wilde
   - `generators/terrain/relief/pick/kindRoll.py`
   - `pack/refine/detailed/detailedGradeDiscover.py`
   - `generators/terrain/mountains/materializer.py`
-- Тест: `tests/test_deterministic_ids.py` — существующие проверки det-функций должны остаться зелёными без изменения результата.
+- Тест: `tests/identity/test_deterministic_ids.py` — существующие проверки det-функций должны остаться зелёными без изменения результата.
 
 ## Скоуп шага 0 — строго по плану §4
 
@@ -61,7 +61,7 @@ Use this skill when the user asks to run the migrated source command `impl-wilde
 ## Приёмка (из плана, строка 0)
 
 - `python -m compileall backend/app` — чисто; импортов `seededHash`/`bakeSeed` в дереве не осталось (grep).
-- `python -m unittest tests.test_deterministic_ids` — зелёный, результаты det-функций идентичны до/после.
+- `python -m unittest tests.identity.test_deterministic_ids` — зелёный, результаты det-функций идентичны до/после.
 - Relief pick / kind roll и mountains materialize на тест-мире — результат идентичен до/после (значения seed'ов не сдвинулись).
 - Пометка «выполнен» в плане — только после приёмки и «ок» мастера.
 

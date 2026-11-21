@@ -16,7 +16,7 @@ from unittest.mock import patch
 from pydantic import BaseModel
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from test_preparation_wilderness_chunks import WildernessChunkTransitionTests
+from tests.spatial_pack.test_preparation_wilderness_chunks import WildernessChunkTransitionTests
 from app.application.worldData.pack.preparation.packPreparationService import PackPreparationService
 from app.application.worldData.pack.preparation.wildernessChunkWrite import apply_wilderness_chunks
 from app.dataModel.worldPack.preparation.operations import PackWildernessChunksInput, PackWildernessChunkWrite

@@ -25,8 +25,8 @@ pre-bed snapshot — контракт «planner → spec → relief apply → р
 | # | Находка | Критерий | Файлы | Шаг |
 |---|---------|----------|-------|-----|
 | 1 | `topology=None` — три разных фолбэка: `segments_from_declared` молча пропускает canonicalize; `plan_river_network` resolve из мира; `river_topology` принудительный **PLANAR** из `heightmap.bbox`, игнорируя `terrain_scalars.world_topology_mode`. Standalone-вызов без topology на wrapped/sphere мире тихо теряет seam-семантику: планировщик идёт по planar-соседям, а `river_bed_spec`/`is_river_mouth` — по world-топологии | неявный контракт | `hydrology/rivers/riverGeometry.py:14-21`, `riverNetworkPlanner.py:73-80,213-217`, `classifyRiverSegments.py:16-24`, `resolveDeclaredRiverPath.py:51-58`, `riverNetworkAssembler.py:50-52` | 1 |
-| 2 | `_channel_depth_step` — underscore-имя, импортируется тремя модулями (assembler, fineHydrologyIndex, test helper). Кросс-модульный приватный контракт; сигнатура и смысл политики нигде не зафиксированы | неявный контракт | `hydrology/rivers/riverBedCarver.py:20-25`; импорты в `riverNetworkAssembler.py:8`, `shore/fineHydrologyIndex.py:24`, `tests/hydrology_geometry_helpers.py:30` | 2 |
-| 3 | `generate_rivers(*args, **kwargs)` — нетипизированный compat-shim → 3-tuple; живёт ради `test_hydrology_hy5c`. Второй публичный шов в новом модуле, прячет контракт `AssembledRivers` | неявный контракт, SRP | `riverNetworkAssembler.py:121-123`, `tests/test_hydrology_hy5c.py:5,79` | 3 |
+| 2 | `_channel_depth_step` — underscore-имя, импортируется тремя модулями (assembler, fineHydrologyIndex, test helper). Кросс-модульный приватный контракт; сигнатура и смысл политики нигде не зафиксированы | неявный контракт | `hydrology/rivers/riverBedCarver.py:20-25`; импорты в `riverNetworkAssembler.py:8`, `shore/fineHydrologyIndex.py:24`, `tests/hydrology/hydrology_geometry_helpers.py:30` | 2 |
+| 3 | `generate_rivers(*args, **kwargs)` — нетипизированный compat-shim → 3-tuple; живёт ради `test_hydrology_hy5c`. Второй публичный шов в новом модуле, прячет контракт `AssembledRivers` | неявный контракт, SRP | `riverNetworkAssembler.py:121-123`, `tests/hydrology/test_hydrology_hy5c.py:5,79` | 3 |
 | 4 | `AssembledRivers.bed_specs` — поле результата без потребителей (apply внутри `assemble_rivers`). Либо задел под spec-queue, либо лишний выходной контракт | неявный контракт | `riverNetworkAssembler.py:40,118` | 3 |
 | 5 | Алиасинг `hm.surface_z is surface_z`: корректность возврата `apply_declared_fine_river_carves` держится на том, что `apply_river_bed_z(hm, specs)` пишет в тот же dict, что возвращается — в FINE_GRID через конструктор, в SURFACE_GRID через `replace`. Будущий `dict()`-слой молча теряет русла | неявный контракт | `shore/fineHydrologyIndex.py:52-67,85-86,100-102` | 4 |
 | 6 | Fine-путь: `resolve_declared_river_intents(..., occupied={})` — planning слеп к принимающей воде; `occupied` из coarse_hydro собирается после и проецируется только на клетки полилиний (`samples`). Устье при планировании не видно, усечение делегировано `river_bed_spec` — неявный двухфазный контракт. Вопрос: осознанно или регрессия относительно старого `merged_hydro`? | неявный контракт | `shore/fineHydrologyIndex.py:72-88` | 4 (решение мастера) |
@@ -38,7 +38,7 @@ pre-bed snapshot — контракт «planner → spec → relief apply → р
 | 12 | `base = 1` — lowland depth step литералом; после cleanup единственный источник глубины для обоих проходов. Mountain идёт через `type_classify.mountain_bed_steepness_factor` — lowland не через реестр/policy | хардкод | `riverBedCarver.py:20-25` | 2 (вопрос мастеру) |
 | 13 | Внешний `min(z, ...)` защищает от подъёма рельефа при `z < z_min`; исходный вывод о мёртвом коде неверен без инварианта `z >= z_min`. Поведение сохраняется | уточнение ревью / инвариант | `riverBedCarver.py:30-31` | 2 |
 | 14 | `max_radius=24` унаследован в `_nearest_water_cell`; метрика сменилась Manhattan-кольца → `dist2` (Euclidean²), значение не пересмотрено. Плюс `dist2` считается дважды на кандидата (filter + min key), скан всех `occupied` вместо ring-поиска | хардкод / perf | `resolveDeclaredRiverPath.py:51-58` | 6 |
-| 15 | `z_min=0` дефолт в `apply_test_river` — расходится с production `world_z_min`; helper может скрывать клэмп | хардкод | `tests/hydrology_geometry_helpers.py:28-32` | 5 (minor) |
+| 15 | `z_min=0` дефолт в `apply_test_river` — расходится с production `world_z_min`; helper может скрывать клэмп | хардкод | `tests/hydrology/hydrology_geometry_helpers.py:28-32` | 5 (minor) |
 | 16 | `riverNetworkAssembler.py` — docstring скопирован со старого carver'а («River channel carve on declare polylines — D HY-4, U24/U28»); модуль — assembler, не carver. `from typing import Any` в середине import-блока | SRP / гигиена | `riverNetworkAssembler.py:1,13` | 3 |
 | 17 | `riverBedCarver.py` — имя «Carver», carving переехал в `reliefObjects/riverBed/riverBedZ`; модуль держит три зоны: depth-политика + spec emission + roles | SRP / нейминг | `rivers/riverBedCarver.py` целиком | 2 |
 | 18 | `river_topology` — фабрика fallback-политики внутри geometry-модуля; дублирует fallback-логику `resolve_hydrology_topology` (там — bounds из world/bbox + mode из scalars; тут — PLANAR). Политика ≠ геометрия | SRP | `riverGeometry.py:14-21`, `load/resolveHydrologyTopology.py:24-34` | 1 |
@@ -162,7 +162,7 @@ Caller wiring входит в шаг 1: `HydrologyGeneratorService` разреш
   `dataModel-no-hardcode` (глубина через POJO по принятому R-4).
 - **Файлы:** `hydrology/rivers/riverBedCarver.py` (вероятный rename, напр.
   `riverBedProfile.py`), `riverNetworkAssembler.py`,
-  `shore/fineHydrologyIndex.py`, `tests/hydrology_geometry_helpers.py`,
+  `shore/fineHydrologyIndex.py`, `tests/hydrology/hydrology_geometry_helpers.py`,
   `dataModel/hydrology/rivers.py`, loader политики, `docs/tz_terrain_hydrology.md`.
 - **Контракт:** `_channel_depth_step` → публичное имя (или перенос в
   модуль-владелец политики); R-4: POJO `channel_depth_cells`, default 3 cells,
@@ -188,7 +188,7 @@ Caller wiring входит в шаг 1: `HydrologyGeneratorService` разреш
   `dataModel/hydrology/{riverRouting,rivers}.py`, `resolveDeclaredRiverPath`,
   `riverNetworkPlanner`, `geom/smoothRiverPolyline` (численная граница поворота),
   `hydrologyGeneratorService`/`types.py`,
-  `tests/test_hydrology_hy5c.py` и routing regression tests.
+  `tests/hydrology/test_hydrology_hy5c.py` и routing regression tests.
   Это необходимые контракты/подключение R-3 в рамках шага 3; fine-cutover остаётся шагу 4.
   Полный контракт до кода: `tz_terrain_hydrology` § River routing: кодовые контракты review-debt шага 3.
 - **Контракт:** `generate_rivers` удалён; `test_hydrology_hy5c` переведён
@@ -261,8 +261,8 @@ Fine и coarse используют общий `prepare_river_requests`: ато�
 - **ТЗ:** `contract-creation` (строгая типизация и валидация обновлений сохраняются).
 - **Файлы:** `dataModel/hydrology/physicalWaterUnion.py`,
   `dataModel/hydrology/waterBody.py`, `dataModel/hydrology/mapCellHydrology.py`,
-  `tests/hydrology_geometry_helpers.py`, callers в `test_hydrology_hy4.py` /
-  `test_hydrology_water_body_uid.py`, `tests/test_hydrology_pojo_updates.py`.
+  `tests/hydrology/hydrology_geometry_helpers.py`, callers в `test_hydrology_hy4.py` /
+  `test_hydrology_water_body_uid.py`, `tests/hydrology/test_hydrology_pojo_updates.py`.
   Уточнение до кода: используется существующий проектный pattern
   `type(self).model_validate(self.model_dump(round_trip=True, by_alias=True) | updates)`;
   новый base class/helper для трёх моделей не вводится. Тесты добавляют

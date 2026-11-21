@@ -39,7 +39,7 @@ Use this skill when the user asks to run the migrated source command `impl-orien
 
 ### Шаг 3 — тест
 
-`tests/test_structure_orientation.py` уже существует — расширить его (не создавать дубль). Кейсы:
+`tests/structure/test_structure_orientation.py` уже существует — расширить его (не создавать дубль). Кейсы:
 
 - `main_entrance` на южной стене + `facing=west` → после `apply`: `entry_point.wall == Facing.WEST`, shaft `facing`/`embedded_entry` повёрнуты тем же `orientation.facing()`.
 - `attach_wall=BOTH`/`ANY` остаются собой; кардинал поворачивается.
@@ -53,7 +53,7 @@ Use this skill when the user asks to run the migrated source command `impl-orien
 
 ## Проверки
 
-- Полный suite: `python -m unittest tests.test_entry_point tests.test_entry_point_runtime tests.test_room_connection tests.test_staircase_spec tests.test_structure_template tests.test_building_assembler tests.test_structure_area_assembler tests.test_deterministic_ids tests.test_city_three_axes tests.test_c24_district_packing tests.test_structure_orientation tests.test_u_shape_orientation_baseline tests.test_vertical_ladder_orientation_baseline tests.test_debug_structure_rotations tests.test_room_def tests.test_attach_any tests.test_wall_opening_spec` — зафиксировать фактический baseline-объём на старте.
+- Полный suite: `python -m unittest tests.structure.test_entry_point tests.structure.test_entry_point_runtime tests.structure.test_room_connection tests.structure.test_staircase_spec tests.structure.test_structure_template tests.settlements.test_building_assembler tests.structure.test_structure_area_assembler tests.identity.test_deterministic_ids tests.settlements.test_city_three_axes tests.settlements.test_c24_district_packing tests.structure.test_structure_orientation tests.structure.test_u_shape_orientation_baseline tests.structure.test_vertical_ladder_orientation_baseline tests.structure.test_debug_structure_rotations tests.structure.test_room_def tests.structure.test_attach_any tests.structure.test_wall_opening_spec` — зафиксировать фактический baseline-объём на старте.
 - `python -m compileall -q app tests`; `git diff --check`.
 - A/B fingerprint 13 stdlib (`.local/rooms_pojo_sweep.py`-техника, артефакты `.local/orientation_facing_{before,after}.json`) — **идентичен** (поля в fingerprint не входят — проверить состав fingerprint в скрипте).
 

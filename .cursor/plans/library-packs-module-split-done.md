@@ -89,6 +89,6 @@ job-классы несут свои docstrings.
 
 ## Проверка обоих шагов
 
-`cd backend && python -m unittest tests.test_library_packs_4a
-tests.test_library_packs_4b tests.test_library_packs_b3
-tests.test_library_packs_schema` + `python -m compileall app`.
+`cd backend && python -m unittest tests.libraries.test_library_packs_4a
+tests.libraries.test_library_packs_4b tests.libraries.test_library_packs_b3
+tests.libraries.test_library_packs_schema` + `python -m compileall app`.

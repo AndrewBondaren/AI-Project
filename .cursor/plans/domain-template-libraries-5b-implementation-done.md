@@ -318,11 +318,11 @@ structure/cascade baseline прошли; SQL, runtime readers и DAG не изм
 [cascade §2/4](../../docs/tz_cascade_context.md).
 **Файлы:** dataModel/locations/structure/building/{plotTemplate,buildingTemplate}.py
 (новые), structureTemplate.py, re-exports; application templateContracts.py
-(новый); tests/test_template_domain_models.py (новый).
+(новый); tests/libraries/test_template_domain_models.py (новый).
 **Контракт:** UID refs, TemplateEntry и snapshot types §2.1/2.5;
 full validation, defaults из POJO, None inheritance. Legacy классы пока живы.
-**Проверка:** python -m unittest tests.test_template_domain_models
- tests.test_structure_template tests.test_cascade_context_baseline.
+**Проверка:** python -m unittest tests.libraries.test_template_domain_models
+ tests.structure.test_structure_template tests.cascade.test_cascade_context_baseline.
 Ожидается: missing defaults применены, invalid overrides отвергнуты,
 null/0/false не потеряны, plot без здания не создаёт building.
 **Done:** target models не импортируют DB/services, fixtures legacy ещё читаются.
@@ -347,7 +347,7 @@ default declarations и runtime consumers — последующие шаги.
 **Файлы:** app/ids; db/migrations/0001_initial.sql; db/models/plotTemplate.py
 (новый), buildingTemplate.py; iPlotTemplateRepository.py и sqlite implementation
 (новые); repositories registration (core/templateRepositories.py, Container
-и startup schema model list); tests/test_template_domain_storage.py.
+и startup schema model list); tests/libraries/test_template_domain_storage.py.
 При регистрации вынести провайдеры plot/building/structure в одну небольшую
 зону, сохранив текущие Container methods и private cache names.
 **Контракт:** LibraryKind.PLOT_TEMPLATES; member UID единственная identity;
@@ -356,8 +356,8 @@ kind использует центральный library/remap UID-контра�
 UID не пересчитывается. Не вводить helper по пути вложенного body только
 ради создания member. Старую table data
 не UPDATE-мигрировать: локальная БД recreate, входы файлов конвертируются.
-**Проверка:** python -m unittest tests.test_template_domain_storage
- tests.test_library_packs_schema. Свежая temp DB, mapper/schema соответствие,
+**Проверка:** python -m unittest tests.libraries.test_template_domain_storage
+ tests.libraries.test_library_packs_schema. Свежая temp DB, mapper/schema соответствие,
 одноимённые members, стабильность UID mapping и сохранность вложенных bodies.
 **Done:** нет local uuid/hash; существующие SQL модели/0001 согласованы.
 
@@ -382,14 +382,14 @@ Writer factory и runtime consumers не переключены — это A4/B3
 **Файлы:** domainAdapters/{plot,building,structure,refFields}.py;
 новые domain preparation/graphValidation helpers; sourceValidation.py
 (переиспользование channel checks для подготовленных POJO);
-tests/test_template_domain_preparation.py.
+tests/libraries/test_template_domain_preparation.py.
 **Контракт:** plot содержит building bodies; явные библиотечные refs — UID,
 building.structure → structure; новый plot→building UID wire не вводится.
 полная typed preparation; local field validation и cross-domain graph
 validation раздельны; usage/remap используют одну декларацию refs.
 Structure model A сохранена. Доменные material/cascade constraints не
 заменяются глобальным merger. Supplied invalid value остаётся ошибкой.
-**Проверка:** python -m unittest tests.test_template_domain_preparation;
+**Проверка:** python -m unittest tests.libraries.test_template_domain_preparation;
 python -m unittest discover -s tests -p test_library_pack_refs.py.
 Проверить valid graph, wrong kind, unavailable
 ref, duplicate local names, None inheritance и cross-field invalid override.
@@ -414,7 +414,7 @@ domain kinds/body contracts — в редакции A0;
 [JSON validation — Scoped column write](../../docs/tz_json_validation.md#scoped-column-write-internal).
 **Файлы:** PlotTemplateLibraryService (новый), building library typed body path,
 domainAdapters/factory, write source/state reader wiring, core/container;
-tests/test_template_domain_writer.py.
+tests/libraries/test_template_domain_writer.py.
 **Контракт:** один adapter на kind, body persistence в caller UOW; общий
 inspector/planner/executor, copy/replace/token, immutable lineage. Legacy
 body shape не принимается modern adapter как BuildingTemplate по эвристике.
@@ -456,7 +456,7 @@ membership, паки и dependency rows; существующие тела/sourc
 **Файлы:** доменные source/spec modules, libraryPacks/defaults.py;
 canonicalLibrary adapters/wiring по публичному contract;
 fixtures/templates и structures_templates manifests по migration map;
-tests/test_template_domain_canonical.py.
+tests/libraries/test_template_domain_canonical.py.
 **Контракт:** единый typed источник каждого canonical набора, объявленные
 pack identities и связи; insert-missing, no positive fullness cache,
 повтор не заменяет body/source_file. Нет autodiscovery user FS как defaults.
@@ -542,7 +542,7 @@ cross-pack remap/deps/pins, 409 stale без записи и rollback после
 **Файлы:** worldBundle library DTO/section allowlists; bundle/archive/libraryLayout;
 libraryPacks/archiveSources/archiveService; api routes/DTO;
 frontend существующий libraryWrite client только при изменении kind typing;
-tests/test_template_domain_archive.py, test_template_domain_api.py.
+tests/libraries/test_template_domain_archive.py, test_template_domain_api.py.
 **Контракт:** UID paths, typed kind, transport хранит одинаковые имена;
 legacy формы идут только converter A6; routes тонкие, 409 decisions/token
 общий. Engine import не требует мира, world import не публикует engine packs.
@@ -612,8 +612,8 @@ body → legacy route, без silent loss. Нормализованные bodies
 `worldBundleService` и container. Raw extraction до normalize, composed
 split/world-copy remap и token continuation сохранены; SQL hydrate
 не мигрирует, modern input идёт прежним 4d путём.
-Проверено: `tests.test_library_packs_5b_import tests.test_library_packs_4d
-tests.test_fixture_bundle_import` — 23 теста, OK.
+Проверено: `tests.test_library_packs_5b_import tests.libraries.test_library_packs_4d
+tests.bundles.test_fixture_bundle_import` — 23 теста, OK.
 
 **Цель:** применить план через существующий 4d writer атомарно.
 **ТЗ:** [packs §0.3/4.1/4.2](../../docs/tz_template_library_packs.md),
@@ -627,7 +627,7 @@ worldService/import entry points; tests/test_library_packs_5b_import.py.
 Fixture/world-row path использует application pipeline, pure prepare_import
 не получает SQL I/O. Modern input проходит существующий 4d путь.
 **Проверка:** python -m unittest tests.test_library_packs_5b_import
- tests.test_library_packs_4d tests.test_fixture_bundle_import.
+ tests.libraries.test_library_packs_4d tests.bundles.test_fixture_bundle_import.
 Preview/stale/entity error rollback; immutable originals; repeat без duplicates.
 **Done:** imported мир не зависит от registry для восстановления graph.
 
@@ -641,9 +641,9 @@ consumers (tokens/areaSlots/types, buildingCache/buildingDefaults,
 requiredStructureResolve/structurePlacement). Для соблюдения class-size
 tokens разделён на layoutPicks/subjects. StructureCatalog без global
 list_all/FS source.
-Проверено: `tests.test_library_packs_5b_snapshot
-tests.test_required_structure_position tests.test_building_assembler
-tests.test_settlement_topology` — 29 тестов, OK.
+Проверено: `tests.libraries.test_library_packs_5b_snapshot
+tests.structure.test_required_structure_position tests.settlements.test_building_assembler
+tests.settlements.test_settlement_topology` — 29 тестов, OK.
 
 **Цель:** переключить выбор plots/buildings на scoped UID catalog.
 **ТЗ:** [packs §1/1.1/3/5](../../docs/tz_template_library_packs.md),
@@ -657,9 +657,9 @@ RequiredStructure/DistrictTemplateEntry/SettlementPayload/structurePlacement.
 **Контракт:** loader → immutable snapshot, UID кандидаты/кэш/token/placement;
 UID recipe refs/keys; legacy names только converter; N/priority порядок
 сохранён; StructureCatalog не получает global list_all или прямой FS source.
-**Проверка:** python -m unittest tests.test_library_packs_5b_snapshot
- tests.test_required_structure_position tests.test_building_assembler
- tests.test_settlement_topology. Новый snapshot suite обязателен.
+**Проверка:** python -m unittest tests.libraries.test_library_packs_5b_snapshot
+ tests.structure.test_required_structure_position tests.settlements.test_building_assembler
+ tests.settlements.test_settlement_topology. Новый snapshot suite обязателен.
 **Done:** одноимённые plots не сливаются, pins не фильтр, чужой owner невидим;
 ни один packing consumer не восстанавливает identity по имени.
 
@@ -674,7 +674,7 @@ UID recipe refs/keys; legacy names только converter; N/priority поряд
 **Файлы:** areaAssembler/structureAreaAssembler и context helpers;
 db/models/namedLocation.py + db/migrations/0001_initial.sql;
 bundleNamedLocation DTO; доменные ref declarations/usage queries;
-persist/remap services; tests/test_template_location_refs.py.
+persist/remap services; tests/libraries/test_template_location_refs.py.
 **Контракт:** system_template_uid хранит UID реально выбранного member;
 assembler получает identity отдельно от читаемого имени тела. Существующие
 structure refs остаются UID. Проверяются PK uniqueness, kind/owner/body и
@@ -687,10 +687,10 @@ StructureTemplate. SQL/model/DTO меняются вместе; import/export/wo
 восстанавливается только по явному однозначному mapping, без догадок.
 Context берёт подготовленные building параметры, None сохраняет cascade;
 plot без building не создаёт NL. Central det-id использует принятую identity.
-**Проверка:** python -m unittest tests.test_template_location_refs
- tests.test_structure_area_assembler tests.test_structure_orientation
- tests.test_bundle_named_location_wire tests.test_bundle_remap
- tests.test_cascade_context_baseline.
+**Проверка:** python -m unittest tests.libraries.test_template_location_refs
+ tests.structure.test_structure_area_assembler tests.structure.test_structure_orientation
+ tests.bundles.test_bundle_named_location_wire tests.bundles.test_bundle_remap
+ tests.cascade.test_cascade_context_baseline.
 **Done:** persist и round-trip содержат реальные member UID, не имена;
 две одноимённые копии различимы; проверка wrong-kind/unknown UID не обходится;
 применённый structure UID переживает смену structure ref исходного building
@@ -706,13 +706,13 @@ default-параметры не дублируются в generators.
 [logging — Инварианты/Маршрут](../../docs/tz_logging.md).
 **Файлы:** loadReliefTemplatesForWorld; relief pick/templatePick/ribbonGrade;
 mountains/reliefSidesStamp; detailedGradeDiscover/detailedGradeFrontPick;
-pack bake/refine callers; tests/test_library_packs_5b_relief.py.
+pack bake/refine callers; tests/libraries/test_library_packs_5b_relief.py.
 **Контракт:** entries_for_context над typed bodies, UID-order; pure pick;
 explicit ref availability проверяет общий resolver, no-candidate/context
 mismatch остаются самостоятельными domain errors. Не дублировать diagnostic.
-**Проверка:** python -m unittest tests.test_library_packs_5b_relief
- tests.test_relief_mountain_stamp tests.test_relief_road_shoulder
- tests.test_relief_grade_system_t3c.
+**Проверка:** python -m unittest tests.libraries.test_library_packs_5b_relief
+ tests.relief.test_relief_mountain_stamp tests.relief.test_relief_road_shoulder
+ tests.relief.test_relief_grade_system_t3c.
 **Done:** random/round_robin/fixed сохраняют policy, expected order diff
 документирован, другой шаблон вместо missing relief не подставляется.
 
@@ -783,9 +783,9 @@ registry names разрешены лишь legacy input parser/tests/history.
 Pack-level get_by_system_name остаётся для глобально уникальной pack identity.
 **Проверка:** python -m unittest discover -s tests -p "test_library_packs_*.py";
 python -m unittest discover -s tests -p "test_library_write_*.py";
-python -m unittest tests.test_fixture_bundle_import tests.test_world_column_write
- tests.test_bundle_archive tests.test_bundle_library_archive
- tests.test_template_location_refs.
+python -m unittest tests.bundles.test_fixture_bundle_import tests.validation.test_world_column_write
+ tests.bundles.test_bundle_archive tests.bundles.test_bundle_library_archive
+ tests.libraries.test_template_location_refs.
 Source audit rg registry names / mixed POJO / by_system_name / global list_all
 по backend/frontend/fixtures/scripts с явным compatibility allowlist.
 **Done:** fresh schema и modern/legacy round-trip прошли; нет silent drops,

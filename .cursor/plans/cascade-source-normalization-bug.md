@@ -9,7 +9,7 @@
 Из корня репозитория перейти в `backend` и выполнить следующий Python-код. Фикстура создаёт мир с зарегистрированными экономическими уровнями `t1` и `t9`.
 
 ```python
-from tests.test_cascade_context_baseline import fixture
+from tests.cascade.test_cascade_context_baseline import fixture
 from app.application.cascade.locationScope import area_context, empty_location_chain
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate

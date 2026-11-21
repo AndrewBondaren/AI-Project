@@ -101,7 +101,7 @@ rule `layer-boundaries.mdc` (api = только HTTP).
 перед per-row `except ValueError` (доменная ошибка из `_ensure_registry` →
 `worlds.update` — не row-ошибка; иначе `WorldDataValidationError` как
 `ValueError` проглатывается в `ImportResult` → 207 вместо 422);
-`tests/test_import_validation_policy.py`
+`tests/validation/test_import_validation_policy.py`
 (2 сайта `assertRaises(HTTPException)` на прямой вызов `worlds.update` →
 assert доменного класса); `tests/test_building_registry_mixed.py`
 (`assertRaises(HTTPException)` на `import_from_json` → `ImportValidationError`,
@@ -120,7 +120,7 @@ assert по `errors` вместо `.detail`); аудит internal callers — `e
 ASGI-тест `validate_only` (реальный роут)
 должен остаться зелёным — глобальный хендлер даёт тот же 422.
 
-**Проверка.** `python -m unittest tests.test_import_validation_policy` +
+**Проверка.** `python -m unittest tests.validation.test_import_validation_policy` +
 pack-suite (world_for path) + `compileall`.
 
 **Done.** `grep fastapi worldService.py` = 0; тесты зелёные.
@@ -153,7 +153,7 @@ application/worldData` = 0; `python -m unittest discover -s tests`.
 - Независим от `library-packs-module-split` (другие файлы); порядок любой.
 - Не снимает D9 (`building-registry-mixed-column`) и не вводит scoped
   write-seam — это отдельный вопрос из разбора `worlds.update`.
-- `tests/test_settlement_volume_separation.py` (`except HTTPException: fail`)
+- `tests/settlements/test_settlement_volume_separation.py` (`except HTTPException: fail`)
   — dead-catch после рефактора, чистится при касании, не blocker.
 - ASGI-тесты монтируют голый `FastAPI()` без `install_error_handlers`
   (`test_import_validation_policy.py`); сейчас зелёные за счёт per-route

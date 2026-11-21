@@ -67,7 +67,7 @@ contributor); ниже — зафиксированные дефекты и от
   `ClaimOwnersIndex`, создаваемый один раз в `collect`/pass и
   передаваемый в rasterize). Выбирает имплементатор: предпочтительно
   явный index-объект, а не скрытый `@cache` на публичной функции.
-- **Проверка:** `tests.test_region_rasterizer` + `test_landcover_materializer`
+- **Проверка:** `tests.regions.test_region_rasterizer` + `test_landcover_materializer`
   + `test_landcover_fine_paint` без изменений результата; benchmark-log
   или счётчик вызовов — один BFS на claim.
 - **Done:** один `claim_owners` на claim за bake и за refine; тесты зелёные.
@@ -81,7 +81,7 @@ contributor); ниже — зафиксированные дефекты и от
 - **ТЗ:** `tz_map_light_bake.md` § Регионы покрытия › L0/L2 (фон вне
   точного контура = per-cell fallback); план §4 шаг 7.
 - **Файлы:** `backend/app/application/worldData/generators/terrain/landcover/finePaint.py`,
-  `backend/tests/test_landcover_fine_paint.py`.
+  `backend/tests/regions/test_landcover_fine_paint.py`.
 - **Контракт:** при `regions == []` выполняется та же ветка
   `region_painted_parent → restore background`, что и при пустом
   `winners`; быстрый выход — только если нет ни winners, ни
@@ -115,7 +115,7 @@ contributor); ниже — зафиксированные дефекты и от
 - **ТЗ:** `tz_map_light_bake.md` § Регионы покрытия › Реестр и
   CoverageResolver («все отпали → WarningError, тип не меняется»).
 - **Файлы:** `backend/app/application/worldData/regions/coverageResolver.py`,
-  `backend/tests/test_coverage_resolver.py`.
+  `backend/tests/regions/test_coverage_resolver.py`.
 - **Контракт:** кандидат с `score == 0` не побеждает (или явный
   threshold); итог `None` → WarningError + сохранение типа — тот же
   путь, что и «все отпали». Точный порог — по решению в ТЗ; минимум —
@@ -148,7 +148,7 @@ contributor); ниже — зафиксированные дефекты и от
 - **ТЗ:** `tz_map_light_bake.md` § Регионы покрытия › Пересечения и
   приоритет (критерий `area()` — «площадь покрытия», а не геометрия).
 - **Файлы:** `backend/app/dataModel/spatial/regionShape.py`,
-  `backend/tests/test_region_precedence.py` (или models-тест).
+  `backend/tests/regions/test_region_precedence.py` (или models-тест).
 - **Контракт:** `area()` → `(dx+1)(dy+1)` в клетках (или зафиксировать
   в ТЗ «площадь = геометрическая» и оставить; решение — с мастером).
 - **Проверка:** юнит — bbox 1×1 не проигрывает по нулевой площади;

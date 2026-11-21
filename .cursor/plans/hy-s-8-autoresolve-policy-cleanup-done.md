@@ -35,8 +35,8 @@ declare/autoresolve и § HydrologyGeneratorService. Мастер согласо
 - **ТЗ:** разделы выше; перед кодом уточнить прямое чтение default_*
   из WorldHydrology, без параллельных autoresolve-policy классов.
 - **Файлы:** `generators/hydrology/load/hydrologyAutoresolvePolicy.py`
-  (удаление), `tests/test_hydrology_hy5a.py`, `tests/test_hydrology_hy5b.py`,
-  `tests/test_hydrology_hy5c.py` (при необходимости coverage river gates),
+  (удаление), `tests/hydrology/test_hydrology_hy5a.py`, `tests/hydrology/test_hydrology_hy5b.py`,
+  `tests/hydrology/test_hydrology_hy5c.py` (при необходимости coverage river gates),
   `docs/tz_terrain_hydrology.md`, `docs/tz_generator_technical_debt.md`.
 - **Контракт:** удаляется только неиспользуемый API; POJO, wire, production
   gates и значения defaults не меняются. Полезные четыре legacy tests

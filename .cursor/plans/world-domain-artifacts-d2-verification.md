@@ -1,6 +1,6 @@
 # Artifacts D2 verification — 2026-11-07
 
-Scope: world-domain-artifacts-cancel-gc-d1.md D2-1…D2-4; HEAD 4ed02d60. Production activation не выполнялась. Повторной реализации готовых контрактов нет; единственная кодовая правка этого прохода — дополнительный тест в backend/tests/test_logging_routes.py.
+Scope: world-domain-artifacts-cancel-gc-d1.md D2-1…D2-4; HEAD 4ed02d60. Production activation не выполнялась. Повторной реализации готовых контрактов нет; единственная кодовая правка этого прохода — дополнительный тест в backend/tests/logging/test_logging_routes.py.
 
 ## Review D2-1 / D2-2
 

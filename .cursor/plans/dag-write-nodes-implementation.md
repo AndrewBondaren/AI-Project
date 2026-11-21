@@ -63,6 +63,49 @@ Lifecycle NodeContract[I,O,Never]: version 1, reads/calls/error_types пусты
 
 ## 5. Шаги реализации и завершение каждого шага
 
+### Обязательная граница оркестрации — поправка архитектурной сверки
+
+Этот подраздел уточняет §4 и обязателен для N0–N5. Нода не получает предметную ответственность только потому, что проверка короткая или её удобно выполнить до CALL. Правило одного public call у leaf необходимо, но недостаточно: вложенная цепочка owning pipeline также проверяется на скрытую оркестрацию и foreign calls.
+
+#### Разрешённые CALL и источники входов
+
+| Caller | Разрешённый child / public target | Источник Input и использование Output | Запрещённый перенос логики |
+|---|---|---|---|
+| write_changes | prepare_changes → assemble_patch_set → apply_snapshot | Ready input/context → preparation; successful sections/context → assembly input; successful PatchSet → apply input; owning итог → caller | Не выбирает settings single/batch или Lifecycle transition route; не вызывает domain services, не разбирает sections/receipts |
+| prepare_changes | prepare_time_section, prepare_world_time_settings_changes, settings section leaf, Lifecycle preparation/section leaf в выбранном сценарии | Typed входы и outputs передаются по заранее объявленным связям; settings prepared → section.change; Lifecycle prepared → section.changes | Не диспетчеризует восемь settings операций, не выполняет batch, не строит native patches, не решает validity/coverage/dependencies |
+| prepare_world_time_settings_changes | Один concrete single leaf либо один batch leaf | Одна команда → leaf её объявленного concrete типа; несколько → один PrepareTimeSettingsBatch; success/refusal возвращается prepare_changes | Не вызывает settings section leaf/assembler/Snapshot; не сравнивает base, не вычисляет indices, budget, before/after/effective_at |
+| Любой preparation/section leaf | Только закреплённый публичный owning method | input.request → method argument; полный owning result → output.value | Не вызывает другие ноды; не собирает request из hidden reads; не создаёт prepared/section вместо owner |
+| assemble_patch_set | Только IPatchSetAssembly.assemble | Переданный PatchSetAssemblyInput → owning PatchSet/refusal | Не вызывает preparation или apply; не реализует проверки/codec/fingerprint |
+| apply_snapshot | Только IWorldSnapshotApply.apply | Переданный PatchSet → exact owning result либо согласованный fault | Не вызывает handlers, не делает receipt validation/CAS/replay/rollback/commit самостоятельно |
+
+Сценарий prepare_changes должен быть закрытым типизированным контрактом G5. Наличие ветвей задаётся его declared input, а не анализом предметного payload. Запрещены обнаружение новых доменов по содержимому объекта, plugin discovery во время исполнения, вложенный kind dispatch и универсальный execute(command). Допустимый выбор concrete single settings leaf находится только в settings orchestrator, а Lifecycle A/B binding фиксируется composition. Parent не воспроизводит внутренний маршрут child.
+
+#### Сбор результатов не равен сборке PatchSet
+
+prepare_changes сохраняет successful native sections в объявленные slots/коллекцию исходного сценария и возвращает их. Он может проверить завершение требуемых CALL по engine-контракту; это не проверка предметной полноты publication. Порядок переноса определяется frozen G5 mapping, не сортировкой по содержимому. Нельзя удалять no-op, дубли, пустые или «неподходящие» секции, сливать patches, вычислять SectionDependency или корректировать evidence.
+
+write_changes только связывает этот результат с полями принятого PatchSetAssemblyInput. Создание транспортной оболочки разрешено; вычисление новых доменных значений — нет. Совместимость/уникальность секций, native admission и зависимости проверяет публичная операция PatchSet в пределах собственного контракта. Правила Time/Lifecycle не переносятся даже в assembler. После assembly результат PatchSet передаётся apply без исправлений.
+
+#### Точный transport исходов
+
+G3/G5 должны предъявить для каждого CALL named Input/Output/Error с модулем, полями, closed union, источником каждого поля, invocation correlation и явным mapping каждого owning исхода. До freeze это OPEN, не разрешение добавить Any/dict, строковый reason или общий synthetic domain refusal.
+
+| Исход дочернего CALL | Обязанность родителя |
+|---|---|
+| Owning success | Передать payload следующему declared потребителю без пересоздания предметного результата |
+| Owning refusal/conflict/unavailable, если допускается контрактом | Сохранить concrete payload, diagnostics/paths/order и корреляцию; не вызывать зависимый следующий этап |
+| Structural input/output contract failure | Следовать engine failure transport; не подменять доменным отказом |
+| Owning infrastructure fault | Только принятый lossless error mapping; без blanket catch/fallback |
+| Cancellation / unknown outcome | Сохранить принятый исход; не выдавать rollback/committed и не запускать повторный apply |
+
+Общий отказ подготовки не создаётся путём объединения diagnostics разных доменов без принятого aggregate-контракта. Parent не интерпретирует коды, не меняет категорию и не сокращает reason. Остановка зависимых стадий обязательна; политика продолжения независимых ветвей и порядок их отказов фиксируются в G5, не выдумываются реализацией.
+
+#### Приёмка каждой ноды
+
+Для каждой строки concrete node roster предъявить: (1) allowed CALL/public target; (2) exact Input→argument и result→Output/Error mapping; (3) список фактических imports/dependencies и nested calls; (4) источник порядка; (5) negative trace, доказывающий отсутствие следующей зависимой стадии при отказе. Code review ищет доменные predicates, работу с storage/codec, ручные patch/header/dependency constructions и копирование child dispatch. Наличие любого из них в ноде — FAIL, даже при успешных тестах.
+
+Node-тесты используют заданные owning результаты и проверяют передачу/число вызовов/trace. Пример A,B,A,C→indices(1,3) вычисляется в Time-тесте; node-тест получает готовый SettingsBatchInputMismatch и проверяет неизменность indices, не воспроизводит алгоритм. Аналогично no-op/history/retention/coverage проверяются владельцами и сквозной интеграцией, не становятся implementation predicates ноды.
+
 ### N0. Preflight и freeze
 
 - Сверить текущие files/registrations: implemented Cache — пример одной operation boundary, legacy engine не SoT новой архитектуры.

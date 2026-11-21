@@ -1368,7 +1368,7 @@ specificity по убыванию → original_area по убыванию → re
   принимает любое effective_specificity is not None, включая 0.
 - [ResolvedPlacement](../../backend/app/dataModel/placement/result.py:39)
   проверяет None, а не положительность при создании.
-- [test_dry_coastline_can_create_water_with_zero_even_when_auto_not_provided](../../backend/tests/test_placement_resolver.py:227)
+- [test_dry_coastline_can_create_water_with_zero_even_when_auto_not_provided](../../backend/tests/placement/test_placement_resolver.py:227)
   прямо ожидает создание с 0. Текущее поведение расходится с решением
   мастера; нельзя сообщать, что правило нуля уже реализовано.
 
@@ -8575,10 +8575,10 @@ PC-11.2b/PC-11.3 сохраняют согласованный WS integration ga
   (68 OK), аналогичные discover providers (129 OK), contracts (69 OK),
   encoding (7 OK). Команда `-m unittest
   tests.planning.consumers.test_wiring.WorkingFieldsTests
-  tests.test_pack_climate_sample tests.test_pack_climate_parallel
-  tests.test_water_placement_pass tests.test_relief_objects_z
-  tests.test_hydrology_hy12_rivers tests.test_pack_bake_modes
-  tests.test_detailed_bake_c11 tests.test_region_fact_consumers` — 78 OK.
+  tests.worldPack.test_pack_climate_sample tests.worldPack.test_pack_climate_parallel
+  tests.hydrology.test_water_placement_pass tests.relief.test_relief_objects_z
+  tests.hydrology.test_hydrology_hy12_rivers tests.worldPack.test_pack_bake_modes
+  tests.worldPack.test_detailed_bake_c11 tests.regions.test_region_fact_consumers` — 78 OK.
   Итого 346 уникальных tests (5 новых входят и в consumers, и в regression run).
   Async suites запущены вне Windows sandbox после воспроизведённого зависания
   минимального asyncio.run(asyncio.sleep(0)); зависшие sandbox runs прерваны.
@@ -8641,15 +8641,15 @@ Valid-key baseline/порядок стадий/гидрологические un
 - `PYTHONPATH=backend`, `backend/.venv/Scripts/python.exe -m unittest discover
   -s backend/tests/planning/consumers -p test_*.py` — 70 OK; те же discover для
   providers — 129 OK, contracts — 69 OK, encoding — 7 OK.
-- Итоговый `-m unittest` с модулями tests.test_water_placement_pass,
-  tests.test_relief_objects_z, tests.test_hydrology_hy12_rivers,
-  tests.test_pack_bake_modes, tests.test_detailed_bake_c11,
-  tests.test_pack_climate_sample, tests.test_pack_climate_parallel,
-  tests.test_parent_light_refine, tests.test_pack_fine_terrain_refine_parallel,
-  tests.test_pack_wp13_entry_first, tests.test_landcover_fine_paint,
-  tests.test_open_land_hills, tests.test_region_state_contract,
-  tests.test_terrain_hills_registry_cutover, tests.test_wilderness_region_index,
-  tests.test_pack_tz_slot_l2_render_e2e, tests.test_detailed_grade_generate —
+- Итоговый `-m unittest` с модулями tests.hydrology.test_water_placement_pass,
+  tests.relief.test_relief_objects_z, tests.hydrology.test_hydrology_hy12_rivers,
+  tests.worldPack.test_pack_bake_modes, tests.worldPack.test_detailed_bake_c11,
+  tests.worldPack.test_pack_climate_sample, tests.worldPack.test_pack_climate_parallel,
+  tests.worldPack.test_parent_light_refine, tests.worldPack.test_pack_fine_terrain_refine_parallel,
+  tests.worldPack.test_pack_wp13_entry_first, tests.regions.test_landcover_fine_paint,
+  tests.regions.test_open_land_hills, tests.regions.test_region_state_contract,
+  tests.regions.test_terrain_hills_registry_cutover, tests.regions.test_wilderness_region_index,
+  tests.worldPack.test_pack_tz_slot_l2_render_e2e, tests.relief.test_detailed_grade_generate —
   174 OK. Итого 449 уникальных tests; async suites вне sandbox по ранее
   подтверждённому asyncio ограничению. Failed intermediate runs из-за старых
   mock/preparation signatures исправлены и заменены указанными final runs.
@@ -9179,7 +9179,7 @@ PC-11.7 этим заходом не выполнялся. Код не комм�
   возможность отсутствия entry; present outline без entry — явная ошибка,
   после прежнего membership gate. Новый orchestrator/интерфейс не вводится.
   Файлы: pack/read/wildernessRegionReadService.py, api/routes/map.py,
-  tests/test_wilderness_region_index.py. Проверки: outline/HTTP/state baseline,
+  tests/regions/test_wilderness_region_index.py. Проверки: outline/HTTP/state baseline,
   вызов именно injected entry один раз, absent gate и missing-entry error;
   Результат: внедрение entry выполнено, snapshot-only route entry не создаёт.
   unittest test_wilderness_region_index/test_region_coverage_contract/
@@ -9797,7 +9797,7 @@ placement_specificity в POJO владельцев (default_seas/default_lakes).
 Файлы: dataModel/placement/{prepared,result,batch}.py;
 application/worldData/placement/{resolver,dependencies,diagnostics}.py
 и application/worldData/placement/adapters/water.py (outcome identity
-projection J08); tests/test_placement_resolver.py/contract.py.
+projection J08); tests/placement/test_placement_resolver.py/contract.py.
 Контракт: §6.5/§6.8/§6.9, живой domain POJO default и terminal fallback 0;
 0 не создаёт, None unresolved, >0 участвует; generic
 typed reason, authored value сохранён, dependent не получает ложную опору.
@@ -10940,7 +10940,7 @@ tz_json_validation POJO/REF-W. Exact owner map before code:
 Composition: relief root23→23 WARN, new surfaceCoating2, composition root5→5,
 new support capture2, material enums2→3; new tests5, encoding3→3. Existing
 material root count checked before edits; no new file added there.
-Integration baseline repair: tests/test_relief_canonical.py imports smoke_003 from
+Integration baseline repair: tests/relief/test_relief_canonical.py imports smoke_003 from
 the obsolete repo-root relief_templates path although the checked-in user fixture
 is backend/relief_templates/smoke_003. Keep default-domain-root assertions; add a
 separate explicit fixture source root for import/copy only. No runtime FS fallback
@@ -12627,9 +12627,9 @@ layout/profile не пересчитываются. Все входы bind к о
   без MapCellHydrology import/role inspection. Existing placement/raster/seed math
   сохранена. Caller может передать keys existing map как обычную collection;
   dual API/compatibility helper и новые классы не вводятся.
-- tests/test_open_land_hills.py: public behavior explicit exclusion и integration
+- tests/regions/test_open_land_hills.py: public behavior explicit exclusion и integration
   hills→accepted basin carve→fill с protected reservation, без копирования алгоритма.
-- tests/test_terrain_hills_registry_cutover.py: найден stale patch удалённого
+- tests/regions/test_terrain_hills_registry_cutover.py: найден stale patch удалённого
   finePaint.prepare_landcover_inputs; убрать stub, использовать уже существующий
   public region_state_snapshot argument. Это чинит проверку поведения, не caller.
 - tests/typing/planning valid terrain fixture + invalid.py: новый input contract;
@@ -15330,7 +15330,7 @@ source evidence, не unknown world. Отрицательные проверки
 
 Проверки реализации: focused backend/tests/geo1/canonical_source/test_source_models.py;
 existing backend/tests/geo1/integration/test_surface_validation.py и
-backend/tests/test_hydrology_water_body_uid.py как совместимость existing water/
+backend/tests/hydrology/test_hydrology_water_body_uid.py как совместимость existing water/
 mapping contracts; проектные type/lint checks только затронутого scope.
 Проверить imports без app/storage dependencies,
 реальные file counts и diff на отсутствие изменений production wiring/fixtures.
@@ -15368,7 +15368,7 @@ effective level. Flood/connectivity и liquid registry membership не вычи�
 Выполнены проверки:
 
 - `.venv/Scripts/python.exe -m unittest tests.geo1.canonical_source.test_source_models
-  tests.geo1.integration.test_surface_validation tests.test_hydrology_water_body_uid -q`
+  tests.geo1.integration.test_surface_validation tests.hydrology.test_hydrology_water_body_uid -q`
   из backend: **47 tests, OK**, включая **19** новых tests (negative cases внутри subTests).
 - `node node_modules/pyright/index.js --project pyrightconfig.cascade.json
   backend/app/dataModel/hydrology/query/source.py`: **0 errors, 0 warnings**.
@@ -15459,7 +15459,7 @@ surface rows до доступа/распаковки с ValueError для inval
 - Из backend: `.venv/Scripts/python.exe -m unittest
   tests.geo1.canonical_source.test_source_models
   tests.geo1.integration.test_surface_validation
-  tests.test_hydrology_water_body_uid -q` — **47 tests OK**, штатные WarningError
+  tests.hydrology.test_hydrology_water_body_uid -q` — **47 tests OK**, штатные WarningError
   diagnostics; полный regression suite не запускался.
 - `node node_modules/pyright/index.js --project pyrightconfig.cascade.json
   backend/app/dataModel/hydrology/query/source.py` — **0 errors, 0 warnings**.
@@ -15539,7 +15539,7 @@ invariants остаются в существующих validators.
 - После исправления из backend: `.venv/Scripts/python.exe -m unittest
   tests.geo1.canonical_source.test_source_models
   tests.geo1.integration.test_surface_validation
-  tests.test_hydrology_water_body_uid -q` — **50 tests OK** (22 source tests),
+  tests.hydrology.test_hydrology_water_body_uid -q` — **50 tests OK** (22 source tests),
   штатные hydrology WarningError diagnostics. Existing strict/coercion/forged
   facts, odd sphere, wet/dry/Z/union/shore tests также прошли.
 - `node node_modules/pyright/index.js --project pyrightconfig.cascade.json
@@ -15582,7 +15582,7 @@ model_construct сами остаются unchecked Pydantic APIs: гарант�
 - Из backend: `.venv/Scripts/python.exe -m unittest
   tests.geo1.canonical_source.test_source_models
   tests.geo1.integration.test_surface_validation
-  tests.test_hydrology_water_body_uid -q` — **50 tests OK** (22 source tests),
+  tests.hydrology.test_hydrology_water_body_uid -q` — **50 tests OK** (22 source tests),
   со штатными hydrology WarningError diagnostics.
 - `node node_modules/pyright/index.js --project pyrightconfig.cascade.json
   backend/app/dataModel/hydrology/query/source.py` — **0 errors, 0 warnings**.
@@ -15889,7 +15889,7 @@ GEO-I9.1 принят в границах authored geometry. G10-A и итого
 | GEO-LEGACY-52 | `application/worldData/generators/hydrology/placement/__init__.py` — `project_declared_hydrology, WaterPlacementPassResult, run_water_placement_pass` | Удалить оба eager import и все три экспорта. Пакет выполняется даже при импорте leaf-модуля проекции. |
 | GEO-LEGACY-53 | `dataModel/placement/__init__.py` — `TYPE_CHECKING, __all__, __getattr__` | Убрать PlacementBatch, PlacementBatchResult, PlacementOutcome, PreparedPlacement, ResolvedPlacement, UnresolvedPlacement, ResolvedWaterPlacement, CoastlinePlacementFact, WaterPresence из трёх поверхностей API. В новом процессе разрешить каждое оставшееся имя, для удалённых проверить AttributeError. |
 | GEO-LEGACY-54 | `application/worldData/planning/composition/surfacePlanningAssembler.py` — `SurfacePlanningAssembler.prepare, _build, prepare_captured_bundle` | Убрать PC prepare/helper, типы WorldPlanProviders, SurfacePlanBundle, ReadySurfacePlanningView и PC ветви общих сигнатур после переключения SurfacePlanningEntry.prepare_captured на prepare_captured_geo_bundle. Проверить через WorldDataWiring мир с extent (GEO bundle) и без extent (NoExtent). |
-| GEO-LEGACY-55 | `application/worldData/generators/hydrology/hydrologyGeneratorService.py` — `HydrologyGeneratorService.apply` | Удалить обход planning вместе с построением отсутствующего master input, ветвью отсутствующих specs и чтением sea/lake флагов. Найдены тестовые callers backend/tests/hydrology_fixtures.py и backend/tests/planning/providers/test_domain_providers.py. Перенести их сценарии на planning entry: specs отсутствуют/присутствуют, declare-only/autoresolve. Сохранить import normalizers в legacySettings.py. |
+| GEO-LEGACY-55 | `application/worldData/generators/hydrology/hydrologyGeneratorService.py` — `HydrologyGeneratorService.apply` | Удалить обход planning вместе с построением отсутствующего master input, ветвью отсутствующих specs и чтением sea/lake флагов. Найдены тестовые callers backend/tests/hydrology/hydrology_fixtures.py и backend/tests/planning/providers/test_domain_providers.py. Перенести их сценарии на planning entry: specs отсутствуют/присутствуют, declare-only/autoresolve. Сохранить import normalizers в legacySettings.py. |
 | GEO-LEGACY-56 | `application/worldData/generators/terrain/designedWater/fields/noiseFieldGenerator.py` — `NoiseFieldGenerator.build` | Сменить обход TerrainPlan.surface_z и пересчёт центра через fine_span на координаты W. Сохранить sample. |
 | GEO-LEGACY-57 | `application/worldData/generators/terrain/designedWater/fields/plateFieldGenerator.py` — `PlateFieldGenerator.build` | Сохранить layout/sample. При fine_span > 1 для noise, plate и mixed сравнить координаты и значения двух fine-клеток внутри одной coarse-клетки с раздельными вызовами sample. |
 | GEO-LEGACY-58 | `application/worldData/planning/encoding/surfaceManifest.py` — `SURFACE_MANIFEST: 29/32, 148/149, 164/165, 225/233, 276/277` | 29/32 зарезервировать при снятии старых полей sea/lake. С прекращением PC убрать 148/149 (routes) и 164/165 (final). При изменении GEO layout вывести из обращения 276/277 (routes) и 225/233 (final), выделить свежие IDs payload/envelope, как для изменённого P2 260/261. Удалённые IDs никогда не назначать новым типам. Для изменённых GEO routes/final повысить schema/cache 2→3 при переходе на этот layout. Если native_final меняет wire payload, поднять также его schema 1→2 относительно EF-1.3. Проверить отказ на фиксированных старых bytes policy, P2, routes, final и содержащего их bundle, плюс round-trip новых bytes. |

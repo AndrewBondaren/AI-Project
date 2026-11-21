@@ -29,7 +29,7 @@ Use this skill when the user asks to run the migrated source command `impl-hy-12
    - `generators/hydrology/` — `shore/waterSideFootprint.py`, `shore/deepeningBandCarver.py`, `basins/seaBasinGenerator.py`, `basins/oceanBasinGenerator.py`, `basins/seaLevelPolicy.py` (сейчас `resolve_z_sea() = 0` хардкод), `basins/basinKindResolver.py`, `autoresolve/proceduralSeaAutoresolve.py`, `rivers/riverNetworkPlanner.py` (`_neighbors8`), `rivers/riverSpecs.py`, `load/buildHydrologyMasterInput.py`, `load/loadDeclaredHydrology.py`
    - `dataModel/spatial/regionShape.py` — footprint-механика + `edge_noise`
    - `reliefObjects/depressionDetect.py` — локальные минимумы (озёра)
-   - тесты: `backend/tests/hydrology_fixtures.py`, `test_hydrology_hy2.py`, `test_hydrology_hy5a.py`, `test_hydrology_hy11.py` (бaseline регрессий — hy2/hy5a писаны под paint-модель, переписываются по плану)
+   - тесты: `backend/tests/hydrology/hydrology_fixtures.py`, `test_hydrology_hy2.py`, `test_hydrology_hy5a.py`, `test_hydrology_hy11.py` (бaseline регрессий — hy2/hy5a писаны под paint-модель, переписываются по плану)
    - fixture: `fixtures/world_test_004.json`
 6. Правила (нарушение = стоп):
    - [`.cursor/rules/dataModel-no-hardcode.mdc`](../rules/dataModel-no-hardcode.mdc)

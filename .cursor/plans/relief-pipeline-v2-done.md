@@ -207,6 +207,6 @@ Halo = `max(L_tpl, envelope floor)` (уже в knobs; не JSON-2).
 
 ## Тесты / приёмка
 
-Переписать `test_detailed_grade_generate` с `plan_grade_for_rects` на worker-discover — **слой 7 ✅**. Юниты слоя 1: меса 8-связная (gy 901); фронт W×L; шов чаши; 1×1 → skip; нижняя терраса не сеет под `occ`. Слой 6 ✅: `tests/test_relief_grade_system_t3c.py`. **R41-T-9…T-12 ✅:** оркестратор / identity / envelope walk cap / PackJobUid site / owner omit. Smoke pack — по команде мастера (агент backend не поднимает).
+Переписать `test_detailed_grade_generate` с `plan_grade_for_rects` на worker-discover — **слой 7 ✅**. Юниты слоя 1: меса 8-связная (gy 901); фронт W×L; шов чаши; 1×1 → skip; нижняя терраса не сеет под `occ`. Слой 6 ✅: `tests/relief/test_relief_grade_system_t3c.py`. **R41-T-9…T-12 ✅:** оркестратор / identity / envelope walk cap / PackJobUid site / owner omit. Smoke pack — по команде мастера (агент backend не поднимает).
 
 **Запрещено при impl:** второй пул; fill∥relief; два column fill; полный same-z CC тайла; Priority-Flood; Instance на ступень; uid System на клетке; stamp uid на тело; пики × 4 «на переход»; первый-занял внутри вершины.

@@ -1,0 +1,4 @@
+{
+  "extends": "./pyrightconfig.nodes.json",
+  "include": ["typing_invalid_nodes.py"]
+}

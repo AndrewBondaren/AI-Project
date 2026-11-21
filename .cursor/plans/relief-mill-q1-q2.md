@@ -125,7 +125,7 @@ Docstring `core.py` / `apron.py`: не Q1→Q2→Q3.
 
 ### 4. Тесты T-18
 
-`backend/tests/test_relief_discover.py`:
+`backend/tests/relief/test_relief_discover.py`:
 
 - Один walk: leftover построен раз; повторный `buckets_high_to_low` нет.
 - Клетка не в двух вёдрах.

@@ -32,7 +32,7 @@ identity = member UID, pins ≠ фильтр, FS stdlib и world registry сня
 | Двойной `prepare_body`: `template_graph_issues` (`_PREPARATIONS`) + повторный `adapter.prepare_body` в loader — два pipeline обязаны совпадать, результат первого не переиспользуется | `templateGraphValidation.py:23,46-50`, `templateSnapshotLoader.py:95-115` | 3 |
 | Single-pass исключение ref'ов опирается на незащищённый инвариант «refs только plot/building → structure» | `templateSnapshotLoader.py:118-129`, `refFields.template_body_refs` | 3 |
 | Private-имена (`_pick_layout_picks`, `_buildings_rng`, `_resolve_subjects`, `_*_kinds_for`) — фактический межмодульный API после сплита | `planner/tokens.py:11-14`, `planner/layoutPicks.py:11-16` | 4 |
-| `candidate_template_uids` — чистый алиас `pick_layout_uids`, живёт только ради тестов | `planner/tokens.py:60-71`, `tests/test_city_three_axes.py` | 4 |
+| `candidate_template_uids` — чистый алиас `pick_layout_uids`, живёт только ради тестов | `planner/tokens.py:60-71`, `tests/settlements/test_city_three_axes.py` | 4 |
 | `_resolve_subjects` мутирует `slot.subject_tags` — скрытый write-back внутри «resolve» (переехал as-is) | `planner/subjects.py:135` | 5 |
 | Тихий `continue` — размещённый токен без template/envelope исчезает без диагностики | `planner/areaSlots.py:102` | 5 |
 | `StructureAreaAssembler` class body ~281 строка — выше порога 250 (pre-existing; B3 +~9 строк; repo-лимит 300 не перейден) | `structureAreaAssembler.py:202-482` | 6 |
@@ -71,8 +71,8 @@ identity = member UID, pins ≠ фильтр, FS stdlib и world registry сня
   явное поле в `packing_warning`), не литерал `"snapshot"`/`"cache"`;
   subject-каталоги — `StrEnum`/`SubjectCatalog` вместо `"resource"`…;
   `AreaPlacement.template_uid: str | None = None` вместо `""`.
-- **Проверка:** `python -m unittest tests.test_city_three_axes
-  tests.test_plot_layout tests.test_building_purpose` — зелёные;
+- **Проверка:** `python -m unittest tests.settlements.test_city_three_axes
+  tests.settlements.test_plot_layout tests.settlements.test_building_purpose` — зелёные;
   grep: `Facing.SOUTH` вне константы — только в non-packing контекстах.
 - **Done:** литералы packing-конвенции — через константы/enum;
   sentinel `""` убран.
@@ -90,8 +90,8 @@ identity = member UID, pins ≠ фильтр, FS stdlib и world registry сня
   (без `= None` + `raise`); `ensure()` без `world`;
   `build_layout_cache` без `terrain_cells`;
   `placements_from_reservations` без `world`/`skeleton`.
-- **Проверка:** `python -m unittest tests.test_library_packs_5b_snapshot
-  tests.test_settlement_topology tests.test_c24_district_packing` +
+- **Проверка:** `python -m unittest tests.libraries.test_library_packs_5b_snapshot
+  tests.settlements.test_settlement_topology tests.settlements.test_c24_district_packing` +
   `python -m compileall app` — зелёные; скрипты `debug_settlement*`
   обновлены.
 - **Done:** ни один параметр не игнорируется; `None`-catalog невозможен
@@ -113,7 +113,7 @@ identity = member UID, pins ≠ фильтр, FS stdlib и world registry сня
   (или loader'у), второй `prepare_body` устранён либо задокументирован
   как единственный; инвариант «refs только → structure» — assertion в
   `template_body_refs` или comment-контракт на уровне полей.
-- **Проверка:** `python -m unittest tests.test_library_packs_5b_snapshot`
+- **Проверка:** `python -m unittest tests.libraries.test_library_packs_5b_snapshot`
   — зелёный; при подмене адаптера ошибка доменная.
 - **Done:** идентичность структур не зависит от side-effect подготовки;
   пробел адаптеров диагностируется.
@@ -125,13 +125,13 @@ identity = member UID, pins ≠ фильтр, FS stdlib и world registry сня
 - **ТЗ:** — (чистота пакета; правило `class-size-limit.mdc` о
   единственном публичном шве).
 - **Файлы:** `planner/tokens.py`, `planner/layoutPicks.py`,
-  `planner/subjects.py`, `tests/test_city_three_axes.py`.
+  `planner/subjects.py`, `tests/settlements/test_city_three_axes.py`.
 - **Контракт:** `_pick_layout_picks`, `_buildings_rng`,
   `_resolve_subjects`, `_resource_kinds_for`, `_crop_kinds_for`,
   `_livestock_kinds_for` — без ведущего underscore (это межмодульный
   API пакета planner); `candidate_template_uids` удалён, тесты
   переходят на `pick_layout_uids`.
-- **Проверка:** `python -m unittest tests.test_city_three_axes` —
+- **Проверка:** `python -m unittest tests.settlements.test_city_three_axes` —
   зелёный; grep: импорт `_`-имён между модулями planner отсутствует.
 - **Done:** один публичный шов `pick_layout_uids`/`build_tokens`;
   алиас снят.

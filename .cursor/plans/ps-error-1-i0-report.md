@@ -12,7 +12,7 @@
 
 - До переключения: `tests.physics.test_settings_policy` — 15/15 PASS.
 - Полный baseline §P3.21 (оба списка объединены) после переключения — 71/71 PASS, включая P2, typing, codec и propagation exceptions/cancellation.
-- `tests.physics.test_settings_logging tests.test_generation_logging` — 7/7 PASS. Настоящие facade/file handlers: собственный sink, отсутствие событий в jsonValidation sink, совпадение события в transcript, request_id/reset, nested world isolation, continuation dedup. Проверены runtime/collect_only equality, validation silence, None/missing/zero/custom/mixed/P2 и независимый успешный вызов после отказов.
+- `tests.physics.test_settings_logging tests.logging.test_generation_logging` — 7/7 PASS. Настоящие facade/file handlers: собственный sink, отсутствие событий в jsonValidation sink, совпадение события в transcript, request_id/reset, nested world isolation, continuation dedup. Проверены runtime/collect_only equality, validation silence, None/missing/zero/custom/mixed/P2 и независимый успешный вызов после отказов.
 - После последнего изменения projection: `tests.physics.test_settings_logging tests.physics.test_settings_policy tests.physics.test_settings_typing` — 19/19 PASS.
 - Existing route suite без постороннего `test_real_gc_emitter_preserves_failure_in_file_and_transcript` — 16/16 PASS. Этот параллельно добавленный Artifact GC тест зависал и в общем, и в отдельном verbose запуске; прогоны прерваны. Его код не менялся. Полный route suite PASS не заявляется.
 
@@ -22,14 +22,14 @@
 $env:TEMP = 'E:\AI Project\backend\.test-tmp'
 $env:TMP = $env:TEMP
 New-Item -ItemType Directory -Force -Path $env:TEMP | Out-Null
-.\.venv\Scripts\python.exe -m unittest tests.physics.test_settings_logging tests.physics.test_settings_policy tests.physics.test_settings_typing tests.test_generation_logging
+.\.venv\Scripts\python.exe -m unittest tests.physics.test_settings_logging tests.physics.test_settings_policy tests.physics.test_settings_typing tests.logging.test_generation_logging
 ```
 
 Изолированное воспроизведение route regression, исключающее только зависающий чужой case:
 
 ```python
 import unittest
-suite = unittest.defaultTestLoader.loadTestsFromName('tests.test_logging_routes')
+suite = unittest.defaultTestLoader.loadTestsFromName('tests.logging.test_logging_routes')
 selected = unittest.TestSuite(t for group in suite for t in group
     if 'test_real_gc_emitter_preserves_failure_in_file_and_transcript' not in t.id())
 result = unittest.TextTestRunner().run(selected)

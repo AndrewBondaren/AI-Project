@@ -182,7 +182,7 @@ Serial. Barrier shrink + `plan_settlement_entries` после всех слот�
 
 ## 5. Тесты (узкие)
 
-Существующий `tests/test_city_three_axes.py` не ломать. Добавить:
+Существующий `tests/settlements/test_city_three_axes.py` не ломать. Добавить:
 
 - rank: порядок registry, unknown size → 0; мир overlay size в середине списка.
 - zone preference: world overlay меняет EDGE list; тип вне списка всё ещё выбирается.

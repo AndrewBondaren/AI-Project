@@ -5,7 +5,7 @@
 **declared-autoresolve** (мастер объявил интент endpoints/via_locations — движок
 достраивает полилинию), **autoresolve** (процедурный, только policy-gated).
 
-## Шаг 1 — `tests/test_hydrology_edge_cases.py`
+## Шаг 1 — `tests/hydrology/test_hydrology_edge_cases.py`
 
 Файлы: новый тест-файл + `named_location()` в `hydrology_fixtures.py`.
 
@@ -18,5 +18,5 @@
 
 ## Приёмка
 
-- `python -m unittest tests.test_hydrology_edge_cases` зелёный.
+- `python -m unittest tests.hydrology.test_hydrology_edge_cases` зелёный.
 - Полный hydrology-набор зелёный.

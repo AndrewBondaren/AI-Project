@@ -64,7 +64,7 @@ Use this skill when the user asks to run the migrated source command `impl-5b-b2
 
 ## Приёмка (из плана B2)
 
-- `python -m unittest tests.test_library_packs_5b_import tests.test_library_packs_4d tests.test_fixture_bundle_import` — зелёные.
+- `python -m unittest tests.test_library_packs_5b_import tests.libraries.test_library_packs_4d tests.bundles.test_fixture_bundle_import` — зелёные.
 - Preview/stale/entity error → полный rollback, ноль записей; исходники immutable; повторный импорт без duplicates.
 - Imported мир не зависит от legacy registry для восстановления graph.
 - Пометка «выполнен» в плане — только после прохождения приёмки и «ок» мастера.

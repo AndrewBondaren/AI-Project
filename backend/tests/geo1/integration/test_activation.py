@@ -204,7 +204,7 @@ class SourceMappingProducerTests(TestCase):
         from app.application.worldData.generators.hydrology.waterBodyAssembler import assemble_water_bodies
         from app.dataModel.hydrology.worldHydrology import WorldHydrology
         from app.dataModel.topology.enums.worldTopologyMode import WorldTopologyMode
-        from tests.hydrology_fixtures import flat_heightmap, hydro_topology
+        from tests.hydrology.hydrology_fixtures import flat_heightmap, hydro_topology
         heightmap = flat_heightmap(0, 5, 0, 3, z=10)
         heightmap.surface_z.update(wet)
         before = dict(heightmap.surface_z)
@@ -289,7 +289,7 @@ class SourceMappingProducerTests(TestCase):
         from app.application.jsonValidation.resolve import ResolveContext
         from app.application.worldData.generators.hydrology.waterBodyAssembler import assemble_water_bodies
         from app.dataModel.hydrology.worldHydrology import WorldHydrology
-        from tests.hydrology_fixtures import flat_heightmap, hydro_topology
+        from tests.hydrology.hydrology_fixtures import flat_heightmap, hydro_topology
         heightmap = flat_heightmap(0, 5, 0, 3, z=10)
         topology = hydro_topology(heightmap)
         del heightmap.surface_z[(2, 2)]

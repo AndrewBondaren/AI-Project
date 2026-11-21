@@ -42,7 +42,7 @@ from app.dataModel.worldPack.meta.wildernessRegionEntry import WildernessRegionE
 from app.application.worldData.pack.preparation.metadataStateValidator import MetadataStateValidator
 from app.application.worldData.pack.preparation.errors import preparation_errors
 from app.dataModel.fields.checkedPath import CheckedPath
-from metadata_vector_cases import vector_cases
+from tests.spatial_pack.metadata_vector_cases import vector_cases
 
 
 class ChunkContractTests(unittest.TestCase):

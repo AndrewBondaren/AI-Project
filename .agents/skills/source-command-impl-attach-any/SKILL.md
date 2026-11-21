@@ -50,7 +50,7 @@ scoped_rng(building_uid, corridor.room_id, str(z_offset), AttachWall.ANY.value)
 
 ## Проверки
 
-- Полный suite: `python -m unittest tests.test_entry_point tests.test_entry_point_runtime tests.test_room_connection tests.test_staircase_spec tests.test_structure_template tests.test_building_assembler tests.test_structure_area_assembler tests.test_deterministic_ids tests.test_city_three_axes tests.test_c24_district_packing tests.test_structure_orientation tests.test_u_shape_orientation_baseline tests.test_vertical_ladder_orientation_baseline tests.test_debug_structure_rotations tests.test_room_def` + новые тесты среза
+- Полный suite: `python -m unittest tests.structure.test_entry_point tests.structure.test_entry_point_runtime tests.structure.test_room_connection tests.structure.test_staircase_spec tests.structure.test_structure_template tests.settlements.test_building_assembler tests.structure.test_structure_area_assembler tests.identity.test_deterministic_ids tests.settlements.test_city_three_axes tests.settlements.test_c24_district_packing tests.structure.test_structure_orientation tests.structure.test_u_shape_orientation_baseline tests.structure.test_vertical_ladder_orientation_baseline tests.structure.test_debug_structure_rotations tests.structure.test_room_def` + новые тесты среза
 - Новый тест: шаблон с corridor + staircase (facing=north) + attach_wall="any" → все attached комнаты на южной стороне; без лестницы → детерминированный выбор (scoped_rng), generate×2 идентичен
 - `python -m compileall -q app tests`; `git diff --check`
 - A/B fingerprint 13 stdlib (`.local/rooms_pojo_sweep.py`-техника) — **идентичен**, те же 8 ERROR

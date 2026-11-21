@@ -4,6 +4,8 @@
 
 ## Структура
 
+Приоритетное уточнение 2026-11-21: пользователь выбрал последовательную Time-owned batch preparation; прежний OPEN выбора batch-семантики ниже исторический. Для одной команды orchestrator вызывает соответствующий single leaf, для нескольких — один batch leaf → TimeSettingsBatchPipelineOpenPipeline.prepare_batch. NodeId/wrappers/error mapping ещё OPEN. Orchestrator возвращает PreparedTimeSettingsChange либо полный owning отказ в prepare_changes; section producer вызывает prepare_changes через отдельный leaf. В orchestrator нет сравнения base, вычисления command indices/budget, промежуточных settings, no-op/retention checks. Эти алгоритмы остаются Time-owned. Границы CALL и transport — dag-write-nodes-implementation.md, «Обязательная граница оркестрации».
+
 `prepare_world_time_settings_changes` — проектируемая orchestration node. Получает типизированные команды, вызывает соответствующие operation leaf и передаёт результаты следующему согласованному этапу подготовки. Методы, callbacks и pipelines не передаются как данные команды. Название сохраняет ранее предложенную форму; окончательная принадлежность семейства зависит от разрешения ownership ниже.
 
 Каждая из восьми дочерних нод отвечает за одну операцию и вызывает один закреплённый публичный метод. Внутренние календарные алгоритмы не переносятся в DAG. Четыре ранее принятые самостоятельные Time leaf остаются без родительской ноды: этот orchestrator к ним родство не добавляет.

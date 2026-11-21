@@ -10,7 +10,7 @@ description: Code review нормализации источников каск�
 ```powershell
 Push-Location backend
 try {
-    ../.venv/Scripts/python.exe -m unittest tests.test_cascade_context_baseline tests.test_cascade_migration_m2 tests.test_context_extend tests.test_runtime_world_edit_policy tests.test_e6_consumers.SourceConsumerTests.test_scope_uses_normalized_range_from_unchecked_source tests.test_e6_consumers.SourceConsumerTests.test_plot_lower_priority_range_and_band_are_not_silently_ignored tests.test_e6_consumers.SourceConsumerTests.test_settlement_payload_material_is_validated_before_extend tests.test_e6_consumers.SourceConsumerTests.test_invalid_authored_source_never_reaches_extend tests.test_e6_consumers.SourceConsumerTests.test_district_range_and_unavailable_registry_reject
+    ../.venv/Scripts/python.exe -m unittest tests.cascade.test_cascade_context_baseline tests.cascade.test_cascade_migration_m2 tests.cascade.test_context_extend tests.cascade.test_runtime_world_edit_policy tests.cascade.test_e6_consumers.SourceConsumerTests.test_scope_uses_normalized_range_from_unchecked_source tests.cascade.test_e6_consumers.SourceConsumerTests.test_plot_lower_priority_range_and_band_are_not_silently_ignored tests.cascade.test_e6_consumers.SourceConsumerTests.test_settlement_payload_material_is_validated_before_extend tests.cascade.test_e6_consumers.SourceConsumerTests.test_invalid_authored_source_never_reaches_extend tests.cascade.test_e6_consumers.SourceConsumerTests.test_district_range_and_unavailable_registry_reject
     if ($LASTEXITCODE -ne 0) { throw 'Cascade tests failed' }
 } finally { Pop-Location }
 ```
@@ -19,7 +19,7 @@ try {
 
 ```python
 from dataclasses import replace
-from tests.test_cascade_context_baseline import fixture
+from tests.cascade.test_cascade_context_baseline import fixture
 from app.application.cascade.locationScope import settlement_context, district_context, area_context, building_context
 from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
 from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate

@@ -52,8 +52,8 @@ exports не удаляются в рамках этой задачи без п�
 - **Файлы:** `generators/hydrology/types.py`,
   `load/resolveRiverTypeClassify.py`, `rivers/{riverNetworkPlanner,
   classifyRiverSegments,resolveDeclaredRiverPath,riverRouteRequests}.py`,
-  `shore/fineRiverSampling.py`, `tests/test_hydrology_hy1.py`,
-  `tests/test_hydrology_edge_cases.py`, `tests/test_relief_objects_z.py`,
+  `shore/fineRiverSampling.py`, `tests/hydrology/test_hydrology_hy1.py`,
+  `tests/hydrology/test_hydrology_edge_cases.py`, `tests/relief/test_relief_objects_z.py`,
   `docs/tz_terrain_hydrology.md`, `docs/tz_generator_technical_debt.md`.
 - **Контракт:** helper возвращает существующий POJO вместо dataclass;
   production callers сохраняются. Пять полей, defaults и wire не меняются;
@@ -79,7 +79,7 @@ Resolver — typed accessor без ручного перечисления по�
 формулы не менялись; public jsonValidation exports сохранены.
 В ТЗ U22 синхронизирован с уже действующим missing/invalid контрактом.
 
-126 tests OK: tests.test_hydrology_hy1, test_hydrology_edge_cases,
+126 tests OK: tests.hydrology.test_hydrology_hy1, test_hydrology_edge_cases,
 test_hydrology_hy5a/b/c, test_hydrology_river_depth_policy,
 test_hydrology_river_routing, test_hydrology_river_topology_contract,
 test_hydrology_fine_river_planning, test_hydrology_coarse_space,

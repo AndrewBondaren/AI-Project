@@ -282,6 +282,34 @@ class CalendarTests(unittest.TestCase):
         self.assertEqual(proposal.before.hours_per_day, 10)
 
 class WorldOperationTests(unittest.TestCase):
+    def test_preparation_refusal_paths_preserve_contract_and_stop_validation(self):
+        from unittest.mock import patch
+        from app.application.worldData.timeSettings.factory import make_calendar_settings_pipeline, make_epoch_settings_pipeline
+        from app.dataModel.world.settings.timeOperations.changes import CalendarCreate, CalendarRemove, CalendarUpdate, EpochRemove
+        from app.dataModel.world.settings.timeOperations.results import SettingsInvalid
+        from app.dataModel.world.calendar.projection.errors import CalendarIssueCode
+
+        calendar = make_calendar_settings_pipeline(self.validator, self.projector)
+        epochs = make_epoch_settings_pipeline(self.validator)
+        entry = self.base.capture.settings.calendars.entry_for(self.key)
+        bad_anchor = entry.anchor.model_copy(update={"coordinate_seconds": 1})
+        cases = (
+            (calendar.prepare_calendar_create, CalendarCreate(base=self.base, entry=entry), ("entry",)),
+            (calendar.prepare_calendar_remove, CalendarRemove(base=self.base, calendar=self.key, replacement=self.key), ("replacement",)),
+            (calendar.prepare_calendar_update, CalendarUpdate(base=self.base, entry=entry.model_copy(update={"anchor": bad_anchor})), ("entry", "anchor")),
+            (epochs.prepare_epoch_remove, EpochRemove(base=self.base, epoch=RegistryKey("missing")), ("epoch",)),
+        )
+        before = self.base.model_copy(deep=True)
+        with patch.object(type(self.validator), "validate", side_effect=AssertionError("validation must not run")):
+            for operation, request, expected_path in cases:
+                with self.subTest(operation=operation.__name__):
+                    result = operation(request)
+                    self.assertIsInstance(result, SettingsInvalid)
+                    self.assertEqual(len(result.issues), 1)
+                    self.assertEqual(result.issues[0].code, CalendarIssueCode.INVALID_SETTINGS_CHANGE)
+                    self.assertEqual(result.issues[0].path.projection(), expected_path)
+                    self.assertEqual(self.base, before)
+
     def test_shorter_day_requires_anchor_and_keeps_physical_clock(self):
         from app.dataModel.world.calendar.dates.anchor import CalendarOrigin
         from app.dataModel.world.calendar.dates.clock import CalendarClockTime

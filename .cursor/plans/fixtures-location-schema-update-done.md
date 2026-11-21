@@ -39,15 +39,15 @@
   как у `is_inhabited`/`payload_kind`; явный `[]` по-прежнему очищает рецепт.
 - **Файлы:** `backend/app/dataModel/locations/locationType/worldLocationTypeRegistry.py`,
   `backend/app/dataModel/locations/locationType/locationTypeSubtypeEntry.py`,
-  `backend/tests/test_location_payload.py` (+кейс: overlay `{system_subtype, footprint_by_size}`
+  `backend/tests/rendering/test_location_payload.py` (+кейс: overlay `{system_subtype, footprint_by_size}`
   без рецептных полей сохраняет `typical_district_types`/`required_structure_types` engine).
 - **Контракт:** `typical_district_types`/`required_structure_types` берутся из world-строки
   только при `"<field>" in world.model_fields_set`; `footprint_by_size` — merge (уже).
   Отсутствие рецептных полей сохраняется при сериализации source-POJO, как отсутствие,
   а не превращается в явный `[]`. Явные списки сохраняются; `null` не является
   командой очистки. Общую сериализацию остальных defaults не менять.
-- **Проверка:** `python -m unittest tests.test_location_payload tests.test_city_three_axes
-  tests.test_loc_t2_settlement_size` — зелёные.
+- **Проверка:** `python -m unittest tests.rendering.test_location_payload tests.settlements.test_city_three_axes
+  tests.settlements.test_loc_t2_settlement_size` — зелёные.
   Регрессии: omission / явный `[]` / непустой список через normalize → JSON →
   runtime read → engine-merge. Для изоляции этого шага символ указан явно.
   Из корня проекта — `npm run typecheck:cascade`.
@@ -67,10 +67,10 @@
   уточнить там согласованный контракт nullable-символа.
 - **Файлы:** `docs/tz_locations.md`,
   `backend/app/dataModel/locations/locationType/locationTypeSubtypeEntry.py`,
-  `backend/tests/test_location_payload.py`.
+  `backend/tests/rendering/test_location_payload.py`.
 - **Контракт:** отсутствие / `null` наследуют engine; строка содержит ровно один
   символ. `null` не отключает отображение. Ограничение длины не применяется к `None`.
-- **Проверка:** `python -m unittest tests.test_location_payload`;
+- **Проверка:** `python -m unittest tests.rendering.test_location_payload`;
   normalize → JSON → read для `{system_subtype, footprint_by_size}` без символа;
   явный `null` и корректный символ; недопустимая длина отклоняется моделью.
   Из корня — `npm run typecheck:cascade`.
@@ -90,11 +90,11 @@
   сначала обновить канон в ТЗ.
 - **Файлы:** `docs/tz_locations.md`,
   `backend/app/dataModel/locations/locationType/worldLocationTypeRegistry.py`,
-  `backend/tests/test_location_payload.py`.
+  `backend/tests/rendering/test_location_payload.py`.
 - **Контракт:** engine settlement `parent_types = [null, "territory", "region"]`.
   Непустой world-список заменяет engine-список согласно существующему overlay.
   Изменение не создаёт родителей и не добавляет регион в каскад или расчёт footprint.
-- **Проверка:** `python -m unittest tests.test_location_payload` — канонический
+- **Проверка:** `python -m unittest tests.rendering.test_location_payload` — канонический
   реестр разрешает все три варианта; world-override сохраняет существующую семантику.
   Из корня — `npm run typecheck:cascade`.
 - **Done:** существующие поселения под region соответствуют канону;
@@ -114,8 +114,8 @@
   удалить legacy-типы (ген-файлы: `city`/`town`/`village`/`square`/`street`/`gate`/`dungeon`/
   `cave`/`camp`/`kingdom`/`empire`/`duchy`); `continent` оставить + `parent_types: [null]`,
   у `region` в мирах с `continent` — `parent_types: [null, "continent"]`.
-- **Проверка:** JSON parse; `python -m unittest tests.test_declared_river_topology
-  tests.test_terrain_masks tests.test_plot_layout` (грузят `world_template.json`).
+- **Проверка:** JSON parse; `python -m unittest tests.hydrology.test_declared_river_topology
+  tests.regions.test_terrain_masks tests.settlements.test_plot_layout` (грузят `world_template.json`).
   Baseline разбора: во всех шести модулях шагов 1–2 — 111 тестов, две ошибки
   `test_plot_layout` (`test_catalog_of_structure_type_via_structure_ref`,
   `test_leaves_of_plaza_rule_and_resolve`): старый LevelDef без display_name и с rooms=[]
@@ -223,7 +223,7 @@ shore_lake / shore_sea и material sand. Согласованный контра
    WorldSlice передаёт декларацию единому canonical_registry_wire, вызываемому
    импортом и runtime перед policy-resolve. Полный импорт материализует реестры;
    partial update без ключа их не затрагивает. ТЗ обновлены.
-   Добавлен `backend/tests/test_world_registry_defaults.py` (восемь регрессий),
+   Добавлен `backend/tests/validation/test_world_registry_defaults.py` (восемь регрессий),
    обновлён `test_repair_world_defaults.py`: частичный реестр читает каноническую
    воду; repair материализует библиотеку; явная смена категории water сохраняется.
    Целевые три модуля — 24 теста OK. Все восемь миров проходят normalize_world.
@@ -269,12 +269,12 @@ shore_lake / shore_sea и material sand. Согласованный контра
   действующий контракт World Pack для секции map_cells.
 - **Файлы:** семь `fixtures/world*.json` из шагов 2–4 и `fixtures/world_defaults_test.json`;
   `backend/scripts/build_world_test_all_fixture.py`;
-  `backend/tests/test_fixture_bundle_import.py` (интеграционная проверка).
+  `backend/tests/bundles/test_fixture_bundle_import.py` (интеграционная проверка).
 - **Контракт:** импортируемые bundles не содержат ключа `map_cells`, даже с `[]`;
   убрать его из world_test/world_test_all и проверить остальные файлы.
   Контракт импортера не ослаблять. Если клетки нужны другому тестовому потребителю,
   сохранить их в отдельной fixture World Pack и обновить ссылки потребителя.
-- **Проверка:** `python -m unittest tests.test_fixture_bundle_import` в изолированной
+- **Проверка:** `python -m unittest tests.bundles.test_fixture_bundle_import` в изолированной
   БД актуальной схемы через WorldBundleService.import_bundle, затем чтение результатов.
   Для каждого файла: нет ошибок секций и rollback; реестры и payload сохраняются,
   рецепты engine не очищаются; huge резолвится в двух оговорённых файлах;

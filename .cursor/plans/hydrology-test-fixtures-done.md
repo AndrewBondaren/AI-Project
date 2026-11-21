@@ -4,9 +4,9 @@
 Факт: 9–10 тест-файлов hydrology копируют приватные `_world`/`_flat_heightmap`/
 `_depression_heightmap`/`_master` с расходящимися дефолтами; shared-модуля нет.
 
-## Шаг 1 — `backend/tests/hydrology_fixtures.py`
+## Шаг 1 — `backend/tests/hydrology/hydrology_fixtures.py`
 
-Shared-модуль (импорт как `from tests.hydrology_fixtures import ...`, по прецеденту
+Shared-модуль (импорт как `from tests.hydrology.hydrology_fixtures import ...`, по прецеденту
 `template_domain_transport_fixture.py`):
 
 - `hydro_world(**kwargs)` — SimpleNamespace с суперсетом дефолтов:

@@ -18,7 +18,7 @@ SoT: docs/tz_terrain_relief.md § Pack-слот + Правила стрелок;
      docs/tz_terrain_relief_consume.md § Тело sidecar (SCH-GRADE-CELL-SLOTS).
 
 Не трогать: mill C41 / SQL catalog / DAG / 0002_*.sql / Occupancy v1.
-Locked-карты backend/tests/test_relief_r41_t25_locked_cases.py — без правки
+Locked-карты backend/tests/relief/test_relief_r41_t25_locked_cases.py — без правки
 до отдельной просьбы.
 
 Не коммитить, пока не скажу. Backend не поднимать.

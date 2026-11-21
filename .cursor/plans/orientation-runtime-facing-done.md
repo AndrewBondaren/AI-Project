@@ -8,7 +8,7 @@
 - Шаг 2: `StructureOrientation.apply` копирует frozen EntryPoint с повёрнутой
   wall, поворачивает shaft facing/embedded_entry и кардинальный attach_wall через
   существующий CARDINAL_FACINGS; None, BOTH/ANY и неразмещённые комнаты сохраняются.
-- Шаг 3: расширен существующий `backend/tests/test_structure_orientation.py`:
+- Шаг 3: расширен существующий `backend/tests/structure/test_structure_orientation.py`:
   четыре новых теста, четырёхоборотная идентичность с метаданными и проверки
   runtime-полей при полной генерации в четырёх направлениях. Шаблон не мутируется.
 - Начальный baseline: 158 тестов, 1 expected failure, 1 ошибка импорта C24 из-за

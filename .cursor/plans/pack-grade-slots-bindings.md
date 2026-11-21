@@ -66,7 +66,7 @@ GradeSlotIndex.relative_to/restricted_to/without_couple создают прои�
 
 Payload не содержит дочерних ArtifactRef. Сам sidecar ref входит в полный manifest retention set; captured base/provenance dependencies учитываются по общему контракту отдельно. Новые holder store, lifecycle или публичная операция merge внутри Pack не требуются. Порядок источники → evidence → manifest → codec/readers не меняется.
 
-[test_grade_slot_sidecar.py](../../backend/tests/test_grade_slot_sidecar.py) содержит compact round-trip, legacy rays→empty и incoming-first merge; [test_pack_cell_slots.py](../../backend/tests/test_pack_cell_slots.py) — producer/model проверки. Это найденные тесты, не результат нового запуска и не evidence готового artifact binding.
+[test_grade_slot_sidecar.py](../../backend/tests/relief/test_grade_slot_sidecar.py) содержит compact round-trip, legacy rays→empty и incoming-first merge; [test_pack_cell_slots.py](../../backend/tests/worldPack/test_pack_cell_slots.py) — producer/model проверки. Это найденные тесты, не результат нового запуска и не evidence готового artifact binding.
 
 Для приёмки: duplicate XY reject; invalid count/code/type/unknown fields; missing ref отдельно от valid empty; unsupported schema и broken JSON; bytes/collection budget; incoming-first с сохранением старых cells и пустым incoming; точная pinned base вместо latest; корректный tile/location address с world XY; сохранение slot order; read без генерации из z. Существующий legacy тест rays→empty не переносится автоматически в единственный целевой decoder.
 

@@ -102,8 +102,8 @@ scan удалены): часть находок закрыта обстояте�
 - **Контракт:** `pick.template_uid` обязателен (`str`); falsy-guard и
   `or "selected"` в path снимаются — missing body →
   `REF_W_UNAVAILABLE` по реальному uid.
-- **Проверка:** `python -m unittest tests.test_library_packs_5b_relief
-  tests.test_relief_pure`.
+- **Проверка:** `python -m unittest tests.libraries.test_library_packs_5b_relief
+  tests.relief.test_relief_pure`.
 - **Done:** defensive-код не противоречит объявленному типу.
 
 ### Шаг 2 — seam write provider: инъекция + публичный `import_path` ✅ закрыт B7-правками
@@ -126,7 +126,7 @@ scan удалены): часть находок закрыта обстояте�
   FS-import идёт по публичному `LibraryPackService.import_path` —
   `_fs_writes` остаётся внутренним job.
 - **Проверка:** `python -m unittest discover -s tests -p "test_library_packs_5b*.py"`;
-  `tests.test_bundle_archive`.
+  `tests.bundles.test_bundle_archive`.
 - **Done:** `_write_provider` и `_fs_writes` не упоминаются вне
   своих классов.
 
@@ -159,8 +159,8 @@ scan удалены): часть находок закрыта обстояте�
 - **Контракт:** одна структура (field → kinds), от неё derive:
   `LOCATION_TEMPLATE_REF_FIELDS`, `remap_named_location_refs`,
   `named_location_template_refs`, `_LOCATION_REF_KINDS`.
-- **Проверка:** `python -m unittest tests.test_template_location_refs
-  tests.test_bundle_remap tests.test_library_packs_b3`.
+- **Проверка:** `python -m unittest tests.libraries.test_template_location_refs
+  tests.bundles.test_bundle_remap tests.libraries.test_library_packs_b3`.
 - **Done:** добавление ref-поля — одна правка; stale-комбинация
   невозможна конструкцией.
 
@@ -205,7 +205,7 @@ docstring `resolve_fallback` в `domainAdapters/contract.py` — одна
   запись через `report_issues`/существующий маршрут (решение мастера:
   warning, не fail-fast, не `logging.getLogger`).
 - **Проверка:** `python -m unittest discover -s tests -p "test_library_packs_*.py"`;
-  `tests.test_library_write_service`.
+  `tests.libraries.test_library_write_service`.
 - **Done:** identity/UUID-проверки не продублированы; unwired
   `world_import` оставляет диагностический след.
 
@@ -246,7 +246,7 @@ docstring `remapRefs.py`. Проверка: `test_library_write_*` 97 тесто
   новое значение `library_pins`, caller присваивает — согласуется с
   `model_copy`-стилем остальных helpers; форма — в module docstring.
 - **Проверка:** `python -m unittest discover -s tests -p "test_library_write_*.py"`;
-  `tests.test_bundle_remap`.
+  `tests.bundles.test_bundle_remap`.
 - **Done:** ни один caller не игнорирует значимый результат; стиль один.
 
 ### Шаг 9 — хардкоды: константы и дефолты моделей ✅ 2026-10-15
@@ -297,7 +297,7 @@ docstring `remapRefs.py`. Проверка: `test_library_write_*` 97 тесто
 - **Контракт:** сервис держит thin-вызов валидатора; правила
   barrier/canal — в доменном модуле с typed POJO.
 - **Проверка:** `python -m unittest discover -s tests -p "test_library_packs_*.py"`;
-  `tests.test_fixture_bundle_import`.
+  `tests.bundles.test_fixture_bundle_import`.
 - **Done:** класс — одна зона (import job); валидаторы переиспользуемы
   preparation-слоем шага 6 без дублирования.
 

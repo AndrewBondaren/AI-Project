@@ -150,7 +150,7 @@ Data flow serial: typed spec → требования потребителя/pre
 Рабочая директория для unittest — `E:/AI Project/backend`;
 Python — `./.venv/Scripts/python.exe`, не старый `venv`.
 
-U-гейт U: `./.venv/Scripts/python.exe -m unittest tests.test_u_shape_orientation_baseline tests.test_u_shape_facing tests.test_structure_orientation tests.test_debug_structure_rotations tests.test_embedded_shaft tests.test_embedded_upper_layout tests.test_shaft_walls`.
+U-гейт U: `./.venv/Scripts/python.exe -m unittest tests.structure.test_u_shape_orientation_baseline tests.structure.test_u_shape_facing tests.structure.test_structure_orientation tests.structure.test_debug_structure_rotations tests.structure.test_embedded_shaft tests.structure.test_embedded_upper_layout tests.structure.test_shaft_walls`.
 
 Sweep W из корня: `backend/.venv/Scripts/python.exe .local/rooms_pojo_sweep.py .local/unified_placement_<step>_after.json`.
 Сравнить SHA256 cells/passages И ТОЧНЫЙ список ERROR с baseline S1;

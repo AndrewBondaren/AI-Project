@@ -376,10 +376,10 @@ preview/stale/entity error откатывают мир и библиотеки �
 Регрессии из backend через рабочий Python runtime:
 
 ```powershell
-python -m unittest tests.test_library_packs_5a tests.test_library_packs_4d
+python -m unittest tests.libraries.test_library_packs_5a tests.libraries.test_library_packs_4d
 python -m unittest discover -s tests -p "test_library_packs_*.py"
 python -m unittest discover -s tests -p "test_library_write_*.py"
-python -m unittest tests.test_fixture_bundle_import tests.test_world_column_write
+python -m unittest tests.bundles.test_fixture_bundle_import tests.validation.test_world_column_write
 ```
 
 Новые migration/snapshot и доменные cases добавляются в соответствующих

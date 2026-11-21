@@ -473,7 +473,7 @@ unresolved (невалидный terrain-ключ, неразрешимый ко
 `ids/__init__.py`: `SEED="seed"`, `CLAIM="claim"`, `EDGE="edge"`,
 `DENSITY="density"`. DET-1 нормализует Enum через `.value`, поэтому
 каноническая строка и RNG остаются идентичными строковым каналам; это
-проверяется в `tests/test_deterministic_ids.py`. `UidKind.REGION`
+проверяется в `tests/identity/test_deterministic_ids.py`. `UidKind.REGION`
 по-прежнему вводится только шагом 3.
 
 **Уточнение шага 2 по замечанию мастера (2026-10-17):** defaults
@@ -1034,7 +1034,7 @@ canonical registry и resolver используют члены enum. Wire-зна
 
 ### Уточнение контракта shape_kind (2026-10-18)
 
-По указанию мастера shape_kind должен ожидать корректный тип. Цель: единый RegionShapeKind (StrEnum) в dataModel/spatial/regionShape.py, используемый в Literal-discriminator моделей форм и в аннотации region_uid. None остаётся для остальных источников identity; bbox_min требует экземпляр enum, anchor_radius использует anchor_uid. Runtime отвергает произвольную строку и anchor_radius в bbox-ветке. Отложенный импорт enum внутри ids нужен из-за обратной зависимости dataModel → app.ids при инициализации пакетов. ТЗ: docs/tz_map_light_bake.md, раздел degraded identity bbox_min + shape_kind=<shape.kind>; строковые wire-значения и DET-1 UID сохраняются. Файлы: regionShape.py, ids/regionIdentity.py, tests/test_region_identity.py. Проверка: модели/discriminator JSON round-trip, прежняя формула UID, отказ некорректного типа/ветки, профильная регрессия и compileall. Done: тип един для модели и UID, проверяется при вызове.
+По указанию мастера shape_kind должен ожидать корректный тип. Цель: единый RegionShapeKind (StrEnum) в dataModel/spatial/regionShape.py, используемый в Literal-discriminator моделей форм и в аннотации region_uid. None остаётся для остальных источников identity; bbox_min требует экземпляр enum, anchor_radius использует anchor_uid. Runtime отвергает произвольную строку и anchor_radius в bbox-ветке. Отложенный импорт enum внутри ids нужен из-за обратной зависимости dataModel → app.ids при инициализации пакетов. ТЗ: docs/tz_map_light_bake.md, раздел degraded identity bbox_min + shape_kind=<shape.kind>; строковые wire-значения и DET-1 UID сохраняются. Файлы: regionShape.py, ids/regionIdentity.py, tests/regions/test_region_identity.py. Проверка: модели/discriminator JSON round-trip, прежняя формула UID, отказ некорректного типа/ветки, профильная регрессия и compileall. Done: тип един для модели и UID, проверяется при вызове.
 
 Реализовано, готово к приёмке: shape_kind: RegionShapeKind | None; модели форм возвращают тот же enum. Прямой вызов со строкой (включая валидный wire-токен) отклоняется TypeError; anchor_radius с bbox_min — ValueError. 108 профильных тестов прошли, включая 3 новых теста типа/JSON/сохранности UID; compileall app и git diff --check чистые.
 

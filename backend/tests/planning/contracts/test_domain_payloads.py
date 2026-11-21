@@ -273,8 +273,8 @@ class TerrainPlanningPayloadTests(unittest.TestCase):
 
     def water_result(self):
         from app.application.worldData.generators.hydrology.placement import run_water_placement_pass
-        from tests.hydrology_fixtures import flat_heightmap
-        from tests.test_water_placement_pass import _basin_world
+        from tests.hydrology.hydrology_fixtures import flat_heightmap
+        from tests.hydrology.test_water_placement_pass import _basin_world
         return run_water_placement_pass(_basin_world(), [], flat_heightmap(0, 10, 0, 6))
 
     def test_grid_and_terrain_inputs_require_explicit_valid_values(self):

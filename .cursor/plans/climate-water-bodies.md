@@ -61,7 +61,7 @@ climate стампует только свободные клетки. Scope-п�
 Файлы: `dataModel/hydrology/climateWater.py` (new), `worldHydrology.py`,
 `generators/hydrology/types.py` (`CLIMATE_WATER` + `HYDROLOGY_BOOTSTRAP_SCOPES`),
 `load/climateWaterPolicy.py` (new), `waterBodyIdentity.py`.
-Проверка: `python -m unittest tests.test_hydrology_declared_wire` +
+Проверка: `python -m unittest tests.hydrology.test_hydrology_declared_wire` +
 wire round-trip `climate_water` в новом тесте; compileall.
 
 ### Шаг 2 — basin carve (lakes + inland seas)

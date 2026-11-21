@@ -18,15 +18,17 @@ Invalid receipt — execution contract fault, не SectionRefused/business refus
 
 ## 2. Методы и ответственность
 
+**Детализация 2026-11-21 после архитектурного ревью:** global adapter и missing-base preconditions определены в snapshot-receipt-facts-diagnostics.md §3. Единая representation bases для validator/service/builder — `Mapping[SnapshotRef, SnapshotEnvelope]`, ключи — exact pinned refs. Это заменяет tuple bases и raw-receipt global helper в старых предложениях.
+
 Все пути относительно backend/app. TARGET signatures ниже задают предложение реализации принятого поведения; незакрытые детали явно перечислены в §6.
 
 | Класс/модуль | Метод / ответственность / зависимости | Приёмка и отказ |
 |---|---|---|
-| SnapshotReceiptValidator — application/worldSnapshot/validation/snapshotReceiptValidator.py, новый | `validate[S: DomainSection](self, section: S, receipt: SectionApplyReceipt, context: SnapshotApplyContext, bases: tuple[SnapshotEnvelope, ...], *, section_index: int) -> None`. Pure проверка контракта successful результата; owning models, shared provenance helper и локальный collector | Exact membership, section association, provenance; нет IO/codec/handler/commit, sorting входа или Time-specific rules. Нарушение → SnapshotReceiptContractError; section_index проходит отдельный strict nonnegative admission по R2 |
+| SnapshotReceiptValidator — application/worldSnapshot/validation/snapshotReceiptValidator.py, новый | `validate[S: DomainSection](self, section: S, receipt: SectionApplyReceipt, context: SnapshotApplyContext, bases: Mapping[SnapshotRef, SnapshotEnvelope], *, section_index: int) -> None`. Pure проверка контракта successful результата; owning models, shared provenance helper и локальный collector | Exact membership, section association, provenance; нет IO/codec/handler/commit, sorting входа или Time-specific rules. Нарушение → SnapshotReceiptContractError; section_index проходит отдельный strict nonnegative admission по R2 |
 | SectionApplyReceipt — dataModel/patch/results/sectionResult.py, existing | Existing model validation отвечает за uniqueness, section ownership вложенных refs и changed | Revalidate, не копировать predicates. Malformed экземпляр не использовать как trusted input dependent checks |
 | SnapshotMetadataBuilder — application/worldSnapshot/service/snapshotMetadataBuilder.py, existing | build строит metadata из context/receipts/pinned bases; per-receipt provenance делегирует единому helper | Нет второй реализации перенесённых predicates; сохраняются independent diagnostics и итоговая проверка envelope |
-| receiptProvenance.py — application/worldSnapshot/validation/, existing модуль функций | Выделить pure `collect_receipt_provenance(receipt: SectionApplyReceipt, context: SnapshotApplyContext, bases: tuple[SnapshotEnvelope, ...], *, section_index: int) -> tuple[SnapshotMetadataRelationIssue, ...]`. Existing validate_receipt_provenance(metadata, receipts, base, operation_id) сохраняет итоговую envelope/base consistency | Один источник per-receipt predicates. Не копировать их в итоговую проверку. Exact extraction и адреса до кода сверить по §4; section_index передаётся без перенумерации, bool запрещён |
-| WorldSnapshotService — application/worldSnapshot/service/worldSnapshotService.py, existing | _apply_to_target вызывает validator сразу после успешного handler.apply; SectionRefused идёт прежним путём. Service поставляет pinned bases, не validator | Нет append receipt/следующего handler/metadata после fault. Порядок CAS/handoff/terminal не меняется. Exact internal signature delta для передачи bases остаётся gate §6 |
+| receiptProvenance.py — application/worldSnapshot/validation/, existing модуль функций | Pure `collect_receipt_provenance(facts:ReceiptFacts, context:SnapshotApplyContext, bases:Mapping[SnapshotRef,SnapshotEnvelope]) -> tuple[SnapshotMetadataRelationIssue,...]`; exact owner/base adapter по facts-плану §3. Existing validate_receipt_provenance сохраняет signature и итоговую envelope/base consistency | Один источник predicates; no IO и no fake context для final. section_index из facts без перенумерации; base_available=False не подменяет отсутствие parent |
+| WorldSnapshotService — application/worldSnapshot/service/worldSnapshotService.py, existing | _load_pinned_bases читает remaining metadata с reuse; _apply_to_target вызывает validator сразу после success apply; _append_metadata строит/пишет metadata из переданных bases. Exact signatures в §4.1 | Нет повторного base read на metadata-этапе, append receipt/следующего handler после fault. Порядок CAS/handoff/terminal не меняется |
 | ISnapshotHistoryStore / SqliteSnapshotHistoryStore — existing history ports/adapters | Exact чтение metadata базы в caller transaction; append проверяет итоговую provenance | Без competing transaction и domain payload reads; не переносят receipt membership в SQL |
 | ValidatorAggregationHelper — dataModel/validation/diagnostics/validatorAggregationHelper.py, existing | Request-local collector с exact admitted classes | Независимые ошибки агрегируются, mutable shared collector запрещён |
 | SnapshotReceiptContractError — application/worldSnapshot/errors.py, новый | Subclass PublicationInfrastructureError; `__init__(diagnostics: tuple[ReceiptContractIssue, ...]) -> None`, строго валидированный непустой tuple | Не наследует SectionRefused, не обрабатывается как _ApplyRefused; cause malformed model failure сохраняется, unknown rollback не перекрывается |
@@ -72,7 +74,53 @@ Malformed receipt: использовать existing strict model validation/с�
 
 Missing/corrupt persisted base — infrastructure fault до любых handler.apply, не invalid receipt и не business refusal. Принята поведенческая дельта: прежнее обнаружение на metadata-этапе переносится раньше apply. При одновременной потенциальной ошибке handler.apply/receipt она не исследуется: apply не вызывается, вымышленные diagnostics не формируются. Unknown outcome/rollback не маскируется. Exact aggregation нескольких missing bases и carrier/detail mapping уточняются в R3/R5, без возврата к выбору момента чтения.
 
-Решение фиксирует owner/момент reads и изменение приоритета фаз. Exact helper/метод service, representation bases и передача в existing callers ещё требуют внутренней детализации C2-G1; это не повторное согласование варианта А. До кода требуется синхронизация owning ТЗ. Validator остаётся pure; откладывать required receipt provenance до metadata запрещено.
+Решение фиксирует owner/момент reads и изменение приоритета фаз. Exact методы service, representation bases и caller mapping теперь заданы в §4.1; прежний OPEN об отсутствии детализации C2-G1 снят. Принятый порядок уже отражён в docs/tz_world_snapshot.md; новые internal signatures его не меняют. Validator остаётся pure; откладывать required receipt provenance до metadata запрещено.
+
+### 4.1. C2-G1: internal service signatures и caller mapping
+
+Детализация принятой фазы, не новый public apply lifecycle. Все методы принадлежат existing WorldSnapshotService; IO только через self._history с supplied scope. SnapshotMetadataBuilder.build сохраняет existing Mapping параметр. Обязательные keyword-only bases не имеют default и не восстанавливаются из receipts.
+
+```python
+async def _load_pinned_bases(
+    self, validation: SnapshotValidationContext, *, scope: CommitReadScope,
+    source_bases: Mapping[SnapshotRef, SnapshotEnvelope],
+) -> Mapping[SnapshotRef, SnapshotEnvelope]: ...
+
+@asynccontextmanager
+async def _apply_to_target(
+    self, scope: CommitScope, validation: SnapshotValidationContext,
+    sections: tuple[DomainSection, ...], snapshot: WorldSnapshotRef,
+    players: tuple[PlayerSnapshotRef, ...], *,
+    bases: Mapping[SnapshotRef, SnapshotEnvelope],
+) -> AsyncIterator[tuple[SnapshotApplyContext, tuple[SectionApplyReceipt, ...]]]: ...
+
+async def _append_metadata(
+    self, context: SnapshotApplyContext, turn_id: int, created_at: CreatedAtUtc,
+    receipts: tuple[SectionApplyReceipt, ...], *,
+    bases: Mapping[SnapshotRef, SnapshotEnvelope],
+) -> None: ...
+
+async def _append_metadata_and_handoff(
+    self, context: SnapshotApplyContext, turn_id: int, created_at: CreatedAtUtc,
+    receipts: tuple[SectionApplyReceipt, ...], *,
+    bases: Mapping[SnapshotRef, SnapshotEnvelope], holders: IArtifactHolders,
+    lease: OperationLeaseRef, transferred: tuple[ArtifactRef, ...],
+) -> None: ...
+```
+
+`source_bases` — metadata, уже прочитанная owning Snapshot source-resolution фазой в текущем attempt/read scope. Это internal caller-owned cache, не input DAG/handler и не глобальный cache. Loader берёт только exact pinned refs из validation: world, затем expected_players в исходном порядке; None пропускает, одинаковый ref читает один раз. Непривязанные к pinned set entries source-cache не попадают в result. Result — read-only MappingProxyType над новой private dict; исходный mutable cache не публикуется. Не создаются новый wire POJO/base store/source resolver.
+
+При каждом access loader проверяет scope.assert_active(). Для cached entry проверяет strict SnapshotEnvelope admission и exact envelope.ref==requested ref; неверный cache не исправляется повторным read. Для отсутствующего cached ref вызывает self._history.read(ref,scope=scope), строго проверяет полученный envelope/ref и сохраняет результат. IO/decoded corruption/identity mismatch → PublicationInfrastructureError с cause; cancellation распространяется, последующие фиктивные ошибки не вычисляются. None result собирается как existing MissingPersistedSnapshotBase(snapshot=ref,player_index=None|original_player_index); независимые missing refs собираются в world/player порядке через ValidatorAggregationHelper((MissingPersistedSnapshotBase,)), затем raise_if_any(PublicationInfrastructureError) до apply. При IO failure дальнейшая агрегация прекращается. Новые error enums не нужны.
+
+Полная карта передаётся одному call chain как тот же immutable object: caller после успешных всех validates вызывает loader → _apply_to_target(...,bases=bases) → каждый SnapshotReceiptValidator.validate(...,bases,section_index=i) → в yielded body _append_metadata[_and_handoff](...,bases=bases) → SnapshotMetadataBuilder.build(...,bases). _append_metadata больше не вызывает self._history.read, не собирает MissingPersistedSnapshotBase после writes и не имеет fallback загрузки баз. Только build → history.append каждого envelope. Store.append может выполнять собственные defensive provenance reads по своему existing storage contract; они не являются повторным service lookup и не удаляются этим срезом.
+
+Loader гарантирует complete bases до первого apply. Pure consumers продолжают защищать standalone calls: context/base prerequisites проверяет caller validator/builder, а shared global adapter использует только доступные bases и не фабрикует dependent errors. Для early validator missing/invalid supplied bases — внутренний PublicationInfrastructureError до receipt admission, не SnapshotReceiptContractError против handler. Wrong section_index type/bool → TypeError, negative → ValueError до проверки receipt. На штатном service пути эти failures невозможны после корректного loader; негативные harness tests обязаны их обнаруживать. _apply_to_target перед первым handler (включая empty sections) проверяет completeness/exact identity passed bases по тем же pure base-admission правилам consumers; не открывает IO.
+
+Actual callers по inventory: production вызовы _append_metadata_and_handoff→_append_metadata; остальные прямые callers _apply_to_target/_append_metadata — tests/snapshotCore/storage/publication/test_atomicity.py. При I2 эти callers передают bases явно и перестают рассчитывать на metadata-stage lookup. Test harness выполняет existing validate phase, затем loader, затем _apply_to_target; негативные direct-call тесты задают invalid bases явно. Нельзя добавить новый public apply orchestration ради подключения helper или читать remaining bases внутри каждого handler. Будущий full service caller использует тот же seam, но его создание вне C2.
+
+Критерии по методам: loader читает только metadata и ровно недостающие pinned refs; validator/adapter не читают storage; _apply_to_target не накапливает receipt до успешной проверки; _append_metadata не перечитывает service bases; _append_metadata_and_handoff лишь передаёт тот же bases и сохраняет handoff после append. Tests: source cache reuse, missing/corrupt base → zero apply, None heads, empty sections, original player indices, no metadata-stage service reads, second receipt fault → no next handler/handoff/CAS и rollback. Final store checker сохраняет прежние first-error фазы.
+
+Pure base-admission условия (pinned keys, envelope identity, missing/extra entries) переиспользуются validator/builder/service guard через один internal helper `collect_pinned_base_issues(validation:SnapshotValidationContext,bases:Mapping[SnapshotRef,SnapshotEnvelope])->tuple[SnapshotMetadataRelationIssue,...]` в receiptProvenance.py. Он не делает IO, не проверяет receipts/assigned targets и не заменяет strict storage envelope admission loader. Порядок: missing/identity по world→players, затем extra mapping keys в их исходном порядке; existing MISSING_BASE/BASE_IDENTITY/UNEXPECTED_BASE codes/paths сохраняются. Builder включает результат в прежнюю предварительную фазу; early/service guard при непустом tuple поднимают PublicationInfrastructureError. Global receipt adapter только выбирает доступность base, не повторяет выдачу этих issues. Assigned-target/players/self-parent checks остаются у owning context caller, а не переносятся в base helper.
 
 ## 5. Целевой trace и evidence
 
@@ -90,9 +138,9 @@ Fault выходит из outer transaction; подтверждённый rollba
 
 ## 6. Gates и поставка
 
-До реализации OPEN:
+Статус перед реализацией (документальная детализация не runtime PASS):
 
-- C2-G1: internal helper/signature/caller delta для принятого варианта А. Owner/фаза/приоритет missing-base приняты; runtime evidence ещё отсутствует.
+- C2-G1: internal signatures, immutable bases representation, caller mapping и method criteria конкретизированы в §4.1; implementation/call-order evidence ещё отсутствует, новая архитектурная развилка не требуется.
 - C2-G2: extraction map каждого existing predicate, shared helper inputs и итоговая envelope validation без дублей; stable diagnostic order/address и совместимость existing aggregation.
 - C2-G3: malformed root carrier, exact typed diagnostic roster, boundary transport и приоритет unknown rollback. Новые публичные поля не вводятся предположением.
 - C2-G4: синхронизация с owning ТЗ после проверки расхождений; inventory shared файлов после C1.

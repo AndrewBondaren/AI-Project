@@ -75,7 +75,7 @@ uniqueness` для create и remap.
 семантика гейтов не меняются (`_copy` остаётся внутри общей транзакции —
 `insert_pack_row` сам транзакцию не открывает).
 
-**Проверка.** `cd backend && python -m unittest tests.test_library_packs_4a tests.test_library_packs_4b tests.test_library_packs_b3 tests.test_library_packs_schema` — зелёные; существующие conflict/default-gate тесты проходят без правок.
+**Проверка.** `cd backend && python -m unittest tests.libraries.test_library_packs_4a tests.libraries.test_library_packs_4b tests.libraries.test_library_packs_b3 tests.libraries.test_library_packs_schema` — зелёные; существующие conflict/default-gate тесты проходят без правок.
 
 **Done.** Дублирующего блока нет; гейт живёт в одном месте.
 

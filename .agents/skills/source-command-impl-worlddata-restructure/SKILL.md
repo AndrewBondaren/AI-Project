@@ -94,12 +94,12 @@ Use this skill when the user asks to run the migrated source command `impl-world
 Шаг 1:
 - `git grep "app.application.worldData.ids"` = 0
 - `python -m compileall backend/app`
-- `python -m unittest tests.test_deterministic_ids tests.test_library_packs_b3 tests.test_canonical_library` (из `backend/`)
+- `python -m unittest tests.identity.test_deterministic_ids tests.libraries.test_library_packs_b3 tests.libraries.test_canonical_library` (из `backend/`)
 
 Шаг 2:
 - `git grep "app.application.worldData.context"` = 0
 - `python -m compileall backend/app`
-- `python -m unittest tests.test_context_extend tests.test_cascade_context_baseline tests.test_cascade_migration_m2 tests.test_e6_consumers` (из `backend/`)
+- `python -m unittest tests.cascade.test_context_extend tests.cascade.test_cascade_context_baseline tests.cascade.test_cascade_migration_m2 tests.cascade.test_e6_consumers` (из `backend/`)
 - smoke: `python -c "from app.application.cascade.contextResolver import extend, scope_sequence"`
 
 ## Приёмка

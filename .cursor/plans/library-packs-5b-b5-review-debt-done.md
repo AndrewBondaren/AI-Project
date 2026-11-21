@@ -69,8 +69,8 @@ membership-scoped `Mapping[uid, ReliefTemplate]`, reader —
 - **Контракт:** одно поведение на всех потребителей relief-снимка;
   если кэш остаётся — docstring фиксирует инвариант и точку
   инвалидации.
-- **Проверка:** `python -m unittest tests.test_library_packs_5b_relief
-  tests.test_detailed_grade_generate`.
+- **Проверка:** `python -m unittest tests.libraries.test_library_packs_5b_relief
+  tests.relief.test_detailed_grade_generate`.
 - **Done:** поведение задокументировано в коде; attach члена между
   двумя refine либо виден, либо явно невиден по контракту.
 
@@ -87,9 +87,9 @@ membership-scoped `Mapping[uid, ReliefTemplate]`, reader —
   `templates: Mapping[str, ReliefTemplate]` единообразно по цепочке;
   `pick.template_uid` не-optional на выходе успешного pick —
   `or template.system_name` удаляется (или оформляется assert).
-- **Проверка:** `python -m unittest tests.test_library_packs_5b_relief
-  tests.test_relief_pure tests.test_e6_consumers
-  tests.test_relief_mountain_stamp`.
+- **Проверка:** `python -m unittest tests.libraries.test_library_packs_5b_relief
+  tests.relief.test_relief_pure tests.cascade.test_e6_consumers
+  tests.relief.test_relief_mountain_stamp`.
 - **Done:** фильтрация/порядок кандидатов живут в одной функции;
   тест `test_round_robin_follows_member_uid_order` проходит через неё.
 
@@ -108,8 +108,8 @@ membership-scoped `Mapping[uid, ReliefTemplate]`, reader —
   (один `catalog.load` на bake), либо docstring явно фиксирует
   «снимки независимы»; диагностический path ключа шаблона одинаков
   на обоих входах.
-- **Проверка:** `python -m unittest tests.test_library_packs_5b_relief
-  tests.test_library_packs_4a tests.test_library_packs_4b`.
+- **Проверка:** `python -m unittest tests.libraries.test_library_packs_5b_relief
+  tests.libraries.test_library_packs_4a tests.libraries.test_library_packs_4b`.
 - **Done:** контракт написан в docstring; один warn → один path-вид;
   фильтр либо убран (тип гарантирован preparation), либо с диагностикой.
 
@@ -127,8 +127,8 @@ membership-scoped `Mapping[uid, ReliefTemplate]`, reader —
   properties).
 - **Контракт:** каждый вынесенный job — один seam; facade только
   порядок; без `*Part2`-классов с тем же знанием.
-- **Проверка:** `python -m unittest tests.test_detailed_grade_generate
-  tests.test_library_packs_5b_relief` + compileall.
+- **Проверка:** `python -m unittest tests.relief.test_detailed_grade_generate
+  tests.libraries.test_library_packs_5b_relief` + compileall.
 - **Done:** тела классов ≤ 250 (или обоснование, почему зона
   неделима, внесено в `docs/tz_generator_technical_debt.md`).
 
@@ -140,7 +140,7 @@ membership-scoped `Mapping[uid, ReliefTemplate]`, reader —
 - **Файлы:** `generators/terrain/mountains/reliefSidesStamp.py`.
 - **Контракт:** `spec.relief_pick_policy` напрямую (поле объявлено);
   composite id — именованный формат/функция, а не f-строка в теле.
-- **Проверка:** `python -m unittest tests.test_relief_mountain_stamp`.
+- **Проверка:** `python -m unittest tests.relief.test_relief_mountain_stamp`.
 - **Done:** getattr-обёртка снята; формат id — в одном месте.
 
 ## Итоги по шагам (2026-10-15)

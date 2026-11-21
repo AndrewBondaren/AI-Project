@@ -16,7 +16,7 @@ ACCEPTED пользователем через [решение координа�
 
 ### Public pure helper, минимальная application дельта
 
-Принятый target application/patch/encoding/sectionFingerprint.py::SectionFingerprint, владелец Patch representation (не заявление наличия реализации):
+Реализовано по поручению пользователя 2026-11-21: application/patch/encoding/sectionFingerprint.py::SectionFingerprint, владелец Patch representation. Адресные проверки exact bytes, изменения payload при прежнем ref, отказов model/key/version/empty patches/не-bytes codec прошли; общая контрактная регрессия snapshotCore/contracts — 97 tests OK. Вызов и сравнение в Snapshot, admitted view и Lifecycle evidence integration остаются отдельной реализацией; этот результат не является их runtime-приёмкой.
 
 ```python
 class SectionFingerprint:

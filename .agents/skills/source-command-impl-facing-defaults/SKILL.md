@@ -43,7 +43,7 @@ Use this skill when the user asks to run the migrated source command `impl-facin
 
 ## Проверки
 
-- `python -m unittest tests.test_entry_point tests.test_entry_point_runtime tests.test_room_connection tests.test_staircase_spec tests.test_structure_template tests.test_building_assembler tests.test_structure_area_assembler tests.test_deterministic_ids tests.test_city_three_axes tests.test_c24_district_packing tests.test_structure_orientation tests.test_u_shape_orientation_baseline tests.test_vertical_ladder_orientation_baseline tests.test_debug_structure_rotations tests.test_room_def` (+ новые тесты среза если есть)
+- `python -m unittest tests.structure.test_entry_point tests.structure.test_entry_point_runtime tests.structure.test_room_connection tests.structure.test_staircase_spec tests.structure.test_structure_template tests.settlements.test_building_assembler tests.structure.test_structure_area_assembler tests.identity.test_deterministic_ids tests.settlements.test_city_three_axes tests.settlements.test_c24_district_packing tests.structure.test_structure_orientation tests.structure.test_u_shape_orientation_baseline tests.structure.test_vertical_ladder_orientation_baseline tests.structure.test_debug_structure_rotations tests.structure.test_room_def` (+ новые тесты среза если есть)
 - `python -m compileall -q app tests`
 - A/B fingerprint `sha256(cells+passages)` по 13 `structures_templates/base/*.json` — идентично (техника: `.local/rooms_pojo_sweep.py` — backup → `git checkout HEAD -- <файлы>` → sweep → restore)
 - grep: `parse_facing_or_default` с литеральными дефолтами в `generators/structure/` — по итогу только легитимные (если остаются — с обоснованием)

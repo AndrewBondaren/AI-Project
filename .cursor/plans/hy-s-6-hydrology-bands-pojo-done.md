@@ -17,7 +17,7 @@
 Единственный app-потребитель dataclass — `load/resolveHydrologyBands.py`.
 У `resolve_hydrology_bands` / `clamp_bands` нет production-callers: по поиску
 Python-кода репозитория 2026-10-21 остались только два теста в
-`backend/tests/test_hydrology_hy1.py`. Реальная bathymetry уже принимает
+`backend/tests/hydrology/test_hydrology_hy1.py`. Реальная bathymetry уже принимает
 POJO: BasinSpec / floor_profile_z; policy fields и DeclaredBasin.rim также
 используют его. Старые producers из исторической записи HY-S-6 удалены HY-12.
 
@@ -45,7 +45,7 @@ supplied partial bands сохраняют соответствующие default
   bands/rim читаются из POJO без отдельного clamp resolver и local_profile.
 - **Файлы:** `generators/hydrology/types.py`,
   `generators/hydrology/load/resolveHydrologyBands.py` (удаление),
-  `tests/test_hydrology_hy1.py` (замена двух legacy tests проверками POJO),
+  `tests/hydrology/test_hydrology_hy1.py` (замена двух legacy tests проверками POJO),
   `docs/tz_terrain_hydrology.md`, `docs/tz_generator_technical_debt.md`.
 - **Контракт:** удалить dataclass HydrologyBands, clamp_bands,
   resolve_hydrology_bands; production consumers уже используют канонический

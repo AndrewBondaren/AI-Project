@@ -55,8 +55,8 @@ DomainFileRouter сохраняет `__init__(*, profile: str, logs_dir: Path, s
 | [logMiddleware](../../backend/app/core/logMiddleware.py) импортирует request_id_var | Импорт единственного экземпляра из logging.context |
 | [generationLogging](../../backend/app/core/generationLogging.py) импортирует JsonLogFormatter | Импорт logging.formatting; остальная логика без изменений |
 | [test_models](../../backend/tests/snapshotCore/contracts/test_models.py), [test_time_operation_log](../../backend/tests/time/test_time_operation_log.py) импортируют formatter/context | Прямые новые импорты |
-| [test_settings_logging](../../backend/tests/physics/test_settings_logging.py), [test_logging_routes](../../backend/tests/test_logging_routes.py) используют смешанные symbols | Разделить импорты: setup/cleanup остаются loggingConfig; formatter/context/routes/flush приходят от новых владельцев |
-| [test_library_pack_logging](../../backend/tests/test_library_pack_logging.py), [test_region_state_overlay](../../backend/tests/test_region_state_overlay.py) используют flush | flush из logging.console; setup/cleanup остаются |
+| [test_settings_logging](../../backend/tests/physics/test_settings_logging.py), [test_logging_routes](../../backend/tests/logging/test_logging_routes.py) используют смешанные symbols | Разделить импорты: setup/cleanup остаются loggingConfig; formatter/context/routes/flush приходят от новых владельцев |
+| [test_library_pack_logging](../../backend/tests/libraries/test_library_pack_logging.py), [test_region_state_overlay](../../backend/tests/regions/test_region_state_overlay.py) используют flush | flush из logging.console; setup/cleanup остаются |
 | [DAG test_logging](../../backend/tests/dag_typing/execution/test_logging.py) обращается loggingConfig.route_for/flush_console_queue | Прямые routes/console imports; setup/cleanup остаются |
 | [app.py](../../backend/app/core/app.py), [settingsService](../../backend/app/core/settingsService.py) | setup_logging/set_logging_level остаются, правка не нужна |
 | scripts: [detailed_bake](../../backend/scripts/detailed_bake.py), [entry_bg_refine](../../backend/scripts/entry_bg_refine.py), [initialize_world](../../backend/scripts/initialize_world.py), [light_and_full_bake](../../backend/scripts/light_and_full_bake.py), [render_maps](../../backend/scripts/render_maps.py) | ensure_script_logging остаётся в действующем facade, правка не нужна; скрипты не запускать |
@@ -81,9 +81,9 @@ Docstrings DAG/region/canonicalLibrary, называющие facade владел
 
 ```powershell
 # A: общая маршрутизация, transcript и доменные delivery consumers
-.\.venv\Scripts\python.exe -m unittest tests.test_logging_routes tests.test_generation_logging tests.test_library_pack_logging tests.physics.test_settings_logging tests.time.test_time_operation_log tests.dag_typing.execution.test_logging
+.\.venv\Scripts\python.exe -m unittest tests.logging.test_logging_routes tests.logging.test_generation_logging tests.libraries.test_library_pack_logging tests.physics.test_settings_logging tests.time.test_time_operation_log tests.dag_typing.execution.test_logging
 # B: оставшиеся consumers и DTO formatter
-.\.venv\Scripts\python.exe -m unittest tests.test_region_state_overlay tests.snapshotCore.contracts.test_models
+.\.venv\Scripts\python.exe -m unittest tests.regions.test_region_state_overlay tests.snapshotCore.contracts.test_models
 # C: typing нового механизма и facade (сравнить ошибки исходного facade до/после)
 node ../node_modules/pyright/index.js app/core/loggingConfig.py app/core/logging app/core/generationLogging.py app/core/logMiddleware.py
 ```
@@ -98,6 +98,6 @@ node ../node_modules/pyright/index.js app/core/loggingConfig.py app/core/logging
 
 Реализованы структура §2 и прямая миграция callers §4. loggingConfig сокращён с 452 до 108 строк; шесть файлов в logging, включая пустой marker. Alias _JsonFormatter удалён, старых обращений к перенесённым symbols не найдено. Domain adapters и runtime wiring не менялись; текущий Time route сохранён.
 
-L0: A+B с PYTHONPATH=.;tests — 102 tests, 6 errors, 0 failures, 0 skips; C — 0 errors. Все шесть ошибок — tests.test_library_pack_logging: пять LifecycleLoggingTests (common_sink, copy, preview/confirm, usage, another_world) и ReferenceIndexLoggingTests.test_index_returns_typed_facts_without_emitting. Причина — прежний referenceResolver.reference_index вызывает базовый FieldPathError, запрещённый error-контрактом; это до переноса logging. Первый запуск без PYTHONPATH дал import error, не принят за baseline. Sandbox async-прогоны зависали и были остановлены; полные сравнимые прогоны выполнены вне sandbox.
+L0: A+B с PYTHONPATH=.;tests — 102 tests, 6 errors, 0 failures, 0 skips; C — 0 errors. Все шесть ошибок — tests.libraries.test_library_pack_logging: пять LifecycleLoggingTests (common_sink, copy, preview/confirm, usage, another_world) и ReferenceIndexLoggingTests.test_index_returns_typed_facts_without_emitting. Причина — прежний referenceResolver.reference_index вызывает базовый FieldPathError, запрещённый error-контрактом; это до переноса logging. Первый запуск без PYTHONPATH дал import error, не принят за baseline. Sandbox async-прогоны зависали и были остановлены; полные сравнимые прогоны выполнены вне sandbox.
 
 L1: тот же A+B — 102/6/0/0, те же тесты и TypeError; C — 0 errors. L2/L3: A+B — **105 tests, 6 прежних errors, 0 failures, 0 skips**; добавлены три проверки default root/shared request context, queue-full drop и reconfiguration/transcript/listener lifecycle. Адресные logging+generation — **27 OK**. C — **0 errors, 0 warnings**. Общий набор не объявляется полностью зелёным: 6 внешних baseline defects не исправлялись. Diff просмотрен, git diff --check PASS.

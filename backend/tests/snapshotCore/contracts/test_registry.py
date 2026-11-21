@@ -6,10 +6,12 @@ from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
 from unittest.mock import create_autospec
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
+from hashlib import sha256
 from app.encoding.canonicalCodec import encode as canonical_encode
 
 from app.application.patch.contracts.sectionHandler import SectionContract
+from app.application.patch.encoding.sectionFingerprint import SectionFingerprint
 from app.application.patch.registry.sectionRegistry import SectionRegistry
 from app.application.worldSnapshot.contracts.commitScope import CommitReadScope, CommitScope
 from app.application.worldSnapshot.contracts.context import SnapshotValidationContext, SnapshotApplyContext
@@ -29,6 +31,63 @@ from tests.snapshotCore.support.fakeSection import (
 
 
 class SectionRegistryTests(unittest.TestCase):
+    def test_section_contract_preserves_inherited_minimum_and_requiredness(self):
+        class MissingMinimum(FakeSection):
+            patches: tuple[FakePatch, ...]
+
+        class ZeroMinimum(FakeSection):
+            patches: tuple[FakePatch, ...] = Field(min_length=0)
+
+        class DefaultPatches(FakeSection):
+            patches: tuple[FakePatch, ...] = Field(default=(), min_length=1)
+
+        class StrongerMinimum(FakeSection):
+            patches: tuple[FakePatch, ...] = Field(min_length=2)
+
+        for model in (MissingMinimum, ZeroMinimum, DefaultPatches, StrongerMinimum):
+            manifest = CanonicalSchemaManifest(entries=(RegisteredTypeEntry(
+                type_id=99981, python_type=model, kind=CanonicalTypeKind.RECORD),))
+            with self.subTest(model=model):
+                if model is StrongerMinimum:
+                    replace(self.contract, section_model=model, manifest=manifest)
+                else:
+                    with self.assertRaisesRegex(TypeError, "field constraints"):
+                        replace(self.contract, section_model=model, manifest=manifest)
+                    # Registry also revalidates a contract arriving through an unchecked boundary.
+                    unchecked = replace(self.contract)
+                    object.__setattr__(unchecked, "section_model", model)
+                    registry = SectionRegistry()
+                    with self.assertRaisesRegex(TypeError, "field constraints"):
+                        registry.register(unchecked, FakeSectionHandler(unchecked), FakeSectionCodec(unchecked))
+                    with self.assertRaises(ValueError):
+                        registry.require(self.key)
+
+    def test_section_fingerprint_uses_full_checked_bytes_without_behavior(self):
+        registry = SectionRegistry()
+        registry.register(self.contract, self.handler, self.section_codec)
+        fingerprint = SectionFingerprint(registry)
+        original = fingerprint.fingerprint(self.section)
+        self.assertEqual(original, sha256(canonical_encode(self.section, self.manifest)).hexdigest())
+        patch = self.section.patches[0]
+        changed = self.section.model_copy(update={"patches": (patch.model_copy(update={
+            "prepared": FakePrepared(values=(3, 2, 1))}),)})
+        self.assertEqual(changed.patches[0].header.ref, patch.header.ref)
+        self.assertNotEqual(original, fingerprint.fingerprint(changed))
+        self.assertEqual(original, fingerprint.fingerprint(self.section))
+        for section in (
+            self.section.model_copy(update={"header": self.section.header.model_copy(update={"format_version": 3})}),
+            self.section.model_copy(update={"header": self.section.header.model_copy(update={"key": "unknown"})}),
+            self.section.model_copy(update={"patches": ()}),
+            DomainSection[FakePatch](header=self.section.header, patches=self.section.patches),
+        ):
+            with self.subTest(section=section), self.assertRaises((TypeError, ValueError)):
+                fingerprint.fingerprint(section)
+        self.assertEqual(self.section_codec.calls, ["encode"] * 3)
+        self.assertEqual(self.handler.calls, [])
+        self.section_codec.encode = lambda section: "not bytes"
+        with self.assertRaises(TypeError):
+            fingerprint.fingerprint(self.section)
+
     @staticmethod
     def _complete(coroutine):
         # These ports/fixtures perform no IO. Any real suspension is a test failure.

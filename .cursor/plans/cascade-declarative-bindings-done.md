@@ -107,8 +107,8 @@ _REGISTRIES:  dict[str, fn]   # world -> registry (метод .resolve_default(p
   выше; `default_value` заполняется вызовами POJO-accessor'ов
   (`DistrictDensity.default()`, `CONSTRUCTION_MATERIAL_DEFAULTS.*`,
   `WorldSettlementSizeRegistry.default_system_size()`), не литералами
-- **Проверка:** `python -m unittest tests.test_location_context_contract
-  tests.test_context_extend` из `backend/` — зелёные; verify проходит
+- **Проверка:** `python -m unittest tests.cascade.test_location_context_contract
+  tests.cascade.test_context_extend` из `backend/` — зелёные; verify проходит
   с новыми правилами
 - **Done:** контракт объявлен и проверяется; engine не тронут
 
@@ -137,9 +137,9 @@ _REGISTRIES:  dict[str, fn]   # world -> registry (метод .resolve_default(p
   generic policy interpreter для default; покрытие имён — проверка на
   import модуля; опционально `_check_level` (валидация уровня из
   `extend`, ~20 строк)
-- **Проверка:** `python -m unittest tests.test_context_extend
-  tests.test_location_context_contract tests.test_cascade_context_baseline
-  tests.test_cascade_migration_m2` — зелёные; `grep "param is "` в
+- **Проверка:** `python -m unittest tests.cascade.test_context_extend
+  tests.cascade.test_location_context_contract tests.cascade.test_cascade_context_baseline
+  tests.cascade.test_cascade_migration_m2` — зелёные; `grep "param is "` в
   файле = 0
 - **Done:** engine ~150–180 строк чистого механизма; диспатчей нет
 
@@ -155,9 +155,9 @@ _REGISTRIES:  dict[str, fn]   # world -> registry (метод .resolve_default(p
   `dict[str, (value, inherited_source, source)]`; форматирование
   `parent=`/`child=` — внутри cascadeLog. `_CASCADE_FIELDS` —
   модульная константа (модель frozen), её же читает `_check_bindings`
-- **Проверка:** `python -m unittest tests.test_context_extend
-  tests.test_location_context_contract tests.test_cascade_context_baseline
-  tests.test_cascade_migration_m2`; DEBUG-строки лога идентичны
+- **Проверка:** `python -m unittest tests.cascade.test_context_extend
+  tests.cascade.test_location_context_contract tests.cascade.test_cascade_context_baseline
+  tests.cascade.test_cascade_migration_m2`; DEBUG-строки лога идентичны
 - **Done:** `extend` = gate → resolve → copy → log; дубля скана нет
 
 ## Deferred / не в scope

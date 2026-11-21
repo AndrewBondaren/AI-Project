@@ -68,14 +68,14 @@
   поля на голом `str`; allowlist только уменьшается.
 - **ТЗ:** `tz_json_validation.md` § RegistryKey; правила
   `.cursor/rules/type-kind-str-fields.mdc` + `contract-creation.mdc`.
-- **Файлы:** `backend/tests/test_contract_hygiene.py` (новый).
+- **Файлы:** `backend/tests/validation/test_contract_hygiene.py` (новый).
 - **Контракт:** AST-скан `app/**` минус `app/db/models/**` — без
   runtime-import (не маскирует import-ошибку, ловит `@dataclass` и
   Pydantic одинаково); allowlist `(module, class, field) → шаг`;
   новая дыра и stale-запись allowlist — оба fail. Легитимный `str`
   допустим только с пометкой в ТЗ — и тогда заносится в allowlist
   со ссылкой на спеку, не обходится молча.
-- **Проверка:** `python -m unittest tests.test_contract_hygiene` из
+- **Проверка:** `python -m unittest tests.validation.test_contract_hygiene` из
   `backend/`; удаление записи из allowlist → тест красный.
 - **Done:** тест зелёный; allowlist = карта ниже + находки вне карты
   зафиксированы отдельно.
@@ -272,7 +272,7 @@ fixture bundles прошли. Wire JSON сохранён. Этот отчёт з
 Пометка «выполнен» — после «ок» мастера.
 
 **Дополнительная N+1-приёмка шага 6 (2026-10-18, по запросу мастера):**
-`backend/tests/test_location_type_n_plus_one.py` — 4 integration-теста
+`backend/tests/validation/test_location_type_n_plus_one.py` — 4 integration-теста
 через production validate_only/import/export, временную SQLite и pack IO.
 Покрыты новый self-key + новый parent key (включая корневой None),
 N+1-расширение parent/subtype существующего building-типа, новый тип с

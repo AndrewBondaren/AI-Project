@@ -25,7 +25,7 @@ from app.dataModel.validation.enums.resolutionMode import ResolutionMode
 from tests.geo1.contracts.test_policy_resolver import (
     Action, FLAG, TERMINAL, Settings, Defaults, admission, sources, facts, rule, support,
 )
-from test_placement_resolver import SNAPSHOT_REVISION, topology, variant
+from tests.placement.test_placement_resolver import SNAPSHOT_REVISION, topology, variant
 
 
 def decision(priority=1):

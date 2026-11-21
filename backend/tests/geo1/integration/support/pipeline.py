@@ -102,7 +102,7 @@ def placement_plan():
     from app.dataModel.terrain.designedWater.coverage.budget import WaterCoverageBudget, BodyCoverageAllocation
     from app.dataModel.terrain.designedWater.strategyKind import DesignedWaterStrategyKind
     from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
-    from tests.test_water_placement_adapter import context, prepare, resolve, basin
+    from tests.hydrology.test_water_placement_adapter import context, prepare, resolve, basin
 
     ready = ObjectAdmissionDecision[DesignedWaterStrategyKind, WaterPolicyReason](operation=PolicyOperation.OBJECT_ADMISSION, state=PolicyState.READY,
         effective_priority=2, behavior=DesignedWaterStrategyKind.AUTHORED_REGION, reasons=(),

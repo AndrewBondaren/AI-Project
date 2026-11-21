@@ -132,10 +132,10 @@ Gate: regression затронутых потребителей, обновлён
 Из backend, текущим `./.venv/Scripts/python.exe`, выполнены:
 
 ```text
-python -m unittest tests.test_pojo_policies tests.test_location_context_contract tests.test_context_extend tests.test_cascade_context_baseline tests.test_cascade_migration_m2 tests.test_bundle_named_location_wire tests.test_settlement_size_resolve
+python -m unittest tests.validation.test_pojo_policies tests.cascade.test_location_context_contract tests.cascade.test_context_extend tests.cascade.test_cascade_context_baseline tests.cascade.test_cascade_migration_m2 tests.bundles.test_bundle_named_location_wire tests.settlements.test_settlement_size_resolve
 → 134 tests, OK
 
-python -m unittest tests.test_world_row_t28 tests.test_terrain_masks tests.test_mask_domain_materialize tests.test_import_created_at_default
+python -m unittest tests.validation.test_world_row_t28 tests.regions.test_terrain_masks tests.regions.test_mask_domain_materialize tests.validation.test_import_created_at_default
 → 32 tests, OK
 ```
 

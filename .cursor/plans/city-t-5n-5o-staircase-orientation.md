@@ -64,18 +64,18 @@
 
 - **Цель:** создать защиту настроенной геометрии до её адаптации.
 - **ТЗ:** `tz_staircase_generation.md` §0, §2, §3–§4.2, §6 «Якоря», «Multi-loop», «Валидация».
-- **Файлы:** новый `tests/test_u_shape_orientation_baseline.py`; production-код не менять.
+- **Файлы:** новый `tests/structure/test_u_shape_orientation_baseline.py`; production-код не менять.
 - **Контракт:** тестовые случаи фиксируют примыкание, оба стартовых угла при управляемом выборе, занятый угол/fallback, previous anchor, single-/multi-march, прямоугольную шахту и выход на этаж. Проверять координаты/связность/направления, а не только отсутствие исключения.
-- **Проверка:** `python -m unittest tests.test_u_shape_orientation_baseline`.
+- **Проверка:** `python -m unittest tests.structure.test_u_shape_orientation_baseline`.
 - **Done:** исходные результаты воспроизводимы; отделены направление и выбор угла; существующие дефекты записаны, ожидаемые результаты под них не подменены.
 
 ### S2 — Зафиксировать поведение вертикальных лестниц
 
 - **Цель:** защитить выбор якоря и выходов отдельной семьи лестниц.
 - **ТЗ:** `tz_staircase_generation.md` §8.1 «Нормализация направления», «To-anchor-first подход», «Ячейки», «Угловое ограничение»; §9.
-- **Файлы:** новый `tests/test_vertical_ladder_orientation_baseline.py`; production-код не менять.
+- **Файлы:** новый `tests/structure/test_vertical_ladder_orientation_baseline.py`; production-код не менять.
 - **Контракт:** fixed internal/external, near_wall, on_the_edge, has_trapdoor, разные порядки уровней, несколько равноценных кандидатов; исключить movable. Проверить совпадение XY якорей и сохранение lower/upper по Z.
-- **Проверка:** `python -m unittest tests.test_vertical_ladder_orientation_baseline`.
+- **Проверка:** `python -m unittest tests.structure.test_vertical_ladder_orientation_baseline`.
 - **Done:** исходный выбор якорей и геометрия выхода зафиксированы без изменений builders.
 
 ### S3 — Изолировать источник случайного выбора угла U-лестницы — **покрыт шагом 3c-RNG основного плана**
@@ -86,18 +86,18 @@
 - **ТЗ:** `tz_building_generator.md` §8.1; `tz_staircase_generation.md` §6 «Якоря».
 - **Файлы:** `passages/builder.py`, `staircase/builder.py`, `staircase/base.py`, `staircase/uShape/uShape.py`, `staircase/uShape/uShapeHelper.py`; тест S1.
 - **Контракт:** передать `Random` генератора до `_compute_fr_anchor`; глобальный `random.choice` заменить обращением к переданному RNG. В этом шаге не менять facing, порядок кандидатов, вероятности, проверку занятости и previous-anchor ветку.
-- **Проверка:** `python -m unittest tests.test_u_shape_orientation_baseline tests.test_vertical_ladder_orientation_baseline`; управляемый выбор обеих ветвей и повторяемость при одинаковом seed.
+- **Проверка:** `python -m unittest tests.structure.test_u_shape_orientation_baseline tests.structure.test_vertical_ladder_orientation_baseline`; управляемый выбор обеих ветвей и повторяемость при одинаковом seed.
 - **Done:** результаты при одинаковом выборе совпадают с S1; направление от RNG не зависит. Перенос источника случайности — единственное изменение поведения.
 
 ### S4–S10 — **отменены (вариант B, 2026-09-28)**
 
-> Builders лестниц не получают orientation и не адаптируются: при повороте перед `_assemble_result` они работают в исходном фрейме, а их продукты (клетки, `system_facing`, якоря-проходы) поворачивает общий проход шага 3c. Проверки этих шагов (четыре примыкания × четыре поворота, якоря = R(исходных), пути и люки без разрывов, EdgeMounted, интеграция комната → лестница → комната) свёрнуты в `tests/test_structure_orientation.py` основного плана. Формулировки S4–S10 ниже оставлены как история и каталог проверочных случаев для того теста.
+> Builders лестниц не получают orientation и не адаптируются: при повороте перед `_assemble_result` они работают в исходном фрейме, а их продукты (клетки, `system_facing`, якоря-проходы) поворачивает общий проход шага 3c. Проверки этих шагов (четыре примыкания × четыре поворота, якоря = R(исходных), пути и люки без разрывов, EdgeMounted, интеграция комната → лестница → комната) свёрнуты в `tests/structure/test_structure_orientation.py` основного плана. Формулировки S4–S10 ниже оставлены как история и каталог проверочных случаев для того теста.
 
 - **Цель:** сохранить источник направления в примыкании к комнате.
 - **ТЗ:** `tz_staircase_generation.md` §2 «facing», §6 «Конвенция facing», §12 «Архитектура: ShaftPlacer»; уточнения S0.
 - **Файлы:** `rotateInstances.py`, `staircase/shaftPlacer.py`, `staircase/uShape/uShape.py` (только необходимые точки передачи/потребления направления); новый `tests/test_u_shape_facing_rotation.py`.
 - **Контракт:** использовать общий `StructureOrientation`; комнату и шахту повернуть вместе, повторно размещение не запускать. Проверить источник `shaft.facing` и предусмотренный fallback; `building.facing` не присваивать staircase facing. Формулы пути/якорей не менять.
-- **Проверка:** `python -m unittest tests.test_u_shape_orientation_baseline tests.test_u_shape_facing_rotation` — четыре стороны примыкания × четыре поворота, включая fallback и EdgeMounted.
+- **Проверка:** `python -m unittest tests.structure.test_u_shape_orientation_baseline tests.test_u_shape_facing_rotation` — четыре стороны примыкания × четыре поворота, включая fallback и EdgeMounted.
 - **Done:** entry остаётся общей стороной с комнатой, facing соответствует повороту исходного направления; S1 зелёный. Если обнаружена ошибка определения направления, её исправление требует отдельного уточнения плана, не перестройки алгоритма в этом шаге.
 
 ### S5 — Согласовать выбор якорей U-лестницы с поворотом
@@ -106,7 +106,7 @@
 - **ТЗ:** `tz_staircase_generation.md` §1, §6 «Якоря (только u_shape)», «Якоря», §9.
 - **Файлы:** `staircase/uShape/uShapeHelper.py`, `staircase/uShape/uShape.py` (передача общего orientation); новый `tests/test_rotate_stair_anchors.py`.
 - **Контракт:** упорядочивание кандидатов в исходном фрейме; существующие правила доступности и previous anchor сохраняются. Для одного выбора оба якоря должны быть R исходных якорей. Готовые мировые координаты не поворачивать второй раз.
-- **Проверка:** `python -m unittest tests.test_u_shape_orientation_baseline tests.test_u_shape_facing_rotation tests.test_rotate_stair_anchors`.
+- **Проверка:** `python -m unittest tests.structure.test_u_shape_orientation_baseline tests.test_u_shape_facing_rotation tests.test_rotate_stair_anchors`.
 - **Done:** соответствие обоих якорей доказано для single-/multi-floor и обоих исходных углов; Z и помещение назначения сохранены. Геометрия маршей не переделана.
 
 ### S6 — Адаптировать вход направления вертикальной лестницы
@@ -115,7 +115,7 @@
 - **ТЗ:** `tz_staircase_generation.md` §8.1 «Параметры», «To-anchor-first подход»; `tz_building_generator.md` §3.7b.
 - **Файлы:** `passages/builder.py`, `staircase/builder.py`, `staircase/verticalLadder/verticalLadder.py`; новый `tests/test_vertical_ladder_facing_rotation.py`.
 - **Контракт:** runtime-копия sc_entry с повернутым `facing`, смысл — выход наружу; `None` остаётся авто-выбором. Библиотечный dict не меняется. Алгоритм выбора позиции и геометрия лестницы пока не меняются.
-- **Проверка:** `python -m unittest tests.test_vertical_ladder_orientation_baseline tests.test_vertical_ladder_facing_rotation`.
+- **Проверка:** `python -m unittest tests.structure.test_vertical_ladder_orientation_baseline tests.test_vertical_ladder_facing_rotation`.
 - **Done:** builder получает корректное направление при четырёх поворотах; повторная генерация не видит мутаций шаблона.
 
 ### S7 — Согласовать выбор якоря вертикальной лестницы
@@ -124,7 +124,7 @@
 - **ТЗ:** `tz_staircase_generation.md` §8.1 «To-anchor-first подход», «Угловое ограничение», §9.
 - **Файлы:** `staircase/verticalLadder/verticalLadderHelper.py`, `verticalLadder.py` (передача orientation), `tests/test_rotate_stair_anchors.py`.
 - **Контракт:** фильтры доступности/углов прежние; сортировка равнозначных кандидатов и порядок лучей — в исходном фрейме. Оба anchor XY совпадают с R исходного anchor; lower/upper нормализуются только по Z.
-- **Проверка:** `python -m unittest tests.test_vertical_ladder_orientation_baseline tests.test_vertical_ladder_facing_rotation tests.test_rotate_stair_anchors`.
+- **Проверка:** `python -m unittest tests.structure.test_vertical_ladder_orientation_baseline tests.test_vertical_ladder_facing_rotation tests.test_rotate_stair_anchors`.
 - **Done:** internal/external и авто-/явное направление сохраняют выбор позиции; критерии допустимости и путь по Z не менялись.
 
 ### S8 — Проверить и адаптировать путь U-лестницы
@@ -133,7 +133,7 @@
 - **ТЗ:** `tz_staircase_generation.md` §0, §3–§4.2, §6 «Алгоритм построения», «Multi-loop», «Валидация», §10.
 - **Файлы:** `staircase/uShape/uShape.py`, `uShapeHelper.py`, `uShapeValidator.py`, `staircase/base.py` (операции над ориентированной шахтой); новый `tests/test_rotate_staircases.py`.
 - **Контракт:** неизменные march_count, flat/landing, handedness, Z; преобразованные клетки пути и facing. Проверить clear_shaft/lay_base_floor. Изменять только передачу ориентации/интерпретацию координат; новые формулы маршей не входят в шаг.
-- **Проверка:** `python -m unittest tests.test_u_shape_orientation_baseline tests.test_u_shape_facing_rotation tests.test_rotate_stair_anchors tests.test_rotate_staircases`.
+- **Проверка:** `python -m unittest tests.structure.test_u_shape_orientation_baseline tests.test_u_shape_facing_rotation tests.test_rotate_stair_anchors tests.test_rotate_staircases`.
 - **Done:** полные пути соответствуют повороту исходных, последний шаг достигает to_anchor; валидаторы не ослаблены. Если необходима правка самой механики пути — отдельное обсуждение и изменение плана.
 
 ### S9 — Проверить клетки вертикальных лестниц и люков
@@ -142,7 +142,7 @@
 - **ТЗ:** `tz_staircase_generation.md` §8.1 «Ячейки», «Проход к верхней комнате», §9; `tz_building_generator.md` §3.9.1.
 - **Файлы:** `staircase/verticalLadder/verticalLadder.py`, `externalVerticalLadder.py`, `verticalLadderValidator.py`, `staircase/base.py` (ограждение), `tests/test_rotate_staircases.py`.
 - **Контракт:** прежний диапазон Z, has_trapdoor и ограждение; направление выходов повёрнуто, выбранный якорь из S7 не меняется. Legacy trapdoor alias не превращать в новый builder.
-- **Проверка:** `python -m unittest tests.test_vertical_ladder_orientation_baseline tests.test_vertical_ladder_facing_rotation tests.test_rotate_stair_anchors tests.test_rotate_staircases`.
+- **Проверка:** `python -m unittest tests.structure.test_vertical_ladder_orientation_baseline tests.test_vertical_ladder_facing_rotation tests.test_rotate_stair_anchors tests.test_rotate_staircases`.
 - **Done:** фиксированные внутренние/внешние лестницы и люки сохраняют клетки/выходы с учётом преобразования; movable не реализован попутно.
 
 ### S10 — Проверить интеграцию лестниц с проходами
@@ -151,5 +151,5 @@
 - **ТЗ:** `tz_staircase_generation.md` §1, §8.1 «Подземный тоннель», «Проход к верхней комнате», §9; `tz_building_generator.md` §8.8.
 - **Файлы:** новый `tests/test_stair_orientation_integration.py`, этот план; production-изменения не объединять с итоговой проверкой.
 - **Контракт:** world/building/seed фиксированы; сравниваются четыре ориентации, повторные вызовы, multi-floor, наземный/подземный соединитель, ground_z ≠ 0, Adjacent/EdgeMounted. UID, Z, комнаты назначения и библиотечный шаблон неизменны; временные поля результата не сравниваются.
-- **Проверка:** `python -m unittest tests.test_u_shape_orientation_baseline tests.test_vertical_ladder_orientation_baseline tests.test_u_shape_facing_rotation tests.test_vertical_ladder_facing_rotation tests.test_rotate_stair_anchors tests.test_rotate_staircases tests.test_stair_orientation_integration tests.test_rotate_corridors tests.test_rotate_tunnels tests.test_building_assembler tests.test_city_three_axes`; `python -m compileall -q app tests`.
+- **Проверка:** `python -m unittest tests.structure.test_u_shape_orientation_baseline tests.structure.test_vertical_ladder_orientation_baseline tests.test_u_shape_facing_rotation tests.test_vertical_ladder_facing_rotation tests.test_rotate_stair_anchors tests.test_rotate_staircases tests.test_stair_orientation_integration tests.test_rotate_corridors tests.test_rotate_tunnels tests.settlements.test_building_assembler tests.settlements.test_city_three_axes`; `python -m compileall -q app tests`.
 - **Done:** весь набор зелёный; отдельный план отмечен завершённым и снимает зависимость основного 3c.5. При сбое возвращаться к конкретному шагу, не менять алгоритмы в финальном проверочном заходе.

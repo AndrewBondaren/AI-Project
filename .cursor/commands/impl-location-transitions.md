@@ -59,7 +59,7 @@ RegistryKey, SCHEMA_ID и canonical_engine по действующим POJO-па
 - app/dataModel/locations/transitions/transitionType.py
 - app/dataModel/locations/transitions/transitionTypeEntry.py
 - app/dataModel/locations/transitions/worldTransitionTypeRegistry.py
-- tests/test_transition_registry.py
+- tests/transitions/test_transition_registry.py
 
 Portal — один builtin-тип; graph/coordinate — реализации портала,
 не отдельные TransitionType. Не реализуй destination/arrival algorithms.
@@ -70,7 +70,7 @@ Portal — один builtin-тип; graph/coordinate — реализации п
 Проверка из backend/:
 
 ```powershell
-& '..\.venv\Scripts\python.exe' -m unittest tests.test_transition_registry
+& '..\.venv\Scripts\python.exe' -m unittest tests.transitions.test_transition_registry
 ```
 
 Проверить builtin metadata, main/service/hidden, custom behaves_as,

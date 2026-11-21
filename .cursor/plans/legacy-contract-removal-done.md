@@ -102,9 +102,9 @@ RELIEF_SMOKE_003_FORMER_UIDS), dict-map форма реестров.
     (`LandcoverRegionsCategoryPolicy` wire);
   - `climate_zone_registry` dict-map → list;
   - `race_uid` → `template_uid` в `_smoke_races.json`.
-- **Проверка:** `.\.venv\Scripts\python.exe -m unittest tests.test_fixture_bundle_import
-  tests.test_terrain_masks tests.test_landcover_cutover tests.test_import_validation_policy
-  tests.test_declared_river_topology` — зелёный при **ещё живом** legacy-коде
+- **Проверка:** `.\.venv\Scripts\python.exe -m unittest tests.bundles.test_fixture_bundle_import
+  tests.regions.test_terrain_masks tests.regions.test_landcover_cutover tests.validation.test_import_validation_policy
+  tests.hydrology.test_declared_river_topology` — зелёный при **ещё живом** legacy-коде
   (конвертированные фикстуры должны проходить и по canonical, и по legacy-пути
   чтения, порядок шагов 1→2 безопасен).
 - **Done:** sweep-греп по fixtures по ключам из инвентаря — 0 совпадений.
@@ -123,8 +123,8 @@ RELIEF_SMOKE_003_FORMER_UIDS), dict-map форма реестров.
 - **Контракт:** `import_libraries(data)` без `legacy_migration` флага; плоские
   ключи доменов → `ImportValidationError` с path секции; `library_packs` остаётся
   единственным входом библиотек.
-- **Проверка:** `python -m unittest tests.test_fixture_bundle_import
-  tests.test_bundle_library_archive tests.test_template_domain_archive`;
+- **Проверка:** `python -m unittest tests.bundles.test_fixture_bundle_import
+  tests.bundles.test_bundle_library_archive tests.libraries.test_template_domain_archive`;
   `python -m compileall app`.
 - **Done:** grep `legacy` в `worldBundle/` — только удалённые; импорт
   конвертированного `world_test_gen_003` проходит без flat-входа.

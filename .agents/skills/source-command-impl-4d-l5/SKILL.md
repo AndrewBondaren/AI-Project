@@ -85,8 +85,8 @@ Use this skill when the user asks to run the migrated source command `impl-4d-l5
 - Одинаковый source/scope → одинаковые policy decisions через library import
   и через world bundle.
 - Прогоны: `python -m unittest discover -s tests -p "test_library_write_*.py"`,
-  `tests.test_library_packs_{4b,4c,5a}`, `tests.test_bundle_library_archive`,
-  `tests.test_bundle_archive_routes`, `tests.test_fixture_bundle_import`.
+  `tests.test_library_packs_{4b,4c,5a}`, `tests.bundles.test_bundle_library_archive`,
+  `tests.bundles.test_bundle_archive_routes`, `tests.bundles.test_fixture_bundle_import`.
 - Пометки «выполнен» в `library-packs-model-done.md` §4d и
   `library-write-policy-done.md` §L-5 — **только после** прохождения приёмки
   (пункт 7 последовательности).

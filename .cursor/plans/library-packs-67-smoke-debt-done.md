@@ -66,7 +66,7 @@ round-trip без явного `payload_kind` у settlement-записи, пол
 | ТЗ | `docs/tz_locations.md` § `worlds.location_type_registry` (N+1) + § Payload per type |
 | Файлы | `backend/app/dataModel/locations/locationType/locationTypeEntry.py` |
 | Контракт | `serialize_overrides`: pop `payload_kind`/`is_outdoor`, когда поле не в `model_fields_set` (симметрия с `is_inhabited`); authored `null` сохраняет семантику явного override (`test_world_overlay_preserves_missing_and_respects_explicit_kind`) |
-| Проверка | `python tests/test_location_payload.py` (в т.ч. `test_recipe_overlay_survives_world_json_roundtrip`) + round-trip repro: omitted → stored без ключа → merged `payload_kind=SETTLEMENT`; `compileall` |
+| Проверка | `python tests/rendering/test_location_payload.py` (в т.ч. `test_recipe_overlay_survives_world_json_roundtrip`) + round-trip repro: omitted → stored без ключа → merged `payload_kind=SETTLEMENT`; `compileall` |
 | Done | round-trip записи без authored `payload_kind` даёт merged `PayloadKind.SETTLEMENT`; suite зелёный |
 
 ### Шаг 2 — D2 (a): skeleton export пропускает пустые world-owned паки

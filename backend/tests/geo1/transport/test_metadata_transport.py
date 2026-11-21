@@ -16,7 +16,7 @@ from app.dataModel.hydrology.declaredLake import DeclaredLake
 from app.dataModel.placement import PlacementIdentity, ResolvedPlacement
 from app.dataModel.spatial.grid.coordinateTypes import FineZ
 from tests.geo1.composition.fixtures import case
-from tests.test_water_placement_adapter import basin, coast, context, lake, prepare, resolve
+from tests.hydrology.test_water_placement_adapter import basin, coast, context, lake, prepare, resolve
 
 
 class MetadataTransportTests(TestCase):

@@ -36,7 +36,7 @@ alwaysApply: false
    `contextResolver._FOLDS` / `_MATERIALIZE`; доменная логика — в своём
    модуле, в таблице только указатель.
 5. **Проверка до отчёта:** `npm run typecheck:cascade` из корня +
-   `python -m unittest tests.test_location_context_contract`. Новые
+   `python -m unittest tests.cascade.test_location_context_contract`. Новые
    файлы деклараций → `pyrightconfig.cascade.json`.
 
 ## Рёбра `above`/`below` — linked list, не enum order

@@ -26,7 +26,7 @@
 | ТЗ | `tz_generator_technical_debt.md` § Fat modules; `class-size-limit.mdc` |
 | Файлы | new `backend/app/application/worldData/generators/assemblers/districtAssembler/planner/subjects.py`, `planner/layoutPicks.py`; rewrite `planner/tokens.py` |
 | Контракт | Публичный шов без изменений: `build_tokens`, `pick_layout_uids`, `candidate_template_uids` импортируются из `planner.tokens` как сейчас (`districtAssembler.py`, `buildingCache.py`, `test_city_three_axes.py` — не трогаем). Внутренние `_helpers` переезжают с именами как есть; cross-module вызовы — через импорт (`from .subjects import _resolve_subjects, …`), re-export в `tokens.py` не делаем |
-| Проверка | `python -m compileall backend/app/application/worldData/generators/assemblers/districtAssembler/planner` + `python -m unittest backend.tests.test_city_three_axes` (из корня, как принято) — зелёный как до сплита |
+| Проверка | `python -m compileall backend/app/application/worldData/generators/assemblers/districtAssembler/planner` + `python -m unittest backend.tests.settlements.test_city_three_axes` (из корня, как принято) — зелёный как до сплита |
 | Done | `tokens.py` ≤ ~120 строк; callers не изменены; тесты проходят; импорты в новых файлах только по своей зоне |
 
 ## Не в этом плане

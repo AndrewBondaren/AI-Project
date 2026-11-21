@@ -188,9 +188,9 @@ Reuse RiverRouteDiagnostic предполагает strict revalidation, extra=f
 | 2 / 1 | `backend/app/dataModel/hydrology/riverRouting.py`; RiverPlanDiagnostic, strict fact invariants §4; новый `backend/tests/geo1/fine_water/test_river_diagnostics.py` | ТЗ Hydrology; F03/F07 | `.\.venv\Scripts\python -m unittest tests.geo1.fine_water.test_river_diagnostics -q` | Все шесть code, четырнадцать reason, nullable receiver level и пустая rejected string покрыты; неверные пары disposition отклоняются |
 | 3 / 2 | `backend/app/application/worldData/planning/encoding/surfaceManifest.py`; четыре bindings §5. Расширить `backend/tests/planning/encoding/test_canonical_codec.py` | ТЗ DAG; §5 данного D1 | `.\.venv\Scripts\python -m unittest tests.planning.encoding.test_canonical_codec -q` | Новый процесс штатно восстанавливает concrete carrier; bounded decode и unknown-ID negatives; binding 105/его bytes сохранены; принят новый source baseline предварительного среза |
 | 4 / 3 | `backend/app/application/worldData/generators/hydrology/rivers/riverPrepare.py`; четыре sites §2 и callback signatures §4. Расширить новый `backend/tests/geo1/fine_water/test_river_diagnostics.py` | ТЗ Hydrology; F03/F07 | `.\.venv\Scripts\python -m unittest tests.geo1.fine_water.test_river_diagnostics tests.geo1.fine_water.test_routing -q` | ERROR и FALLBACK доходят до collector; без callback сохранены facts; нет двойного emit, алгоритмическая дельта отсутствует |
-| 5 / 4 | `backend/tests/test_hydrology_fine_river_planning.py`, `backend/tests/planning/providers/test_planning_service.py`: mixed water/river, fine/coarse publication через штатный service, fingerprint; production service менять не требуется | ТЗ DAG; §5 | `.\.venv\Scripts\python -m unittest tests.test_hydrology_fine_river_planning tests.planning.providers.test_planning_service -q` | Обе ветви §1 опубликованы; порядок/dedup/type сохранены; изменение cause меняет fingerprint; source compatibility предъявлена |
+| 5 / 4 | `backend/tests/hydrology/test_hydrology_fine_river_planning.py`, `backend/tests/planning/providers/test_planning_service.py`: mixed water/river, fine/coarse publication через штатный service, fingerprint; production service менять не требуется | ТЗ DAG; §5 | `.\.venv\Scripts\python -m unittest tests.hydrology.test_hydrology_fine_river_planning tests.planning.providers.test_planning_service -q` | Обе ветви §1 опубликованы; порядок/dedup/type сохранены; изменение cause меняет fingerprint; source compatibility предъявлена |
 | 6 / 5 | `backend/tests/geo1/procedural_refinement/test_proposals.py`: два JSON-message reader заменить concrete issue; `backend/tests/geo1/procedural_refinement/river_route_golden.json`: только два разрешённых эталона после анализа §6 | ТЗ Hydrology; §6 | `.\.venv\Scripts\python -m unittest tests.geo1.procedural_refinement.test_proposals.ProceduralRefinementTests.test_declared_membership_and_historical_results_do_not_depend_on_segment_flag tests.geo1.procedural_refinement.test_proposals.ProceduralRefinementTests.test_kind_mismatch_migration_preserves_historical_river_payload -q` | Два независимых запуска совпадают; payload неизменен; mismatch-only d632ae06… сохранён; каждая diagnostic/wire дельта объяснена |
-| 7 / 6 | Этот документ: фактический отчёт D2; код вне карты не менять без пересмотра scope | ERROR-CONTRACTS D2 gate | `.\.venv\Scripts\python -m unittest discover -s tests/geo1/procedural_refinement -t . -q`; `.\.venv\Scripts\python -m unittest tests.geo1.fine_water.test_kind_mismatch tests.test_hydrology_river_routing tests.test_hydrology_river_round2 -q` | Новые тесты проходят; прежние ошибки и остаток disabled fine routing предъявлены отдельно; production reporting не объявлен готовым |
+| 7 / 6 | Этот документ: фактический отчёт D2; код вне карты не менять без пересмотра scope | ERROR-CONTRACTS D2 gate | `.\.venv\Scripts\python -m unittest discover -s tests/geo1/procedural_refinement -t . -q`; `.\.venv\Scripts\python -m unittest tests.geo1.fine_water.test_kind_mismatch tests.hydrology.test_hydrology_river_routing tests.hydrology.test_hydrology_river_round2 -q` | Новые тесты проходят; прежние ошибки и остаток disabled fine routing предъявлены отдельно; production reporting не объявлен готовым |
 
 В §5 bindings означают точные записи `(325, RiverRouteDiagnostic, CanonicalTypeKind.RECORD)`, `(326, RiverRoutingCode, CanonicalTypeKind.ENUM)`, `(327, RiverRoutingFailure, CanonicalTypeKind.ENUM)`, `(328, RiverPlanDiagnostic, CanonicalTypeKind.RECORD)` в существующем SURFACE_MANIFEST. Imports — из `app.dataModel.hydrology.riverRouting`. ID 105 остаётся привязан к **непараметризованному PlanDiagnostic**, а не к новой специализации; изменение его shape принимается предварительным shared Planning/source срезом. Проверить доступность ID перед D2; конфликт требует нового решения O2, автоматического перенумерования нет. `backend/app/application/worldData/generators/hydrology/encoding/sourceSchema.py` — read-only compatibility boundary; изменение shape lock требует отдельного scope. Совместимость plain-validator alias со штатным codec/schema introspection проверяется в предварительном срезе до River D2; отрицательный результат требует пересогласования D1, а не выбора альтернативы в реализации.
 
@@ -251,7 +251,7 @@ P2 маршрутизирует по concrete carrier до обращения к
 
 ```powershell
 $env:PYTHONPATH='.;tests'
-.\.venv\Scripts\python.exe -m unittest tests.test_hydrology_hy12_rivers.RiverWaterlineTests.test_pipeline_supplies_pre_river_elevation_to_fine_profiles tests.geo1.integration.test_revisions.GeoBundleReportingTests tests.planning.consumers.test_request_boundary tests.planning.providers.test_diagnostics -q
+.\.venv\Scripts\python.exe -m unittest tests.hydrology.test_hydrology_hy12_rivers.RiverWaterlineTests.test_pipeline_supplies_pre_river_elevation_to_fine_profiles tests.geo1.integration.test_revisions.GeoBundleReportingTests tests.planning.consumers.test_request_boundary tests.planning.providers.test_diagnostics -q
 ```
 
 14 тестов, 8 errors. Один — WaterWorldOcean.path, семь — базовый FieldPathError (один через PlanProviderFault). Для P2 обновить конкретные field fixtures и ожидания FALLBACK в GeoBundleReportingTests, сохранив проверки причин и всех фаз. После реализации обязательна независимая приёмка на обоих entry point: mixed ERROR/FALLBACK/NOTICE, два запроса и cache HIT, повтор в одном контексте, оба флага по отдельности и вместе, NO_EXTENT, отказ до bundle и validate refusal после сборки. Проверить также normal production caller и typing fixtures. Вердикт по выпуску выносится по реализации.
@@ -314,7 +314,7 @@ Reuse принятого смысла WATER_LEVEL_SPILL: [GEO owning-план](g
 Первой командой из `backend` на ревизии `45c187b0` воспроизведено падение на валидном WaterWorldOcean NOTICE.
 
 ```powershell
-.\.venv\Scripts\python -m unittest tests.test_hydrology_hy12_rivers.RiverWaterlineTests.test_pipeline_supplies_pre_river_elevation_to_fine_profiles -q
+.\.venv\Scripts\python -m unittest tests.hydrology.test_hydrology_hy12_rivers.RiverWaterlineTests.test_pipeline_supplies_pre_river_elevation_to_fine_profiles -q
 ```
 
 ```text
@@ -350,11 +350,11 @@ AttributeError: 'WaterWorldOcean' object has no attribute 'path'
 ```powershell
 $env:PYTHONPATH='.;tests'
 $py='.\.venv\Scripts\python'
-& $py -m unittest tests.test_hydrology_hy12_rivers.RiverWaterlineTests.test_pipeline_supplies_pre_river_elevation_to_fine_profiles tests.planning.consumers.test_hydrology_reporting tests.geo1.integration.test_revisions.GeoBundleReportingTests tests.planning.consumers.test_request_boundary tests.geo1.fine_water.test_river_diagnostics -q
-& $py -m unittest tests.test_wilderness_region_index.OutlineReadBoundaryTests -q
+& $py -m unittest tests.hydrology.test_hydrology_hy12_rivers.RiverWaterlineTests.test_pipeline_supplies_pre_river_elevation_to_fine_profiles tests.planning.consumers.test_hydrology_reporting tests.geo1.integration.test_revisions.GeoBundleReportingTests tests.planning.consumers.test_request_boundary tests.geo1.fine_water.test_river_diagnostics -q
+& $py -m unittest tests.regions.test_wilderness_region_index.OutlineReadBoundaryTests -q
 & $py -m unittest discover -s tests/planning/consumers -t . -q
 & $py -m unittest tests.geo1.integration.test_revisions.GeoBundleReportingTests tests.planning.consumers.test_request_boundary tests.planning.providers.test_diagnostics -q
-& $py -m unittest tests.geo1.integration.test_revisions.GeoCapturedAssemblerTests tests.test_hydrology_hy12_rivers tests.test_relief_objects_z tests.test_water_placement_pass -q
+& $py -m unittest tests.geo1.integration.test_revisions.GeoCapturedAssemblerTests tests.hydrology.test_hydrology_hy12_rivers tests.relief.test_relief_objects_z tests.hydrology.test_water_placement_pass -q
 ```
 
 - Целевой набор — 15/15. Outline read через штатный caller — 6/6.

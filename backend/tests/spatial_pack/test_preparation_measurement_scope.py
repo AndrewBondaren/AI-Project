@@ -2,8 +2,8 @@
 
 import unittest
 
-from measure_wilderness_chunk_batch import fixture, execute
-import test_preparation_wilderness_chunks as chunk_tests
+from tests.spatial_pack.measure_wilderness_chunk_batch import fixture, execute
+import tests.spatial_pack.test_preparation_wilderness_chunks as chunk_tests
 from app.application.worldData.pack.preparation.metadataProjection import metadata_input_fingerprint, metadata_value_fingerprint
 from app.dataModel.worldPack.preparation.metadataDependencies import PackMetadataInputField, PackMetadataValueInputSelector
 from app.dataModel.worldPack.preparation.addresses import PackChunkMetadataAddress, PackTileMetadataAddress

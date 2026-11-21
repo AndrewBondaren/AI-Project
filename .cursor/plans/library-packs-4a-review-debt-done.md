@@ -59,7 +59,7 @@
   свои копии `_PLOT_ONLY_FIELDS`, sniffing и `_check_world_subjects`
   удаляются; issues мапятся в `LibraryPackValidationError` (канал ошибки
   сервиса паков, не `reject_unresolved`).
-- **Проверка:** `python -m unittest tests.test_library_packs_4a` +
+- **Проверка:** `python -m unittest tests.libraries.test_library_packs_4a` +
   `python -m compileall app/application/worldData` — зелёные; grep:
   `_PLOT_ONLY_FIELDS` и `check_template_subjects` встречаются в одном
   файле.
@@ -77,7 +77,7 @@
   `PlotLayoutTemplate` → `body.plot_type.value`, иначе `body.structure_type`
   (property outline). Сигнатура `upsert_outline` — union-тип.
   Поведение значений не меняется (денорм-колонка — тот же текст).
-- **Проверка:** `python -m unittest tests.test_library_packs_4a` —
+- **Проверка:** `python -m unittest tests.libraries.test_library_packs_4a` —
   `test_building_member_crud`, `test_building_member_pointer_dual_write`
   зелёные; `compileall`.
 - **Done:** getattr-цепочки нет, сигнатура честная.
@@ -100,7 +100,7 @@
   параметром и не ветвится по строке — реестр резолвится по
   `self.registry_field` через тот же worldRow-аксессор (if/else по
   ClassVar допустим как один dispatch, либо маппинг field→accessor).
-- **Проверка:** `python -m unittest tests.test_library_packs_4a` —
+- **Проверка:** `python -m unittest tests.libraries.test_library_packs_4a` —
   dual-write тесты (`test_world_member_visible_to_registry_readers`,
   `test_building_member_pointer_dual_write`,
   `test_delete_world_pack_drops_pointers`) зелёные.
@@ -120,7 +120,7 @@
   `_MemberOps.teardown(members, world) -> list[str]` (возвращает
   orphan-диагностику); фасад `delete_pack` только гейты + вызов +
   delete pack row + отчёт.
-- **Проверка:** `python -m unittest tests.test_library_packs_4a` —
+- **Проверка:** `python -m unittest tests.libraries.test_library_packs_4a` —
   `test_delete_world_pack_drops_pointers`,
   `test_delete_engine_pack_does_not_break_worlds` зелёные.
 - **Done:** фасад не знает о per-member teardown-механике.
@@ -144,7 +144,7 @@
   `ReliefWorldImportService | None`); `import_fs_pack` outcome —
   типизированный контракт (typed dataclass/результат FS-импортёров),
   `PackImportResult.bodies` получает его тип вместо `tuple[Any, ...]`.
-- **Проверка:** `python -m unittest tests.test_library_packs_4a` —
+- **Проверка:** `python -m unittest tests.libraries.test_library_packs_4a` —
   `test_missing_dependencies_diagnosed_not_blocked`,
   `test_fs_import_creates_engine_library` зелёные; grep `Any` в
   сигнатурах адаптеров пуст (кроме `outline: Any` контракта).
@@ -162,6 +162,6 @@
   update_metadata/delete/set_dependencies/missing_dependencies/
   import_fs_pack; публичный API фасада и сигнатуры не меняются —
   pure move внутри файла. Тело фасада после шага < 150 строк.
-- **Проверка:** `python -m unittest tests.test_library_packs_4a`
-  tests.test_library_packs_b3 — зелёные.
+- **Проверка:** `python -m unittest tests.libraries.test_library_packs_4a`
+  tests.libraries.test_library_packs_b3 — зелёные.
 - **Done:** фасад под порогом, шаг 4b стартует с чистого слоя.

@@ -644,7 +644,7 @@ class WaterPlacementProviderTests(unittest.TestCase):
         from app.application.worldData.generators.hydrology.placement.waterPlacementPass import (
             run_water_placement_pass, run_prepared_water_placement, legacy_surface_revision)
         from app.application.worldData.generators.terrain.types import SurfaceHeightmap
-        from tests.hydrology_fixtures import hydro_world
+        from tests.hydrology.hydrology_fixtures import hydro_world
         terrain = self.terrain.get()
         hm = SurfaceHeightmap(world_uid="climate-world", bbox=terrain.payload.bbox,
             surface_z={(coord.gx, coord.gy): z for coord, z in terrain.payload.surface_z})
@@ -871,7 +871,7 @@ class ReliefProviderTests(ReliefProviderFixture, unittest.TestCase):
         from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
         from app.application.worldData.generators.terrain.reliefObjects import apply_relief_objects_z
         from app.application.worldData.generators.terrain.types import SurfaceHeightmap
-        from tests.hydrology_fixtures import hydro_world
+        from tests.hydrology.hydrology_fixtures import hydro_world
         climate, terrain, water = self.water.terrain.climate.get(), self.water.terrain.get(), self.water.get()
         peak = self.peak()
         inputs = self.inputs.model_copy(update={"declared_mountains": (peak,)})
@@ -895,7 +895,7 @@ class ReliefProviderTests(ReliefProviderFixture, unittest.TestCase):
         from app.application.worldData.generators.terrain.noise import cell_z_noise
         from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale, light_cell_center_fine
         from app.ids import seed_int
-        from tests.hydrology_fixtures import hydro_world
+        from tests.hydrology.hydrology_fixtures import hydro_world
         source = hydro_world(world_uid="climate-world", z_min=-100, z_max=100, default_climate_zone="temperate")
         terrain = self.water.terrain.get()
         coarse = {(c.gx, c.gy): z for c, z in terrain.payload.surface_z}
@@ -1385,7 +1385,7 @@ class HydrologyProviderTests(ReliefProviderFixture, unittest.TestCase):
         from app.application.worldData.generators.terrain.types import SurfaceHeightmap
         from app.dataModel.topology.fineTopology import fine_topology
         from app.dataModel.spatial.grid.coordinateSpace import CoordinateSpace
-        from tests.hydrology_fixtures import hydro_world
+        from tests.hydrology.hydrology_fixtures import hydro_world
         source = {(cell.gx, cell.gy): z for cell, z in self.before.payload.surface_z}
         hm = SurfaceHeightmap("climate-world", self.water.terrain.inputs.bbox, dict(source))
         w = hydro_world(world_uid="climate-world", fine_cells_per_map_cell=10, z_min=-100, hydrology=dict(
@@ -1495,7 +1495,7 @@ class HydrologyProviderTests(ReliefProviderFixture, unittest.TestCase):
         from app.application.worldData.generators.hydrology.riverNetworkAssembler import assemble_rivers
         from app.application.worldData.generators.hydrology.types import HydrologyMasterInput, LoadedConnectionGraph
         from app.application.worldData.generators.terrain.types import SurfaceHeightmap
-        from tests.hydrology_fixtures import hydro_world
+        from tests.hydrology.hydrology_fixtures import hydro_world
         inputs = self.hydro_inputs.model_copy(update={"declared_rivers": (),
             "rivers": self.hydro_inputs.rivers.model_copy(update={"autoresolve": True})})
         hm = SurfaceHeightmap("climate-world", self.water.terrain.inputs.bbox,

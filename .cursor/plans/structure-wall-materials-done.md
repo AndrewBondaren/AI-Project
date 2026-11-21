@@ -183,7 +183,7 @@ DTO — в `backend/app/dataModel/economy/materialPolicies/`; геометрия
 Изменения материала стен шахты допускаются только после явного решения S0.
 Внешние стены должны сохранять свой материал; floors/roof/foundation не меняются.
 
-U-гейт из backend: `./.venv/Scripts/python.exe -m unittest tests.test_u_shape_orientation_baseline tests.test_u_shape_facing tests.test_structure_orientation tests.test_debug_structure_rotations tests.test_embedded_shaft tests.test_embedded_upper_layout tests.test_shaft_walls`.
+U-гейт из backend: `./.venv/Scripts/python.exe -m unittest tests.structure.test_u_shape_orientation_baseline tests.structure.test_u_shape_facing tests.structure.test_structure_orientation tests.structure.test_debug_structure_rotations tests.structure.test_embedded_shaft tests.structure.test_embedded_upper_layout tests.structure.test_shaft_walls`.
 Sweep из корня: `backend/.venv/Scripts/python.exe .local/rooms_pojo_sweep.py .local/wall_materials_<step>_after.json`.
 Сравнить точные ERROR и passages, детерминизм ×2; дополнить sweep проверкой
 геометрии отдельно от cell_material. Существующий expectedFailure не исправлять.
@@ -207,7 +207,7 @@ Sweep из корня: `backend/.venv/Scripts/python.exe .local/rooms_pojo_sweep
 ### S1 — Зафиксировать исходное поведение (только проверки) — **закрыт 2026-10-04**
 - **Цель:** отделить целевое изменение материалов от геометрической регрессии.
 - **ТЗ:** [tz_building_generator.md](<E:/AI Project/docs/tz_building_generator.md>) §8.7, §8.7.1; [tz_staircase_generation.md](<E:/AI Project/docs/tz_staircase_generation.md>) §6, §8.1, §9.
-- **Файлы:** backend/tests/test_wall_material_baseline.py; fixtures при необходимости; .local/baseline-артефакты.
+- **Файлы:** backend/tests/structure/test_wall_material_baseline.py; fixtures при необходимости; .local/baseline-артефакты.
 - **Контракт:** production не меняется; наблюдаемые geometry/material/passages/diagnostics сохраняются отдельно.
 - **Проверка:** U-гейт, sweep; разные материалы здания/комнат, общая перегородка, concave footprint, несколько Z и поворотов, open/closed shaft, несколько seeds.
 - **Done:** исходное поведение воспроизводимо, перечень разрешённых material-diff соответствует S0.
@@ -215,7 +215,7 @@ Sweep из корня: `backend/.venv/Scripts/python.exe .local/rooms_pojo_sweep
 ### S2 — Ввести typed provenance стен (только dataModel) — **закрыт 2026-10-04**
 - **Цель:** выразить происхождение и владельца стены независимо от её материала.
 - **ТЗ:** [tz_building_generator.md](<E:/AI Project/docs/tz_building_generator.md>) §8.7.1; [tz_economic_tier.md](<E:/AI Project/docs/tz_economic_tier.md>) §11 — разделы добавлены; открытые вопросы согласовать в S0.
-- **Файлы:** backend/app/dataModel/locations/structure/wallRegion.py и backend/app/dataModel/economy/materialPolicies/materialPolicy.py; backend/tests/test_wall_region_contract.py.
+- **Файлы:** backend/app/dataModel/locations/structure/wallRegion.py и backend/app/dataModel/economy/materialPolicies/materialPolicy.py; backend/tests/structure/test_wall_region_contract.py.
 - **Контракт:** неизменяемые DTO wall-region/ownership, candidates/policy/context/decision из S0; нет импортов генераторов, subtype-dispatch и несогласованных wire-полей. Политика передаётся явно, будущие экономические данные расширяют typed context. Поле `policy` — optional stub без текущего источника, с комментарием-ссылкой на tz_economic_tier.md §11.5.
 - **Проверка:** unit-контракт координат, Z и ownership, compileall; persistent schema не меняется.
 - **Done:** контракт пригоден и writer, и будущему потребителю лестничного плана; production routing не меняется.
@@ -223,7 +223,7 @@ Sweep из корня: `backend/.venv/Scripts/python.exe .local/rooms_pojo_sweep
 ### S3 — Классифицировать фактические стены (только геометрия) — **закрыт 2026-10-04**
 - **Цель:** определить наружные и внутренние регионы без выбора материала.
 - **ТЗ:** [tz_building_generator.md](<E:/AI Project/docs/tz_building_generator.md>) §8.7.1.
-- **Файлы:** backend/app/application/worldData/generators/structure/wallRegions.py; backend/tests/test_wall_regions.py.
+- **Файлы:** backend/app/application/worldData/generators/structure/wallRegions.py; backend/tests/structure/test_wall_regions.py.
 - **Контракт:** pure geometry input → typed regions, одно разрешённое ownership на физическую клетку по S0; действующая генерация пока не подключена.
 - **Проверка:** соседние и несмежные комнаты, non-rectangle/concave формы, двор по S0, повороты, разные heights/Z, shaft с/без стен; результат независим от перестановки входных комнат.
 - **Done:** принадлежность и owners проверены; материал и клетки классификатор не создаёт.
@@ -231,7 +231,7 @@ Sweep из корня: `backend/.venv/Scripts/python.exe .local/rooms_pojo_sweep
 ### S4 — Ввести helper дефолтной политики (только экономическое правило) — **закрыт 2026-10-04**
 - **Цель:** выбирать default по экономическому контексту здания через отдельный расширяемый helper.
 - **ТЗ:** [tz_economic_tier.md](<E:/AI Project/docs/tz_economic_tier.md>) §3 — соответствие system_tier и band, §4 — effective tier, §11 — правило default helper (открытые вопросы согласовать в S0).
-- **Файлы:** backend/app/application/economy/materialPolicies/defaultMaterialPolicy.py; backend/tests/test_default_material_policy.py; декларации правил/defaults в dataModel/economy/materialPolicies/materialPolicy.py из S2.
+- **Файлы:** backend/app/application/economy/materialPolicies/defaultMaterialPolicy.py; backend/tests/resources/test_default_material_policy.py; декларации правил/defaults в dataModel/economy/materialPolicies/materialPolicy.py из S2.
 - **Контракт:** resolved building economic context → default policy: RICH выбирает max_strength, остальные bands min_strength. Использовать существующее отображение реестра в bands; без списков имён тиров, RNG, поиска БД или выбора кандидата материала.
 - **Проверка:** все пять bands, произвольные имена тиров реестра мира, WEALTHY отдельно от RICH, N=1/N=2 по существующему контракту; неизвестный контекст по S0.
 - **Done:** helper реализует правило мастера независимо от генератора и применим будущему строительству игрока/NPC; production не подключён.
@@ -239,7 +239,7 @@ Sweep из корня: `backend/.venv/Scripts/python.exe .local/rooms_pojo_sweep
 ### S5 — Создать консьюмеры политики материалов (только выбор материала) — **закрыт 2026-10-04**
 - **Цель:** разрешать конкурирующие материалы через отдельный расширяемый консьюмер.
 - **ТЗ:** [tz_economic_tier.md](<E:/AI Project/docs/tz_economic_tier.md>) §11 — слой консьюмеров и приоритет явной политики (открытые вопросы согласовать в S0); [tz_building_generator.md](<E:/AI Project/docs/tz_building_generator.md>) §8.5b, §8.7.1 — источник кандидатов и caller.
-- **Файлы:** backend/app/application/economy/materialPolicies/materialPolicyConsumer.py и defaultMaterialPolicyConsumer.py; structure/wallMaterials.py как caller; backend/tests/test_wall_material_selection.py.
+- **Файлы:** backend/app/application/economy/materialPolicies/materialPolicyConsumer.py и defaultMaterialPolicyConsumer.py; structure/wallMaterials.py как caller; backend/tests/structure/test_wall_material_selection.py.
 - **Контракт:** candidates + optional policy/context → decision; явная policy направляется в MaterialPolicyConsumer, отсутствие — в отдельный DefaultMaterialPolicyConsumer, использующий helper S4 и общий механизм сравнения. Selector вызывает механизм напрямую; у вызова добавить `# TODO: отключить прямое подключение консьюмеров политики материалов и вывести в DAG`. Selector передаёт `policy=None` (stub); место будущего authored-задания политики остаётся в tz_economic_tier.md §11.5, не в этом шаге. Расширение политики не требует правок writer/классификатора; без RNG, дублирования resolver и самостоятельных обращений к экономике/БД. DAG в этом шаге не реализовывать.
 - **Проверка:** явная policy имеет приоритет, отсутствующая вызывает default consumer, RICH выбирает наиболее прочный материал, остальные — наименее прочный; равные/отсутствующие значения по S0, разные материалы соседей, внешний регион, shaft по S0, перестановка кандидатов; произвольные кандидаты без зависимости от комнат или лестниц.
 - **Done:** консьюмеры реализуют правила S0 с объяснимым решением и явным контекстом; default helper и сравнение кандидатов не дублируются, selector вызывает механизм напрямую с TODO, production writer пока использует прежний путь.
@@ -247,7 +247,7 @@ Sweep из корня: `backend/.venv/Scripts/python.exe .local/rooms_pojo_sweep
 ### S6 — Подключить выбор к единственному writer (только генерация клеток) — **закрыт 2026-10-04**
 - **Цель:** создавать внешние стены с материалом здания, внутренние — с материалом владельца.
 - **ТЗ:** [tz_building_generator.md](<E:/AI Project/docs/tz_building_generator.md>) §8.7, §8.7.1.
-- **Файлы:** structure/cellBuilder.py, structure/structureGeneratorService.py как его caller; backend/tests/test_wall_material_cells.py.
+- **Файлы:** structure/cellBuilder.py, structure/structureGeneratorService.py как его caller; backend/tests/structure/test_wall_material_cells.py.
 - **Контракт:** существующий build_level_cells подключает регионы и selector; сохранить usages/совместимые входы до их проверки. Existing open-shaft исключения и passage ownership сохраняются; источник материала ограждения shaft определяется единым helper'ом selector-слоя, без размазывания по placers/cellBuilder.
 - **Проверка:** U-гейт, sweep, baseline S1; по всем Z меняются только согласованные cell_material, openings/passages/floors и геометрия не меняются; внешний материал сохраняется.
 - **Done:** runtime room material реально используется для внутренних стен, нет второго writer или зависимости от порядка обхода.

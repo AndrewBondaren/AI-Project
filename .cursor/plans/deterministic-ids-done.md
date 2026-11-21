@@ -39,9 +39,9 @@ backend/app/application/worldData/ids/
 
 - **Цель:** существует единственная точка формулы; старый `utils/deterministicIds.py` пока живёт параллельно.
 - **ТЗ:** `project_data_storage_tz.md` § DET-1 (контракт функций, нормализация, `runtime_uid`).
-- **Файлы:** новый `backend/app/application/worldData/ids/{__init__.py, uidKind.py, deterministicIds.py}`; `backend/tests/test_deterministic_ids.py` — переписан под новый контракт.
+- **Файлы:** новый `backend/app/application/worldData/ids/{__init__.py, uidKind.py, deterministicIds.py}`; `backend/tests/identity/test_deterministic_ids.py` — переписан под новый контракт.
 - **Контракт:** сигнатуры выше; `UidKind` полный по приложению А.
-- **Проверка:** `python -m unittest tests.test_deterministic_ids`; gate-тест сканирует `app/**` на `uuid5(`, `uuid4(`, `Random(f`, `random.seed(`, `hashlib.md5/sha256`-seed паттерны вне `ids/` и whitelist (текущие нарушители заносятся в whitelist с TODO к шагу).
+- **Проверка:** `python -m unittest tests.identity.test_deterministic_ids`; gate-тест сканирует `app/**` на `uuid5(`, `uuid4(`, `Random(f`, `random.seed(`, `hashlib.md5/sha256`-seed паттерны вне `ids/` и whitelist (текущие нарушители заносятся в whitelist с TODO к шагу).
 - **Done:** тесты зелёные; gate падает на новом нарушении.
 
 ### Шаг 2 — settlement identity domain
@@ -59,7 +59,7 @@ backend/app/application/worldData/ids/
 - **ТЗ:** § DET-1; `tz_location_transitions.md` инв. 10.
 - **Файлы:** `generators/structure/structureGeneratorService.py` (`_build_levels` → `level_uid(building_uid, z_offset)`; `_make_seed` → `entity_rng`), `passages/{entry,doorway,archway,staircaseTunnelOrchestrator,shared}.py`, `staircase/{builder,surfaceCorridor,shaftPlacer,uShape/uShape}.py`, `layoutEngine.py`.
 - **Контракт:** `level_uid` ключ `z_offset`; passage kinds → `UidKind.PASSAGE` + ключи; `scoped_rng(...)` → `entity_rng(world_uid, …)`.
-- **Проверка:** `python -m unittest tests.test_deterministic_ids tests.test_embedded_shaft tests.test_u_shape_facing tests.test_wall_opening_spec` — replay-тесты зелёные (формула новая, значения изменятся — это ожидаемо, фиксируется в шаге 9).
+- **Проверка:** `python -m unittest tests.identity.test_deterministic_ids tests.structure.test_embedded_shaft tests.structure.test_u_shape_facing tests.structure.test_wall_opening_spec` — replay-тесты зелёные (формула новая, значения изменятся — это ожидаемо, фиксируется в шаге 9).
 - **Done:** в `generators/structure/` нет `det_uuid`/`scoped_rng`/`md5`-seed.
 
 ### Шаг 4 — cascade context rng
@@ -68,7 +68,7 @@ backend/app/application/worldData/ids/
 - **ТЗ:** § DET-1; `tz_cascade_context.md` §4.
 - **Файлы:** `context/locationScope.py` (`make_scope_seed` → helper), `generators/utils/materialResolver.py` (`fold_dominant_material` rng), docstring `context/contextResolver.py`.
 - **Контракт:** один rng на scope+param, как сейчас; `make_scope_seed` удалён.
-- **Проверка:** `python -m unittest tests.test_context_extend tests.test_cascade_context_baseline` — материализации детерминированы (значения сменятся с новой формулой).
+- **Проверка:** `python -m unittest tests.cascade.test_context_extend tests.cascade.test_cascade_context_baseline` — материализации детерминированы (значения сменятся с новой формулой).
 - **Done:** `hashlib`/f-string seed в `context/` и `materialResolver` устранены.
 
 ### Шаг 5 — planner / topology rng (включая баг D2)

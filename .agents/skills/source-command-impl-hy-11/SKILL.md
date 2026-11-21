@@ -29,7 +29,7 @@ Use this skill when the user asks to run the migrated source command `impl-hy-11
    - `masks/regionRasterizer.py` — паттерн «unrolled compute + canonical write»
    - `generators/hydrology/shore/waterSideFootprint.py` — `CoastlineWaterSide`, `water_side_footprint`, `compute_land_centroid` (HY-6 код)
    - `generators/hydrology/shore/deepeningBandCarver.py`, `autoresolve/proceduralSeaAutoresolve.py`, `geom/polylineRasterize.py`, `load/buildHydrologyMasterInput.py`
-   - тесты: `backend/tests/test_hydrology_hy6.py`, hy2/hy5a (регрессии)
+   - тесты: `backend/tests/hydrology/test_hydrology_hy6.py`, hy2/hy5a (регрессии)
 6. Правила (нарушение = стоп):
    - [`.cursor/rules/dataModel-no-hardcode.mdc`](../rules/dataModel-no-hardcode.mdc)
    - [`.cursor/rules/layer-boundaries.mdc`](../rules/layer-boundaries.mdc)

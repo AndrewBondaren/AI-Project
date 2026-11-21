@@ -86,7 +86,7 @@ flowchart LR
 - `buildHydrologyMasterInput.py`, `loadConnectionGraph.py`, `loadHydrologyFromWorld.py`
 - `resolveHydrologyBands.py`, `resolveRiverTypeClassify.py`, `hydrologyLocations.py`
 - `dataModel/hydrology/*` — seas, lakes, rivers policies
-- `tests/test_hydrology_hy1.py`
+- `tests/hydrology/test_hydrology_hy1.py`
 
 **Осталось для «closed»:**
 

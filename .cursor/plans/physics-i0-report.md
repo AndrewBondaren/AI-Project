@@ -16,10 +16,10 @@ DAG lifecycle принадлежит прежнему владельцу; execut
 
 - 79 tests PASS: tests.physics.test_settings_policy, test_settings_logging,
   test_settings_core, test_settings_typing, test_codec_compatibility;
-  tests.test_generation_logging; tests.planning.encoding.test_canonical_codec;
+  tests.logging.test_generation_logging; tests.planning.encoding.test_canonical_codec;
   tests.snapshotCore.contracts.test_codec.CanonicalRequestCodecTests.test_raw_digest_is_shared_with_canonical_and_tile_hashing;
   tests.errorContracts.test_import_issues, test_resolve_issues, test_typing, test_core.
-- tests.test_logging_routes: 16 PASS, исключён существовавший до работы
+- tests.logging.test_logging_routes: 16 PASS, исключён существовавший до работы
   test_real_gc_emitter_preserves_failure_in_file_and_transcript (Artifacts GC).
   Общие запуски зависали именно на нём, остановлены. Чужой тест сохранён.
 - Первый запуск с системным TEMP получил PermissionError sandbox при записи
@@ -42,7 +42,7 @@ DAG lifecycle принадлежит прежнему владельцу; execut
 ## Совместная проверка Artifacts / Physics — 2026-11-07
 
 После объединения изменений выполнена команда из `backend`:
-` .\.venv\Scripts\python.exe -m unittest tests.physics.test_settings_policy tests.physics.test_settings_logging tests.test_logging_routes tests.test_generation_logging`.
+` .\.venv\Scripts\python.exe -m unittest tests.physics.test_settings_policy tests.physics.test_settings_logging tests.logging.test_logging_routes tests.logging.test_generation_logging`.
 TEMP/TMP установлены в `E:/AI Project/backend/.tmp_snapshot_core`.
 Результат: **40 tests OK**, 1.582s, без исключения GC-теста.
 Оговорка выше о зависании общего logging-набора снята для этой команды:

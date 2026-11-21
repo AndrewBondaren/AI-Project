@@ -25,7 +25,7 @@ from tests.geo1.coating.fixtures import envelope
 from tests.geo1.hill_hosts.test_hosts import coverage
 from tests.geo1.terrain_base.fixtures import prepare, Control
 from tests.geo1.natural_preparation.fixtures import values
-from tests import test_open_land_hills as hill_fixture
+from tests.regions import test_open_land_hills as hill_fixture
 from app.dataModel.terrainMasks.regions import PlainSpec
 from app.dataModel.spatial.regionShape import BboxShape
 from app.dataModel.regions.regionState import RegionState

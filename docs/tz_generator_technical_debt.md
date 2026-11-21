@@ -1523,7 +1523,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 | `render/renderPayloads.py` | поле `ascii_grade` |
 | `render/mapSymbols.py` | grade symbols / legend (L0 path) |
 | `scripts/render_maps.py` | пишет `world-grade.txt` |
-| Tests | `tests/test_world_map_pack_renderer.py` (grade mosaic) |
+| Tests | `tests/rendering/test_world_map_pack_renderer.py` (grade mosaic) |
 
 **Не legacy dump:** L2 `locationTerrainPackRenderer` / `wildernessTilePackRenderer` + `fineTerrainAsciiKernel` (`surface_grade` / `grade_{n}`) — **target** product.
 
@@ -1709,7 +1709,7 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 
 **Запрещено:** тело×8 Instance; валидатор skip «потому что склон прямой»; закрывать слот из сравнения z; invent `+` в dump; Occupancy v1.
 
-**Target (когда сядем за код):** generate пишет 8 кодов по [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Pack-слот / Правила стрелок (`GradeOctant` 0…7 = поток SLOPE, `SEAM=8`, `SHEER=9`, `COUPLE=10`; не один enum; глифы только dump). θ честный `atan(h/L)`; местность (0, 90); SHEER **[80, 90)**. Новый валидатор читает коды (нет кода = ERROR, не «закрыто из z»). Эталоны ямы / W×L / каскад — в том же ТЗ. `slope_outcome(L=1)` 45° и `downhill_leftover_rim_rays` — не SoT. Locked-файл [`backend/tests/test_relief_r41_t25_locked_cases.py`](../backend/tests/test_relief_r41_t25_locked_cases.py) без правки карт до явной просьбы.
+**Target (когда сядем за код):** generate пишет 8 кодов по [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Pack-слот / Правила стрелок (`GradeOctant` 0…7 = поток SLOPE, `SEAM=8`, `SHEER=9`, `COUPLE=10`; не один enum; глифы только dump). θ честный `atan(h/L)`; местность (0, 90); SHEER **[80, 90)**. Новый валидатор читает коды (нет кода = ERROR, не «закрыто из z»). Эталоны ямы / W×L / каскад — в том же ТЗ. `slope_outcome(L=1)` 45° и `downhill_leftover_rim_rays` — не SoT. Locked-файл [`backend/tests/relief/test_relief_r41_t25_locked_cases.py`](../backend/tests/relief/test_relief_r41_t25_locked_cases.py) без правки карт до явной просьбы.
 
 ---
 
@@ -2234,7 +2234,7 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 
 **Ревью шага B3 плана 5b (2026-10-14):** находки по коммитам `a7d01a7f`/`9522f962` (snapshot loader, packing identity по `template_uid`) — packing-литералы (`Facing.SOUTH`, district-метки), ложный `catalog=None`, мёртвые параметры, `StructureCatalog` по `body.system_name`, двойной `prepare_body`, private-имена как межмодульный API. Подробности и шаги — [library-packs-5b-b3-review-debt-done.md](../.cursor/plans/library-packs-5b-b3-review-debt-done.md).
 
-**Контекст:** 2026-10-10 — **шаг 4a** плана [`library-packs-model-done.md`](../.cursor/plans/library-packs-model-done.md) shipped (`LibraryPackService` + domain adapters + dual-write pointers; `tests/test_library_packs_4a.py`). Чистота кода самих шагов — отдельные ревью-планы [`library-packs-4a-review-debt-done.md`](../.cursor/plans/library-packs-4a-review-debt-done.md) (шаг 4a) и [`library-packs-b3-review-debt-done.md`](../.cursor/plans/library-packs-b3-review-debt-done.md) (шаг 3, FS-import — выполнен), здесь не дублируется. Ниже — **переходные контракты и поверхности**, которые обязаны умереть в шагах 4b/4c/5b, и принятые ограничения dual-write.
+**Контекст:** 2026-10-10 — **шаг 4a** плана [`library-packs-model-done.md`](../.cursor/plans/library-packs-model-done.md) shipped (`LibraryPackService` + domain adapters + dual-write pointers; `tests/libraries/test_library_packs_4a.py`). Чистота кода самих шагов — отдельные ревью-планы [`library-packs-4a-review-debt-done.md`](../.cursor/plans/library-packs-4a-review-debt-done.md) (шаг 4a) и [`library-packs-b3-review-debt-done.md`](../.cursor/plans/library-packs-b3-review-debt-done.md) (шаг 3, FS-import — выполнен), здесь не дублируется. Ниже — **переходные контракты и поверхности**, которые обязаны умереть в шагах 4b/4c/5b, и принятые ограничения dual-write.
 
 | ID | Severity | Status | P | Ось | Smell | Target |
 |---|---|---|---|---|---|---|

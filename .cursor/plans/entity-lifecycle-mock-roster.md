@@ -1,5 +1,7 @@
 # Lifecycle: конечный owning roster mock composition
 
+**Решение пользователя в этом чате, 2026-11-21:** test-only allocation 94001–94062,94090–94091 и pair(1,94001) УТВЕРЖДЕНЫ. Прежние пометки PROPOSED ниже относятся к состоянию до этого ответа. Реализован native/diagnostic manifest fragment, включая shared merge; terminal root94001 пока не подключён. 20 тестов pure preparation/native section проходят; полный apply/replay/static PASS не заявлен.
+
 **Актуальная коррекция H2, PASS координатора 2026-11-21:** Lifecycle handler/append/validator возвращают exact MockLifecycleSectionRefused(SectionRefused[LifecycleApplyIssue]); subject handler/verifier/producer — MockSubjectSectionRefused(SectionRefused[MockSubjectIssue]). SectionRegistry[MockDiagnostic](MockSectionRefused) проверяет узкий local subset, затем переносит category/diagnostics в общий MockSectionRefused без потери типов/paths/order. Прежнее требование одинакового handler.refusal_model у всех handlers отменено. Эти named carriers runtime-only, без wire IDs. Composition declarations только в tests/lifecycle/support/snapshotContracts.py; MockSubjectIssue/Code — domainSections.py, subjectMock.py только behavior. Numeric allocation/pair(1,94001) остаётся PROPOSED, не препятствует независимой реализации моделей/pure операций. Источник: lifecycle-mock-result-manifest.md, итоговая сверка назначенного координатора.
 
 

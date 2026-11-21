@@ -172,11 +172,11 @@ override по `local_uid` нет. Новые пользовательские wr
 - **Цель:** выразить владельца через существующий UID API, без новых формул у consumers.
 - **ТЗ:** `project_data_storage_tz.md` DET-1; `tz_template_library_packs.md` §2.
 - **Файлы:** `worldData/ids/uidKind.py`, `deterministicIds.py`, exports;
-  `backend/tests/test_deterministic_ids.py`.
+  `backend/tests/identity/test_deterministic_ids.py`.
 - **Контракт:** `LibraryKind.LIBRARY_PACKS`, `STRUCTURE_TEMPLATES`;
   `library_uid(library, system_name, *, pack_uid=None)` с однозначной центральной
   сериализацией владельца. Legacy calls остаются bit-compatible до миграции домена.
-- **Проверка (cwd=backend):** `python -m unittest tests.test_deterministic_ids` —
+- **Проверка (cwd=backend):** `python -m unittest tests.identity.test_deterministic_ids` —
   стабильность, разные владельцы/домены, отсутствие delimiter collisions,
   source-gate запрещает локальные uuid/hash/formula.
 - **Done:** единый API готов; доменные refs ещё не мигрированы.
@@ -507,7 +507,7 @@ deferred N+1-доменов этим решением не меняется. К�
   проверяет remap UID формулой от local_uid.
 - **Файлы реализации:** `app/ids/`, `libraryPacks/remapOps.py`, задача
   re-instantiate, domain body-writers, UID-проверки manifest/bundle,
-  `tests/test_deterministic_ids.py`, тесты library-packs 4b/4c.
+  `tests/identity/test_deterministic_ids.py`, тесты library-packs 4b/4c.
 - **Проверки / Done:** одинаковые входы remap дают одинаковый UID;
   разные source UID с одинаковым local_uid дают разные целевые UID;
   другой target pack даёт другой UID; переименование исходника не
@@ -781,7 +781,7 @@ Fallback из manifest пака отложен пользователем 2026-1
 
 - **Файлы:** `core/container.py` wiring — фасад собирается из публичных
   зависимостей (`PackCatalogRepos` + adapters map), без `_PackScope`/
-  write-сервиса; `backend/tests/test_library_packs_5a.py`.
+  write-сервиса; `backend/tests/libraries/test_library_packs_5a.py`.
 - **Проверка:** изоляция миров, выбор из всех паков мира, недоступный
   owner/unknown UID/missing dependency/member без body → доменное
   решение + одна штатная warning-запись, template-only refs и исходные
@@ -950,7 +950,7 @@ SQL-схема и приоритетный resolver не включаются а
   `owner_world_uid` и `defaults`) — расширение loader'а, не второй каталог.
   Файлы: `domainAdapters/{contract,structure,building,relief}.py`,
   `libraryPacks/{effectiveCatalog,refResolve,lifecycleContracts}.py`,
-  `jsonValidation/types.py`, `tests/test_library_packs_5a.py` (+5c-кейсы).
+  `jsonValidation/types.py`, `tests/libraries/test_library_packs_5a.py` (+5c-кейсы).
   Проверка: три уровня по отдельности; битый world-override → warning +
   уровень 2; два world-пака с defaults → conflict-warning + sort by
   `pack_uid`; default-пак проигрывает world-паку; пак вне membership не

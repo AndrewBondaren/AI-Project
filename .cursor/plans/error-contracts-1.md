@@ -46,7 +46,7 @@
 
 **Запрещённые альтернативные центры:** не создавать `app/core/errorContracts`, `app/dataModel/errors`, второй `FieldPathError`, generic domain-error registry или новый logger. Общие типы полей принадлежат `dataModel/fields`, диагностика/collector — `dataModel/validation/diagnostics`, domain variants — своему owning `dataModel/<domain>/...` после D0/D1.
 
-**Тестовые места C1 (точные target paths, типы/фикстуры после C0):** `backend/tests/test_error_contracts_core.py`, `backend/tests/typing/error_contracts_valid.py`, `backend/tests/typing/error_contracts_invalid.py`, `pyrightconfig.error-contracts.json`; существующие `backend/tests/test_location_context_contract.py`, `backend/tests/typing/cascade_fields_valid.py`, `cascade_fields_invalid.py`, `pyrightconfig.cascade.json`, `backend/tests/snapshotCore/` и GEO/Policy tests — regression gates после extraction. Способ проверки negative typing cases выбирается на C0 по текущему `scripts/check-cascade-types.cjs`; новый runner не создавать без доказанной нужды.
+**Тестовые места C1 (точные target paths, типы/фикстуры после C0):** `backend/tests/test_error_contracts_core.py`, `backend/tests/typing/error_contracts_valid.py`, `backend/tests/typing/error_contracts_invalid.py`, `pyrightconfig.error-contracts.json`; существующие `backend/tests/cascade/test_location_context_contract.py`, `backend/tests/typing/cascade_fields_valid.py`, `cascade_fields_invalid.py`, `pyrightconfig.cascade.json`, `backend/tests/snapshotCore/` и GEO/Policy tests — regression gates после extraction. Способ проверки negative typing cases выбирается на C0 по текущему `scripts/check-cascade-types.cjs`; новый runner не создавать без доказанной нужды.
 
 ### 0.1.2. Направление импортов и размещение семейств F01–F09
 
@@ -480,8 +480,8 @@ flowchart TD
 
 | Путь | Символы (связь) | Ломается в C1 | Gate |
 | --- | --- | --- | --- |
-| `backend/tests/test_context_extend.py` | FR (import, ctor×4) | FR: import path | механический D2 (import path) |
-| `backend/tests/test_location_context_contract.py` | FR (import, ctor×12); bf (import, call×8) | FR: import path; bf: import path | механический D2 (import path) |
+| `backend/tests/cascade/test_context_extend.py` | FR (import, ctor×4) | FR: import path | механический D2 (import path) |
+| `backend/tests/cascade/test_location_context_contract.py` | FR (import, ctor×12); bf (import, call×8) | FR: import path; bf: import path | механический D2 (import path) |
 
 **tests: Designed Water / Hydrology (GEO-1)** — предварительно по владельцу
 
@@ -517,7 +517,7 @@ flowchart TD
 
 | Путь | Символы (связь) | Ломается в C1 | Gate |
 | --- | --- | --- | --- |
-| `backend/tests/test_e6_consumers.py` | FPE (import-via:types, ctor×1, str-code, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
+| `backend/tests/cascade/test_e6_consumers.py` | FPE (import-via:types, ctor×1, str-code, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked; str code | scoped D0/D1 до C1 |
 
 **tests: Hydrology pack codec** — предварительно по владельцу
 
@@ -530,7 +530,7 @@ flowchart TD
 
 | Путь | Символы (связь) | Ломается в C1 | Gate |
 | --- | --- | --- | --- |
-| `backend/tests/test_placement_contract.py` | FPE (import-via:types, ctor×1, reference=, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked; ctx-поля | scoped D0/D1 до C1 |
+| `backend/tests/placement/test_placement_contract.py` | FPE (import-via:types, ctor×1, reference=, wire?) | FPE: ctor: `code`→обяз. CodeT, path→checked; ctx-поля | scoped D0/D1 до C1 |
 
 **tests: Planning** — предварительно по владельцу
 
@@ -558,16 +558,16 @@ flowchart TD
 
 | Путь | Символы (связь) | Ломается в C1 | Gate |
 | --- | --- | --- | --- |
-| `backend/tests/test_spatial_read_contract.py` | FPE (import, ctor×3) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
+| `backend/tests/worldPack/test_spatial_read_contract.py` | FPE (import, ctor×3) | FPE: ctor: `code`→обяз. CodeT, path→checked | scoped D0/D1 до C1 |
 
 **tests: Template Library** — предварительно по владельцу
 
 | Путь | Символы (связь) | Ломается в C1 | Gate |
 | --- | --- | --- | --- |
-| `backend/tests/test_library_pack_logging.py` | RIR (import-via:types, annot×4) | RIR: перенос к owner D1 | scoped D0/D1 до C1 |
-| `backend/tests/test_library_pack_update_plan.py` | RIR (import-via:types, annot×1) | RIR: перенос к owner D1 | scoped D0/D1 до C1 |
-| `backend/tests/test_library_packs_5a.py` | RIR (import-via:types, annot×8) | RIR: перенос к owner D1 | scoped D0/D1 до C1 |
-| `backend/tests/test_template_domain_preparation.py` | RIR (import-via:types, annot×1) | RIR: перенос к owner D1 | scoped D0/D1 до C1 |
+| `backend/tests/libraries/test_library_pack_logging.py` | RIR (import-via:types, annot×4) | RIR: перенос к owner D1 | scoped D0/D1 до C1 |
+| `backend/tests/libraries/test_library_pack_update_plan.py` | RIR (import-via:types, annot×1) | RIR: перенос к owner D1 | scoped D0/D1 до C1 |
+| `backend/tests/libraries/test_library_packs_5a.py` | RIR (import-via:types, annot×8) | RIR: перенос к owner D1 | scoped D0/D1 до C1 |
+| `backend/tests/libraries/test_template_domain_preparation.py` | RIR (import-via:types, annot×1) | RIR: перенос к owner D1 | scoped D0/D1 до C1 |
 
 **tests: static typing** — предварительно по владельцу
 
@@ -993,17 +993,17 @@ flowchart TD
     - **EC-11 для JSON/import и World Bundle — принят владельцем 2026-11-05.** Проверка и приёмка завершены после исправления EC-11-R1–R3; результаты приведены ниже.
       - **Контракт.** Владелец операции фиксирует, для каких типизированных причин и режимов результатом будет отказ, успех или допустимый DEGRADED с указанным fallback. Граница записи использует этот исход. Владелец доставки отвечает за полный wire loc, правила emit/silent/collect и наследование контекста. При переключении только `collect_only` доменный исход, UID и разрешение записи должны совпадать. Разделение коллекций принято в D1 ниже.
       - **Сквозная приёмка.** На одном безымянном регионе проверить preview (ошибка имени, ноль записей), обычный импорт (предупреждение, сохранён вычисленный UID) и ту же подготовку с `collect_only` (диагностика собрана без предупреждения, тот же UID и допуск к записи). Повторить с блокирующей ошибкой REF-W, затем с обоими фактами в общем отчёте: блокирующая причина доступна вызывающему коду, транзакция не публикует мир. Проверять фактический результат операции, содержимое отчёта, логи и состояние хранилища. Сценарии проверены в итоговом прогоне ниже.
-    - **P2, адресный тест J3a — DONE:** проверка заменена на полный `wire_loc(...) == (field,)`, тест проходит. В `backend/tests/test_e6_consumers.py`, метод `test_location_wire_policy_has_identical_facts_and_one_log`, сравнение `wire_loc(...)[-1:]` пропустит лишний префикс. Проверить полный адрес `(field,)` для всех трёх полей. Решение B подтверждено: для неизвестной ссылки в `validate_reference_value` ожидается `WireShapeIssue` с абсолютным wire loc без `schema_id`.
+    - **P2, адресный тест J3a — DONE:** проверка заменена на полный `wire_loc(...) == (field,)`, тест проходит. В `backend/tests/cascade/test_e6_consumers.py`, метод `test_location_wire_policy_has_identical_facts_and_one_log`, сравнение `wire_loc(...)[-1:]` пропустит лишний префикс. Проверить полный адрес `(field,)` для всех трёх полей. Решение B подтверждено: для неизвестной ссылки в `validate_reference_value` ожидается `WireShapeIssue` с абсолютным wire loc без `schema_id`.
   - **jsonValidation J3b IMPLEMENTED, ревью — OPEN (2026-11-05, `master`, a89b6742):** `index/validate.py`, `bundle/connectionGraph.py`, `bundle/preflight.py` → `JsonFieldError`/`WireShapeIssue`, старых `FieldPathError` нет. Адресные тесты (33 модуля): 34 → 23 ERROR/FAIL, новых нет; Pyright по 3 файлам 18 → 3 (старые). Замечания ревью до DONE:
     - **R-J3b-1 CLOSED (J3c):** согласованы публичные функции resolve.field_issue и resolve.pydantic_issues, на них переведены вызывающие модули J3a/b.
-    - **R-J3b-2 (P1):** mojibake `—` → `вЂ”` в docstrings `connectionGraph.py` (3) и `index/validate.py` (1); до шага то же в `tests/test_terrain_masks.py`. Вернуть UTF-8. **FIXED (2026-11-05):** `вЂ”` → `—` в `connectionGraph.py`/`index/validate.py`; `tests/test_terrain_masks.py` (тройная порча, до J3b) не трогал.
+    - **R-J3b-2 (P1):** mojibake `—` → `вЂ”` в docstrings `connectionGraph.py` (3) и `index/validate.py` (1); до шага то же в `tests/regions/test_terrain_masks.py`. Вернуть UTF-8. **FIXED (2026-11-05):** `вЂ”` → `—` в `connectionGraph.py`/`index/validate.py`; `tests/regions/test_terrain_masks.py` (тройная порча, до J3b) не трогал.
     - **R-J3b-3 (P2, контракт):** `_normalize_rows` больше не принимает пустую/`null` секцию: `connection_nodes: null`/`{}` → `EXPECTED_LIST` (раньше → `[]`); закреплено в `tests/errorContracts/test_bundle_issues.py`. **Решение: оставить `EXPECTED_LIST`** — исправление бага, не ужесточение: прежнее `null`/`{}` → `[]` было подстановкой при ошибке, запрещённой `docs/tz_runtime_world_edit_policy.md` (§45 absent/null/empty различаются; §74 null вне типа → ошибка; §103 новые error fallback запрещены). Режимы: validate → issue в отчёте; runtime import → 422 + rollback bundle-транзакции. Отсутствующая секция пропускается, `[]` — валидная пустая. Пункт закрыт решением; код не требует правки.
     - **R-J3b-4 (P2):** `preflight`: `ReliefValidationError` теперь даёт 422 `LIBRARY_INVALID` вместо `VALIDATION_ERROR` — расходится с D1 «wire-коды не меняются». **Решение: вернуть `VALIDATION_ERROR`** (см. R-J3c-4). **FIXED (2026-11-05):** `preflight` ловит `(ReliefValidationError, ValueError)` → `VALIDATION_ERROR`.
     - **R-J3b-5 (P2):** `index/validate._index_issue` выбирает позицию POJO хардкодом `offset = 0 if model is WorldClimateScalars else 1`; источник — `WorldSlice.world_keys` (`slice_for_pojo`). **FIXED (2026-11-05):** `_index_issue` берёт `slice_for_pojo(model)`: `multi_column` → loc `()`, иначе `(world_keys[0],)`; незарегистрированный POJO или путь вне колонки → `RuntimeError`, `schema_id` из slice.
-    - Мелкое: `preflight` передаёт `BaseModel` как «нет POJO» в `_pydantic_issues`; двойной импорт `jsonValidation.types` в `tests/test_hydrology_hy12_contract.py`.
+    - Мелкое: `preflight` передаёт `BaseModel` как «нет POJO» в `_pydantic_issues`; двойной импорт `jsonValidation.types` в `tests/hydrology/test_hydrology_hy12_contract.py`.
   - **jsonValidation J3c IMPLEMENTED, ревью — OPEN (2026-11-05, `master`, a47e75bb; DONE снят ревью):** общий mapper producers J3a/b, REMOVED_FROM_WIRE с полным loc в фасаде, единая проекция validate-only и HTTP. Проверены alias loc, неизменяемость отчёта и отклонение одноразового iterable. Адресный прогон: 71/73, две ошибки вне JSON в economicTierBands и materialResolver (прямой FieldPathError).
     - **Ревью (2026-11-05, `master` на `d7c8a545`, база `fd687a15`):** R-J3b-1 закрыт публикацией `resolve.field_issue`/`resolve.pydantic_issues`, локальные хелперы J3a/J3b удалены; `reject_unresolved` больше не расходует одноразовый iterable; `REMOVED_FROM_WIRE` с полным loc; прямых `FieldPathError(...)` в `jsonValidation/` и `worldBundle/` нет. Адресные тесты (40 модулей): 39 → 30 ERROR/FAIL, новых нет, исправлено 9. Pyright по 10 изменённым файлам 39 → 27, одна новая (R-J3c-3).
-    - **R-J3c-1 (P1):** не выполнена зависимость D1 (B) регионов: `wire_loc` и `import_validation_http_detail` в `jsonValidation/types.py` по-прежнему добавляют `location` только для `JsonFieldError`. `regionIdentity.declared_region_identity` всё ещё создаёт базовый `FieldPathError` → `TypeError`; `tests/test_region_identity.py` падает. Закрыть вместе с P1 J3a. **FIXED (2026-11-05):** `RegionIdentityCode`/`RegionIdentityIssue` (`location`, `schema_id`) в `dataModel/terrainMasks/regions/identityIssue.py`; `declared_region_identity` создаёт его (`path` = `CheckedPath.root(RegionSpecBase).field(REGION_NAME)`); `wire_loc` добавляет `location` любого подкласса, 422/report выводят `schema_id` любого подкласса; `test_region_identity` на `wire_loc` — все 7 падений модуля закрыты. P1 J3a закрыт.
+    - **R-J3c-1 (P1):** не выполнена зависимость D1 (B) регионов: `wire_loc` и `import_validation_http_detail` в `jsonValidation/types.py` по-прежнему добавляют `location` только для `JsonFieldError`. `regionIdentity.declared_region_identity` всё ещё создаёт базовый `FieldPathError` → `TypeError`; `tests/regions/test_region_identity.py` падает. Закрыть вместе с P1 J3a. **FIXED (2026-11-05):** `RegionIdentityCode`/`RegionIdentityIssue` (`location`, `schema_id`) в `dataModel/terrainMasks/regions/identityIssue.py`; `declared_region_identity` создаёт его (`path` = `CheckedPath.root(RegionSpecBase).field(REGION_NAME)`); `wire_loc` добавляет `location` любого подкласса, 422/report выводят `schema_id` любого подкласса; `test_region_identity` на `wire_loc` — все 7 падений модуля закрыты. P1 J3a закрыт.
     - **R-J3c-2 (P1, границы):** изменён `application/worldBundle/worldBundleService.py` (+58/−20) — по §6.1 это J4. По содержанию корректно (`world_ctx`, `StrictFieldError.issue`, `WireShapeIssue`), но в плане не отражено, статус J4 не обновлён. **Решение (2026-11-05): вынести в J4** — эти правки — вход J4, принимаются ревью J4; J3c их не засчитывает.
     - **R-J4-1 (P2, J4) — DONE.** При preflight, проверке remapped-мира и записи состояния региона один request-local отчёт сохраняет канонический bundle loc с `world`. Предупреждение для одной строки эмитится один раз; повторный независимый запрос получает собственный отчёт. `WorldCopyImport` использует подготовленный `created_at`, при continuation — значение из подписанного контекста.
     - **R-J3c-3 (P2):** `WorldBundleService._prepare_bundle` вызывает `pydantic_issues(world_ctx, World, exc)`, где `World` — dataclass `db/models/world.py`, не POJO. Воспроизведено: `CheckedPathError: path root must be a POJO model`, выброшенный внутри `except` → вместо 422 сырое исключение. Pyright: новая ошибка аргумента. `WorldService.prepare_import` уже переводит ошибки в `ImportValidationError`, ветка, вероятно, недостижима — удалить или передавать `None`. **FIXED (2026-11-05):** (J4) `pydantic_issues(world_ctx, None, exc)`, импорт `World` удалён.

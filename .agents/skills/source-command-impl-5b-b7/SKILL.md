@@ -63,7 +63,7 @@ Use this skill when the user asks to run the migrated source command `impl-5b-b7
 
 - `python -m unittest discover -s tests -p "test_library_packs_*.py"`;
   `python -m unittest discover -s tests -p "test_library_write_*.py"`;
-  `python -m unittest tests.test_fixture_bundle_import tests.test_world_column_write tests.test_bundle_archive tests.test_bundle_library_archive tests.test_template_location_refs` — зелёные.
+  `python -m unittest tests.bundles.test_fixture_bundle_import tests.validation.test_world_column_write tests.bundles.test_bundle_archive tests.bundles.test_bundle_library_archive tests.libraries.test_template_location_refs` — зелёные.
 - Fresh schema и modern/legacy round-trip прошли; нет silent drops; modern runtime не читает registries.
 - Source audit чист вне allowlist; обнаруженные node dependencies закрыты по «Gate: DAG».
 - Пометка «выполнен» в плане — только после прохождения приёмки и «ок» мастера.

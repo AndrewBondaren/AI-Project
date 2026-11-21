@@ -1,6 +1,6 @@
 # LOD-A0. Продолжение смены покрытия региона
 
-Первый проверяемый потребитель — `StateChangeConsumer.evaluate`. Регион может оставаться лесом с уже накопленным прогрессом перехода в степь. Здесь можно различить доменный результат, незавершённый процесс и то, что наблюдатель видит на карте. В production метод вызывается при изменении декларации с `elapsed_ticks=0` и календарной меткой аудита. Положительный интервал сейчас передаёт тестовый caller. Автоматический выбор FAR/NEAR для региона отсутствует. [Caller деклараций](../../backend/app/application/worldData/regions/declaredRegionEdit.py#L57) · [Caller с длительностью](../../backend/tests/test_region_state_change.py#L146)
+Первый проверяемый потребитель — `StateChangeConsumer.evaluate`. Регион может оставаться лесом с уже накопленным прогрессом перехода в степь. Здесь можно различить доменный результат, незавершённый процесс и то, что наблюдатель видит на карте. В production метод вызывается при изменении декларации с `elapsed_ticks=0` и календарной меткой аудита. Положительный интервал сейчас передаёт тестовый caller. Автоматический выбор FAR/NEAR для региона отсутствует. [Caller деклараций](../../backend/app/application/worldData/regions/declaredRegionEdit.py#L57) · [Caller с длительностью](../../backend/tests/regions/test_region_state_change.py#L146)
 
 ## Кто кому передаёт данные
 
@@ -16,7 +16,7 @@
 
 ## Выполненный сценарий
 
-На временном файле SQLite применена штатная миграция. Использованы [registry, policy, request и климатический test provider](../../backend/tests/test_region_state_change.py#L34), реальный scorer, writer и новый экземпляр Database после закрытия. Вход постоянен — осадки 0, цель steppe, inertia леса 4, strength 1, общий маркер at=42. Единица опыта — входной tick региона.
+На временном файле SQLite применена штатная миграция. Использованы [registry, policy, request и климатический test provider](../../backend/tests/regions/test_region_state_change.py#L34), реальный scorer, writer и новый экземпляр Database после закрытия. Вход постоянен — осадки 0, цель steppe, inertia леса 4, strength 1, общий маркер at=42. Единица опыта — входной tick региона.
 
 1. Контрольный UID обработан одним батчем elapsed=4. Опытный UID в том же мире получил elapsed=2. В БД текущий тип forest, pending_target=steppe, progress=0,5.
 2. На границе детализации тот же UID четыре раза спроецирован через overlay_terrain для чтения покрытия. Все четыре результата — forest. Выбран более частый расчёт с шагом 1. При самом переключении writer не вызывается.

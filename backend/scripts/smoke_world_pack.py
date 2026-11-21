@@ -95,15 +95,15 @@ def run_offline(result: SmokeResult) -> None:
         result.fail("WP-A7", (gate.stderr or gate.stdout or "gate failed").strip()[:500])
 
     tests = [
-        "tests.test_merge_fieldwise",
-        "tests.test_merge_map_cells",
-        "tests.test_merge9_debug_read",
-        "tests.test_pack_fine_terrain_decode_cache",
-        "tests.test_wp_acceptance",
-        "tests.test_location_territory_volumes",
-        "tests.test_pack_root_resolution",
-        "tests.test_pack_climate_apply",
-        "tests.test_pojo_policies",
+        "tests.validation.test_merge_fieldwise",
+        "tests.mapCells.test_merge_map_cells",
+        "tests.mapCells.test_merge9_debug_read",
+        "tests.worldPack.test_pack_fine_terrain_decode_cache",
+        "tests.worldPack.test_wp_acceptance",
+        "tests.worldPack.test_location_territory_volumes",
+        "tests.worldPack.test_pack_root_resolution",
+        "tests.worldPack.test_pack_climate_apply",
+        "tests.validation.test_pojo_policies",
     ]
     proc = _run_cmd(
         [sys.executable, "-m", "unittest", "-q", *tests],

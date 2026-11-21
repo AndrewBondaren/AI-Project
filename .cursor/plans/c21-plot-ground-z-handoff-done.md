@@ -117,7 +117,7 @@ Place / cache / translate:
 Extract (C20 на двор без дома упадёт):
   backend/app/application/worldData/settlementOutdoor/settlementOutdoorExtract.py
     «has no front entry»; AreaLayout.building_* сейчас обязательны
-  backend/tests/test_settlement_outdoor_extract.py
+  backend/tests/settlements/test_settlement_outdoor_extract.py
   collect_connection_graph: settlementLayoutExtract.py — добавить GraphLevel.AREA с участка
 
 Mill (обёртка, не перенос логики в area):
@@ -148,7 +148,7 @@ Grep (Cursor Grep или rg из корня репо):
   GRID_OUTWARD_DELTA
 
 Проверить все road layouts на z узла.
-Не стартовать сервер. Тесты: существующий backend/tests/test_settlement_outdoor_extract.py + новые под C21 (helpers, parcel ≠ bbox, skip луча, clamp ↑↓, gate→waypoint, extract без здания).
+Не стартовать сервер. Тесты: существующий backend/tests/settlements/test_settlement_outdoor_extract.py + новые под C21 (helpers, parcel ≠ bbox, skip луча, clamp ↑↓, gate→waypoint, extract без здания).
 
 После правок dataModel — не оставлять мёртвый export DEFAULT_PARCEL_MARGIN_M.
 

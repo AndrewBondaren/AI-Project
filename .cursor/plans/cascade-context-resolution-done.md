@@ -269,10 +269,10 @@ scope → замороженный ctx передаётся сервисам у�
 - Иерархия: `extend` звеном того же уровня / с пропуском уровня / выше
   текущего → ошибка (unit S3).
 - U-гейт structure: `./.venv/Scripts/python.exe -m unittest
-  tests.test_u_shape_orientation_baseline tests.test_u_shape_facing
-  tests.test_structure_orientation tests.test_debug_structure_rotations
-  tests.test_embedded_shaft tests.test_embedded_upper_layout
-  tests.test_shaft_walls` — геометрия/диагностики неизменны.
+  tests.structure.test_u_shape_orientation_baseline tests.structure.test_u_shape_facing
+  tests.structure.test_structure_orientation tests.structure.test_debug_structure_rotations
+  tests.structure.test_embedded_shaft tests.structure.test_embedded_upper_layout
+  tests.structure.test_shaft_walls` — геометрия/диагностики неизменны.
 - compileall изменённых модулей, `git diff --check` после каждого шага.
 - Поведение генерации не меняется, кроме целевого: тир теперь доходит от
   settlement/area до structure-консьюмеров; допустимые diff — значения
@@ -303,7 +303,7 @@ below, kind)` на самих полях-источниках (стиль wire-�
   cascadeParams,locationContext}.py; `CascadeChannel` на полях
   `BundleNamedLocation` (×4 уровня), `SettlementSkeleton`,
   `DistrictTemplateEntry`, `PlotLayoutTemplate` (×3), `RoomDef`;
-  backend/tests/test_location_context_contract.py.
+  backend/tests/cascade/test_location_context_contract.py.
 - **Контракт:** `ScopeAxis` — StrEnum-миксин с `rank` (ось scope'ов
   любого домена); `ScopeLevel` — локационная ось на его базе;
   `Cascade.axis` привязывает параметр к своей оси (канал на чужой оси
@@ -353,7 +353,7 @@ below, kind)` на самих полях-источниках (стиль wire-�
 ### S1 — Аудит и baseline точек потребления (только проверки)
 - **Цель:** полный список мест, где каскад размазан, + снимок поведения.
 - **ТЗ:** tz_cascade_context §1, §5; tz_economic_tier §4, §8.
-- **Файлы:** backend/tests/test_cascade_context_baseline.py (или
+- **Файлы:** backend/tests/cascade/test_cascade_context_baseline.py (или
   расширение существующего baseline); .local/-артефакты.
 - **Контракт:** production не меняется; зафиксировать текущие значения
   effective tier во всех 4 фазах structureGeneratorService, per-room
@@ -369,7 +369,7 @@ below, kind)` на самих полях-источниках (стиль wire-�
 - **Цель:** typed модель контекста и метаданные полей.
 - **ТЗ:** tz_cascade_context §3, §5.
 - **Файлы:** dataModel/locations/context/{cascadeLevel,cascadeSpec,locationContext}.py;
-  backend/tests/test_location_context_contract.py.
+  backend/tests/cascade/test_location_context_contract.py.
 - **Контракт:** `ScopeLevel` enum (порядок = иерархия);
   `DefaultPolicy` enum; `Cascade(field, default: DefaultPolicy, fold=None,
   levels=None)`; frozen `LocationContext` с `level`, единственным
@@ -385,7 +385,7 @@ below, kind)` на самих полях-источниках (стиль wire-�
 - **Цель:** generic fold по `Cascade`-метаданным.
 - **ТЗ:** tz_cascade_context §2, §4.
 - **Файлы:** application/worldData/context/{cascadeLink,contextResolver}.py;
-  backend/tests/test_context_extend.py.
+  backend/tests/cascade/test_context_extend.py.
 - **Контракт:** `extend(*links)`: звено — `{level, obj}` (или
   `EmptyLink(level)`); валидация `level` (строго ниже `ctx.level`, без
   пропуска и повтора → ошибка) → чтение каналов типа по

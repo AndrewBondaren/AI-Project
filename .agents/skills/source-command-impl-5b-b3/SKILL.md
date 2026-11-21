@@ -68,8 +68,8 @@ Use this skill when the user asks to run the migrated source command `impl-5b-b3
 
 ## Приёмка (из плана B3)
 
-- `python -m unittest tests.test_library_packs_5b_snapshot` (новый обязательный suite) +
-  `tests.test_required_structure_position tests.test_building_assembler tests.test_settlement_topology`.
+- `python -m unittest tests.libraries.test_library_packs_5b_snapshot` (новый обязательный suite) +
+  `tests.structure.test_required_structure_position tests.settlements.test_building_assembler tests.settlements.test_settlement_topology`.
 - Одноимённые plots различимы по UID; pins не режут кандидатов; чужой owner не виден;
   ни один packing consumer не восстанавливает identity по имени (source-grep).
 - Пометка «выполнен» в плане — только после прогонов и «ок» мастера.

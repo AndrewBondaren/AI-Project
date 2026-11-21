@@ -100,7 +100,7 @@ instance (`_unwired_warned`): на seam нет `ResolveContext`, поэтому
   - `templateGraphValidation` остаётся pure: read-path вообще не знает
     про `ReliefWorldImportService`.
 - **Проверка:** `python -m unittest discover -s tests -p "test_library_packs_*.py"
-  tests.test_template_domain_preparation tests.test_template_domain_canonical`;
+  tests.libraries.test_template_domain_preparation tests.libraries.test_template_domain_canonical`;
   smoke `load_relief` — 0 `WORLD_IMPORT_UNWIRED` в логе.
 - **Done:** `WORLD_IMPORT_UNWIRED` не существует; `ReliefBodyPreparation()`
   конструируется без аргументов на всех site'ах; world-checks reachable

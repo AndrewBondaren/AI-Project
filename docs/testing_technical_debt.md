@@ -7,9 +7,9 @@
 Три тестовых модуля создают `map_cell_patches` собственными функциями
 `_map_cell_patches_ddl()`, вместо использования основной схемы:
 
-- [`test_bootstrap_map_cell_writer.py`](../backend/tests/test_bootstrap_map_cell_writer.py:16)
-- [`test_database_bootstrap_conn.py`](../backend/tests/test_database_bootstrap_conn.py:23)
-- [`test_map_cell_persist_perf.py`](../backend/tests/test_map_cell_persist_perf.py:28)
+- [`test_bootstrap_map_cell_writer.py`](../backend/tests/mapCells/test_bootstrap_map_cell_writer.py:16)
+- [`test_database_bootstrap_conn.py`](../backend/tests/mapCells/test_database_bootstrap_conn.py:23)
+- [`test_map_cell_persist_perf.py`](../backend/tests/mapCells/test_map_cell_persist_perf.py:28)
 
 Копии разошлись с контрактом: в них отсутствует `system_grade_uid`,
 который есть в [`MapCell`](../backend/app/db/models/mapCell.py:33)

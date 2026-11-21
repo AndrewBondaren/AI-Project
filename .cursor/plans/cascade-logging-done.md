@@ -96,8 +96,8 @@ median, WARNING эмитит движок через `cascadeLog`.
     `test_location_context_contract.py` (прямой вызов `resolve_default`
     больше не предупреждает — кейс переписывается на «median без
     warning», warning покрывается через `extend`).
-- **Проверка:** `python -m unittest tests.test_context_extend
-  tests.test_cascade_context_baseline tests.test_location_context_contract`;
+- **Проверка:** `python -m unittest tests.cascade.test_context_extend
+  tests.cascade.test_cascade_context_baseline tests.cascade.test_location_context_contract`;
   WARNING ровно один на пустую цепочку, ноль при authored.
 - **Done:** median-WARNING идёт в `logs/cascade/cascadeLog.log` с
   scope-контекстом; `core/runtime` каскад не засоряет; в dataModel нет

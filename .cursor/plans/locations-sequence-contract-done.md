@@ -23,7 +23,7 @@
   композиция требует отдельного плана), terrain/passes 9→9,
   planning/composition 5→5. WARN по существующим папкам выдан в чат.
 
-Проверено: `python -m unittest tests.test_world_bounds
+Проверено: `python -m unittest tests.topology.test_world_bounds
 tests.planning.consumers.test_request_boundary tests.planning.consumers.test_wiring -q`
 из backend с PYTHONPATH=tests — 37 OK. Pyright planning valid — 0 ошибок;
 positive fixture включает Sequence и tuple. Инструмент по-прежнему сообщает

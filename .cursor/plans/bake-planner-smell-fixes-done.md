@@ -64,7 +64,7 @@ def plan(
 
 ## 5. Тесты
 
-- [`tests/test_pack_bake_modes.py`](backend/tests/test_pack_bake_modes.py): rename patch target, cap via resolve, WorldBounds cases
+- [`tests/worldPack/test_pack_bake_modes.py`](backend/tests/worldPack/test_pack_bake_modes.py): rename patch target, cap via resolve, WorldBounds cases
 - Grep: `full_location_l0_tiles` → 0; `_debug_tile_cap` → 0; `_bounds_dict` → 0
 
 ## Порядок имплементации

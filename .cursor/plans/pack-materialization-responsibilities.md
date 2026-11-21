@@ -31,7 +31,7 @@
 
 ## 4. Проверки и приёмка
 
-- Запустить существующие проверки в `backend/tests/planning/consumers/test_revisions.py` и `backend/tests/test_region_state_contract.py`, а также найденные тесты finalize/light/full и сборки контейнера.
+- Запустить существующие проверки в `backend/tests/planning/consumers/test_revisions.py` и `backend/tests/regions/test_region_state_contract.py`, а также найденные тесты finalize/light/full и сборки контейнера.
 - Проверить, что stale source запрещает публикацию manifest, вычисления идут без publication lock, snapshot региона читается один раз и передаётся в drain/L0 без замены.
 - Для publisher покрыть только отсутствующие проверки поведения: порядок guard/manifest, инвалидацию при ошибке сохранения world и отклонение неполной конфигурации до bake.
 - Выполнить поиск оставшихся старых параметров и свойств, проверить diff на изменение порядка стадий и значений отчёта.

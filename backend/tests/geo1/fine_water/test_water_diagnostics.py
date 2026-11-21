@@ -179,7 +179,7 @@ class WaterDiagnosticsTests(TestCase):
         from app.application.worldData.generators.hydrology.hydrologyGeneratorService import HydrologyGeneratorService
         from app.application.worldData.generators.hydrology.water import waterDiagnostics as reporting
         from tests.geo1.coastline.test_routing import coast
-        from tests.hydrology_fixtures import hydro_world, flat_heightmap
+        from tests.hydrology.hydrology_fixtures import hydro_world, flat_heightmap
 
         world = hydro_world(hydrology={"enabled": True, "declared_coastlines": [coast("source")],
             "default_seas": {"autoresolve_coastal_sea": False, "autoresolve_open_ocean": False},

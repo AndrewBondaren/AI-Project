@@ -47,7 +47,7 @@ World registry POJO + builtin defaults → merge с сохранением от�
 - ТЗ: docs/tz_locations.md §Payload per type; docs/tz_city_generation.md §1.2.
 - Файлы: settlementPayload.py; locationTypeEntry.py; locationTypeSubtypeEntry.py;
   worldLocationTypeRegistry.py; bundleNamedLocation.py; pyrightconfig.cascade.json;
-  tests/test_location_payload.py, test_location_payload_schema.py, test_city_three_axes.py
+  tests/rendering/test_location_payload.py, test_location_payload_schema.py, test_city_three_axes.py
   и необходимые runtime-fixtures без is_inhabited.
 - Порядок: обновить ТЗ → POJO defaults/serializer/merge → bind_payload → fixture wiring
   и behavioral tests → обязательные проверки.

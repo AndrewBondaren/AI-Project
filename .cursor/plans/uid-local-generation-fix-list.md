@@ -45,7 +45,7 @@ test_c24_district_packing прошли; добавлена проверка ре
   повторный вызов для того же поселения даёт прежние UID.
 
 - [x] **UID-RV-2 — неполное обнаружение локальных формул source-gate.**
-  backend/tests/test_local_uid_identity.py:14, local_uid_expressions:
+  backend/tests/identity/test_local_uid_identity.py:14, local_uid_expressions:
   воспроизведены четыре обхода, для которых проверка возвращает пустой список:
   присваивание item.location_uid = f"...", location_uid = "...".format(...),
   передача через промежуточную переменную и возврат f-строки из локального
@@ -105,7 +105,7 @@ callers и не удалять генераторы. R1/R3/R5 и pack-часть
 | Прямые uuid4 и импорты | Все места §1; memoryExecutionStore.py; core/logMiddleware.py | Подключён общий API с нужным типом/форматом. |
 | Синтетические location_uid, area_uid и room_uid | areaBarriers.py; structureAreaAssembler.py; cascade/locationScope.py; structure/room/roomFactory.py; api/routes/debug.py | Передан UID настоящего владельца либо подключена принятая централизованная выдача. Не создавать фиктивного владельца только ради UUID. |
 | Выдачу PackingToken.uid строковой склейкой | districtAssembler/planner/tokens.py:125/131 | Подключён общий API идентичности экземпляра токена. |
-| Разрешения обходов в _EXEMPT и устаревшие комментарии | tests/test_deterministic_ids.py; deterministic-ids.mdc | Gate проверяет новые пути и не разрешает локальные UID. |
+| Разрешения обходов в _EXEMPT и устаревшие комментарии | tests/identity/test_deterministic_ids.py; deterministic-ids.mdc | Gate проверяет новые пути и не разрешает локальные UID. |
 
 - [x] Удалить перечисленные обходы после подключения замен.
 - [x] Удалить пустые/неиспользуемые генераторы и импорты; полезные доменные
@@ -370,7 +370,7 @@ autoresolve, runtime или authored fallback. Обёртка может пер�
 - Реализация: [`backend/app/ids/deterministicIds.py`](../backend/app/ids/deterministicIds.py).
 - Публичный импорт: [`backend/app/ids/__init__.py`](../backend/app/ids/__init__.py) (app.ids).
 - Закрытые типы: [`backend/app/ids/uidKind.py`](../backend/app/ids/uidKind.py): UidKind, LibraryKind.
-- Тест и source-gate: [`backend/tests/test_deterministic_ids.py`](../backend/tests/test_deterministic_ids.py), SourceGateTests.
+- Тест и source-gate: [`backend/tests/identity/test_deterministic_ids.py`](../backend/tests/identity/test_deterministic_ids.py), SourceGateTests.
 - Действующий контракт: [`docs/project_data_storage_tz.md`](project_data_storage_tz.md), § DET-1, уточнение A0 от 2026-10-14.
 Основные операции: entity_uid(world_uid, UidKind, **keys) для идентичности сущностей мира; seed_uid(world_seed, UidKind, **keys) для bake; library_uid(LibraryKind, system_name, pack_uid=...) для библиотек; runtime_uid() для назначаемого случайного UID; entity_rng/`seed_rng` для детерминированных потоков. Тонкие доменные обёртки допустимы, если не вводят собственную формулу.
 

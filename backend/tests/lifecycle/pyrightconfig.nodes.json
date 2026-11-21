@@ -1,0 +1,8 @@
+{
+  "include": ["support/nodeContracts.py", "support/nodeBindings.py"],
+  "extraPaths": ["../.."],
+  "venvPath": "../..",
+  "venv": ".venv",
+  "pythonVersion": "3.14",
+  "typeCheckingMode": "strict"
+}

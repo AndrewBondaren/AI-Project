@@ -26,7 +26,7 @@ Use this skill when the user asks to run the migrated source command `impl-casca
    - `backend/app/dataModel/cascade/` — `cascadeSpec`, `cascadeGraph`, `cascadeVerify` (generic);
    - `backend/app/dataModel/locations/context/` — `scopeLevel`, `cascadeParams` (`ECONOMIC_TIER`), `locationContext`;
    - `backend/app/application/worldData/context/` — `cascadeLink` (`Link`/`EmptyLink`), `contextResolver` (`extend`);
-   - `backend/tests/test_context_extend.py`, `test_location_context_contract.py`.
+   - `backend/tests/cascade/test_context_extend.py`, `test_location_context_contract.py`.
 7. Код старых точек — по инвентарю плана (§«Текущие точки старой логики»).
 8. Правила (нарушение = стоп):
    - [`.cursor/rules/dataModel-no-hardcode.mdc`](../rules/dataModel-no-hardcode.mdc)

@@ -53,7 +53,7 @@ Use this skill when the user asks to run the migrated source command `impl-struc
 
 ## Проверки на каждый срез
 
-- `python -m unittest tests.test_entry_point tests.test_structure_template tests.test_building_assembler tests.test_structure_area_assembler tests.test_deterministic_ids tests.test_city_three_axes tests.test_c24_district_packing` + новые тесты среза
+- `python -m unittest tests.structure.test_entry_point tests.structure.test_structure_template tests.settlements.test_building_assembler tests.structure.test_structure_area_assembler tests.identity.test_deterministic_ids tests.settlements.test_city_three_axes tests.settlements.test_c24_district_packing` + новые тесты среза
 - `python -m compileall -q app tests`
 - grep `.get("` по потребителям домена — пусто
 - Sweep generate по 13 `structures_templates/base/*.json` с capture `logger.error` — не хуже baseline (36 ERROR pre-existing, §7 п.11 основного плана)

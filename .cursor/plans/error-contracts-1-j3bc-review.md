@@ -26,13 +26,13 @@
 
 ## Запущенные проверки и границы
 
-Прошли **70 тестов**: 39 в `tests/errorContracts`, 14 в `tests.test_region_identity` и 17 в `tests.test_import_validation_policy`. Проверены carrier admission, отклонение изменяемого состояния опубликованного отчёта, одноразовый iterable и полный loc удалённого wire-поля. Адресные пробы в таблице дополняли эти тесты. Полный backend-suite и отдельный аудит безопасности за рамками этого прогона.
+Прошли **70 тестов**: 39 в `tests/errorContracts`, 14 в `tests.regions.test_region_identity` и 17 в `tests.validation.test_import_validation_policy`. Проверены carrier admission, отклонение изменяемого состояния опубликованного отчёта, одноразовый iterable и полный loc удалённого wire-поля. Адресные пробы в таблице дополняли эти тесты. Полный backend-suite и отдельный аудит безопасности за рамками этого прогона.
 
 ## Оставшиеся проверки J4
 
 1. После исправления повторить обе минимальные пробы. Для ошибочных ключей словаря дополнительно сверить две причины и оба полных адреса в preview и HTTP 422.
-2. При итоговом вердикте J4 учесть результаты `test_import_validation_policy` на проверенной ревизии. Пройдены preview без записи и резервирования, повторная проверка после remap, rollback при ошибке записи и отмене, отдельный исход инфраструктурного отказа и HTTP-флаг. [Тесты импорта](../../backend/tests/test_import_validation_policy.py#L94)
-3. На целевой ревизии отдельно подтвердить атомарность continuation с устаревшим source и HTTP-коллизию региона с rollback. Эти два сценария в данный прогон не входили. EC-11 принят, R-J4-1 имеет статус DONE. [Тест continuation](../../backend/tests/test_library_packs_4d.py#L121) · [Тест коллизии](../../backend/tests/test_declared_region_edit.py#L172)
+2. При итоговом вердикте J4 учесть результаты `test_import_validation_policy` на проверенной ревизии. Пройдены preview без записи и резервирования, повторная проверка после remap, rollback при ошибке записи и отмене, отдельный исход инфраструктурного отказа и HTTP-флаг. [Тесты импорта](../../backend/tests/validation/test_import_validation_policy.py#L94)
+3. На целевой ревизии отдельно подтвердить атомарность continuation с устаревшим source и HTTP-коллизию региона с rollback. Эти два сценария в данный прогон не входили. EC-11 принят, R-J4-1 имеет статус DONE. [Тест continuation](../../backend/tests/libraries/test_library_packs_4d.py#L121) · [Тест коллизии](../../backend/tests/regions/test_declared_region_edit.py#L172)
 
 ## Повторная проверка после исправлений
 

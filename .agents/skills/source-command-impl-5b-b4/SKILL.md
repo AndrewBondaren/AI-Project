@@ -48,7 +48,7 @@ Use this skill when the user asks to run the migrated source command `impl-5b-b4
 - `system_template_uid` = UID реально выбранного member; проверки PK uniqueness, kind/owner/body, world availability; одинаковые имена не влияют на разрешение.
 - **Новое поле `system_structure_template_uid`**: `db/models/namedLocation.py` + `0001_initial.sql` + `bundleNamedLocation` DTO **в одном изменении**; import/export/world copy и ref usage поддерживают обе ссылки. UID фактически применённой при генерации structure; повторная генерация обновляет, обычное чтение не пересчитывает; `None` — для локаций без structure и невосстановимых legacy.
 - Context: подготовленные building параметры, `None` сохраняет cascade-наследование; plot без building не создаёт NL; central det-id — принятая identity.
-- Новый тест `tests/test_template_location_refs.py`.
+- Новый тест `tests/libraries/test_template_location_refs.py`.
 - **Не в B4:** relief pick cutover (B5), удаление pointer dual-write (B6), registry columns cleanup (B7).
 
 ## Жёсткие запреты
@@ -62,7 +62,7 @@ Use this skill when the user asks to run the migrated source command `impl-5b-b4
 
 ## Приёмка (из плана B4)
 
-- `python -m unittest tests.test_template_location_refs tests.test_structure_area_assembler tests.test_structure_orientation tests.test_bundle_named_location_wire tests.test_bundle_remap tests.test_cascade_context_baseline` — зелёные.
+- `python -m unittest tests.libraries.test_template_location_refs tests.structure.test_structure_area_assembler tests.structure.test_structure_orientation tests.bundles.test_bundle_named_location_wire tests.bundles.test_bundle_remap tests.cascade.test_cascade_context_baseline` — зелёные.
 - Persist и round-trip содержат реальные member UID, не имена; две одноимённые копии различимы; wrong-kind/unknown UID не обходятся.
 - Применённый structure UID переживает смену structure ref исходного building template, export/import и remap; usage видит ссылку созданного здания.
 - Пометка «выполнен» в плане — только после прохождения приёмки и «ок» мастера.

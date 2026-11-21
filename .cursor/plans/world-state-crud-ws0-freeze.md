@@ -453,9 +453,9 @@ Existing suites (проверены имена файлов):
 
 ```powershell
 $env:PYTHONPATH = 'backend'
-.venv/Scripts/python.exe -m unittest tests.test_map_cell_query_facade tests.test_merge_map_cells tests.test_merge_fieldwise tests.test_merge9_debug_read
-.venv/Scripts/python.exe -m unittest tests.test_bootstrap_map_cell_writer tests.test_database_bootstrap_conn tests.test_map_cell_persist_perf
-.venv/Scripts/python.exe -m unittest tests.test_region_state_repository tests.test_region_state_overlay tests.test_region_state_contract tests.test_region_state_change tests.test_declared_region_edit tests.test_wilderness_region_index
+.venv/Scripts/python.exe -m unittest tests.mapCells.test_map_cell_query_facade tests.mapCells.test_merge_map_cells tests.validation.test_merge_fieldwise tests.mapCells.test_merge9_debug_read
+.venv/Scripts/python.exe -m unittest tests.mapCells.test_bootstrap_map_cell_writer tests.mapCells.test_database_bootstrap_conn tests.mapCells.test_map_cell_persist_perf
+.venv/Scripts/python.exe -m unittest tests.regions.test_region_state_repository tests.regions.test_region_state_overlay tests.regions.test_region_state_contract tests.regions.test_region_state_change tests.regions.test_declared_region_edit tests.regions.test_wilderness_region_index
 ```
 
 Target WS tests leaf из WS-0A §12 сохраняется:

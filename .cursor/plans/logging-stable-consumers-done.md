@@ -129,14 +129,14 @@ D2-4: итоговая регрессия, obsolete catalog строк в ТЗ �
 
 Core production правки: новые `backend/app/core/logging/contracts.py`, `consumers.py`; существующие `routes.py`, `fileRouter.py`, `backend/app/core/generationLogging.py`, `logMiddleware.py`. Из core config migration только документирование настроек; алгоритмы loggingConfig/configManager не меняются. 8 файлов в core/logging с __init__ (WARN >5, <=10); корень core не расширяется. Domain production правки — ровно 33 пути §2, Relief повторно не считать. Уже существующие адаптеры не заменяются новым классом.
 
-Tests: `backend/tests/test_logging_routes.py`, `backend/tests/test_generation_logging.py`, `backend/tests/test_library_pack_logging.py`, `backend/tests/test_region_state_overlay.py`, `backend/tests/physics/test_settings_logging.py`, `backend/tests/time/test_time_operation_log.py`, `backend/tests/dag_typing/execution/test_logging.py`; новый `backend/tests/test_logging_consumers.py` — strict contracts, route catalog, relocation, level mapping. Остальные direct-producer тесты подключать адресно при обнаружении assert старого logger.name, с перечислением найденных файлов перед правкой; не обновлять snapshots массово.
+Tests: `backend/tests/logging/test_logging_routes.py`, `backend/tests/logging/test_generation_logging.py`, `backend/tests/libraries/test_library_pack_logging.py`, `backend/tests/regions/test_region_state_overlay.py`, `backend/tests/physics/test_settings_logging.py`, `backend/tests/time/test_time_operation_log.py`, `backend/tests/dag_typing/execution/test_logging.py`; новый `backend/tests/logging/test_logging_consumers.py` — strict contracts, route catalog, relocation, level mapping. Остальные direct-producer тесты подключать адресно при обнаружении assert старого logger.name, с перечислением найденных файлов перед правкой; не обновлять snapshots массово.
 
 Нормативная привязка: D2-0/1 — [маршрут](../../docs/tz_logging.md#маршрут) и новый раздел типов из D2-0; D2-2/3 — [L3–L8](../../docs/tz_logging.md#инварианты) и [каталог](../../docs/tz_logging.md#каталог-консьюмеров); D2-4 — обе группы. Команды ниже из backend, PYTHONPATH=.;tests. Для D2-0 не запускать ещё отсутствующий test_logging_consumers.
 
 ```powershell
 $env:PYTHONPATH='.;tests'
-.\.venv\Scripts\python.exe -m unittest tests.test_logging_consumers tests.test_logging_routes tests.test_generation_logging
-.\.venv\Scripts\python.exe -m unittest tests.physics.test_settings_logging tests.time.test_time_operation_log tests.dag_typing.execution.test_logging tests.test_region_state_overlay tests.test_library_pack_logging
+.\.venv\Scripts\python.exe -m unittest tests.logging.test_logging_consumers tests.logging.test_logging_routes tests.logging.test_generation_logging
+.\.venv\Scripts\python.exe -m unittest tests.physics.test_settings_logging tests.time.test_time_operation_log tests.dag_typing.execution.test_logging tests.regions.test_region_state_overlay tests.libraries.test_library_pack_logging
 node ../node_modules/pyright/index.js app/core/logging app/core/generationLogging.py app/core/logMiddleware.py
 ```
 

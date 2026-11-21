@@ -11,7 +11,7 @@
 
 Общие LogLevel/to_logging_level, JsonLogFormatter, request_id_var и router остаются единственным механизмом. SnapshotLifecycleLog служит образцом best-effort delivery и строгого admission; DAG emit — только проекции по объявленной схеме (его logger.log не защищён try/except), но целые Time POJO через model_dump в extra не передаются.
 
-Artifacts уже имеет prefix app.artifacts → artifacts/artifactLifecycle и SERVER_SINKS entry; docs/tz_logging.md отмечает выполненную регистрацию D2-3. В текущем рабочем дереве изменены loggingConfig.py, generationLogging.py, docs/tz_logging.md и tests/test_logging_routes.py. Их не менять и не откатывать в независимом срезе. Не переносить устаревший список routes целиком и не добавлять Artifacts повторно.
+Artifacts уже имеет prefix app.artifacts → artifacts/artifactLifecycle и SERVER_SINKS entry; docs/tz_logging.md отмечает выполненную регистрацию D2-3. В текущем рабочем дереве изменены loggingConfig.py, generationLogging.py, docs/tz_logging.md и tests/logging/test_logging_routes.py. Их не менять и не откатывать в независимом срезе. Не переносить устаревший список routes целиком и не добавлять Artifacts повторно.
 
 ## 2. Контракты событий (TL-1)
 
@@ -95,9 +95,9 @@ rg -n 'TimeOperationLog|app.time.operations' backend/app/application/time backen
 
 ## 5. Отдельная регистрация TL-R (после независимого среза)
 
-**Выполнено, предъявлено на приёмку 2026-11-07.** Добавлены prefix/server allowlist Time и запись каталога; два теста используют настоящий TimeOperationLog и временные файлы. Проверены request_id, DEBUG/INFO filtering, отсутствие Time в core/runtime и transcript, отсутствие дублирования и сохранение script sink. Из backend с TEMP/TMP=backend/.tmp_snapshot_core: `.\.venv\Scripts\python.exe -m unittest tests.test_logging_routes tests.test_generation_logging` — **24 tests OK** (0.934s), включая прежние Artifacts/Physics проверки. Generation allowlist и runtime wiring не менялись. Production TL-B/acceptance не закрыты.
+**Выполнено, предъявлено на приёмку 2026-11-07.** Добавлены prefix/server allowlist Time и запись каталога; два теста используют настоящий TimeOperationLog и временные файлы. Проверены request_id, DEBUG/INFO filtering, отсутствие Time в core/runtime и transcript, отсутствие дублирования и сохранение script sink. Из backend с TEMP/TMP=backend/.tmp_snapshot_core: `.\.venv\Scripts\python.exe -m unittest tests.logging.test_logging_routes tests.logging.test_generation_logging` — **24 tests OK** (0.934s), включая прежние Artifacts/Physics проверки. Generation allowlist и runtime wiring не менялись. Production TL-B/acceptance не закрыты.
 
-Состав TL-R: loggingConfig.py — prefix (app.time.operations,time,operations) и SERVER_SINKS (time,operations); docs/tz_logging.md — consumer catalog; tests/test_logging_routes.py — адресные проверки. До регистрации unknown prefix уходил в core/runtime; этот пробел закрыт. Подключение producer к production остаётся отдельным TL-B.
+Состав TL-R: loggingConfig.py — prefix (app.time.operations,time,operations) и SERVER_SINKS (time,operations); docs/tz_logging.md — consumer catalog; tests/logging/test_logging_routes.py — адресные проверки. До регистрации unknown prefix уходил в core/runtime; этот пробел закрыт. Подключение producer к production остаётся отдельным TL-B.
 
 Сохранить текущий Artifacts route и transcript allowlist. Time transcript регистрацию не добавлять автоматически: §47 согласует server sink backend/logs/time/operations.log. Никакого нового router/formatter/handler.
 
@@ -149,7 +149,7 @@ rg -n 'TimeOperationLog|app.time.operations' backend/app/application/time backen
 .\.venv\Scripts\python.exe -m unittest tests.time.test_time_logging_bindings
 $env:TEMP=(Resolve-Path .tmp_snapshot_core).Path
 $env:TMP=$env:TEMP
-.\.venv\Scripts\python.exe -m unittest tests.test_logging_routes tests.test_generation_logging
+.\.venv\Scripts\python.exe -m unittest tests.logging.test_logging_routes tests.logging.test_generation_logging
 node ../node_modules/pyright/index.js app/dataModel/time app/application/time app/dataModel/world/calendar app/application/worldData/timeSettings
 node ../node_modules/pyright/index.js app/dataModel/time app/application/time app/dataModel/world/calendar app/application/worldData/timeSettings tests/time
 ```

@@ -1327,7 +1327,7 @@ regenerate. Это достигается **одной** конвенцией ф
 Вне helper'а `uuid.uuid5(...)`, `uuid4()` для generated-сущностей,
 `Random(f"...")`, `random.seed(...)`, `hashlib.*` для uid/seed —
 **запрещены** (правило `.cursor/rules/deterministic-ids.mdc`; source-gate в
-`tests/test_deterministic_ids.py` сканирует `app/**`, исключения — `_EXEMPT`).
+`tests/identity/test_deterministic_ids.py` сканирует `app/**`, исключения — `_EXEMPT`).
 Legacy `app/utils/deterministicIds.py` — **удалён** (миграция выполнена,
 `.cursor/plans/deterministic-ids-done.md`).
 

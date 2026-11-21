@@ -194,7 +194,7 @@ floor-якорь выхода и детерминизм adjacent-open; wall flag
 ## Итерация B5 — 2026-10-03
 
 Файлы: `docs/tz_building_generator.md` §9, `structureOrientation.py`,
-`tests/test_structure_orientation.py`, `orientation-runtime-facing-done.md`.
+`tests/structure/test_structure_orientation.py`, `orientation-runtime-facing-done.md`.
 После origin/bbox/extra_cells единый проход поворачивает entry_point.wall и
 back_entry_point.wall через model_copy frozen EntryPoint, shaft facing (str) и
 embedded_entry (Facing), кардинальный attach_wall через общий CARDINAL_FACINGS.

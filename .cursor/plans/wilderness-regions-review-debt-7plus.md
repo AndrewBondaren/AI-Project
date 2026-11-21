@@ -83,7 +83,7 @@ bulkSql в repo — всё подтверждено кодом. Ниже — з�
   приёмка 10c («`validate_only=true` без `name` → issue», «одинаковое
   решение в обоих режимах»); `docs/tz_json_validation.md` § ResolveContext.
 - **Файлы:** `backend/app/application/jsonValidation/declaredRegions.py`,
-  `backend/tests/test_declared_region_edit.py` (или JV-тесты регионов).
+  `backend/tests/regions/test_declared_region_edit.py` (или JV-тесты регионов).
 - **Контракт (решено):** `local` → `regions_ctx.child(index)` — шарит
   report/mode/schema_id родителя (заодно чинит drift `mode=runtime` в
   логе resolve при импорте). В `declared_region_identity` при
@@ -185,7 +185,7 @@ bulkSql в repo — всё подтверждено кодом. Ниже — з�
 - **ТЗ:** план §4 шаг 8 уточнение — superseded шагом 3.
 - **Файлы:** `landcover/materializer.py` (поле + reset + вызов),
   удалить `landcover/hydrologyIndex.py`, секция в
-  `backend/tests/test_landcover_materializer.py` (прямой вызов).
+  `backend/tests/regions/test_landcover_materializer.py` (прямой вызов).
 - **Контракт:** удаление целиком (решение мастера).
 - **Проверка:** collect/materialize/outline идентично; регрессия
   landcover тестов.

@@ -535,6 +535,8 @@ Proposed dataModel/world/settings/timeOperations/batch.py::PrepareTimeSettingsBa
 
 #### S4-A. Карта ответственности и критериев допуска к реализации
 
+**Implementation evidence 2026-11-21, узкий срез typed diagnostic construction:** shared/candidate.issue теперь принимает CheckedPath вместо request+строкового пути; все его callers H/C/E/projected строят путь через FieldRef (bind_field выполняет CheckedPath.field). Existing тип/код/сообщения отказов сохранены. WorldOperationTests: 7 PASS, включая regression четырёх refusal paths, вложенного entry.anchor, immutable base и запрета последующей validation. Это не закрывает остальные пункты карты: единый selector для чтения значения/пути, классификацию origin по typed paths, aggregation и кандидатную revalidation проверять отдельно. Два широких unittest прогона без результата прерваны; full Time suite PASS не заявляется. Публичные batch/section API, DAG и storage не изменялись.
+
 Scope: runtime settings preparation, её календарные зависимости, proposed batch/section и граница acceptance. Это карта проверки, не PASS реализации. Existing означает найденный код, proposed — только проект. Initial/branch lifecycle, activation, transport и concrete DAG nodes не входят в этот implementation-срез. Полные публичные Input/Output/Error одиночных методов — таблица SETTINGS-CONTRACT; batch — S3; producer — S2. Пути от backend/app. Отсутствие хотя бы одного evidence ниже означает OPEN, выявленное нарушение — FAIL; тесты не заменяют проверку callers и зависимостей.
 
 | Класс / метод, статус и размещение | Единственная ответственность; допустимые зависимости и эффекты | Проверяемый PASS | Конкретный FAIL |

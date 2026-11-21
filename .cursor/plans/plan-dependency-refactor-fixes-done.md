@@ -7,7 +7,7 @@
 ## Контекст
 
 После сдачи шага A-2 (`backend/app/application/canonicalLibrary/` +
-`tests/test_canonical_library.py`) проведена ревизия чистоты
+`tests/libraries/test_canonical_library.py`) проведена ревизия чистоты
 ответственности и дублирования. Ниже — что было найдено и как закрыто.
 
 ## Исправлено
@@ -80,5 +80,5 @@
 
 ## Проверка
 
-`python -m unittest tests.test_canonical_library` (cwd=backend) —
+`python -m unittest tests.libraries.test_canonical_library` (cwd=backend) —
 20/20 OK после всех правок.

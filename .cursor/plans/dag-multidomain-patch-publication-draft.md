@@ -2,6 +2,8 @@
 
 Порядок поставки нод, локальные gates и проверки: [план реализации](dag-write-nodes-implementation.md). Диаграмма задаёт контракты процесса; этот отдельный план не объявляет отсутствующие bindings принятыми.
 
+Архитектурное уточнение: write_changes управляет только prepare → assemble → apply; prepare_changes связывает объявленные доменные ветви, но не повторяет dispatch settings orchestrator. Только prepare_world_time_settings_changes выбирает single/batch и concrete single leaf. Все section leaf вызывают owning producer; native patch/header/dependencies создаёт домен. Сбор успешных outputs в prepare_changes — транспорт, не нормализация/проверка/сборка PatchSet. Exact CALL/mapping и запреты закреплены в плане реализации, подраздел «Обязательная граница оркестрации». G3/G5 остаются OPEN до named wrappers и корреляции; утечка логики в parent не допускается как временная реализация.
+
 ## Актуальный общий write flow — Time, настройки Time и Lifecycle, 2026-11-21
 
 Этот раздел обновлён после синхронизации владельцев Lifecycle/PatchSet/Snapshot и имеет приоритет над прежними OPEN/картой ниже. Прежние Time-диаграммы далее сохраняются как локальный IC-1, а не полный перечень участников. Порядок общий: write_changes → prepare_changes → assemble_patch_set → apply_snapshot. Lifecycle/Time подключаются по выбранному сценарию, не обязательны для любой записи.

@@ -131,7 +131,7 @@ token, поэтому второй вызов возвращает `PolicyRequir
 
 ## Исполнимые шаги и затрагиваемые файлы
 
-1. **Воспроизведение.** Добавить `backend/tests/test_library_write_api.py`
+1. **Воспроизведение.** Добавить `backend/tests/libraries/test_library_write_api.py`
    с реальным Container/SQLite и HTTP-вызовами, а также regression case в
    `test_library_packs_4b.py`: стандартная публикация → другое имя → preview
    → повтор с token → применено. Зафиксировать ошибки до изменений.

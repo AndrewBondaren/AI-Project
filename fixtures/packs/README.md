@@ -40,7 +40,7 @@ SQL/HTTP-импорт библиотечных `.wpack` подключается
 
 ```powershell
 .\.venv\Scripts\python.exe -m scripts.build_library_test_fixtures
-.\.venv\Scripts\python.exe -m unittest tests.test_library_archive_fixtures tests.test_bundle_library_archive
+.\.venv\Scripts\python.exe -m unittest tests.libraries.test_library_archive_fixtures tests.bundles.test_bundle_library_archive
 ```
 
 Генератор проверяет FS-manifests, UID-формулы, доменные тела, default-статус

@@ -79,7 +79,7 @@ dataModel/topology/
 | ТЗ | § Топология поверхности (шаг 1) |
 | Файлы | new `dataModel/topology/topologyGeometry.py` (`unrolled_images`, `dist2`, `nearest_on_segment`, `centroid`, `neighbors4_unrolled`); tests `test_topology_unrolled_geometry.py` |
 | Контракт | pure функции от `WorldTopology` (координатная арифметика — wire-слой домена); `passable`/membership — в консьюмере (application); planar — degenerate (один образ, `canonicalize`→None за bounds); sphere — fold-образы с `invert_dy` |
-| Проверка | `python -m unittest backend.tests.test_topology_unrolled_geometry`: wrapped dist через шов < прямого, sphere fold-сдвиг `w/2`, centroid через шов, planar void |
+| Проверка | `python -m unittest backend.tests.topology.test_topology_unrolled_geometry`: wrapped dist через шов < прямого, sphere fold-сдвиг `w/2`, centroid через шов, planar void |
 | Done | сервисы + тесты зелёные |
 
 ### Шаг 3a — flood-ядро → домен
@@ -171,7 +171,7 @@ unrolled-ввод runtime. Внешние API генераторов не мен
   Остальные домены TOPO-1, включая river `_neighbors8`, остаются открыты.
   Backend агент не запускал.
 
-- `python -m unittest backend.tests.test_topology_unrolled_geometry backend.tests.test_hydrology_hy11` зелёные; регрессии hy2/hy5a/hy6 без новых падений относительно baseline съюта.
+- `python -m unittest backend.tests.topology.test_topology_unrolled_geometry backend.tests.hydrology.test_hydrology_hy11` зелёные; регрессии hy2/hy5a/hy6 без новых падений относительно baseline съюта.
 - `compileall` изменённых модулей, `git diff --check` после каждого шага.
 - Grep `neighbors4` по `generators/hydrology/` → 0.
 - HY-11 в `tz_generator_technical_debt.md` → `resolved`; план → `hy-11-topology-domain-geometry-done.md`.
