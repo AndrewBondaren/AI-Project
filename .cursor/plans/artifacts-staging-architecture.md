@@ -234,6 +234,46 @@ P1 Pack integration остаётся OPEN. [Карта перехода](pack-st
 
 ## Приёмка по правилу агента
 
+### Повторная независимая проверка — 2026-11-22
+
+Чат «Artifacts — независимая приёмка архитектуры», `01a1ffc7-1b31-71f2-935a-b1b2e710ae68`, закрыл три последних findings **на уровне архитектуры**: persisted-first _lease, standalone composition closure, repeated codec/post-seal error mapping. Runtime PASS не выдан. ARCH-STAGE остаётся OPEN: concrete specialization и полный POJO inventory её closure. Разрешение реализации получено 2026-11-22 через координатора; повторно оно не запрашивается, но не подменяет приёмку exact binding. Координатору направлен запрос на принятые producer/content/format/version/lease issuer/consumer/caller route. Full Source/Pack completion не является автоматическим prerequisite независимого stage.
+
+Общий POJO inventory до получения concrete binding (пути относительно backend/app; это не утверждение полного concrete closure):
+
+| Тип / модуль / статус | Поля, validation, владелец и отсутствие зеркала |
+|---|---|
+| Existing `dataModel/artifacts/references.py::ArtifactRef` | Artifacts: kind, format_key, format_version, content_hash, nbytes>=0, row_count>=0 либо None; BLOB запрещает row_count, SQL_ROWS требует его. Strict/frozen/extra-forbid/revalidate always. Используется напрямую, не копируется в descriptor DTO |
+| Existing `references.py::ArtifactFormatMetadata`, ArtifactFormatRegistry | Artifacts: key/supported_versions nonempty; entries tuple с unique keys. RegistryKey/FormatVersion/RevisionHex переиспользуются; не authority и не budgets |
+| Existing `dataModel/artifacts/lifecycle/lease.py::OperationLeaseRef` | Artifacts lifecycle: operation_id/world_uid/kind/preparation_fingerprint/fence>=1, strict/frozen/extra-forbid/revalidate always. Structural validity не подтверждает live lease/authority; issuer остаётся concrete binding prerequisite |
+| Existing `lease.py::StagingReservation` | Artifacts storage: artifact_id/lease/ref, те же strict/frozen настройки; только internal, отсутствует в DAG Input/Output |
+| TARGET `dataModel/artifacts/staging/preparedArtifact.py::ArtifactPrepareStageInput[C]` | content:C, strict/frozen/extra-forbid; concrete schema + deep immutability; admitted content instance сохраняется |
+| TARGET тот же модуль `PreparedArtifact[C]` | content:C/descriptor:ArtifactRef; runtime envelope без wire ID, authority и storage lifetime. Instance-preserving validation не отключает schema checks |
+| TARGET `dataModel/artifacts/staging/stageInput.py::ArtifactStageInput[C]` | lease:OperationLeaseRef/prepared:PreparedArtifact[C]; strict/frozen/extra-forbid; сохраняются content и prepared identity. Не вводит вторые поля descriptor/lease |
+| TARGET `dataModel/artifacts/staging/inputErrors.py::ArtifactInputIssue`, ArtifactInputError | Owning FieldPathError subclass с code/path/message; codes CONTENT_NOT_IMMUTABLE/CONTENT_TYPE_MISMATCH/FORMAT_BINDING_MISMATCH/DESCRIPTOR_MISMATCH. Error: непустой tuple existing JsonFieldError, WireShapeIssue или owning issue; не новый framework field errors |
+| Existing `dataModel/validation/diagnostics/fieldPathError.py`, `validation/importIssues/jsonFieldError.py`, `wireShapeIssue.py` | Общие owning diagnostics переиспользуются без переопределения их полей. Concrete accepted field paths и schema refs надо сверить при freeze specialization, не угадывать |
+| TARGET `dataModel/artifacts/lifecycle/leaseFailure.py::ArtifactLeaseFailure` | lease/requirement(WRITABLE,CLOSED)/code из owning enum; logic refusal, не field error. Коды и порядок predicates указаны в failure table; не generic stage failure |
+| Existing `dataModel/artifacts/events.py::ArtifactLogRecord` | activity/operation_id/world_uid?/preparation_fingerprint?/request_fingerprint?/artifact_hash?/gc_failure?; GC_FAILED требует matching ref hash, остальные запрещают gc_failure. TARGET LEASE_REFUSED/lease_failure — дельта этого типа по owning-плану, не второй event DTO; seal использует existing fields |
+| TARGET ArtifactInputRejected, ArtifactLeaseRefused; ArtifactCodecError/ArtifactDescriptorConflictError/ArtifactStorageInvariantError | Application carriers, не POJO/wire models; error/failure и cause, без алгоритмов, logging или новых schema IDs. Existing infrastructure/unknown/busy/cancellation категории не зеркалируются |
+
+Concrete C, owning nested fields/validators/codec schemas, typed field selectors и concrete DAG wrappers/error binding пока не названы принятым маршрутом. Именно этот остаток не позволяет отметить полный POJO closure PASS; наличие таблицы общих типов не заменяет его. Existing persistence row/terminal models из transitive inventory остаются у своих владельцев, в новые transport wrappers не копируются.
+
+### Binding matrix: точные owning gaps — 2026-11-22
+
+Координатор `01a1ef35-3287-7a12-89e2-76273eaa043d` сверил источники: accepted concrete binding не найден; статус зафиксирован в §2 плана нод. Pack material binding — PROPOSED. Пустое поле ниже означает отсутствие accepted значения, не default.
+
+| Binding cell | Accepted value | Владелец необходимого решения / exact gap |
+|---|---|---|
+| Producer public method и Output field | — | Owning producer (Pack для предложенного material route): exact public Output, поле content/evidence; не existing прямой finish_pack_preparation |
+| Concrete C и nested POJO/schema | — | Producer объявляет тип готового content; Artifacts сверяет immutable/identity admission и field/error closure. bytes не назначается автоматически |
+| ArtifactFormatContract[C], key, kind, version | — | Owning format + Artifacts composition: exact существующий contract instance/import, supported version; не новый wire/storage ID по догадке |
+| Lease issuer public method/Output→OperationLeaseRef | — | Lifecycle/Publication owning issuer: exact world/kind/fingerprint/fence и право stage. Новый issuer не создаётся внутри Artifacts |
+| prepare/stage public IO | Общий TARGET V1.1 | Artifacts: signatures определены, но их specialization C/contract/version и принятый foreign mapping ещё отсутствуют |
+| DAG caller/transport route | — | DAG/координатор: concrete registration и in-memory route; без нового NodeId/порядка от Artifacts. P1 contract test требуется при регистрации |
+| ArtifactRef consumer public Input field | — | Owning consumer + DAG: exact поля, correlation с producer/evidence и граница stage success; proposed completion не accepted consumer |
+| Error transport specialization | — | Artifacts предоставляет field/lease/fault категории; DAG фиксирует concrete wrapper mapping, без переопределения owning meaning |
+
+Общий алгоритм stage имеет проработанные архитектурные исправления, но это не означает принятую specialization или готовый runtime. Регистрация требует freeze всех клеток и identity evidence. По текущему owning gate ARCH-STAGE scope включает concrete binding, поэтому полная приёмка остаётся OPEN; нет самостоятельного решения автора заменить её default BLOB или объявить разрешённым общий код в обход gate. Time/Lifecycle, X-READ и полный Pack production не добавляются в prerequisites этого локального решения.
+
 | Критерий | Статус и основание |
 |---|---|
 | Три запрета DAG | TARGET локально соблюдены описанным trace; интеграция OPEN: existing Pack bypass и concrete registrations |

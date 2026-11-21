@@ -64,6 +64,8 @@ SourceRevisionChangeClassifier не добавляется ради сравне
 
 ## 4. Values и используемые общие классы: обязательная полнота АР-6
 
+Фактическая поимённая инвентаризация Source POJO, полей и собственных методов выполнена 2026-11-22: [source-core-existing-values-inventory.md](source-core-existing-values-inventory.md). Это статическое evidence; shared collaborators и будущие исполнители ещё требуют полного сопоставления. Общий gate не закрывается наличием inventory.
+
 Existing Source identities/revisions/dependencies/capture/proof/input/result/error POJO: каждый отвечает только за собственные immutable значения и локальные инварианты. Методы validation не нормализуют usage, не вычисляют union/closure и не обращаются к application/storage. `_proofValueRules` — единственная реализация общих локальных правил, не второй публичный контракт.
 
 Existing SourceDescriptorRegistry/SourceDescriptorDefinition: immutable definitions и structural constraints; не runtime registration и не owning key projection. SourceRevisionChanges: provisional exact refs, без receipt/scope/committed status. SourceMutationApplied/Refused: подтверждённый outcome по owning evidence, не вычисляемое обещание commit.

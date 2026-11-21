@@ -38,6 +38,11 @@ def union_members(annotation: object) -> tuple[object, ...]:
     return get_args(annotation) if get_origin(annotation) in (Union, UnionType) else (annotation,)
 
 
+def model_extends(model: type[BaseModel], base: type[BaseModel]) -> bool:
+    """Nominal check without erasing a closed class into an open generic."""
+    return issubclass(model, base)
+
+
 @dataclass(frozen=True, slots=True)
 class LifecyclePreparationBinding[Q: BaseModel, P: BaseModel]:
     request_model: type[Q]
@@ -71,7 +76,7 @@ class LifecyclePreparationBinding[Q: BaseModel, P: BaseModel]:
         operation = operations[0]
         ref = (require_named_model(tuple_item(intent, "predecessors"))
                if operation is LifecycleOperation.REPLACEMENT else nested_model(intent, "entity"))
-        if not issubclass(ref, LifecycleEntityRef):
+        if not model_extends(ref, LifecycleEntityRef):
             raise TypeError("intent must contain a Lifecycle entity ref")
         if operation is LifecycleOperation.REPLACEMENT and tuple_item(intent, "successors") is not ref:
             raise TypeError("replacement sides must share the exact ref model")
@@ -80,8 +85,8 @@ class LifecyclePreparationBinding[Q: BaseModel, P: BaseModel]:
         if nested_model(state, "entity") is not ref:
             raise TypeError("participant state has a different entity kind")
         before = tuple(require_named_model(m) for m in union_members(participant.model_fields["before"].annotation))
-        absent = tuple(m for m in before if issubclass(m, AbsentLifecycle))
-        present = tuple(m for m in before if issubclass(m, PresentLifecycle))
+        absent = tuple(m for m in before if model_extends(m, AbsentLifecycle))
+        present = tuple(m for m in before if model_extends(m, PresentLifecycle))
         if len(before) != 2 or len(absent) != 1 or len(present) != 1:
             raise TypeError("successful participant requires exact absent/present branches")
         if nested_model(absent[0], "entity") is not ref or nested_model(present[0], "state") is not state:
@@ -90,11 +95,11 @@ class LifecyclePreparationBinding[Q: BaseModel, P: BaseModel]:
         observation_models = tuple(require_named_model(m) for m in union_members(tuple_item(capture, "entities")))
         if absent[0] not in observation_models or present[0] not in observation_models:
             raise TypeError("capture does not preserve the participant observation types")
-        unknown = tuple(m for m in observation_models if issubclass(m, UnknownLifecycle))
+        unknown = tuple(m for m in observation_models if model_extends(m, UnknownLifecycle))
         if len(observation_models) != 3 or len(unknown) != 1 or nested_model(unknown[0], "entity") is not ref:
             raise TypeError("capture must contain one same-kind unknown observation branch")
         last_fact = require_named_model(tuple_item(capture, "last_transitions"))
-        if not issubclass(last_fact, LastTransitionFact) or nested_model(last_fact, "entity") is not ref:
+        if not model_extends(last_fact, LastTransitionFact) or nested_model(last_fact, "entity") is not ref:
             raise TypeError("last-transition facts must retain the same entity kind")
         admission = nested_model(request, "admission")
         effect = require_named_model(tuple_item(admission, "effects"))

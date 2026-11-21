@@ -11,7 +11,53 @@ from app.encoding.canonicalCodec import CanonicalCodec, CanonicalEncodingError, 
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest, CanonicalTypeKind
 from app.dataModel.planning.diagnostics.planDiagnostic import IssueT, PlanDiagnostic, admits_diagnostic_type
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
-from app.dataModel.encoding.decodeLimits import DecodeLimits
+from app.dataModel.encoding.decodeLimits import DecodeLimits, RecordLimits, CollectionLimit
+from app.dataModel.fields.fieldBinding import bind_field
+from app.dataModel.fields.fieldRef import FieldRef
+
+
+def validate_decode_limits(limits: DecodeLimits) -> None:
+    """Reject invalid configuration before interpreting any encoded payload."""
+    if type(limits) is not DecodeLimits:
+        raise TypeError("expected DecodeLimits")
+    for value in (limits.max_bytes, limits.max_nodes, limits.max_depth, limits.max_items):
+        if type(value) is not int:
+            raise TypeError("decode budgets must be strict integers")
+        if value <= 0:
+            raise ValueError("decode budgets must be positive")
+    if type(limits.field_sizes) is not tuple:
+        raise TypeError("field limits must be a tuple")
+    owners = set()
+    for record in limits.field_sizes:
+        if type(record) is not RecordLimits:
+            raise TypeError("expected RecordLimits")
+        if not isinstance(record.owner, type) or not issubclass(record.owner, BaseModel):
+            raise TypeError("record limit owner must be a model")
+        if record.owner is BaseModel or getattr(record.owner, "__parameters__", ()):
+            raise ValueError("record limit owner must be concrete")
+        if record.owner in owners:
+            raise ValueError("duplicate record limit owner")
+        owners.add(record.owner)
+        if type(record.collections) is not tuple:
+            raise TypeError("collection limits must be a tuple")
+        names = set()
+        for rule in record.collections:
+            if not isinstance(rule, CollectionLimit):
+                raise TypeError("expected CollectionLimit")
+            if type(rule.minimum) is not int or type(rule.maximum) is not int:
+                raise TypeError("collection bounds must be strict integers")
+            if not 0 <= rule.minimum <= rule.maximum:
+                raise ValueError("invalid collection bounds")
+            if not isinstance(rule.ref, FieldRef):
+                raise TypeError("collection reference must be FieldRef")
+            bound = bind_field(rule.ref)
+            if bound != rule.bound or bound.model is not record.owner:
+                raise ValueError("collection binding differs from its owner/reference")
+            if get_origin(record.owner.model_fields[bound.field].annotation) not in (tuple, frozenset):
+                raise ValueError("collection limit requires a tuple or frozenset field")
+            if bound.field in names:
+                raise ValueError("duplicate collection field limit")
+            names.add(bound.field)
 
 
 def _alternatives(annotation, substitutions):
@@ -209,8 +255,9 @@ def _reader(encoded, manifest, limits):
     return _Reader(encoded, manifest, limits)
 
 
-def validate_bounded(encoded, expected, manifest, *, limits):
+def validate_bounded[T](encoded: bytes, expected: type[T], manifest: CanonicalSchemaManifest, *, limits: DecodeLimits) -> None:
     """Check encoded representation and budgets without constructing owner models."""
+    validate_decode_limits(limits)
     try:
         _reader(encoded, manifest, limits).run(expected, build=False)
     except (ValueError, TypeError, AttributeError, OverflowError) as exc:
@@ -218,6 +265,7 @@ def validate_bounded(encoded, expected, manifest, *, limits):
 
 
 def decode_bounded[T](encoded: bytes, expected: type[T], manifest: CanonicalSchemaManifest, *, limits: DecodeLimits) -> T:
+    validate_decode_limits(limits)
     try:
         reader = _reader(encoded, manifest, limits)
         reader.run(expected, build=False)

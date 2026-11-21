@@ -1,5 +1,13 @@
 # C2 R3/R4/R5: admitted facts, единые predicates и порядок diagnostics
 
+## Реализация 2026-11-22 — ограниченный статус
+
+ReceiptFactsAdmission и shared predicates подключены к SnapshotReceiptValidator, SnapshotMetadataBuilder и final validate_receipt_provenance. Сохраняются partial refs/retention=None, исходные индексы и отдельные final first-error фазы. Добавлены tests/snapshotCore/contracts/test_receipt_facts.py и test_attempt_context.py. Расширенный прогон с test_models, test_publication_current_binding, test_registry и test_section_h2: 80 tests PASS; Pyright по 13 затронутым production-модулям: 0 errors/0 warnings. Архитектурный test_registry допускает точную согласованную связь WorldSnapshotService → SnapshotAttemptContextBuilder, запрет чужих service imports сохранён. Это не общий runtime PASS Snapshot.
+
+Service содержит обязательную immediate receipt проверку, loader immutable pinned bases и metadata append без service reread. I2 ещё НЕ принят: старый storage/publication/test_atomicity.py требует миграции на обязательные publication_binding/operations, request/admitted_sections и bases. Общий support/fixtures.py:224 всё ещё вызывает StoredTerminalCodec(TEST_ISSUE_SCHEMA), тогда как актуальный Publication API требует StoredTerminalCodec(binding=...). Прогон test_claim_mapping + test_history: 4 PASS, 5 setup errors по этой точной несовместимости. Publication owning файлы параллельно не изменялись; current named result/record binding общего fixture необходимо свести с Publication, затем обновить Snapshot callers и повторить storage regressions. Это технический остаток реализации, не новый пользовательский выбор и не production/OUT blocker.
+
+Полного публичного apply orchestrator в существующем WorldSnapshotService нет; он не добавлялся ради C2. _validate_sections — внутренний seam после claim/exact replay и expected/source checks, затем remaining-base loader и _apply_to_target. Локальные тесты этих seams не доказывают сквозной transaction/unknown/replay flow.
+
 ## Итог координаторской сверки P1 — 2026-11-21
 
 PASS документальной сверки уточнённого R3/R4/R5 в области facts/provenance/address/order. Основание: прочитаны actual SnapshotMetadataBuilder и validation/receiptProvenance.py, сопоставлены независимые partial-ref checks, operation/history/state predicates и final postconditions. Пользователь поручил принять уточнённый контракт перед подключением consumers. Ниже фиксируется целевой контракт к этому подключению; прежнее «граница не определена» superseded. Это не PASS реализации: код ещё содержит независимые проверки, runtime tests не выполнены. Полная реализация выполняется только через implement-plan с отдельной проверкой scope.

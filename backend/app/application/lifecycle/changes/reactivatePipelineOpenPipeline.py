@@ -7,7 +7,7 @@ from app.application.lifecycle.contracts.preparationPolicy import LifecyclePrepa
 from app.application.lifecycle.validation.transitionValidator import LifecycleTransitionValidator
 from app.application.lifecycle.changes.changeBuilder import LifecycleChangeBuilder
 from app.dataModel.lifecycle.operations.kind import LifecycleOperation
-from app.dataModel.lifecycle.results.issues import LifecycleFieldIssue
+from app.dataModel.lifecycle.results.issues import LifecycleFieldIssue, LifecycleRelationIssue
 from app.dataModel.lifecycle.results.errors import LifecycleFieldError, LifecycleLogicError
 
 
@@ -30,5 +30,5 @@ class LifecycleReactivatePipelineOpenPipeline[Q: BaseModel, P: BaseModel]:
         if issues:
             if any(type(issue) is LifecycleFieldIssue for issue in issues):
                 return LifecycleFieldError(issues=issues)
-            return LifecycleLogicError(issues=issues)
+            return LifecycleLogicError(issues=tuple(issue for issue in issues if isinstance(issue, LifecycleRelationIssue)))
         return self._builder.build_reactivate(admitted)

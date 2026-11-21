@@ -2,7 +2,13 @@
   "include": [
     "support/nodeContracts.py",
     "support/nodeBindings.py",
-    "../../app/application/lifecycle/changes/changeBuilder.py"
+    "../../app/application/lifecycle",
+    "support/subjectMock.py",
+    "support/evidenceBinding.py",
+    "support/acceptedContracts.py",
+    "support/lifecycleParticipant.py",
+    "support/subjectParticipant.py",
+    "support/subjectCodec.py"
   ],
   "extraPaths": ["../.."],
   "venvPath": "../..",

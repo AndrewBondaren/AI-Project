@@ -18,6 +18,7 @@ from app.application.worldSnapshot.encoding.coreManifest import SNAPSHOT_CORE_SC
 from app.application.patch.encoding.patchSetCodec import PatchSetCodec
 from app.application.worldSnapshot.encoding.snapshotCodec import SnapshotEnvelopeCodec
 from app.application.patch.registry.sectionRegistry import SectionRegistry
+from tests.snapshotCore.support.fakeSection import FakeSectionRefused
 from app.application.patch.contracts.sectionCodec import SectionCodec
 from app.application.patch.contracts.sectionHandler import SectionContract, DomainSectionHandler
 from app.application.worldData.pack.io.tileCodec import TileCodec, PAYLOAD_KIND_WORLD_MAP
@@ -48,7 +49,7 @@ class CanonicalRequestCodecTests(unittest.TestCase):
             supported_versions=frozenset({1, 2}), manifest=FAKE_SECTION_SCHEMA)
         self.handler = FakeSectionHandler(self.contract)
         self.section_codec = FakeSectionCodec(self.contract)
-        self.registry = SectionRegistry()
+        self.registry = SectionRegistry(FakeSectionRefused)
         self.registry.register(self.contract, self.handler, self.section_codec)
         self.codec = PatchSetCodec(self.registry, PatchSet[FakeSection])
         self.publication = WorldPublicationRef(world_uid="w", publication_id="p", pack_hash="a" * 64,
@@ -226,6 +227,7 @@ class CanonicalRequestCodecTests(unittest.TestCase):
             supported_versions=frozenset({1}), manifest=manifest)
         handler = create_autospec(DomainSectionHandler, instance=True)
         handler.contract = contract
+        handler.refusal_model = FakeSectionRefused
         section_codec = create_autospec(SectionCodec, instance=True)
         section_codec.contract = contract
         section_codec.encode.side_effect = lambda section: encode(section, manifest)
@@ -297,7 +299,7 @@ class CanonicalRequestCodecTests(unittest.TestCase):
                 RegisteredTypeEntry(type_id=90001, python_type=FakeSection, kind=CanonicalTypeKind.RECORD), entry))
             contract = replace(self.contract, manifest=manifest)
             handler = FakeSectionHandler(contract)
-            registry = SectionRegistry()
+            registry = SectionRegistry(FakeSectionRefused)
             with self.assertRaises(CanonicalEncodingError):
                 registry.register(contract, handler, FakeSectionCodec(contract))
             self.assertEqual(handler.calls, [])

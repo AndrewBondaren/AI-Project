@@ -6,7 +6,6 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.dataModel.patch.changes.header import PatchRef
 from app.dataModel.patch.registry.sectionMetadata import SectionKey
-from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
 from app.dataModel.worldSnapshot.identity.refs import WorldSnapshotRef
 from app.dataModel.worldSnapshot.sections.retention import SectionHistoryRetention, SectionStateRetention
@@ -16,11 +15,11 @@ class SectionAccepted(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
 
 
-class SectionRefused(BaseModel):
+class SectionRefused[D: BaseModel](BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
 
     category: SnapshotApplyOutcomeKind
-    diagnostics: tuple[FieldPathError, ...] = Field(min_length=1)
+    diagnostics: tuple[D, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
     def refusal_category(self) -> Self:
@@ -29,7 +28,7 @@ class SectionRefused(BaseModel):
         return self
 
 
-type SectionValidation = SectionAccepted | SectionRefused
+type SectionValidation[D: BaseModel] = SectionAccepted | SectionRefused[D]
 
 
 class SectionApplyReceipt(BaseModel):

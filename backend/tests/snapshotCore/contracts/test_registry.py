@@ -13,8 +13,10 @@ from app.encoding.canonicalCodec import encode as canonical_encode
 from app.application.patch.contracts.sectionHandler import SectionContract
 from app.application.patch.encoding.sectionFingerprint import SectionFingerprint
 from app.application.patch.registry.sectionRegistry import SectionRegistry
+from tests.snapshotCore.support.fakeSection import FakeSectionRefused
 from app.application.worldSnapshot.contracts.commitScope import CommitReadScope, CommitScope
 from app.application.worldSnapshot.contracts.context import SnapshotValidationContext, SnapshotApplyContext
+from app.application.worldSnapshot.contracts.admittedSectionView import AdmittedSectionView
 from app.application.artifacts.contracts.formatBackend import ArtifactBackend, ArtifactFormatContract
 from app.application.artifacts.registry.artifactRegistry import ArtifactFormatRegistryBinding
 from app.dataModel.artifacts.references import ArtifactFormatRegistry, ArtifactKind, ArtifactRef
@@ -56,14 +58,14 @@ class SectionRegistryTests(unittest.TestCase):
                     # Registry also revalidates a contract arriving through an unchecked boundary.
                     unchecked = replace(self.contract)
                     object.__setattr__(unchecked, "section_model", model)
-                    registry = SectionRegistry()
+                    registry = SectionRegistry(FakeSectionRefused)
                     with self.assertRaisesRegex(TypeError, "field constraints"):
                         registry.register(unchecked, FakeSectionHandler(unchecked), FakeSectionCodec(unchecked))
                     with self.assertRaises(ValueError):
                         registry.require(self.key)
 
     def test_section_fingerprint_uses_full_checked_bytes_without_behavior(self):
-        registry = SectionRegistry()
+        registry = SectionRegistry(FakeSectionRefused)
         registry.register(self.contract, self.handler, self.section_codec)
         fingerprint = SectionFingerprint(registry)
         original = fingerprint.fingerprint(self.section)
@@ -117,10 +119,11 @@ class SectionRegistryTests(unittest.TestCase):
         self.publication = WorldPublicationRef(world_uid="world", publication_id="p", pack_hash="a" * 64,
             snapshot_head=None, active_timeline_id="timeline", gameplay_started=True)
         self.context = SnapshotValidationContext(operation_id="op", expected_world=self.publication,
-            expected_players=(), resolved_dependencies=(), read_scope=self.read_scope)
+            expected_players=(), resolved_dependencies=(), read_scope=self.read_scope,
+            admitted_sections=create_autospec(AdmittedSectionView, instance=True))
 
     def test_explicit_registration_preserves_subtype_fields_and_dispatches(self) -> None:
-        registry = SectionRegistry()
+        registry = SectionRegistry(FakeSectionRefused)
         with self.assertRaises(ValueError):
             registry.resolve(self.section)
         with self.assertRaises(TypeError):
@@ -160,7 +163,7 @@ class SectionRegistryTests(unittest.TestCase):
             replace(context, next_publication=snapshot)
 
     def test_codec_binding_failures_leave_registry_unchanged(self):
-        registry = SectionRegistry()
+        registry = SectionRegistry(FakeSectionRefused)
         manifest = registry.manifest
         for codec, error in ((object(), TypeError),
                              (FakeSectionCodec(replace(self.contract)), ValueError)):
@@ -182,7 +185,7 @@ class SectionRegistryTests(unittest.TestCase):
         self.assertEqual(self.section_codec.calls, [])
 
     def test_representation_preserves_bytes_without_semantic_dispatch(self):
-        registry = SectionRegistry()
+        registry = SectionRegistry(FakeSectionRefused)
         registry.register(self.contract, self.handler, self.section_codec)
         codec = registry.resolve_codec(self.section)
         payload = codec.encode(self.section)
@@ -194,13 +197,13 @@ class SectionRegistryTests(unittest.TestCase):
             codec.encode(self.section)
 
     def test_duplicate_wrong_binding_models_keys_and_versions_fail_before_handler(self) -> None:
-        registry = SectionRegistry()
+        registry = SectionRegistry(FakeSectionRefused)
         registry.register(self.contract, self.handler, self.section_codec)
         with self.assertRaises(ValueError):
             registry.register(self.contract, self.handler, self.section_codec)
         other_contract = replace(self.contract, key=RegistryKey[PatchSectionRegistry]("other"))
         with self.assertRaises(ValueError):
-            SectionRegistry().register(other_contract, self.handler, self.section_codec)
+            SectionRegistry(FakeSectionRefused).register(other_contract, self.handler, self.section_codec)
         with self.assertRaises(ValueError):
             registry.register(other_contract, FakeSectionHandler(other_contract), FakeSectionCodec(other_contract))
         invalid_sections = (
@@ -234,7 +237,7 @@ class SectionRegistryTests(unittest.TestCase):
             self.contract.key = "changed"
 
     def test_decoded_wrong_model_or_key_is_rejected(self) -> None:
-        registry = SectionRegistry()
+        registry = SectionRegistry(FakeSectionRefused)
         registry.register(self.contract, self.handler, self.section_codec)
         bound = registry.resolve(self.section)
         wrong = self.section.model_copy(update={"header": self.section.header.model_copy(
@@ -376,7 +379,8 @@ class SectionRegistryTests(unittest.TestCase):
                             source.relative_to(root).as_posix() == "artifacts/staging/artifactStaging.py"
                             and name == "app.application.publication.service.operationLedger")
                         builder_edge = (source.relative_to(root).as_posix() == "worldSnapshot/service/worldSnapshotService.py"
-                                        and name == "app.application.worldSnapshot.service.snapshotMetadataBuilder")
+                                        and name in {"app.application.worldSnapshot.service.snapshotMetadataBuilder",
+                                                     "app.application.worldSnapshot.service.attemptContextBuilder"})
                         if not (allowed_service_edge or builder_edge):
                             self.assertNotIn(".service.", name, source)
 

@@ -3,13 +3,19 @@
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from collections.abc import Mapping
+from typing import cast
 
 from pydantic import BaseModel
+from typing import Any
 
 from app.application.lifecycle.contracts.preparationBinding import require_named_model, tuple_item, union_members
 from app.application.patch.contracts.sectionHandler import SectionContract
 from app.dataModel.patch.changes.patchData import PatchData
 from app.dataModel.patch.sections.section import DomainSection
+from app.dataModel.lifecycle.publication.patch import LifecycleTransitionPatch
+from app.dataModel.lifecycle.publication.section import LifecycleSection
+from app.application.lifecycle.contracts.typedViews import section_request_view
+from app.application.lifecycle.contracts.preparationBinding import model_extends
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,7 +26,7 @@ class LifecyclePatchModelBinding[P: BaseModel, N: PatchData]:
     def __post_init__(self) -> None:
         require_named_model(self.prepared_model)
         require_named_model(self.patch_model)
-        if not issubclass(self.patch_model, PatchData):
+        if not model_extends(self.patch_model, LifecycleTransitionPatch):
             raise TypeError("native wrapper must extend PatchData")
         if self.patch_model.model_fields["prepared"].annotation is not self.prepared_model:
             raise TypeError("wrapper must bind the exact prepared model")
@@ -29,15 +35,17 @@ class LifecyclePatchModelBinding[P: BaseModel, N: PatchData]:
 
 
 @dataclass(frozen=True, slots=True)
-class LifecycleSectionBinding[Q: BaseModel, S: DomainSection]:
+class LifecycleSectionBinding[Q: BaseModel, S: DomainSection[Any]]:
     request_model: type[Q]
     section_contract: SectionContract[S]
-    patch_bindings: tuple[LifecyclePatchModelBinding, ...]
+    patch_bindings: tuple[LifecyclePatchModelBinding[BaseModel, PatchData], ...]
     _patch_models: Mapping[type[BaseModel], type[PatchData]] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         require_named_model(self.request_model)
         model = require_named_model(self.section_contract.section_model)
+        if not model_extends(model, LifecycleSection):
+            raise TypeError("Lifecycle section binding requires its owning native section")
         if type(self.patch_bindings) is not tuple or not self.patch_bindings:
             raise TypeError("patch bindings must be a nonempty immutable tuple")
         prepared = tuple(binding.prepared_model for binding in self.patch_bindings)
@@ -57,9 +65,9 @@ class LifecycleSectionBinding[Q: BaseModel, S: DomainSection]:
             raise ValueError("local v1 producer binding requires one explicit write version")
         object.__setattr__(self, "_patch_models", MappingProxyType(dict(zip(prepared, patches, strict=True))))
 
-    def patch_model(self, prepared: BaseModel) -> type[PatchData]:
+    def patch_model(self, prepared: BaseModel) -> type[LifecycleTransitionPatch[BaseModel]]:
         try:
-            return self._patch_models[type(prepared)]
+            return cast(type[LifecycleTransitionPatch[BaseModel]], self._patch_models[type(prepared)])
         except KeyError as exc:
             raise TypeError("prepared model is not in the closed wrapper map") from exc
 
@@ -67,9 +75,10 @@ class LifecycleSectionBinding[Q: BaseModel, S: DomainSection]:
         if type(request) is not self.request_model:
             raise TypeError("section request does not have the exact bound class")
         # Check exact members before Pydantic could coerce a subclass to its parent.
-        for change in request.changes:
+        view = section_request_view(request)
+        for change in view.changes:
             self.patch_model(change)
         evidence_models = union_members(tuple_item(self.request_model, "domain_evidence"))
-        if any(type(entry) not in evidence_models for entry in request.domain_evidence):
+        if any(type(entry) not in evidence_models for entry in view.domain_evidence):
             raise TypeError("evidence model is not in the closed roster")
         return self.request_model.model_validate(request, strict=True)

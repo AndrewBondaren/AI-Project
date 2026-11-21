@@ -1,6 +1,9 @@
 """Test-only domain contracts; never registered in production."""
 
 from pydantic import BaseModel, ConfigDict
+from enum import StrEnum
+from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
+from app.dataModel.patch.results.sectionResult import SectionRefused
 from app.encoding.canonicalCodec import CanonicalEncodingError, encode, decode, merge_manifests
 from app.application.patch.encoding.coreManifest import PATCH_CORE_SCHEMA
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest, RegisteredTypeEntry, CanonicalTypeKind
@@ -59,7 +62,19 @@ FAKE_SECTION_SCHEMA = merge_manifests(PATCH_CORE_SCHEMA, CanonicalSchemaManifest
 )))
 
 
-class FakeSectionHandler(DomainSectionHandler[FakeSection]):
+class FakeTargetCode(StrEnum):
+    INVALID_NAME = "invalid_name"
+
+
+class FakeTargetIssue(FieldPathError[FakeTargetCode]):
+    pass
+
+
+class FakeSectionRefused(SectionRefused[FakeTargetIssue]):
+    pass
+
+
+class FakeSectionHandler(DomainSectionHandler[FakeSection, FakeTargetIssue]):
     def __init__(self, contract: SectionContract[FakeSection]) -> None:
         self._contract = contract
         self.calls: list[str] = []
@@ -68,7 +83,11 @@ class FakeSectionHandler(DomainSectionHandler[FakeSection]):
     def contract(self) -> SectionContract[FakeSection]:
         return self._contract
 
-    async def validate(self, section: FakeSection, context: SnapshotValidationContext) -> SectionValidation:
+    @property
+    def refusal_model(self) -> type[FakeSectionRefused]:
+        return FakeSectionRefused
+
+    async def validate(self, section: FakeSection, context: SnapshotValidationContext) -> SectionValidation[FakeTargetIssue]:
         self.calls.append("validate")
         return SectionAccepted()
 

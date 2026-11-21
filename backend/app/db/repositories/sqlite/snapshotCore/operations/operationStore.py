@@ -1,6 +1,7 @@
 """Common immutable operation bindings, claims and terminal outcomes; no domain compute."""
 
 from pydantic import TypeAdapter
+from app.application.publication.contracts.resultBinding import PublicationResultBinding
 
 from app.application.publication.errors import PublicationInfrastructureError, OperationBindingMismatchError
 from app.dataModel.publication.operationBindingMismatch import OperationBindingMismatch
@@ -28,15 +29,26 @@ from app.db.repositories.sqlite.snapshotCore.operations.publicationEvidence impo
 from app.db.repositories.sqlite.artifacts.operationArtifacts import SqliteOperationArtifacts
 
 
-class SqliteOperationStore:
+class SqliteOperationStore[R: SnapshotApplyResult]:
     def __init__(self, commits: SqlitePublicationCommitStore, access: ScopedSqliteAccess,
-                 codec: StoredTerminalCodec, evidence: SqlitePublicationEvidence,
-                 artifacts: SqliteOperationArtifacts) -> None:
+                 codec: StoredTerminalCodec[R], evidence: SqlitePublicationEvidence[R],
+                 artifacts: SqliteOperationArtifacts, *, record_model: type[OperationRecord[R]]) -> None:
+        if record_model is not codec.result_binding.record_model:
+            raise ValueError("operation record model differs from codec binding")
+        self._record_model = record_model
         if (access.registry is not commits.registry or evidence._commits is not commits
                 or evidence._access is not access or artifacts._access is not access):
             raise ValueError("operation dependencies must share one commit coordinator and access")
         self._access, self._registry, self._commits = access, access.registry, commits
         self._codec, self._evidence, self._artifacts = codec, evidence, artifacts
+
+    @property
+    def result_binding(self) -> PublicationResultBinding[R]:
+        return self._codec.result_binding
+
+    @property
+    def record_model(self) -> type[OperationRecord[R]]:
+        return self._record_model
 
     async def _event(self, operation_id: EntityUid, scope: CommitReadScope | CommitScope) -> PublicationOperationEventRow:
         row = await self._access.one_row(scope, PublicationOperationEventRow,
@@ -72,7 +84,7 @@ class SqliteOperationStore:
                 raise PublicationInfrastructureError("stored operation phase/fence transition mismatch")
         return row
 
-    async def _load(self, operation_id: EntityUid, scope: CommitReadScope | CommitScope) -> OperationRecord | None:
+    async def _load(self, operation_id: EntityUid, scope: CommitReadScope | CommitScope) -> OperationRecord[R] | None:
         row = await self._access.one_row(scope, PublicationOperationRow, "SELECT * FROM publication_operations WHERE operation_id=?", (operation_id,))
         if row is None:
             return None
@@ -88,18 +100,18 @@ class SqliteOperationStore:
             raise PublicationInfrastructureError("cancelled operation still has active artifact holds")
         if result is not None:
             await self._evidence.check(scope, result)
-        return OperationRecord(operation_id=row.operation_id, world_uid=row.world_uid, kind=_wire(OperationKind, row.kind),
+        return self.record_model(operation_id=row.operation_id, world_uid=row.world_uid, kind=_wire(OperationKind, row.kind),
             preparation_fingerprint=row.preparation_fingerprint, publication_fingerprint=None if request is None else request.publication_fingerprint,
             phase=_wire(OperationPhase, event.phase), fence=event.fence, leased_artifacts=refs,
             terminal=result)
 
-    async def read(self, operation_id: EntityUid) -> OperationRecord | None:
+    async def read(self, operation_id: EntityUid) -> OperationRecord[R] | None:
         operation_id = _UID.validate_python(operation_id, strict=True)
         async with self._commits.read_scope() as scope:
             return await self._load(operation_id, scope)
 
     async def claim_publication(self, kind: OperationKind, operation_id: EntityUid, world_uid: EntityUid,
-                                preparation_fingerprint: RevisionHex, request_fingerprint: RevisionHex) -> OperationClaim:
+                                preparation_fingerprint: RevisionHex, request_fingerprint: RevisionHex) -> OperationClaim[R]:
         kind = TypeAdapter(OperationKind).validate_python(kind, strict=True)
         operation_id = _UID.validate_python(operation_id, strict=True)
         world_uid = _UID.validate_python(world_uid, strict=True)
@@ -125,9 +137,9 @@ class SqliteOperationStore:
                         stored_preparation_fingerprint=record.preparation_fingerprint,
                         stored_request_fingerprint=record.publication_fingerprint))
                 if record.phase is OperationPhase.TERMINAL:
-                    return PublicationTerminal(record=record)
+                    return PublicationTerminal[self.result_binding.result_model](record=record)
                 if record.phase is not OperationPhase.READY:
-                    return PublicationBusy(record=record)
+                    return PublicationBusy[self.result_binding.result_model](record=record)
                 event_id = _UID.validate_python(runtime_uid(), strict=True)
                 if record.publication_fingerprint is None:
                     await self._access.insert(scope, PublicationRequestRow(operation_id, request_fingerprint))
@@ -151,7 +163,7 @@ class SqliteOperationStore:
             raise ValueError("cancellation requires release of operation holds")
         if not isinstance(outcome, OperationCancelled) and record.phase is not OperationPhase.APPLYING:
             raise ValueError("publication outcome requires a claimed applying operation")
-        OperationRecord.model_validate({**record.model_dump(), "phase": OperationPhase.TERMINAL, "terminal": outcome}, strict=True)
+        self.record_model.model_validate({**{name: getattr(record, name) for name in self.record_model.model_fields}, "phase": OperationPhase.TERMINAL, "terminal": outcome}, strict=True)
         await self._evidence.check(scope, outcome)
         terminal_row = self._codec.encode(outcome)
         previous = await self._event(operation_id, scope)
@@ -160,18 +172,20 @@ class SqliteOperationStore:
         await self._access.insert(scope, PublicationOperationEventRow(event_id,
             operation_id, previous.event_id, previous.event_seq + 1, OperationPhase.TERMINAL.value, record.fence))
 
-    async def record_terminal(self, scope: CommitScope, outcome: SnapshotApplyResult | PackActivationResult | GameplayStarted | OperationCancelled) -> None:
+    async def record_terminal(self, scope: CommitScope, outcome: R | PackActivationResult | GameplayStarted | OperationCancelled) -> None:
         self._registry.check(scope, True)
-        if type(outcome) not in (SnapshotApplyResult, PackActivationResult, GameplayStarted, OperationCancelled):
+        if type(outcome) not in (self.result_binding.result_model, PackActivationResult, GameplayStarted, OperationCancelled):
             raise TypeError("terminal must be a typed record")
         outcome = type(outcome).model_validate(outcome, strict=True)
         if isinstance(outcome, SnapshotApplyResult) and outcome.category is not SnapshotApplyOutcomeKind.COMMITTED:
             raise ValueError("record refusal only after confirmed rollback through record_refusal")
         await self._save(scope, outcome)
 
-    async def record_refusal(self, claim: PublicationOwner, outcome: SnapshotApplyResult) -> None:
+    async def record_refusal(self, claim: PublicationOwner, outcome: R) -> None:
         claim = PublicationOwner.model_validate(claim, strict=True)
-        outcome = SnapshotApplyResult.model_validate(outcome, strict=True)
+        if type(outcome) is not self.result_binding.result_model:
+            raise TypeError("refusal must match current result model")
+        outcome = self.result_binding.result_model.model_validate(outcome, strict=True)
         if outcome.category is SnapshotApplyOutcomeKind.COMMITTED:
             raise ValueError("refusal cannot assert a committed outcome")
         async with self._commits.transaction(claim.lease.operation_id) as scope:

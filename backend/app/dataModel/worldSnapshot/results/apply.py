@@ -29,14 +29,14 @@ class SnapshotCommitRefs(BaseModel):
         return self
 
 
-class SnapshotApplyResult(BaseModel):
+class SnapshotApplyResult[D: BaseModel = FieldPathError](BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
 
     category: SnapshotApplyOutcomeKind
     operation_id: EntityUid
     request_fingerprint: RevisionHex
     committed: SnapshotCommitRefs | None
-    diagnostics: tuple[FieldPathError | SnapshotApplyRelationIssue, ...]
+    diagnostics: tuple[D | SnapshotApplyRelationIssue, ...]
 
     @model_validator(mode="after")
     def coherent_outcome(self) -> Self:

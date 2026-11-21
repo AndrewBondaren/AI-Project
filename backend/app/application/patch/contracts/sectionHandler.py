@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from types import UnionType
 from typing import Union, get_args, get_origin
 from annotated_types import MinLen
-from pydantic import TypeAdapter
+from pydantic import BaseModel, TypeAdapter
 from app.dataModel.patch.changes.patchData import PatchData
 
 from app.application.worldSnapshot.contracts.context import SnapshotApplyContext, SnapshotValidationContext
@@ -65,7 +65,7 @@ class SectionContract[S: DomainSection]:
             raise ValueError("canonical manifest must declare the concrete section model")
 
 
-class DomainSectionHandler[S: DomainSection](ABC):
+class DomainSectionHandler[S: DomainSection, D: BaseModel](ABC):
     # SNAPSHOT-V1-BOUNDARY: deferred external contracts remain v1; this is not
     # a v1 adapter. Admit native section contracts only, without legacy conversion.
     # Scope: .cursor/plans/snapshot-public-contracts-dag-integration.md, section 7.
@@ -73,12 +73,16 @@ class DomainSectionHandler[S: DomainSection](ABC):
     @abstractmethod
     def contract(self) -> SectionContract[S]: ...
 
+    @property
     @abstractmethod
-    async def validate(self, section: S, context: SnapshotValidationContext) -> SectionValidation:
+    def refusal_model(self) -> type[SectionRefused[D]]: ...
+
+    @abstractmethod
+    async def validate(self, section: S, context: SnapshotValidationContext) -> SectionValidation[D]:
         """Read-only semantic/precondition checks on the captured base."""
         ...
 
     @abstractmethod
-    async def apply(self, section: S, context: SnapshotApplyContext) -> SectionApplyReceipt | SectionRefused:
+    async def apply(self, section: S, context: SnapshotApplyContext) -> SectionApplyReceipt | SectionRefused[D]:
         """Append prepared changes using bound storage; never materialize or commit."""
         ...

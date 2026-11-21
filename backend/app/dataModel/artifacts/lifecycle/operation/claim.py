@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.dataModel.artifacts.lifecycle.lease import OperationLeaseRef
 from app.dataModel.artifacts.lifecycle.operation.kinds import OperationClaimKind, OperationPhase
 from app.dataModel.artifacts.lifecycle.operation.record import OperationRecord
+from app.dataModel.worldSnapshot.results.apply import SnapshotApplyResult
 
 
 class PublicationOwner(BaseModel):
@@ -15,11 +16,11 @@ class PublicationOwner(BaseModel):
     lease: OperationLeaseRef
 
 
-class PublicationTerminal(BaseModel):
+class PublicationTerminal[R: SnapshotApplyResult](BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
 
     kind: Literal[OperationClaimKind.TERMINAL] = OperationClaimKind.TERMINAL
-    record: OperationRecord
+    record: OperationRecord[R]
 
     @model_validator(mode="after")
     def terminal_record(self) -> Self:
@@ -28,11 +29,11 @@ class PublicationTerminal(BaseModel):
         return self
 
 
-class PublicationBusy(BaseModel):
+class PublicationBusy[R: SnapshotApplyResult](BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
 
     kind: Literal[OperationClaimKind.BUSY] = OperationClaimKind.BUSY
-    record: OperationRecord
+    record: OperationRecord[R]
 
     @model_validator(mode="after")
     def nonterminal_record(self) -> Self:
@@ -41,6 +42,6 @@ class PublicationBusy(BaseModel):
         return self
 
 
-type OperationClaim = Annotated[
-    PublicationOwner | PublicationTerminal | PublicationBusy, Field(discriminator="kind"),
+type OperationClaim[R: SnapshotApplyResult] = Annotated[
+    PublicationOwner | PublicationTerminal[R] | PublicationBusy[R], Field(discriminator="kind"),
 ]

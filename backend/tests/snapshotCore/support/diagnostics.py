@@ -8,15 +8,7 @@ from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.fields.validatedFieldPath import FieldSegment, ModelIdentity, ValidatedFieldPath
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from app.encoding.canonicalCodec import decode, encode, merge_manifests
-from tests.snapshotCore.support.fakeSection import FAKE_SECTION_SCHEMA, FakeTarget
-
-
-class FakeTargetCode(StrEnum):
-    INVALID_NAME = "invalid_name"
-
-
-class FakeTargetIssue(FieldPathError[FakeTargetCode]):
-    pass
+from tests.snapshotCore.support.fakeSection import FAKE_SECTION_SCHEMA, FakeTarget, FakeTargetCode, FakeTargetIssue
 
 
 def target_issue(message: str) -> FakeTargetIssue:

@@ -1,6 +1,7 @@
 """Transaction-bound handler inputs; no query routing or domain payload assembly."""
 
 from dataclasses import dataclass
+from app.application.worldSnapshot.contracts.admittedSectionView import AdmittedSectionView
 
 from app.application.worldSnapshot.contracts.commitScope import CommitReadScope, CommitScope
 from app.dataModel.identity.uid import EntityUid
@@ -16,6 +17,7 @@ class SnapshotValidationContext:
     expected_players: tuple[PlayerHeadExpectation, ...]
     resolved_dependencies: tuple[SectionDependency, ...]
     read_scope: CommitReadScope
+    admitted_sections: AdmittedSectionView
 
 
 @dataclass(frozen=True, slots=True)

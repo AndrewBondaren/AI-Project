@@ -12,6 +12,8 @@
 
 ## 2. Собственные POJO нод
 
+**Координаторская сверка 2026-11-22:** конкретная принимаемая specialization в этом плане не назначена. Нет принятой сквозной строки producer public Output → C → ArtifactFormatContract/version → issuer public Input/Output OperationLeaseRef → prepare/stage transport → consumer ArtifactRef. Поэтому concrete binding остаётся OPEN, а не implicit bytes/BLOB. Выбор BLOB по удобству запрещён; Pack material binding остаётся предложением и не становится accepted от поручения реализации. Повторная локальная архитектурная проверка Artifacts закрыла три findings, но не этот binding и его exact POJO/error inventory. Это отдельная граница Artifacts, не prerequisite текущих Time/Lifecycle нод.
+
 Ниже объявлены проектные имена и полный состав полей. Предлагаемый модуль — `backend/app/dataModel/engine/nodes/artifacts.py`, владелец — Engine/DAG. Это спецификация, не утверждение о существующих классах.
 
 | POJO | Поля | Назначение |

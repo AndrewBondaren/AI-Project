@@ -1,6 +1,13 @@
 """Pure batch relations; subject payload/hash verification belongs to apply."""
 
 from pydantic import BaseModel
+from typing import Any
+from typing import cast
+from app.application.lifecycle.contracts.typedViews import section_request_view, ReasonView
+from app.dataModel.lifecycle.identity import LifecycleEntityRef
+from app.dataModel.identity.uid import EntityUid
+from app.dataModel.patch.changes.header import PatchRef
+from app.dataModel.patch.sections.section import DomainSection
 
 from app.application.lifecycle.contracts.sectionBinding import LifecycleSectionBinding
 from app.dataModel.fields.checkedPath import CheckedPath
@@ -10,11 +17,12 @@ from app.dataModel.lifecycle.results.issues import LifecycleIssue, LifecycleFiel
 from app.dataModel.validation.diagnostics.validatorAggregationHelper import ValidatorAggregationHelper
 
 
-class LifecycleSectionValidator:
-    def __init__(self, binding: LifecycleSectionBinding) -> None:
+class LifecycleSectionValidator[Q: BaseModel, S: DomainSection[Any]]:
+    def __init__(self, binding: LifecycleSectionBinding[Q, S]) -> None:
         self._binding = binding
 
-    def validate(self, request: BaseModel) -> tuple[LifecycleIssue, ...]:
+    def validate(self, source: Q) -> tuple[LifecycleIssue, ...]:
+        request = section_request_view(source)
         errors = ValidatorAggregationHelper[LifecycleIssue]((LifecycleFieldIssue, LifecycleRelationIssue))
         root = CheckedPath.root(type(request))
         changes_ref = FieldRef(lambda: type(request), lambda value: value.changes)
@@ -24,12 +32,12 @@ class LifecycleSectionValidator:
         cp = root.field(changes_ref)
         ep = root.field(evidence_ref)
 
-        def issue(code: R, path: CheckedPath, message: str) -> None:
+        def issue[A: BaseModel, B](code: R, path: CheckedPath[A, B], message: str) -> None:
             errors.add(LifecycleRelationIssue(code=code, path=path.freeze(), related_path=None, message=message))
 
-        seen_changes = set()
-        seen_entities = set()
-        expected = {}
+        seen_changes: set[EntityUid] = set()
+        seen_entities: set[LifecycleEntityRef[object]] = set()
+        expected: dict[tuple[EntityUid, LifecycleEntityRef[object], str], tuple[int, EntityUid]] = {}
         for index, prepared in enumerate(changes):
             intent = prepared.transition.intent
             if prepared.base != request.expected_world:
@@ -37,7 +45,7 @@ class LifecycleSectionValidator:
             if intent.change_uid in seen_changes:
                 issue(R.DUPLICATE_CHANGE_UID, cp.item(index), "Duplicate logical change in one batch")
             seen_changes.add(intent.change_uid)
-            local_entities = set()
+            local_entities: set[LifecycleEntityRef[object]] = set()
             for participant in prepared.transition.participants:
                 entity = participant.after.entity
                 if entity in local_entities:
@@ -46,15 +54,15 @@ class LifecycleSectionValidator:
                     issue(R.PARTICIPANT_OVERLAP, cp.item(index), "Independent transitions must not share an entity")
                 local_entities.add(entity)
                 effect = ("end" if entity in intent.predecessors else "create") if intent.operation is Op.REPLACEMENT else intent.operation.value
-                expected[(intent.change_uid, entity, effect)] = (index, intent.reason.action_uid)
+                expected[(intent.change_uid, entity, effect)] = (index, cast(ReasonView, intent.reason).action_uid)
             seen_entities.update(local_entities)
 
-        entries = {}
+        entries: dict[tuple[EntityUid, LifecycleEntityRef[object], str], list[int]] = {}
         for index, entry in enumerate(evidence):
             key = (entry.change_uid, entry.effect.entity, entry.effect.effect)
             entries.setdefault(key, []).append(index)
         for key, (change_index, action) in expected.items():
-            indices = entries.get(key, ())
+            indices = entries.get(key, [])
             if not indices:
                 issue(R.COVERAGE_MISSING, cp.item(change_index), "Required subject effect has no prepared coverage")
             for index in indices:
@@ -62,12 +70,12 @@ class LifecycleSectionValidator:
                     issue(R.ADMISSION_MISMATCH, ep.item(index), "Coverage belongs to another subject action")
             for index in indices[1:]:
                 issue(R.COVERAGE_DUPLICATE, ep.item(index), "Duplicate coverage for the same typed effect")
-        fingerprints = {}
+        fingerprints: dict[str, str] = {}
         for index, entry in enumerate(evidence):
             key = (entry.change_uid, entry.effect.entity, entry.effect.effect)
             if key not in expected:
                 issue(R.COVERAGE_EXTRA, ep.item(index), "Coverage has no corresponding transition effect")
-            refs = set()
+            refs: set[PatchRef] = set()
             for ref in entry.patch_refs:
                 if ref in refs:
                     issue(R.COVERAGE_DUPLICATE, ep.item(index), "Coverage repeats a patch ref")

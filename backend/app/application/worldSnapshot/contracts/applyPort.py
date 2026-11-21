@@ -6,5 +6,5 @@ from app.dataModel.patch.sections.section import DomainSection
 from app.dataModel.worldSnapshot.results.apply import SnapshotApplyResult
 
 
-class IWorldSnapshotApply(Protocol):
-    async def apply[S: DomainSection](self, patch_set: PatchSet[S]) -> SnapshotApplyResult: ...
+class IWorldSnapshotApply[S: DomainSection, T: SnapshotApplyResult](Protocol):
+    async def apply(self, patch_set: PatchSet[S]) -> T: ...

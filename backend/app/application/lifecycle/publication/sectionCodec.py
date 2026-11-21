@@ -3,9 +3,10 @@ from app.application.patch.contracts.sectionHandler import SectionContract
 from app.dataModel.lifecycle.publication.section import LifecycleSection
 from app.dataModel.patch.values import FormatVersion
 from app.encoding.canonicalCodec import decode, encode
+from typing import Any
 
 
-class LifecycleSectionCodec[S: LifecycleSection](SectionCodec[S]):
+class LifecycleSectionCodec[S: LifecycleSection[Any, Any]](SectionCodec[S]):
     def __init__(self, contract: SectionContract[S]) -> None:
         self._contract = contract
 

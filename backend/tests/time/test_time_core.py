@@ -46,6 +46,52 @@ def publication():
 
 
 class TimeCoreTests(unittest.TestCase):
+    def test_native_section_preparation_and_context_aggregation(self):
+        from unittest.mock import patch
+        from app.dataModel.time.changes.section import PrepareTimeAdvanceSection, TimeAdvanceSection
+        from app.dataModel.time.results.section import TimeSectionContextMismatch, TimeSectionIssueCode
+        pipeline = make_time_advance_pipeline()
+        proposal = pipeline.prepare_advance(PrepareAdvance(operation_id="op",
+            base=TimeCapture(publication=publication(), point=point()),
+            duration=TimeConversions.from_seconds(SecondsInput(seconds=1, nanoseconds=1)).duration))
+        request = PrepareTimeAdvanceSection(proposal=proposal, operation_id="op", expected_world=publication())
+        with patch.object(type(pipeline), "prepare_advance", side_effect=AssertionError("must reuse proposal")):
+            section = pipeline.prepare_section(request)
+            self.assertIsInstance(section, TimeAdvanceSection)
+            self.assertEqual(section.patches[0].proposal, proposal)
+            from app.application.time.encoding.manifest import TIME_SECTION_SCHEMA
+            from app.application.time.encoding.sectionCodec import TimeSectionCodec
+            from app.application.patch.contracts.sectionHandler import SectionContract
+            from app.encoding.canonicalCodec import CanonicalEncodingError
+            contract = SectionContract(key=section.header.key, section_model=TimeAdvanceSection,
+                supported_versions=frozenset({1}), manifest=TIME_SECTION_SCHEMA)
+            codec = TimeSectionCodec(contract)
+            self.assertIs(codec.contract, contract)
+            encoded = codec.encode(section)
+            self.assertEqual(codec.decode(encoded, 1), section)
+            with self.assertRaises(CanonicalEncodingError):
+                codec.decode(encoded, 2)
+            with self.assertRaises(CanonicalEncodingError):
+                codec.decode(b"invalid", 1)
+            self.assertEqual(TimeAdvanceSection.model_validate_json(section.model_dump_json()), section)
+            mismatch = pipeline.prepare_section(PrepareTimeAdvanceSection(proposal=proposal,
+                operation_id="other", expected_world=publication().model_copy(update={"publication_id": "other"})))
+        self.assertIsInstance(mismatch, TimeSectionContextMismatch)
+        self.assertEqual(tuple(issue.code for issue in mismatch.issues), (
+            TimeSectionIssueCode.OPERATION_MISMATCH, TimeSectionIssueCode.PUBLICATION_MISMATCH))
+        self.assertEqual(tuple(issue.path.projection() for issue in mismatch.issues), (
+            ("proposal", "operation_id"), ("proposal", "base", "publication")))
+        invalid = section.model_copy(update={"header": section.header.model_copy(update={
+            "key": RegistryKey("other"), "format_version": 2})})
+        with self.assertRaises(ValidationError) as caught:
+            TimeAdvanceSection.model_validate(invalid)
+        self.assertEqual(tuple(error["loc"] for error in caught.exception.errors()), (
+            ("header", "key"), ("header", "format_version")))
+        bad_patch = section.patches[0].model_copy(update={"header": section.patches[0].header.model_copy(
+            update={"ref": section.patches[0].header.ref.model_copy(update={"ordinal": 1})})})
+        with self.assertRaises(ValidationError):
+            TimeAdvanceSection(header=section.header, patches=(bad_patch,))
+
     def test_publication_state_tracks_active_branch_before_first_snapshot(self):
         state = TimeClockState(point=point())
         inherited = publication()

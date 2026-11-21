@@ -24,7 +24,7 @@ class OperationCancelled(BaseModel):
     reason: OperationCancellationReason
 
 
-class OperationRecord(BaseModel):
+class OperationRecord[R: SnapshotApplyResult](BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
 
     operation_id: EntityUid
@@ -35,7 +35,7 @@ class OperationRecord(BaseModel):
     phase: OperationPhase
     fence: Annotated[StrictInt, Field(ge=1)]
     leased_artifacts: tuple[ArtifactRef, ...]
-    terminal: SnapshotApplyResult | PackActivationResult | GameplayStarted | OperationCancelled | None
+    terminal: R | PackActivationResult | GameplayStarted | OperationCancelled | None
 
     @model_validator(mode="after")
     def coherent_record(self) -> Self:

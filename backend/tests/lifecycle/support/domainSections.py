@@ -62,3 +62,29 @@ class TestDomainPatchB(PatchData):
 class TestDomainSectionB(DomainSection[TestDomainPatchB]):
     __test__ = False
     patches: tuple[TestDomainPatchB, ...] = Field(min_length=1)
+
+
+class MockSubjectObservationA(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
+    entity: RefA
+    slot: Literal["primary", "index"]
+    value: bool | None
+
+
+class MockSubjectCaptureA(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
+    publication: WorldPublicationRef
+    observations: tuple[MockSubjectObservationA, ...]
+
+
+class MockSubjectObservationB(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
+    entity: RefB
+    slot: Literal["primary", "index"]
+    value: bool | None
+
+
+class MockSubjectCaptureB(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
+    publication: WorldPublicationRef
+    observations: tuple[MockSubjectObservationB, ...]

@@ -1,6 +1,7 @@
-from typing import Protocol, cast
+from typing import Protocol
 
 from pydantic import BaseModel
+from typing import Any
 
 from app.application.lifecycle.contracts.sectionBinding import LifecycleSectionBinding
 from app.application.lifecycle.validation.sectionValidator import LifecycleSectionValidator
@@ -9,11 +10,11 @@ from app.dataModel.lifecycle.results.errors import LifecycleSectionRefused
 from app.dataModel.patch.sections.section import DomainSection
 
 
-class ILifecycleSectionPipelineOpenPipeline[Q: BaseModel, S: DomainSection](Protocol):
+class ILifecycleSectionPipelineOpenPipeline[Q: BaseModel, S: DomainSection[Any]](Protocol):
     def prepare_section(self, request: Q) -> S | LifecycleSectionRefused: ...
 
 
-class LifecycleSectionPipelineOpenPipeline[Q: BaseModel, S: DomainSection]:
+class LifecycleSectionPipelineOpenPipeline[Q: BaseModel, S: DomainSection[Any]]:
     def __init__(self, *, binding: LifecycleSectionBinding[Q, S]) -> None:
         self._binding = binding
         self._validator = LifecycleSectionValidator(binding)
@@ -24,4 +25,4 @@ class LifecycleSectionPipelineOpenPipeline[Q: BaseModel, S: DomainSection]:
         issues = self._validator.validate(admitted)
         if issues:
             return LifecycleSectionRefused(issues=issues)
-        return cast(S, self._builder.build(admitted))
+        return self._builder.build(admitted)

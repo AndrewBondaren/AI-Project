@@ -1,23 +1,22 @@
 """Build immutable tick metadata from pinned envelopes and assigned participants."""
 from collections.abc import Callable, Mapping
-from typing import Annotated, Literal
+from typing import Annotated
 
 from pydantic import BaseModel, Field, StrictInt, TypeAdapter, ValidationError
 
 from app.dataModel.validation.diagnostics.validatorAggregationHelper import ValidatorAggregationHelper
 from app.dataModel.fields.fieldBinding import bind_field
 from app.dataModel.fields.fieldRef import FieldRef
-from app.dataModel.fields.checkedPath import CheckedPath
 from app.dataModel.worldSnapshot.metadata.metadataIssues import (
     SnapshotBuilderIssue, SnapshotMetadataCode as Code, SnapshotMetadataFieldIssue, SnapshotMetadataRelationIssue,
 )
 
 from app.application.worldSnapshot.contracts.context import SnapshotApplyContext
-from app.application.worldSnapshot.validation.receiptProvenance import validate_receipt_provenance
-from app.dataModel.patch.changes.header import PatchRef
+from app.application.worldSnapshot.validation.receiptProvenance import (
+    validate_receipt_provenance, collect_pinned_base_issues, collect_receipt_provenance, patch_matches_operation,
+)
+from app.application.worldSnapshot.validation.receiptFacts import ReceiptFactsAdmission
 from app.dataModel.patch.results.sectionResult import SectionApplyReceipt
-from app.dataModel.worldSnapshot.sections.retention import SectionHistoryRetention, SectionStateRetention
-from app.dataModel.worldSnapshot.sections.refs import SectionHistoryRef, SectionStateRef
 from app.dataModel.worldSnapshot.identity.refs import SnapshotRef, WorldSnapshotRef
 from app.dataModel.worldSnapshot.metadata.envelope import (
     CreatedAtUtc, PlayerSnapshotMetadata, SnapshotEnvelope, WorldSnapshotMetadata,
@@ -38,38 +37,6 @@ def metadata_field[M: BaseModel, T](model: M, select: Callable[[M], T]) -> tuple
     return bind_field(ref).field, ref.select(model)
 
 
-def _indexed_items[T: BaseModel](values: tuple[T, ...], model: type[T], *,
-                                 validated: bool) -> tuple[tuple[int, T], ...]:
-    if validated:
-        return tuple(enumerate(values))
-    # Whole-receipt validation already reported malformed items at their original paths.
-    items: list[tuple[int, T]] = []
-    if isinstance(values, tuple):
-        for index, value in enumerate(values):
-            try:
-                items.append((index, model.model_validate(value, strict=True)))
-            except ValidationError:
-                continue
-    return tuple(items)
-
-
-def _owner(ref: SnapshotRef) -> tuple[str, str]:
-    return ref.kind, ref.world_uid if isinstance(ref, WorldSnapshotRef) else ref.player_uid
-
-
-def _indexed_refs[T: BaseModel](values: object, field: str, model: type[T]) -> tuple[tuple[int, T], ...]:
-    """Inspect independently valid refs even when their sibling artifact closure is malformed."""
-    result: list[tuple[int, T]] = []
-    if isinstance(values, tuple):
-        for index, value in enumerate(values):
-            raw = value.get(field) if isinstance(value, dict) else getattr(value, field, None)
-            try:
-                result.append((index, model.model_validate(raw, strict=True)))
-            except ValidationError:
-                continue  # Whole-receipt validation already reports the exact original path.
-    return tuple(result)
-
-
 class SnapshotMetadataBuilder:
     @staticmethod
     def build(context: SnapshotApplyContext, turn_id: int, created_at: CreatedAtUtc,
@@ -81,15 +48,6 @@ class SnapshotMetadataBuilder:
         def report(path: tuple[str | int, ...], code: Code, message: str, snapshot: SnapshotRef | None = None) -> None:
             errors.add(SnapshotMetadataRelationIssue.model_validate(dict(location=path[0], address=path[1:],
                 code=code, message=message, snapshot=snapshot), strict=True))
-
-        def malformed(location: Literal["receipts", "retained"], destination: tuple[int] | tuple[str, int],
-                      model: type[BaseModel], loc: tuple[str | int, ...], code: Code, message: str) -> None:
-            checked = CheckedPath.from_pydantic_loc(model, loc)
-            if checked is None:
-                report((location, *destination, *loc), code, message)
-            else:
-                errors.add(SnapshotMetadataFieldIssue(location=location, destination=destination, code=code,
-                                                     path=checked, message=message))
 
         for label, adapter, value, code in (("turn_id", _TURN, turn_id, Code.INVALID_TURN_ID),
                                             ("created_at", _CREATED, created_at, Code.INVALID_CREATED_AT)):
@@ -121,82 +79,29 @@ class SnapshotMetadataBuilder:
         for ref, parent in parents.items():
             if ref == parent:
                 report(("parents", ref.snapshot_id), Code.SELF_PARENT, "assigned snapshot cannot be its own parent")
-        pinned = tuple(p for p in (expected.snapshot_head, *players.values()) if p is not None)
-        for parent in pinned:
-            if parent not in bases:
-                report(("bases", parent.snapshot_id), Code.MISSING_BASE, "missing pinned snapshot", parent)
-            else:
-                name, identity = metadata_field(bases[parent], lambda m: m.ref)
-                if identity != parent:
-                    report(("bases", parent.snapshot_id, name), Code.BASE_IDENTITY, "metadata base identity mismatch")
-        for ref in bases:
-            if ref not in pinned:
-                report(("bases", ref.snapshot_id), Code.UNEXPECTED_BASE, "base is not pinned")
+        for issue in collect_pinned_base_issues(context.validation, bases):
+            errors.add(issue)
         if not isinstance(receipts, tuple):
             report(("receipts",), Code.INVALID_RECEIPTS, "receipts must be a tuple")
         validated: list[SectionApplyReceipt] = []
         seen_sections = set()
         for i, raw in enumerate(receipts if isinstance(receipts, tuple) else ()):
             path = ("receipts", i)
-            invalid_fields = set()
-            valid = True
-            try:
-                receipt = SectionApplyReceipt.model_validate(raw, strict=True)
-            except ValidationError as error:
-                valid = False
-                for issue in error.errors():
-                    loc = issue["loc"]
-                    malformed("receipts", (i,), SectionApplyReceipt, loc, Code.INVALID_RECEIPT, issue["msg"])
-                    if loc and isinstance(loc[0], str):
-                        invalid_fields.add(loc[0])
-                if not isinstance(raw, SectionApplyReceipt):
-                    continue
-                missing_fields = {field: () for field in invalid_fields if not hasattr(raw, field)}
-                receipt = raw.model_copy(update=missing_fields)
-            else:
-                validated.append(receipt)
-            key_name, key = metadata_field(receipt, lambda r: r.section_key)
-            if key_name not in invalid_fields:
-                if key in seen_sections:
-                    report((*path, key_name), Code.DUPLICATE_SECTION, "duplicate section receipt")
-                seen_sections.add(key)
-            changed_name, changed = metadata_field(receipt, lambda r: r.changed)
-            for j, patch in _indexed_items(changed, PatchRef, validated=valid):
-                op_name, op = metadata_field(patch, lambda p: p.operation_id)
-                if op != context.validation.operation_id:
-                    report((*path, changed_name, j, op_name), Code.FOREIGN_OPERATION, "patch belongs to another operation")
-            history_name, histories = metadata_field(receipt, lambda r: r.history)
-            history_field = bind_field(FieldRef(lambda: SectionHistoryRetention, lambda r: r.history)).field
-            for j, entry in _indexed_refs(histories, history_field, SectionHistoryRef):
-                field, snapshot = metadata_field(entry, lambda r: r.snapshot)
-                if snapshot not in parents:
-                    report((*path, history_name, j, history_field, field), Code.FOREIGN_HISTORY, "history must target an assigned snapshot")
-            state_name, states = metadata_field(receipt, lambda r: r.states)
-            state_field = bind_field(FieldRef(lambda: SectionStateRetention, lambda r: r.state)).field
-            closures = dict(_indexed_items(states, SectionStateRetention, validated=valid))
-            indexed_states = _indexed_refs(states, state_field, SectionStateRef)
-            replacements = {(_owner(entry.snapshot), entry.section_key) for _, entry in indexed_states
-                            if entry.snapshot in parents}
-            for j, state_ref in indexed_states:
-                field, snapshot = metadata_field(state_ref, lambda r: r.snapshot)
-                if snapshot in parents:
-                    if "changed" not in invalid_fields and not receipt.changed:
-                        report((*path, state_name, j, state_field, field), Code.NOOP_STATE, "no-op receipt cannot replace state")
-                else:
-                    if isinstance(snapshot, WorldSnapshotRef):
-                        owner_present = snapshot.world_uid == context.world_snapshot.world_uid
-                        parent = expected.snapshot_head
-                    else:
-                        owner_present = snapshot.player_uid in players
-                        parent = players.get(snapshot.player_uid)
-                    if (_owner(snapshot), state_ref.section_key) in replacements:
-                        report((*path, state_name, j), Code.SUPERSEDED_STATE, "receipt also replaces this inherited state")
-                    if owner_present and parent is not None and (parent not in bases or bases[parent].ref != parent):
-                        continue  # Reachability depends on the pinned base.
-                    if (not owner_present or parent is None
-                            or not any(entry.state == state_ref for entry in bases[parent].states)
-                            or (j in closures and closures[j] not in bases[parent].states)):
-                        report((*path, state_name, j, state_field, field), Code.UNREACHABLE_STATE, "state closure is not reachable from pinned base")
+            facts = ReceiptFactsAdmission.admit(raw, section_index=i)
+            for issue in facts.structural_issues:
+                errors.add(issue)
+            if facts.validated is not None:
+                validated.append(facts.validated)
+            if facts.section_key is not None:
+                if facts.section_key in seen_sections:
+                    report((*path, "section_key"), Code.DUPLICATE_SECTION, "duplicate section receipt")
+                seen_sections.add(facts.section_key)
+            for item in facts.changed:
+                if not patch_matches_operation(item.ref, context.validation.operation_id):
+                    report((*path, "changed", item.index, "operation_id"), Code.FOREIGN_OPERATION,
+                           "patch belongs to another operation")
+            for issue in collect_receipt_provenance(facts, context, bases):
+                errors.add(issue)
         field, pack = metadata_field(context.next_publication, lambda p: p.pack_hash)
         if pack is None:
             report(("context", "next_publication", field), Code.MISSING_PACK, "runtime metadata requires a pack")

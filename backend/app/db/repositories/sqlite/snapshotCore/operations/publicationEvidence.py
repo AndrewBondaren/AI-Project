@@ -13,7 +13,7 @@ from app.db.repositories.sqlite.snapshotCore.publications.worldPublicationStore 
 from app.db.repositories.sqlite.snapshotCore.publications.playerPublicationStore import SqlitePlayerPublicationStore
 
 
-class SqlitePublicationEvidence:
+class SqlitePublicationEvidence[R: SnapshotApplyResult]:
     def __init__(self, commits: SqlitePublicationCommitStore, world: SqliteWorldPublicationStore,
                  players: SqlitePlayerPublicationStore, access: ScopedSqliteAccess) -> None:
         if (access.registry is not commits.registry or world._commits is not commits
@@ -21,7 +21,7 @@ class SqlitePublicationEvidence:
             raise ValueError("evidence/publication adapters must share one commit coordinator and access")
         self._commits, self._world, self._players, self._access = commits, world, players, access
 
-    async def check(self, scope: CommitReadScope | CommitScope, result: SnapshotApplyResult | PackActivationResult | GameplayStarted | OperationCancelled) -> None:
+    async def check(self, scope: CommitReadScope | CommitScope, result: R | PackActivationResult | GameplayStarted | OperationCancelled) -> None:
         marker = await self._access.one(scope, "SELECT publication_id FROM world_publications WHERE operation_id=?", (result.operation_id,))
         if marker is not None:
             _fields(marker, uids=("publication_id",))

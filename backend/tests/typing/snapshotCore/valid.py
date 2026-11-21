@@ -147,6 +147,7 @@ def lifecycle_event(digest: RevisionHex) -> SnapshotLogRecord:
 
 from app.application.patch.contracts.sectionHandler import DomainSectionHandler, SectionContract
 from app.application.patch.registry.sectionRegistry import SectionRegistry
+from tests.snapshotCore.support.fakeSection import FakeSectionRefused
 from app.application.artifacts.contracts.formatBackend import ArtifactBackend, ArtifactFormatContract
 from app.application.artifacts.registry.artifactRegistry import ArtifactFormatRegistryBinding
 from app.application.worldSnapshot.contracts.commitScope import CommitScope, CommitReadScope, IDomainCommitBinding
@@ -158,7 +159,7 @@ from tests.snapshotCore.support.fakeSection import FakeSection, FakeSectionHandl
 
 def register_typed_sections(contract: SectionContract[FakeSection], handler: FakeSectionHandler,
                             section: FakeSection) -> bytes:
-    registry = SectionRegistry()
+    registry = SectionRegistry(FakeSectionRefused)
     registry.register(contract, handler, FakeSectionCodec(contract))
     return registry.resolve_codec(section).encode(section)
 

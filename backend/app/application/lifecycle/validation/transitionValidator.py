@@ -6,6 +6,9 @@ from pydantic import BaseModel
 
 from app.application.lifecycle.contracts.preparationBinding import LifecyclePreparationBinding
 from app.application.lifecycle.contracts.preparationPolicy import LifecyclePreparationPolicy
+from app.application.lifecycle.contracts.typedViews import PreparationRequest, preparation_view
+from app.dataModel.lifecycle.identity import LifecycleEntityRef
+from app.dataModel.lifecycle.reads.facts import LastTransitionFact
 from app.dataModel.fields.checkedPath import CheckedPath
 from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.identity.uid import EntityUid
@@ -44,6 +47,11 @@ class LifecycleTransitionValidator[Q: BaseModel, P: BaseModel]:
     def _validate(self, request: Q, operation: LifecycleOperation) -> tuple[LifecycleIssue, ...]:
         if self._binding.operation is not operation:
             raise TypeError("validator operation does not match its construction binding")
+        return self._validate_typed(preparation_view(request), operation)
+
+    def _validate_typed[T, Reason: BaseModel](
+        self, request: PreparationRequest[T, Reason], operation: LifecycleOperation,
+    ) -> tuple[LifecycleIssue, ...]:
         errors = ValidatorAggregationHelper[LifecycleIssue]((LifecycleFieldIssue, LifecycleRelationIssue))
         root = CheckedPath.root(type(request))
         intent_ref = FieldRef(lambda: type(request), lambda value: value.intent)
@@ -62,10 +70,10 @@ class LifecycleTransitionValidator[Q: BaseModel, P: BaseModel]:
         ep = cp.field(entities_ref)
         fp = cp.field(facts_ref)
 
-        def field(code: F, path: CheckedPath, message: str) -> None:
+        def field[A: BaseModel, B](code: F, path: CheckedPath[A, B], message: str) -> None:
             errors.add(LifecycleFieldIssue(code=code, path=path.freeze(), message=message))
 
-        def relation(code: R, path: CheckedPath, message: str, related: CheckedPath | None = None) -> None:
+        def relation[A: BaseModel, B, C: BaseModel, D](code: R, path: CheckedPath[A, B], message: str, related: CheckedPath[C, D] | None = None) -> None:
             errors.add(LifecycleRelationIssue(code=code, path=path.freeze(), message=message,
                                               related_path=related.freeze() if related is not None else None))
 
@@ -75,17 +83,22 @@ class LifecycleTransitionValidator[Q: BaseModel, P: BaseModel]:
             relation(R.BASE_MISMATCH, cp, "A transition requires a captured timeline")
 
         replacement = operation is LifecycleOperation.REPLACEMENT
-        refs = intent.predecessors + intent.successors if replacement else (intent.entity,)
-        predecessor_count = len(intent.predecessors) if replacement else 0
-        seen = set()
+        if intent.operation is LifecycleOperation.REPLACEMENT:
+            predecessors = intent.predecessors
+            refs = predecessors + intent.successors
+        else:
+            predecessors = ()
+            refs = (intent.entity,)
+        predecessor_count = len(predecessors)
+        seen: set[LifecycleEntityRef[T]] = set()
         for i, ref in enumerate(refs):
             if ref in seen:
                 code = (R.PARTICIPANT_OVERLAP if replacement and i >= predecessor_count
-                        and ref in intent.predecessors else R.DUPLICATE_PARTICIPANT)
+                        and ref in predecessors else R.DUPLICATE_PARTICIPANT)
                 relation(code, ip, "Participants must be unique and replacement sides disjoint")
             seen.add(ref)
 
-        observations = {}
+        observations: dict[LifecycleEntityRef[T], AbsentLifecycle[T] | PresentLifecycle[T] | UnknownLifecycle[T]] = {}
         for index, observation in enumerate(entities):
             ref = observation.state.entity if isinstance(observation, PresentLifecycle) else observation.entity
             if ref in observations:
@@ -96,7 +109,7 @@ class LifecycleTransitionValidator[Q: BaseModel, P: BaseModel]:
                 if observation.state.last_transition.world_uid != capture.publication.world_uid:
                     relation(R.IDENTITY_MISMATCH, ep.item(index), "State transition belongs to another world")
 
-        fact_map = {}
+        fact_map: dict[LifecycleEntityRef[T], LastTransitionFact[T]] = {}
         for index, fact in enumerate(facts):
             if fact.entity in fact_map:
                 relation(R.DUPLICATE_PARTICIPANT, fp.item(index), "Duplicate last-transition fact")
