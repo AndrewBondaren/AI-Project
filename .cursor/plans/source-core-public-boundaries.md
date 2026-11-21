@@ -38,17 +38,23 @@ Public метод не принимает SourceOperation, codec/manifest, backe
 
 ## 2. Точные существующие импорты POJO
 
-### АР-1: зависимости владельцев и незакрытая read boundary (2026-11-16)
+### АР-1: зависимости владельцев и data-input boundary (актуализация 2026-11-21)
 
 Это детализация целой архитектуры, не локальный implementation-срез. Предлагаемый обязательный набор constructor dependencies пяти concrete owners:
 
-| Public owner | Pure dependencies (каждый отдельный параметр конструктора) | Durable dependency |
+| Public owner | Pure dependencies (каждый отдельный параметр конструктора) | Closure dependency |
 |---|---|---|
-| SourceProofAdmissionPipelineOpenPipeline | validation: SourceAdmissionRequestChecker; normalizer: SourceProofNormalizer | closure: SourceProofClosureCollector; read lifetime binding — OPEN ниже |
-| SourceProofReadPipelineOpenPipeline | validation: SourceReadRequestChecker | тот же closure и read lifetime binding |
-| SourceProofGroupAdmissionPipelineOpenPipeline | validation: SourceGroupAdmissionRequestChecker; union: SourceProofGroupUnionBuilder | тот же closure и read lifetime binding |
-| SourceProofGroupVerificationPipelineOpenPipeline | validation: SourceGroupVerificationRequestChecker; matcher: SourceProofGroupMatcher | тот же closure и read lifetime binding |
-| SourceProofSelectionPipelineOpenPipeline | validation: SourceSelectionRequestChecker; extractor: SourceProofSelectionExtractor | тот же closure и read lifetime binding |
+| SourceProofAdmissionPipelineOpenPipeline | validation: SourceAdmissionRequestChecker; normalizer: SourceProofNormalizer | closure: SourceProofClosureCollector по переданным данным; exact data-input/protection binding OPEN |
+| SourceProofReadPipelineOpenPipeline | validation: SourceReadRequestChecker | тот же collector по переданным данным |
+| SourceProofGroupAdmissionPipelineOpenPipeline | validation: SourceGroupAdmissionRequestChecker; union: SourceProofGroupUnionBuilder | тот же collector по переданным данным |
+| SourceProofGroupVerificationPipelineOpenPipeline | validation: SourceGroupVerificationRequestChecker; matcher: SourceProofGroupMatcher | тот же collector по переданным данным |
+| SourceProofSelectionPipelineOpenPipeline | validation: SourceSelectionRequestChecker; extractor: SourceProofSelectionExtractor | тот же collector по переданным данным |
+
+Source не открывает и не заимствует storage scope в этом пути. Artifacts выполняет protected read; DAG передаёт owning результат Source. Collector проверяет Source relations/closure по этим данным и evidence, не дочитывает storage и не приобретает holds. Наличие данных не заменяет protection evidence. Exact owning типы и полные constructors остаются прежним незавершённым binding; private scope или новый DTO-зеркало его не заменяют.
+
+#### История проверки scope-based дизайна, 2026-11-16 (superseded)
+
+Следующие записи до раздела «АР-1: ошибки и завершение публичной операции» объясняют прежние gaps. Требования собственного Source read lifetime, borrowed scope и collector IO отозваны выбранным data-input путём; их нельзя брать как constructor contract. Разделение validation и original-request mapping сохраняется в актуальных разделах ниже.
 
 Все параметры обязательны, без fallback/service locator/режимов. Operation фиксирована конкретным public owner, не constructor flag. Exact тип read lifetime binding пока не определён: таблица **не является полной готовой сигнатурой конструктора**. Не создавать пустой Protocol или private implementation, чтобы скрыть этот пробел. Общие pure dependencies имеют собственные constructors в source-core-internal-api.md и source-core-request-composition.md; никакого второго набора validators для public owner не вводится.
 
@@ -70,11 +76,11 @@ Public метод не принимает SourceOperation, codec/manifest, backe
 
 **Принято пользователем 2026-11-17 — разделение request и collector validation.** Request checker проверяет исходный запрос и формирует пользовательские diagnostics от actual root. Normalizer/union/extractor запускаются только после успешной проверки. Collector проверяет canonical proof теми же единственными реализациями правил; некорректный вычисленный Source proof — programming/postcondition failure, не SourceFailure по синтетическому пользовательскому полю. Для READ/VERIFY/SELECT некорректный предъявленный persisted proof диагностируется на request boundary до зависимых вычислений; это не ошибка реализации только потому, что proof persisted.
 
-Внутри живого read scope collector обязательно проверяет finalized captures, membership, доступность/integrity данных и полный durable closure. Ранняя pure validation и occurrence mapping этих проверок не заменяют. Повторный invariant check не создаёт второй набор правил или повторные пользовательские diagnostics. Решение закрывает выбор ответственности этого вопроса АР-1; exact programming-error transport, синхронизация collector spec и приёмка реализации остаются отдельной работой. Не вводить флаг skip_validation/trusted_proof. Одобрение не принимает автоматически occurrence signature delta, read lifetime/DAG binding или всю архитектуру.
+Collector обязательно проверяет finalized captures, membership и полный durable closure по переданным данным и owning evidence доступности/integrity/protection. Ранняя pure validation и occurrence mapping этих проверок не заменяют. Source не управляет read scope и не воспроизводит проверки хранения Artifacts. Повторный invariant check не создаёт второй набор правил или повторные пользовательские diagnostics. Выбор ответственности принят; exact programming-error transport, data-input/protection binding и приёмка реализации остаются прежними незавершёнными пунктами. Не вводить skip_validation/trusted_proof.
 
 ### Требования к occurrence mapping — proposal 2026-11-17
 
-Точные private tuple aliases, функции index/project/localize и явная замена collector signature предъявлены в [source-core-occurrence-mapping.md](source-core-occurrence-mapping.md). Normalizer/union/extractor сохраняют existing signatures; карта сопоставляется с их фактическим результатом без повторного вычисления proof. Дельта collector требует принятия и сверки всех callers §12.1, включая adoption; до этого существующий spec не заменён.
+Точные private tuple aliases и функции index/project/localize предъявлены в [source-core-occurrence-mapping.md](source-core-occurrence-mapping.md). Normalizer/union/extractor сохраняют existing signatures; карта сопоставляется с их фактическим результатом без повторного вычисления proof. Scoped collector signature отозвана; data-input дельта требует сверки допустимых callers. Прежние adoption callers исключены по source-s1-s2-adoption-disposition.md, а не ожидают реализации.
 
 До выбора нового carrier проверить существующие `SourceProofGroupProjection`, FieldRef/CheckedPath, SourceProofSelection и SourceLogicIssue: projection/selections описывают вычисленный proof/subset, но не заменяют позиции всех повторов исходного request. Не вводить зеркальный proof, публичный provenance DTO либо новый универсальный context. Связь существует только внутри одного вызова Source, не сериализуется и не передаётся Pack.
 
@@ -84,7 +90,7 @@ Normalizer/union не выбирает один origin среди повторо
 
 Предлагаемая кратность: capture-level IO issue распространяется на все соответствующие original uses; dependency-level — на все uses, где заявлен этот exact capture+dependency. Повтор одной dependency внутри одного use не создаёт одинаковые SourceLogicIssue: existing carrier не содержит dependency_index, поэтому одинаковые итоговые logic diagnostics сводятся при отображении, сохраняя первый исходный порядок. Field diagnostics сохраняют каждый точный path и не объединяются по одному коду. Это явное уточнение семантики для приёмки, не уже утверждённая дельта §11.3.
 
-Ошибка инфраструктуры/декодирования не превращается в field error исходного request. Structural/canonical отказ вычисленного proof — нарушение postcondition Source, а не ошибка пользователя; исходный persisted proof проверяется до преобразования. Authority/membership/availability проверки collector остаются обязательными внутри живого scope и не заменяются ранее построенным mapping.
+Ошибка инфраструктуры/декодирования не превращается в field error исходного request. Structural/canonical отказ вычисленного proof — нарушение postcondition Source, а не ошибка пользователя; исходный persisted proof проверяется до преобразования. Проверки Source authority/membership/closure по owning evidence остаются обязательными и не заменяются ранее построенным mapping. Lifetime защищённого набора обеспечивает внешняя owning операция, не Source scope.
 
 До приёмки нужны exact функции построения/проекции mapping и дельта collector, позволяющая отличить capture/atom/proof-level issue до потери контекста. Текущую `collect(scope, SourceProofReadInput, operation)` нельзя объявлять достаточной лишь на основании наличия SourceLogicIssue.source/artifact. Минимальные сценарии: один atom в двух группах; повтор atom в одном use; один source ref в разных captures; capture-wide refusal; subset с изменившимися ordinals; VERIFY expected/presented; proof-level failure без use. Все случаи проверяются без IO и без новых публичных POJO; runtime read lifetime проверяется отдельно.
 
@@ -98,7 +104,7 @@ Normalizer/union не выбирает один origin среди повторо
 | Exact read/closure | Полный SourceProofResult либо SourceFailure по принятой mapping | Latest fallback, read failure как отсутствие без evidence, потеря original diagnostic context |
 | Infrastructure/cancel/invalid scope | Existing infrastructure exception/cancellation | Превращение в MISSING_BODY или успешный domain result |
 
-Обязательные архитектурные сценарии: original group error после union; selection из historical capture; empty foreign-world proof; noncanonical input без вызова transform; отказ read после открытия scope с обязательным cleanup; несколько независимых issues до IO; отсутствие nested public calls. Это будущие критерии проверки границ, не выполненные runtime tests.
+Обязательные Source-сценарии: original group error после union; selection из historical capture; empty foreign-world proof; noncanonical input без вызова transform; несколько независимых issues до dependent computation; отсутствие nested public calls и storage IO. Внешний protected read/cleanup проверяется у владельца и на согласованной цепочке, не как обязанность Source owner. Это будущие критерии проверки границ, не выполненные runtime tests.
 
 Все пути под `app.dataModel.sourceVersioning`:
 

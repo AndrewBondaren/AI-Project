@@ -160,7 +160,7 @@ Field paths создаются от actual request class через existing Fie
 
 Existing ValidatorAggregationHelper создаётся заново на каждый check и принимает только concrete SourceFieldIssue/SourceLogicIssue. Никакой instance-level mutable issues list между requests. Aggregation использует фазовые локальные коллекции и stable обход, а не разбор строк path/message для сортировки.
 
-Field issues — порядок полей и исходных индексов. Logic issues — world → descriptor → capture → dependency → selection → closure; внутри фазы исходный порядок. Proof-level отсутствующие indices остаются None. В этой стадии closure issues ещё не вычисляются. Поздняя IO стадия добавляет свои diagnostics согласно той же семантике, не меняя исходную operation. SourceFailure создаётся только для непустого результата, success — None.
+Field issues — порядок полей и исходных индексов. Logic issues — world → descriptor → capture → dependency → selection → closure; внутри фазы исходный порядок. Proof-level отсутствующие indices остаются None. В этой стадии closure issues ещё не вычисляются. Поздняя closure evaluation по переданным owning данным добавляет свои diagnostics согласно той же семантике, не меняя исходную operation. SourceFailure создаётся только для непустого результата; success — tuple CaptureOrigins/ObjectOrigins/CollectionOrigins по §1, не None. Карты строятся из facts того же обхода, без повторного traversal.
 
 ## 4. Pure sequence после проверки
 

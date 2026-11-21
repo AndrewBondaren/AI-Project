@@ -1,5 +1,7 @@
 # Source core — декомпозиция ответственности
 
+**Приоритет 2026-11-21:** актуальный roster и критерии — source-core-responsibility-matrix.md, порядок — source-core-architecture.md АР-1…АР-6. Пять public owners уже приняты. SourceCaptureRetentionBinding.adopt и adoption preflight исключены из target по source-s1-s2-adoption-disposition.md. Описания первоначальных кандидатов ниже — история обоснования; они не разрешают реализовывать отменённые классы или локальные срезы. Classifier/assembler не добавляются только ради hash comparison/POJO construction: уточнения — mutation-contract §2 и capture-prune-configuration §1.
+
 2026-11-15. **Разделение ответственности согласовано пользователем** ответом «Ок» после подробного объяснения пункта 1. Основание: world-source-versioning.md, решения пользователя «одна ответственность — одна реализация; один метод — одна функция», ядро до интеграций. Это согласие с декомпозицией обязанностей, не приёмка всей архитектуры, не принятая смена публичного API и не разрешение кода. Имена классов остаются кандидатами; полные signatures, публичные операции и implementation-срез принимаются следующими пунктами архитектуры. Принятые proof POJO/semantics и G1.1/G1.2 сохраняются.
 
 ## 1. Что разделяем
@@ -64,11 +66,11 @@ Closure evaluation — одна общая внутренняя ответств
 | SourceCaptureAssembler | assemble: построить capture из готовых exact mappings | Предъявленные body/collection revisions; pure | Не выбирает latest и не запускает producers |
 | SourceCaptureCandidateChecker | check: проверить полноту/связность кандидата capture | Предъявленные значения и Source checks | Не утверждает committed finalization |
 | SourceCaptureFinalizer | finalize: выполнить одну атомарную finalize-операцию | Candidate checker и infrastructure ports; write integration deferred | Не реализует codec/SQL/holders, не даёт partial success, не запускает recovery |
-| SourceCaptureRetentionBinding | adopt: выполнить одну атомарную adoption-операцию | Общая closure evaluation и holder ports; write integration deferred | Не доверяет caller refs как полному closure, не release source, не вызывает публичный proof read |
+| SourceCaptureRetentionBinding (отозван) | Исторический adopt; не целевой метод Source | Acquire/handoff — внешняя граница варианта А через DAG | Реализация этого owner либо перенос acquire в переименованный Source класс — отказ |
 | SourceRevisionPrunePolicy | evaluate: определить допустимость explicit prune | Предъявленные revision/root/hold facts; pure | Не удаляет artifact bytes и не снимает holders самостоятельно |
 | SourceMutationOutcomeResolver | resolve: определить исход операции по authoritative receipt | Receipt-read port; recovery integration deferred | Не повторяет mutation при unknown outcome и не выдаёт unknown за отказ/успех |
 
-Это разделение ролей, не завершённый mutation/recovery контракт. Конкретные request/result/error здесь не изобретаются: они должны быть предъявлены отдельным пунктом архитектуры до кода. Прямые реализации SQL/read ports имеют ответственность хранения/чтения, не принятия доменных решений. Общий transaction owner остаётся внешней инфраструктурой; атомарность finalize/adopt не теряется при выделении pure checks.
+Это историческое разделение ролей, не завершённый mutation/recovery контракт. Конкретные request/result/error здесь не изобретаются: они должны быть предъявлены соответствующим пунктом архитектуры до кода. Прямые реализации SQL/read ports имеют ответственность хранения/чтения, не принятия доменных решений. Общий transaction owner остаётся внешней инфраструктурой; отменённый adopt не сохраняется под предлогом атомарности.
 
 ## 5. Что сохраняется без новых реализаций
 
