@@ -13,6 +13,7 @@ from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind, Ope
 from app.dataModel.artifacts.lifecycle.operation.record import OperationRecord, OperationCancellationReason, OperationCancelled
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.validation.diagnostics.runtimeIssueContext import RevisionHex
+from app.dataModel.worldSnapshot.results.apply import SnapshotApplyResult
 from app.db.models.artifacts.leaseRows import ArtifactLeaseEventRow, ArtifactWriterClaimRow
 from app.db.models.snapshotCore.operationRows import PublicationOperationEventRow, PublicationOperationRow
 from app.db.repositories.sqlite.artifacts.access.artifactScope import SqliteArtifactScope
@@ -24,17 +25,21 @@ from app.db.repositories.sqlite.shared.validation.rowValues import _UID
 from app.ids.deterministicIds import runtime_uid
 
 
-class SqliteArtifactLeases:
-    def __init__(self, scopes: SqliteArtifactScope, operations: SqliteOperationStore,
+class SqliteArtifactLeases[R: SnapshotApplyResult]:
+    def __init__(self, scopes: SqliteArtifactScope, operations: SqliteOperationStore[R],
                  artifacts: SqliteOperationArtifacts) -> None:
         self._catalog = SqliteArtifactCatalog(scopes, operations, artifacts)
         self._scopes, self._operations, self._access = scopes, operations, scopes.access
+
+    @property
+    def record_model(self) -> type[OperationRecord[R]]:
+        return self._operations.record_model
 
     def _transaction(self, operation_id):
         self._scopes._require_unbound()
         return self._scopes.commits.transaction(operation_id)
 
-    async def _record(self, scope, operation_id) -> OperationRecord:
+    async def _record(self, scope, operation_id) -> OperationRecord[R]:
         record = await self._operations._load(operation_id, scope)
         if record is None:
             raise ValueError("unknown operation")
@@ -129,7 +134,7 @@ class SqliteArtifactLeases:
             await self._access.insert(scope, replace(latest, event_id=runtime_uid(), predecessor_id=latest.event_id,
                 event_seq=latest.event_seq + 1, admission_open=False))
 
-    async def finish_preparation(self, lease: OperationLeaseRef, refs: tuple[ArtifactRef, ...]) -> OperationRecord:
+    async def finish_preparation(self, lease: OperationLeaseRef, refs: tuple[ArtifactRef, ...]) -> OperationRecord[R]:
         lease = OperationLeaseRef.model_validate(lease, strict=True)
         refs = TypeAdapter(tuple[ArtifactRef, ...]).validate_python(refs, strict=True)
         async with self._transaction(lease.operation_id) as scope:
@@ -150,7 +155,7 @@ class SqliteArtifactLeases:
                 event.event_id, event.event_seq + 1, "ready", lease.fence))
             return await self._record(scope, lease.operation_id)
 
-    async def recover(self, operation_id: EntityUid) -> OperationRecord:
+    async def recover(self, operation_id: EntityUid) -> OperationRecord[R]:
         operation_id = _UID.validate_python(operation_id, strict=True)
         self._scopes._require_unbound()
         async with self._scopes.commits.read_scope() as scope:
@@ -159,7 +164,7 @@ class SqliteArtifactLeases:
                 raise OperationBusyError("publication owner quiescence is unproven")
             return record
 
-    async def cancel(self, operation_id: EntityUid, fence: int) -> OperationRecord:
+    async def cancel(self, operation_id: EntityUid, fence: int) -> OperationRecord[R]:
         fence = TypeAdapter(PositiveInt).validate_python(fence, strict=True)
         outcome = OperationCancelled(operation_id=operation_id, reason=OperationCancellationReason.REQUESTED)
         async with self._transaction(operation_id) as scope:

@@ -24,7 +24,7 @@ from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind, Ope
 from app.dataModel.artifacts.lifecycle.operation.record import OperationRecord, OperationCancellationReason, OperationCancelled
 from app.dataModel.artifacts.references import ArtifactKind, ArtifactFormatRegistry
 from app.dataModel.artifacts.events import ArtifactLogActivity
-from app.dataModel.worldSnapshot.results.apply import SnapshotApplyResult
+from tests.snapshotCore.support.publicationBinding import TEST_PUBLICATION_BINDING, SnapshotTestResult as SnapshotApplyResult
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
 from app.dataModel.registryKey import RegistryKey
 from tests.snapshotCore.support.diagnostics import target_issue
@@ -37,6 +37,7 @@ from app.db.repositories.sqlite.artifacts.leaseStore import SqliteArtifactLeases
 
 class LifecycleFixture:
     """Model the required guard/hold/claim contract, without claiming SQL evidence."""
+    record_model = TEST_PUBLICATION_BINDING.record_model
     def __init__(self):
         self.lease = OperationLeaseRef(operation_id="op", world_uid="world", kind=OperationKind.PACK_ACTIVATION,
                                       preparation_fingerprint="a" * 64, fence=1)
@@ -100,7 +101,7 @@ class LifecycleFixture:
                 self.drained.set()
 
     def record(self, phase=OperationPhase.PREPARING):
-        return OperationRecord(operation_id="op", world_uid="world", kind=self.lease.kind,
+        return self.record_model(operation_id="op", world_uid="world", kind=self.lease.kind,
             preparation_fingerprint="a" * 64, publication_fingerprint=None, phase=phase,
             fence=1, leased_artifacts=tuple(self.refs), terminal=self.terminal)
 
@@ -142,6 +143,8 @@ class ArtifactStagingTests(unittest.TestCase):
         self.registry = ArtifactFormatRegistryBinding()
         self.registry.register(self.contract, self.backend)
         self.operations = create_autospec(IOperationStore, instance=True)
+        self.operations.result_binding = TEST_PUBLICATION_BINDING
+        self.operations.record_model = TEST_PUBLICATION_BINDING.record_model
         self.operations.read.return_value = None
         self.ledger = OperationLedger(self.operations, self.state)
         self.log = create_autospec(ArtifactLifecycleLog, instance=True)

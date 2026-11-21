@@ -9,7 +9,7 @@ from app.application.publication.errors import PublicationInfrastructureError
 from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind, OperationPhase
 from app.dataModel.artifacts.lifecycle.operation.claim import PublicationBusy, PublicationTerminal
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
-from app.dataModel.worldSnapshot.results.apply import SnapshotApplyResult
+from tests.snapshotCore.support.publicationBinding import SnapshotTestResult as SnapshotApplyResult
 from app.dataModel.worldSnapshot.results.publication import CasDecision, WorldCasMismatch, PackActivationResult, PackActivationDisposition
 from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
 from app.dataModel.artifacts.references import ArtifactRef, ArtifactKind, ArtifactFormatRegistry

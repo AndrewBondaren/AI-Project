@@ -8,22 +8,26 @@ from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind
 from app.dataModel.artifacts.lifecycle.operation.record import OperationRecord
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.validation.diagnostics.runtimeIssueContext import RevisionHex
+from app.dataModel.worldSnapshot.results.apply import SnapshotApplyResult
 
 
-class IArtifactLeases(Protocol):
+class IArtifactLeases[R: SnapshotApplyResult](Protocol):
+    @property
+    def record_model(self) -> type[OperationRecord[R]]: ...
+
     async def open_operation(self, operation_id: EntityUid, world_uid: EntityUid, kind: OperationKind,
                              preparation_fingerprint: RevisionHex) -> OperationLeaseRef: ...
     async def assert_writable(self, lease: OperationLeaseRef) -> None: ...
     def writer(self, reservation: StagingReservation) -> AbstractAsyncContextManager[None]:
         """Acquire/release a fenced writer claim; cancel must drain claims before release."""
         ...
-    async def finish_preparation(self, lease: OperationLeaseRef, refs: tuple[ArtifactRef, ...]) -> OperationRecord:
+    async def finish_preparation(self, lease: OperationLeaseRef, refs: tuple[ArtifactRef, ...]) -> OperationRecord[R]:
         """Atomically verify the full sealed/held set and close writer admission."""
         ...
-    async def recover(self, operation_id: EntityUid) -> OperationRecord:
+    async def recover(self, operation_id: EntityUid) -> OperationRecord[R]:
         """Read terminal/commit markers before permitting an explicit fenced resume."""
         ...
-    async def cancel(self, operation_id: EntityUid, fence: int) -> OperationRecord:
+    async def cancel(self, operation_id: EntityUid, fence: int) -> OperationRecord[R]:
         """Prove no publication, close admission and drain claims before cancelling.
 
         OperationCancelled confirms release of this fenced operation's holds;

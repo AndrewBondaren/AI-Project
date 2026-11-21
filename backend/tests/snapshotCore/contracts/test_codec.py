@@ -68,7 +68,8 @@ class CanonicalRequestCodecTests(unittest.TestCase):
     def test_cancelled_terminal_uses_production_codec(self):
         from app.dataModel.artifacts.lifecycle.operation.record import OperationCancellationReason, OperationCancelled
         from app.db.repositories.sqlite.snapshotCore.operations.terminalCodec import StoredTerminalCodec
-        codec = StoredTerminalCodec()
+        from tests.snapshotCore.support.publicationBinding import TEST_PUBLICATION_BINDING
+        codec = StoredTerminalCodec(binding=TEST_PUBLICATION_BINDING)
         result = OperationCancelled(operation_id="op", reason=OperationCancellationReason.REQUESTED)
         row = codec.encode(result)
         self.assertEqual(row.format_version, 1)

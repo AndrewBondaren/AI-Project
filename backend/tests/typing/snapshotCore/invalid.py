@@ -148,15 +148,18 @@ def write_capability(scope: CommitScope) -> None:
     pass
 
 
+from tests.snapshotCore.support.fakeSection import FakeSectionRefused, FakeTargetIssue
+
+
 def wrong_handler_binding(contract: SectionContract[FakeSection],
-                          handler: DomainSectionHandler[DomainSection[HeaderOnlyPatch]],
+                          handler: DomainSectionHandler[DomainSection[HeaderOnlyPatch], FakeTargetIssue],
                           codec: SectionCodec[FakeSection]) -> None:
-    SectionRegistry().register(contract, handler, codec)  # EXPECT: reportArgumentType
+    SectionRegistry(FakeSectionRefused).register(contract, handler, codec)  # EXPECT: reportArgumentType
 
 
 def wrong_codec_binding(contract: SectionContract[FakeSection], handler: FakeSectionHandler,
                         codec: SectionCodec[DomainSection[HeaderOnlyPatch]]) -> None:
-    SectionRegistry().register(contract, handler, codec)  # EXPECT: reportArgumentType
+    SectionRegistry(FakeSectionRefused).register(contract, handler, codec)  # EXPECT: reportArgumentType
 
 
 def wrong_artifact_binding(contract: ArtifactFormatContract[bytes],

@@ -264,7 +264,7 @@ async def live_tick(bundle, operation_id="tick", *, fail=False, entered=None, ho
     from app.dataModel.worldSnapshot.identity.refs import WorldSnapshotRef, PlayerSnapshotRef
     from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef, PlayerHeadExpectation
     from app.dataModel.worldSnapshot.metadata.envelope import WorldSnapshotMetadata, PlayerSnapshotMetadata
-    from app.dataModel.worldSnapshot.results.apply import SnapshotApplyResult, SnapshotCommitRefs
+    from app.dataModel.worldSnapshot.results.apply import SnapshotCommitRefs
     from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
     db, commits, world, players, history, operations = bundle
     expected = await world.read("w1")

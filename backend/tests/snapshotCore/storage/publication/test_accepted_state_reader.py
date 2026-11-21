@@ -5,7 +5,8 @@ from app.application.publication.errors import PublicationInfrastructureError
 from app.application.worldSnapshot.service.acceptedStateReader import AcceptedStateReader, PublicationMismatch, StateReadFailure
 from app.dataModel.artifacts.lifecycle.operation.kinds import OperationKind
 from app.dataModel.worldSnapshot.identity.refs import WorldSnapshotRef
-from app.dataModel.worldSnapshot.results.apply import SnapshotApplyResult, SnapshotCommitRefs
+from app.dataModel.worldSnapshot.results.apply import SnapshotCommitRefs
+from tests.snapshotCore.support.publicationBinding import SnapshotTestResult as SnapshotApplyResult
 from app.dataModel.worldSnapshot.results.outcomeKind import SnapshotApplyOutcomeKind
 from app.dataModel.worldSnapshot.sections.refs import SectionStateRef
 from tests.snapshotCore.storage.publication.test_history import KEY, OTHER, envelope, receipt

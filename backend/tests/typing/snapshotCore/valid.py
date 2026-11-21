@@ -252,7 +252,10 @@ from app.db.repositories.sqlite.shared.capabilities.scopeRegistry import SqliteS
 from app.db.repositories.sqlite.shared.transactions.transactionDriver import SqliteTransactionDriver
 
 
-def sqlite_composition(db: Database) -> tuple[IPublicationCommitStore, IWorldPublicationStore,
+from app.application.publication.contracts.resultBinding import PublicationResultBinding
+
+
+def sqlite_composition(db: Database, binding: PublicationResultBinding) -> tuple[IPublicationCommitStore, IWorldPublicationStore,
         IWorldPublicationInitializer, IPlayerPublicationStore, ISnapshotHistoryStore, IOperationStore]:
     registry = SqliteScopeRegistry(db)
     driver = SqliteTransactionDriver()
@@ -261,8 +264,9 @@ def sqlite_composition(db: Database) -> tuple[IPublicationCommitStore, IWorldPub
     world = SqliteWorldPublicationStore(commits, access)
     players = SqlitePlayerPublicationStore(commits, access)
     history = SqliteSnapshotHistoryStore(commits, access)
-    operations = SqliteOperationStore(commits, access, StoredTerminalCodec(),
-        SqlitePublicationEvidence(commits, world, players, access), SqliteOperationArtifacts(access))
+    operations = SqliteOperationStore(commits, access, StoredTerminalCodec(binding=binding),
+        SqlitePublicationEvidence(commits, world, players, access), SqliteOperationArtifacts(access),
+        record_model=binding.record_model)
     return sqlite_ports(commits, world, players, history, operations)
 
 

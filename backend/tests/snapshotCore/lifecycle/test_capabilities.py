@@ -41,8 +41,8 @@ class CommitCapabilityTests(unittest.TestCase):
                         with self.assertRaises(ValueError):
                             factory(commits, second[2]._access)
                     with self.assertRaises(ValueError):
-                        SqliteOperationStore(commits, second[2]._access, StoredTerminalCodec(),
-                            operations._evidence, operations._artifacts)
+                        SqliteOperationStore(commits, second[2]._access, StoredTerminalCodec(binding=operations.result_binding),
+                            operations._evidence, operations._artifacts, record_model=operations.record_model)
                     # A second registry for the same Database is also a different authority.
                     with self.assertRaises(ValueError):
                         SqliteWorldPublicationStore(commits, ScopedSqliteAccess(SqliteScopeRegistry(db)))
@@ -84,6 +84,7 @@ class CommitCapabilityTests(unittest.TestCase):
                 await live_started(bundle)
                 async with commits.transaction("scope") as scope:
                     read = scope.read_scope
+                    self.assertIs(read, scope.read_scope)
                     self.assertFalse(hasattr(scope, "connection"))
                     self.assertFalse(hasattr(scope, "commit"))
                     self.assertFalse(hasattr(scope, "__dict__"))

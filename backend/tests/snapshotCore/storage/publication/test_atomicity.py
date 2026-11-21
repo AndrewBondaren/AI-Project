@@ -619,6 +619,9 @@ class AssignedPublicationTests(unittest.TestCase):
                 snapshot = WorldSnapshotRef(world_uid="w1", timeline_id="t1", snapshot_id="assigned")
                 service = WorldSnapshotService(registry, bundle[2], bundle[3], bundle[4],
                     publication_binding=bundle[-1].result_binding, operations=bundle[-1])
+                from pydantic import ValidationError
+                with self.assertRaises(ValidationError):
+                    attempt_request("candidate", base, (h1, h1))
                 with (patch.object(bundle[2], "compare_append", new_callable=AsyncMock) as world_cas,
                       patch.object(bundle[3], "compare_append", new_callable=AsyncMock) as player_cas):
                     for case, heads, refs in (
