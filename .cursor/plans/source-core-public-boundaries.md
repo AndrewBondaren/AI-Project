@@ -10,6 +10,20 @@ Layout актуализирован 2026-11-21 и синхронизирован
 
 ## 1. Пять отдельных публичных классов
 
+**P1 АР-1 — НЕ ЗАКРЫТ, уточнение ревью 2026-11-22.** Ниже приняты имена пяти owners и операции, но proof-only signatures не являются окончательными входами выбранного materialized-data пути. Наличие constructors в §2 не закрывает этот дефект. Не реализовывать эти signatures как полный public boundary с ambient data, hidden IO, optional data=None или fake closure.
+
+Работа разделена: Artifacts/publication предъявляют owning materialized results/evidence и lifetime; Source после этого обязан определить exact public input каждой операции, сопоставить owning типы с internal collector и завершить его constructor/signature. Внешний ответ сам по себе не завершает Source АР-1. Mapping должен включать original-request occurrences по source-core-occurrence-mapping.md, не synthetic SourceProofReadInput как diagnostic root.
+
+Условие закрытия P1: для каждой из admit/read/admit_groups/verify_groups/select предъявлены полный Input/Output/Error, фактические owning imports, trace input → request validation → transform → projected origins → collector → result и проверки ниже; дельта проходит координатора. Не вводить mirror witness/body/evidence DTO. Для VERIFY origins presented proof отделены от expected groups; для SELECT canonical ordinals результата не заменяют original positions.
+
+| Ситуация | Допустимый вывод | Запрещённая подмена |
+|---|---|---|
+| Required ref раскрыт, но соответствующего объекта нет в materialized input | Неполнота producer input; конкретный typed transport должен войти в data-input дельту | MISSING_BODY по одному отсутствию во входе |
+| Owning результат чтения подтверждает отсутствие exact artifact | Только после проверки owning semantics возможен согласованный Source mapping | Вывод физического отсутствия из пустого tuple/None без evidence |
+| Evidence отсутствует, неверно коррелирует с ref или не подтверждает требуемую гарантию | Ошибка input/evidence boundary по согласованному контракту | Успех, fabricated authority или MISSING_HOLD без owning отрицательного evidence |
+
+Тесты допуска: incomplete materialized set не выдаёт MISSING_BODY; Source не выполняет дочитывание; один atom в двух original groups сохраняет оба origins; SELECT сохраняет original indices; VERIFY не смешивает expected/presented; каждый successful result имеет вычисленный полный closure. Пока transport неполноты/evidence не определён, нельзя молча выбрать для него SourceFailure либо RuntimeError: это отдельная часть того же незавершённого Input/Output/Error контракта.
+
 Предлагаемый корень: `app.application.worldData.sourceVersioning.operations`. Каждый модуль содержит один concrete operation owner с одним публичным методом. Интерфейс, если необходим DI-контракту, повторяет только этот метод; универсальный пятиоперационный facade не добавляется. Caller — согласованная нода DAG; назначение нод и wiring отложены INT-DAG. Pack не получает доступ к внутренним алгоритмам.
 
 ```python

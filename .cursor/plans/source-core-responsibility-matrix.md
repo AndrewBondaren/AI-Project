@@ -10,6 +10,8 @@
 
 ## 2. АР-1: proof
 
+Внутренняя часть X-READ отделена от external transport в [source-x-read-internal-boundary.md](source-x-read-internal-boundary.md): materialized completeness, roots, pure graph, semantic relation composition и original occurrences определяются Source сейчас. Exact public owning binding выполняется позднее; pure helper tuples не объявляются evidence или новым публичным DTO.
+
 Корень application: `app.application.worldData.sourceVersioning`. Exact модули/signatures — source-core-internal-api.md, source-core-checker-signatures.md, source-core-request-composition.md §1 и source-core-public-boundaries.md §1–3. Статус и evidence существующих A0→D компонентов сохраняются; новые строки не переоткрывают их независимый PASS.
 
 | Класс | Метод и единственная функция | Допустимые зависимости/эффекты | Проверка; конкретное нарушение |

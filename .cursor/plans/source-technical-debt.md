@@ -4,6 +4,19 @@
 
 ## Решение пользователя и запрос Artifacts — 2026-11-18
 
+### X-READ — OPEN, граница ожидания уточнена пользователем 2026-11-22
+
+Собственные Source operands/semantics уже предъявлены в source-closure-operands-2026-11-22.md: historical witnesses с finalization evidence, полные captures v1, object/collection bodies и required format dependencies с exact correlation. Source проверяет relations/closure; не читает чужое storage, не управляет holders и не запускает Artifacts.
+
+| Недостающая гарантия/контракт | Владелец | Что ожидает |
+|---|---|---|
+| Exact materialized BLOB/SQL_ROWS Input/Output/Error, physical integrity и completeness transport | Artifacts | Привязка owning результатов к Source public inputs/collector; предложенные read_verified signatures не accepted |
+| Read authority/issuer, protection исходного набора и непрерывное retention до target acquisition | Publication infrastructure совместно с Artifacts | Authority/evidence mapping; physical read lifetime не равен retention lifetime |
+| Полный перечислимый исходный набор и его consistency/version/correlation | Concrete producer ещё не назначен; назначение через координатора | Способ получения достаточного materialized input без hidden IO или неутверждённого DAG loop |
+| Mapping owning результатов в пять proof-входов и collector, original occurrences и ошибки incomplete input | Source после предъявления owning типов | Окончательная интеграционная дельта Source; отсутствие переданного объекта не даёт MISSING_BODY |
+
+Не ожидают X-READ: собственные pure validation, normalization/union/subset, occurrence mapping, revision arithmetic, POJO rules и архитектурные контракты других независимых частей. Их собственные OPEN устраняет Source, не внешний владелец. X-READ не является общим запретом продолжать АР-2…АР-6 и не prerequisite Time/Lifecycle nodes. Полный dependent public runtime нельзя объявить готовым до закрытия owning цепочки.
+
 ### Рекомендация по защите раскрытия closure — вариант 1
 
 2026-11-18: пользователь поручил зафиксировать первый вариант как рекомендацию для согласования с Artifacts: **удерживать исходный набор целиком на время раскрытия зависимостей**. Это не подтверждение готового API, не приёмка интеграции и не выбор нового транзитивного retention graph.

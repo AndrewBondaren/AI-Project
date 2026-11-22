@@ -1,5 +1,7 @@
 # Source closure: operands и correlation для X-READ
 
+Внутренний trace, pure helper contracts и явное разделение «определяем сейчас / интегрируем позднее» — [source-x-read-internal-boundary.md](source-x-read-internal-boundary.md). Внешний transport/authority/protection/producer binding остаётся EXTERNAL / DEFERRED, собственная архитектура продолжается.
+
 Требования потребителя Source, 2026-11-22; адресное уточнение существующего AR-1 data-input gap координатору. Не новый DTO, public signature, разрешение нового порядка DAG или принятие foreign контракта. Основание: source-proof-v2-contract-spec.md full capture closure v1 и source-core-public-boundaries.md выбранный Artifacts → DAG → Source путь. Старый collect(scope, ...) не возвращается.
 
 ## 1. Что требуется semantic evaluation

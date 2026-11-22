@@ -6,6 +6,8 @@
 
 ### Папки, владельцы и допустимые эффекты
 
+**Уточнение пользователя 2026-11-22 — X-READ не останавливает архитектуру ядра.** Собственные требования к historical witness/capture/object/collection bodies и evidence перечислены в source-closure-operands-2026-11-22.md. Source владеет semantic relations и closure, но не foreign storage reads/holders/Artifacts orchestration. Внешняя зависимость X-READ зарегистрирована OPEN в source-technical-debt.md. Pure validation, normalization, occurrence mapping, revision и остальные независимые Source contracts продолжаются без ожидания X-READ. Ожидает только зависимая привязка materialized input/collector/public proof к owning результатам и authority; она не заменяется placeholder. АР-1…АР-6 остаются архитектурным порядком, но внешний OPEN в АР-1 не запрещает детализацию собственной части следующих пунктов. Это не разрешение искусственных локальных implementation-срезов и не PASS всей архитектуры.
+
 Все пути относительно `backend/app`. Source владеет своими values, proof semantics и revision history. Значения чужих объектов, их semantic projection и запись принадлежат owning-доменам. Новые имена в таблице — proposals; exact signatures берутся только из указанных контрактов, не из догадок по названию.
 
 | Папка | Компоненты и единственная функция | Разрешённые зависимости / эффекты | Отказ в приёмке |

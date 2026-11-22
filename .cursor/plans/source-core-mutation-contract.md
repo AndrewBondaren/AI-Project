@@ -191,6 +191,25 @@ Existing SourceFieldIssue/SourceLogicIssue/SourceFailure остаются еди
 
 ## 7. Recovery — одна ответственность: установить или законно завершить исход
 
+### АР-2: единый trace попытки и границы authority
+
+Уточнение P2, 2026-11-22. Batch arithmetic не завершает композицию попытки. Ниже trace одной **новой разрешённой попытки**, а не утверждение готовности runner или новый порядок DAG. Request binding/terminal replay/recovery grant проверяются до выбора новой попытки по существующему §7/8: подтверждённый terminal возвращается без повторного state admission/projector/revision calculation; отсутствие terminal само по себе не разрешает выполнение. Маршрут между публичными доменными операциями остаётся у DAG.
+
+| Стадия | Собственный owner и метод | Вход → выход | Источник authority / граница отказа |
+|---|---|---|---|
+| 1. Request validation | SourceRegistryMutationRequestChecker.check | SourceRegistryMutationInput → None либо SourceFailure | Pure original request checks, не authority. При refusal dependent stages не запускаются; terminal не выдумывается |
+| 2. Authoritative state admission | Source: проверка expected object/membership, live/tombstone и допустимости действия; concrete class/signature пока OPEN | Проверенный request + exact authoritative state → допущенные previous revisions либо relation refusal | Source revision store facts; phase guard/serialization с gameplay start — owning внешний контракт INT-WRITER/INT-DAG. Caller pregame flag/старый preview недостаточны |
+| 3. Semantic evidence | Source проверяет identity/version correlation входа; hash/projector — owning body domain | Допущенные изменения + owning semantic evidence → exact identity/previous/semantic_hash operands | Owning projector и immutable format/execution binding; Source tombstone rule для DELETE. Не читать чужой latest и не вызывать foreign projector напрямую из Source |
+| 4. Revision calculation | SourceRevisionBatchBuilder.build → SourceRevisionTransitionBuilder.build | Exact operand tuples → SourceRevisionChanges | Pure calculation, не новое разрешение. Нарушенные internal preconditions/postconditions — programming failure; output provisional |
+| 5. Permitted append | SourceRevisionAppender.append; внутренний SourceMutationAttemptRunner.run — proposed composition, exact contracts OPEN | Checked transitions + разрешённая write boundary → provisional append result | Owning writer/attempt authority; state preconditions должны быть защищены от изменения между admission и append. Atomicity с gameplay transition должна быть гарантирована владельцем, не одним ранним phase read |
+| 6. Terminal resolution | SourceMutationOutcomeResolver.resolve | Immutable operation/request binding + authoritative outcome observation → подтверждённый outcome либо сохранённый unknown | Terminal registration/read/commit — publication/Artifacts. Source не объявляет Applied по успешному append; unknown не превращает в refusal/rollback |
+
+**Attempt runner:** отвечает только за локальную согласованную попытку Source, не за выбор новой публичной операции, recovery takeover или вызов чужих доменов. Предлагаемый путь `application/worldData/sourceVersioning/mutation/mutationAttemptRunner.py`; имя SourceMutationAttemptRunner переиспользовано из staging design. Старые scoped run/apply_in_scope signatures не объявляются автоматически действующими. Для завершения нужны exact permitted write input/result/error, внутренние collaborators и trace до подтверждённого terminal. Не создавать placeholder runner, исполняющий только arithmetic.
+
+До первого write ошибки request/state/evidence не допускают append. После любого write отказ требует подтверждённого owning rollback либо предусмотренного terminal refusal; возвращать голый preflight failure с частичными writes запрещено. Cancellation/неподтверждённый commit или rollback сохраняют owning transport и unknown outcome. Логи различают stage, operation_id, cause и provisional/confirmed/unknown, без второго Source terminal store.
+
+Критерии завершения АР-2: exact state-admission class/input/result/error; concrete appender/runner/resolver contracts; подтверждённые foreign методы вместо описания роли; доказательство serialization admission→append с gameplay transition; failure trace каждой стадии; replay без повторной arithmetic; отсутствие прямого Source→foreign domain call. Проверки race: expected state изменилось после admission; gameplay стартовал до append; append прошёл, commit outcome unknown. Ни один из этих случаев не может дать ложный Applied. Этот trace конкретизирует оставшуюся композицию, но P2 не закрывается до получения перечисленных контрактов.
+
 Разделить функции: SourceMutationOutcomeResolver читает authoritative terminal/binding и классифицирует исход; отдельный approved attempt runner исполняет разрешённую попытку. Resolver не вызывает mutation сам и не делает takeover по одному отсутствию terminal. Recovery state machine/claims/fences принадлежит существующей publication инфраструктуре, не дублируется Source.
 
 1. Проверить operation id и immutable request fingerprint.
