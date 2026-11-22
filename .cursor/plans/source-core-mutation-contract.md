@@ -77,8 +77,10 @@ class SourceRevisionBatchBuilder:
 Update/Delete делегируют проверку registry variant одной private функции `_mutationValueRules.is_registry_ref(ref: SourceVersionRef) -> bool`; один и тот же алгоритм не копируется в два validators. Для batch предлагаются функции того же dataModel модуля:
 
 - `change_identity(change: SourceRegistryChange) -> RegistryMemberId`: извлечь identity после допуска variant, без lookup/normalization.
-- `duplicate_change_positions(changes: tuple[SourceRegistryChange, ...]) -> tuple[int, ...]`: позиции повторных full identities после первого.
-- `invalid_change_order_positions(changes: tuple[SourceRegistryChange, ...]) -> tuple[int, ...]`: позиции нарушений принятого canonical identity order, без сортировки/repair. Canonical key переиспользует owning canonical contract, не новый str/repr порядок.
+- `duplicate_identity_positions(identities: tuple[RegistryMemberId, ...]) -> tuple[int, ...]`: позиции повторных full identities после первого.
+- `invalid_identity_order_positions(identities: tuple[RegistryMemberId, ...]) -> tuple[int, ...]`: позиции нарушений принятого canonical identity order, без сортировки/repair. Canonical key переиспользует owning canonical contract, не новый str/repr порядок.
+
+Это единственный нормативный набор predicates. POJO получает identities через change_identity; application — из пригодных leaf facts, сохраняя original positions. Функции над целыми changes отозваны и не реализуются параллельно. Ни POJO, ни checker не создаёт repaired change для проверки identity.
 
 Application diagnostics переиспользуют эти predicates и отображают позиции в original mutation paths; POJO validators проверяют те же predicates. World checks используют существующие identities и Source world checker на application boundary. Для result refs переиспользуются existing unique identity predicates `_proofValueRules`, а не новый set-алгоритм. Common canonical order helper должен быть единственным для соответствующего ref type; его exact composition проверяется при АР-6.
 

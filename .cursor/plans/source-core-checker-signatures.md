@@ -108,11 +108,14 @@ class SourceCaptureMembershipChecker:
         self, usage: SourceCaptureUsage, *,
         witness: SourceCaptureWitness, capture: SourceCapture,
         collections: tuple[tuple[SourceCollectionVersion, SourceCollectionBody], ...],
-        group_index: int | None, use_index: int,
     ) -> tuple[SourceLogicIssue, ...]: ...
 ```
 
 Здесь только relation checks уже структурно пригодных values: usage соответствует witness/capture mappings и membership. Structural errors decoded content не адресуются ложным путём внутри request: owning read boundary отвечает за decoding/corrupt payload. World и descriptor admission выполняются соответствующими checks до зависимых membership проверок.
+
+**Адресная дельта АР-1, 2026-11-22:** membership checker больше не принимает group_index/use_index. Все его issues возвращаются с group_index=None/use_index=None. Он проверяет canonical usage один раз, не назначая canonical ordinal как original index. Единственная граница назначения original coordinates — locate_logic по projected occurrences. Collector сохраняет capture/atom context вызова и передаёт его вместе с issue; source/artifact сами не заменяют этот context. Общие capture relation issues локализуются на capture occurrences, dependency issues — на соответствующие exact atom occurrences. Публичный SourceLogicIssue не меняется; world/identity request checkers и selection checker сохраняют собственные уже определённые координаты и через locate_logic повторно не проходят.
+
+Проверка: canonical capture C, заявленный в groups[0].uses[1] и groups[2].uses[0], проверяется один раз; его capture-level issue без indices превращается в два original issues (0,1) и (2,0). Для atom-level issue берутся только uses, где заявлен соответствующий atom. Передача уже локализованной issue в locate_logic — programming failure. Полнота materialized input проверяется до membership, её отсутствие не диагностируется semantic issue.
 
 Пары collection mapping/body передаются явно, не связываются по неоговорённому порядку двух списков. Read binding обязан доказать ArtifactRef→decoded bytes/value связь; pure checker её не выдумывает. Противоречивые mappings, отсутствующая requested revision, неполный collection membership классифицируются BODY_MAPPING_CONFLICT, DEPENDENCY_NOT_CAPTURED, INCOMPLETE_COLLECTION по §11.3; CAPTURE_ID_CONFLICT — при несовпадении предъявленного witness с usage capture identity. Exact conditions не расширяют meaning кодов. Missing/unsealed/corrupt artifact и committed finalization — ответственность IO, не этого checker.
 

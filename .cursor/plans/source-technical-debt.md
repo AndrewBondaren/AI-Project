@@ -56,7 +56,9 @@ Source вычисляет точный closure под этой защитой. �
 
 ## Evidence INT-ARTIFACTS-TERMINAL
 
-### INT-SOURCE-READ-LIFETIME — public proof read scope (OPEN)
+### INT-SOURCE-READ-LIFETIME — SUPERSEDED / HISTORICAL
+
+Снято как актуальное требование: Source не открывает/заимствует storage read scope. Все записи этого раздела ниже — история исследования, не OPEN задача и не условие возврата. Текущая внешняя зависимость — X-READ materialized transport/authority/protection/producer binding, EXTERNAL / DEFERRED. Physical read lifetime остаётся у owning reader, не constructor dependency Source.
 
 #### Совместное уточнение конкурентности — 2026-11-17
 
@@ -80,7 +82,9 @@ Source требует: изоляция mutable request/diagnostics между �
 
 Точный запрос: подтвердить применение этого existing read lifetime к пяти scope-free public Source proof operations; допускается ли inherited binding на этой границе или нужен owning публичный способ отказа до IO; кто гарантирует same registry/task, cleanup при failure/cancellation и допустимость композиции по INT-DAG-SCOPED. Source не вызывает private `_require_unbound`, не добавляет свой commit owner и не принимает решение за владельцев. Условие возврата: актуальные exact imports/methods и согласованный call trace с обеими lifetime ветвями либо явным запретом borrowed ветви. До ответа durable constructor signatures остаются OPEN. Запрос зафиксирован, отправка и ответ не заявляются. Pure request validation и собственный provenance design этим не блокируются.
 
-### INT-DAG-SCOPED — нормативная граница atomic composition (OPEN)
+### INT-DAG-SCOPED — REJECTED ROUTE / HISTORICAL
+
+Прямой Snapshot/Publication → Source adoption отклонён; shared transaction/internal method не дают исключения из запрета. Старое согласование scoped вызова не ожидается и не является prerequisite ядра. Ни adopt, ни collect_for_adoption, ни SourceAdoptionPreflight не возвращаются. Новая междоменная цепочка идёт через координатора по выбранному варианту А; следующие прежние формулировки этого раздела не действуют.
 
 Владельцы: пользователь/владелец правил DAG и Snapshot; Source предоставляет точный контракт своих calls. Зависимость: §5 source-pack-s1-s2-contract.md содержит Snapshot→Source check_coverage/collect_for_adoption/adopt при абсолютном запрете прямых междоменных calls. Акт проверял только public calls, чего недостаточно. Затронутый срез — S1/S2 scoped integration; независимые Source invariants не блокируются. Условие закрытия: явное решение по допустимости, согласованный ограниченный перечень calls/effects/transaction ownership и синхронизация normative rules/design/акта. Если composition запрещена — совместимый маршрут предъявляют владельцы, без самостоятельного изменения Source порядка/транзакции. Запрос подготовлен в §5; отправка владельцам и ответ не заявляются.
 
