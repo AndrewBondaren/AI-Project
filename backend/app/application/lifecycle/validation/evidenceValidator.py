@@ -2,10 +2,13 @@
 from typing import Protocol, cast
 from pydantic import BaseModel
 from app.application.lifecycle.validation.stateValidator import Native
+from app.application.lifecycle.contracts.typedViews import ReasonView
 from app.dataModel.fields.checkedPath import CheckedPath
 from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.identity.uid import EntityUid
-from app.dataModel.lifecycle.evidence.effects import DomainEffect
+from app.dataModel.lifecycle.evidence.effects import DomainEffect, LifecycleEffectKind
+from app.dataModel.lifecycle.identity import LifecycleEntityRef
+from app.dataModel.lifecycle.operations.kind import LifecycleOperation
 from app.dataModel.lifecycle.results.applyIssue import LifecycleApplyCode, LifecycleApplyIssue
 from app.dataModel.lifecycle.publication.section import LifecycleSection
 from app.dataModel.patch.changes.header import PatchHeader
@@ -32,6 +35,45 @@ class SubjectSectionClaims(Protocol):
     def patches(self) -> tuple[SubjectPatchClaims, ...]: ...
 
 
+type _EffectKey = tuple[EntityUid, LifecycleEntityRef[object], LifecycleEffectKind, EntityUid]
+
+
+def _require_transition_coverage(native: Native) -> None:
+    """Reject structurally valid native input that bypassed prepare relations."""
+    required: set[_EffectKey] = set()
+    for patch in native.patches:
+        intent = patch.prepared.transition.intent
+        action = cast(ReasonView, intent.reason).action_uid
+        for participant in patch.prepared.transition.participants:
+            entity = participant.after.entity
+            effect: LifecycleEffectKind
+            if intent.operation is LifecycleOperation.REPLACEMENT:
+                effect = "end" if entity in intent.predecessors else "create"
+            elif intent.operation is LifecycleOperation.CREATE:
+                effect = "create"
+            elif intent.operation is LifecycleOperation.END:
+                effect = "end"
+            else:
+                effect = "reactivate"
+            key = (intent.change_uid, entity, effect, action)
+            if key in required:
+                raise ValueError("native transitions contain a duplicate required effect")
+            required.add(key)
+    seen: set[_EffectKey] = set()
+    violations: list[str] = []
+    for index, entry in enumerate(native.domain_evidence):
+        key = (entry.change_uid, entry.effect.entity, entry.effect.effect, entry.effect.reason_action_uid)
+        if key not in required:
+            violations.append(f"domain_evidence[{index}]: no matching transition/change/entity/effect/action")
+        if key in seen:
+            violations.append(f"domain_evidence[{index}]: duplicate transition coverage")
+        seen.add(key)
+    if required - seen:
+        violations.append("domain_evidence: missing required transition effects")
+    if violations:
+        raise ValueError(tuple(violations))
+
+
 class LifecycleEvidenceValidator[F: SectionRefused[LifecycleApplyIssue]]:
     def __init__(self, refusal_model: type[F]) -> None:
         self._refusal_model = refusal_model
@@ -46,6 +88,7 @@ class LifecycleEvidenceValidator[F: SectionRefused[LifecycleApplyIssue]]:
         native = cast(Native, section_model.model_validate(section, strict=True))
         if any(p.prepared.base != expected_world or p.header.ref.operation_id != operation_id for p in native.patches):
             raise ValueError("Lifecycle native base/operation differs from admitted context")
+        _require_transition_coverage(native)
         sources = {source.header.key: source for source in prepared_domain_sections}
         if len(sources) != len(prepared_domain_sections):
             raise ValueError("duplicate admitted subject section")

@@ -39,6 +39,66 @@ class SourceRevisionTransitionBuilder:
 
 ## 3. Подготовка и provisional result
 
+### Карточки исполнителей Source — детализация проекта 2026-11-22
+
+#### Собственные exact contracts: batch arithmetic
+
+Уточнение проекта 2026-11-22: SourceRevisionBatchBuilder не получает live/tombstone/phase/hold состояние и не проверяет допустимость CREATE/UPDATE/DELETE. Эта проверка предшествует вычислению. Его единственная функция — применить уже определённое revision rule к exact operands и собрать provisional refs. Для этого foreign evidence DTO не нужен; reuse existing identity/revision/hash values:
+
+```python
+# application/worldData/sourceVersioning/mutation/revisionBatchBuilder.py
+class SourceRevisionBatchBuilder:
+    def __init__(self, *, revisions: SourceRevisionTransitionBuilder) -> None: ...
+    def build(
+        self, *,
+        objects: tuple[tuple[RegistryMemberId, SourceRevision | None, RevisionHex], ...],
+        collections: tuple[tuple[SourceCollectionId, SourceRevision | None, RevisionHex], ...],
+    ) -> SourceRevisionChanges: ...
+```
+
+Каждая тройка содержит identity, previous revision и готовый semantic hash. None означает допущенное создание; builder не выводит отсутствие объекта из None. Обязательные preconditions: обе последовательности canonical/unique по full identity, общий world и допустимый touched set уже проверены, хотя бы одна identity присутствует; semantic hash получен по owning rules, для DELETE — по Source tombstone rules. Результат содержит соответствующий exact ref для каждой входной identity в том же canonical порядке. Метод не получает ArtifactRef и не может подменить semantic hash физическим digest или заменить body mapping. Невалидные internal operands — programming failure, не SourceFailure; конкретный общий programming-error transport остаётся собственным АР-1.
+
+Критерии: initial revision=1; unchanged сохраняет предыдущую revision; A→B→A повышает seq дважды; object и collection refs не смешиваются; каждой входной identity соответствует ровно один выход; builder не реализует сравнение hash/seq вторым алгоритмом, а вызывает SourceRevisionTransitionBuilder. Запрещены IO, latest lookup, terminal construction и определение mutation permission.
+
+#### Собственные local POJO methods и единые правила
+
+Проектируемые методы ниже уточняют существующие модели §1/4, не добавляют поля или новые внешние carriers. Пути относительно `backend/app/dataModel/sourceVersioning`.
+
+| Класс / модуль | Метод / функция | Граница проверки |
+|---|---|---|
+| SourceRegistryCreate / sourceRegistryMutation.py | Construction по exact typed полям; дополнительный after-validator не требуется | RegistryMemberId задан полем; body проверяет owning ArtifactRef, не Source reader |
+| SourceRegistryUpdate / sourceRegistryMutation.py | registry_identity(self) → Self — expected.object_id должен быть RegistryMemberId | Не проверяет актуальность expected |
+| SourceRegistryDelete / sourceRegistryMutation.py | registry_identity(self) → Self — тот же локальный variant constraint | Не выполняет tombstone/prune |
+| SourceCollectionMutation / sourceRegistryMutation.py | Construction strict nullable expected_revision и existing refs | None не подтверждает отсутствие storage row |
+| SourceRegistryMutationInput / sourceRegistryMutation.py | batch_shape(self) → Self — nonempty/unique/canonical changes, общий world и member descriptor, world membership | Допустимость member descriptor в configuration проверяет application; POJO registry не читает |
+| SourceMutationApplied / sourceMutationOutcome.py | revision_shape(self) → Self — nonempty/unique/canonical result refs, world equality | Сверка touched set/request fingerprint и commit evidence у producer, не у POJO без request |
+| SourceMutationRefused / sourceMutationOutcome.py | refusal_shape(self) → Self — failure.operation=APPLY_MUTATION | Не устанавливает факт сохранения terminal |
+
+Update/Delete делегируют проверку registry variant одной private функции `_mutationValueRules.is_registry_ref(ref: SourceVersionRef) -> bool`; один и тот же алгоритм не копируется в два validators. Для batch предлагаются функции того же dataModel модуля:
+
+- `change_identity(change: SourceRegistryChange) -> RegistryMemberId`: извлечь identity после допуска variant, без lookup/normalization.
+- `duplicate_change_positions(changes: tuple[SourceRegistryChange, ...]) -> tuple[int, ...]`: позиции повторных full identities после первого.
+- `invalid_change_order_positions(changes: tuple[SourceRegistryChange, ...]) -> tuple[int, ...]`: позиции нарушений принятого canonical identity order, без сортировки/repair. Canonical key переиспользует owning canonical contract, не новый str/repr порядок.
+
+Application diagnostics переиспользуют эти predicates и отображают позиции в original mutation paths; POJO validators проверяют те же predicates. World checks используют существующие identities и Source world checker на application boundary. Для result refs переиспользуются existing unique identity predicates `_proofValueRules`, а не новый set-алгоритм. Common canonical order helper должен быть единственным для соответствующего ref type; его exact composition проверяется при АР-6.
+
+Проверка чистоты: один invalid expected variant и независимый duplicate change не должны скрывать друг друга в application diagnostics; malformed ветвь не чинится; ни один POJO validator не создаёт SourceFailure/terminal, не вызывает application и не присваивает revision. Concrete mapping mutation relation diagnostics остаётся собственным пунктом §6, не долгом X-READ.
+
+Корень путей ниже — `backend/app/application/worldData/sourceVersioning/`. Это конкретизация собственных ролей, не новые публичные междоменные контракты. Сигнатуры с неустановленным authoritative operand не подменяются Any/Protocol/пустой реализацией; отсутствие exact типа явно блокирует приёмку соответствующей карточки. Общий порядок проверки целого ядра сохраняется.
+
+| Класс / файл | Методы: функция и действие | Зависимости / эффекты | Проверка ответственности |
+|---|---|---|---|
+| SourceRegistryMutationRequestChecker / mutation/validation/registryMutationRequestChecker.py (предлагаемое размещение) | check — проверить исходный SourceRegistryMutationInput: world, descriptor, уникальность touched identities, допустимость variants и связь membership descriptor; вернуть SourceFailure либо отсутствие ошибок | Общие identity/world rules и descriptor lookup; pure. Structural paths от mutation request | Несколько независимых ошибок сохраняются; не назначает revisions, не читает latest, не подтверждает expected revision без authoritative данных |
+| SourceRevisionBatchBuilder / mutation/revisionBatchBuilder.py (предлагаемое размещение) | build — применить revision rule к проверенным operand triples и собрать SourceRevisionChanges; exact signature выше | RevisionTransitionBuilder; pure; live/tombstone admission — до builder | Не вычисляет owning semantic hash, не проверяет phase/holds, не пишет; unchanged hash не заменяет immutable mapping; output остаётся provisional |
+| SourceRevisionAppender / revision/revisionAppender.py (предлагаемое размещение) | append — сохранить проверенные immutable revision transitions через Source revision store в разрешённой write boundary | Только owning revision storage; exact store/transition input contract OPEN | Повтор exact transition идемпотентен, другой body той же revision не перезаписывает запись; нет commit/latest выбора/semantic policy |
+| SourceMutationOutcomeResolver / mutation/mutationOutcomeResolver.py (предлагаемое размещение) | resolve — сопоставить request binding с authoritative terminal observation; вернуть существующий подтверждённый outcome либо сохранить состояние без подтверждённого terminal | Owning terminal read/evidence contract OPEN; не собственный ledger | Нет mutation/retry/takeover; отсутствие terminal не равно rollback; unknown не превращается в SourceFailure |
+| SourceRegistryMutationPipelineOpenPipeline / registryMutationPipelineOpenPipeline.py | apply — выполнить одну разрешённую mutation; exact public input/result §8.1 | Request validation, preparation, разрешённые execution/terminal bindings; полные constructors OPEN | Только confirmed outcome выдаётся как Applied/Refused; нет второго commit owner или автоматического вызова Snapshot |
+| SourceMutationRecoveryPipelineOpenPipeline / mutationRecoveryPipelineOpenPipeline.py | recover — установить или законно завершить исход того же immutable request; exact public input/result §8.1 | Outcome resolver и owning recovery/attempt binding; полные constructors OPEN | Не вызывает public apply; replay не пересчитывает revisions/latest; новая попытка требует owning grant |
+
+`__init__` каждого executor только фиксирует immutable collaborators и не выполняет IO. Строки с OPEN не имеют завершённого constructor contract; это запрет implementation placeholder, а не разрешение спрятать зависимость внутри метода. Для RequestChecker общий failure carrier известен, но точная агрегация mutation relation diagnostics должна быть сведена с §6 до приёмки. Нельзя записывать индекс mutation change в proof group_index/use_index ради совместимости.
+
+Исторический SourceRegistryMutationApplier из staging P3 объединял required_refs и apply_in_scope и возвращал provisional Applied. Эта форма не является альтернативой данной декомпозиции: provisional payload — SourceRevisionChanges, а разрешённая вложенная цепочка writer/terminal ещё проверяется отдельно. Старый scoped execution не разрешает прямые междоменные вызовы.
+
 Ни SourceRevision, ни построенный набор revisions не являются свидетельством применения. Для внутреннего batch результата предлагается **SourceRevisionChanges** в `mutation/revisionChanges.py`, frozen dataclass:
 
 ```python
@@ -90,6 +150,40 @@ SourceMutationRefused(
 PreflightRejected и Rollback — разные internal control carriers, не новые diagnostics. Они сохраняют strict SourceFailure без перекодирования message и не сериализуются как terminal. Для initial preflight до создания scope нельзя выдумывать rollback/attempt; transport этого случая должен явно сохранить отсутствие durable terminal. Публичный exposure exception либо именованного error envelope — ещё отдельное решение, не молчаливый экспорт infrastructure внутренностей.
 
 ## 6. Единый error roster
+
+### Request diagnostics: собственная детализация, 2026-11-22
+
+Exact mutation inspect-functions, nullable slots, nested trace и критерии — [source-mutation-traversal-contract.md](source-mutation-traversal-contract.md). Его §4 уточняет общие predicates: duplicate_identity_positions/invalid_identity_order_positions заменяют ранние duplicate_change_positions/invalid_change_order_positions из §3, чтобы malformed branches не требовали repaired records. Это одна реализация правил для POJO и application, не дополнительный алгоритм.
+
+Проект exact boundary в `application/worldData/sourceVersioning/mutation/validation/registryMutationRequestChecker.py`:
+
+```python
+class SourceRegistryMutationRequestChecker:
+    def __init__(self, *, descriptors: SourceDescriptorLookup,
+                 identities: SourceIdentityChecker,
+                 worlds: SourceWorldChecker) -> None: ...
+    def check(self, request: SourceRegistryMutationInput) -> SourceFailure | None: ...
+```
+
+Одна функция — проверить original mutation request до чтения authoritative state и preparation. Здесь None означает отсутствие найденных request ошибок; в отличие от proof request checker, mutation checker не возвращает origins для proof transformation. Это не разрешение исполнить mutation без expected-state/phase/retention проверок. Operation итогового failure фиксирована APPLY_MUTATION, а не выбирается caller-флагом.
+
+| Проверяемое нарушение | Диагностика / точный контекст | Предел |
+|---|---|---|
+| Непригодное известное поле/variant | INVALID_SHAPE по actual typed path поля request | Unknown root/extra без представимого path остаётся structural отказом |
+| UPDATE/DELETE с object_id другого variant | INVALID_IDENTITY по changes[i].expected.object_id | Не выдавать неподходящий ref как валидный registry member |
+| Повтор full identity в changes | DUPLICATE_IDENTITY на повторном identity/object_id | Повтор не удаляется; i — исходный индекс |
+| Нарушен canonical порядок changes | INVALID_SHAPE по changes | Не сортировать исходный request; canonical identity order один |
+| World не соответствует request | WRONG_WORLD; source — exact пригодный expected ref при наличии, artifact — соответствующий body при наличии | group_index/use_index=None; для CREATE не придумывать revision, source=None |
+| Descriptor отсутствует / несовместим с category/configuration | UNKNOWN_DESCRIPTOR / DESCRIPTOR_MISMATCH через owning checker | Точный existing identity path для field errors; без default definition |
+| Owning key непригоден | INVALID_IDENTITY по original owning key path | Key adapter не выполняет IO/projector |
+
+Field paths строятся shared FieldRef/CheckedPath от SourceRegistryMutationInput. Change index не записывается в group_index/use_index. Existing SourceLogicIssue не содержит create identity без revision: нельзя создавать fake SourceVersionRef для локализации. При совпадающих logic contexts одинаковые итоговые issues сводятся стабильно; точную локализацию каждого CREATE relation этот carrier не обещает. Если нужна такая локализация, требуется явная Source error delta; она не добавляется скрыто этим проектом.
+
+Membership request world/descriptor compatibility относится к request validation; сравнение actual before/after membership с authoritative состоянием — последующая проверка. MEMBERSHIP_MISMATCH из proposal ниже нельзя реализовать как уже существующий код. Stale expected revision, missing/pruned revision, phase denial и operation binding conflict не определяются этим checker по одному request.
+
+Агрегатор создаётся на вызов с SourceFieldIssue/SourceLogicIssue. Structural traversal сохраняет пригодные листья; semantic checks не обходят request заново. Общие `_mutationValueRules` дают positions без копирования правил. Before effects собираются все независимые ошибки; непригодный expected не мешает проверить соседний CREATE и membership. Для полного implementation допуска нужны exact mutation inspect-functions, как для proof traversal; эта собственная детализация не скрывается X-READ.
+
+Проверки ответственности: wrong variant + duplicate соседней identity + неверный membership world дают доступные независимые diagnostics; changes[i] paths не уплотняются; checker не вызывает builder/store/projector; одинаковые logic issues не размножаются; infrastructure key composition error не преобразуется в business INVALID_IDENTITY. Отдельные relation коды и несовпадающие exact contexts сохраняются.
 
 Existing SourceFieldIssue/SourceLogicIssue/SourceFailure остаются единственным диагностическим контрактом. Known codes WRONG_WORLD, UNKNOWN_DESCRIPTOR, DESCRIPTOR_MISMATCH, REVISION_CONFLICT, BODY_MAPPING_CONFLICT, MISSING_BODY, CORRUPT_BODY, UNSEALED_BODY, MISSING_HOLD не меняют смысл. Paths mutation строятся от original SourceRegistryMutationInput, не от синтетического proof; change index не записывается как proof group/use index.
 

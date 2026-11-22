@@ -52,6 +52,42 @@ Public метод не принимает SourceOperation, codec/manifest, backe
 
 Source не открывает и не заимствует storage scope в этом пути. Artifacts выполняет protected read; DAG передаёт owning результат Source. Collector проверяет Source relations/closure по этим данным и evidence, не дочитывает storage и не приобретает holds. Наличие данных не заменяет protection evidence. Exact owning типы и полные constructors остаются прежним незавершённым binding; private scope или новый DTO-зеркало его не заменяют.
 
+#### Собственные constructor contracts Source — проект 2026-11-22
+
+Следующие signatures конкретизируют таблицу выше; foreign reader, authority issuer и scope не являются constructor dependencies этих owners. Все параметры обязательны и keyword-only, сохраняются неизменными; request/paths/diagnostics не сохраняются между вызовами. Это проект composition, не обещание runtime import или завершения X-READ. Тип SourceProofClosureCollector обозначает уже предусмотренный internal owner, а не новый Protocol/placeholder; его data-input метод до согласования owning inputs остаётся незавершённым.
+
+```python
+# operations/proofAdmissionPipelineOpenPipeline.py
+def __init__(self, *, validation: SourceAdmissionRequestChecker,
+             normalizer: SourceProofNormalizer,
+             closure: SourceProofClosureCollector) -> None: ...
+
+# operations/proofReadPipelineOpenPipeline.py
+def __init__(self, *, validation: SourceReadRequestChecker,
+             closure: SourceProofClosureCollector) -> None: ...
+
+# operations/proofGroupAdmissionPipelineOpenPipeline.py
+def __init__(self, *, validation: SourceGroupAdmissionRequestChecker,
+             union: SourceProofGroupUnionBuilder,
+             closure: SourceProofClosureCollector) -> None: ...
+
+# operations/proofGroupVerificationPipelineOpenPipeline.py
+def __init__(self, *, validation: SourceGroupVerificationRequestChecker,
+             matcher: SourceProofGroupMatcher,
+             closure: SourceProofClosureCollector) -> None: ...
+
+# operations/proofSelectionPipelineOpenPipeline.py
+def __init__(self, *, validation: SourceSelectionRequestChecker,
+             extractor: SourceProofSelectionExtractor,
+             closure: SourceProofClosureCollector) -> None: ...
+```
+
+Назначение __init__ — только связать collaborators одной операции; constructor не проверяет request, не читает storage и не открывает lifetime. Origins принадлежат одному вызову: checker возвращает их, operation передаёт через общие index/project/localize функции; это не отдельный mutable service dependency. Canonical schema принадлежит внутренним algorithms, не public constructor. Empty/default dependencies, service locator и скрытое создание альтернативного validator запрещены.
+
+Проверки composition: отказ validation не вызывает transform/closure; ADMIT вызывает свой normalizer, GROUPS — общий union, SELECT — extractor; READ не вызывает transform; VERIFY использует matcher и exact closure comparison. Ни один owner не вызывает публичный метод другого owner. Параллельные requests с разными worlds/origins не разделяют mutable diagnostics. Применимость collector к полностью материализованным owning inputs проверяется после X-READ; до этого constructors нельзя объявлять исполнимой полной runtime composition.
+
+Статус АР-1: отсутствие собственных имён/параметров этих пяти constructors устранено как проект. Не закрыты contract acceptance, collector constructor/data-input method, programming-error transport и внешняя цепочка полного materialized набора. Приёмка пяти owners не выводится из заполнения constructor signatures.
+
 #### История проверки scope-based дизайна, 2026-11-16 (superseded)
 
 Следующие записи до раздела «АР-1: ошибки и завершение публичной операции» объясняют прежние gaps. Требования собственного Source read lifetime, borrowed scope и collector IO отозваны выбранным data-input путём; их нельзя брать как constructor contract. Разделение validation и original-request mapping сохраняется в актуальных разделах ниже.
@@ -95,6 +131,21 @@ Normalizer/union не выбирает один origin среди повторо
 До приёмки нужны exact функции построения/проекции mapping и дельта collector, позволяющая отличить capture/atom/proof-level issue до потери контекста. Текущую `collect(scope, SourceProofReadInput, operation)` нельзя объявлять достаточной лишь на основании наличия SourceLogicIssue.source/artifact. Минимальные сценарии: один atom в двух группах; повтор atom в одном use; один source ref в разных captures; capture-wide refusal; subset с изменившимися ordinals; VERIFY expected/presented; proof-level failure без use. Все случаи проверяются без IO и без новых публичных POJO; runtime read lifetime проверяется отдельно.
 
 ### Таблица ошибок публичной операции
+
+#### Внутренние programming failures — проект transport, 2026-11-22
+
+Фактические pure checkers уже используют TypeError для неподходящих structural internal operands и ValueError для некорректных diagnostic positions/facts. Предлагается сохранить эту границу без нового Source error DTO:
+
+| Ситуация | Transport | Ответственный / проверка |
+|---|---|---|
+| Неверный тип обязательного internal operand/dependency | TypeError | Компонент, принимающий operand; не преобразовывать в INVALID_IDENTITY/SourceFailure |
+| Неверные internal positions, counts или противоречивые facts | ValueError | Компонент, принимающий facts; original user failures обрабатываются request checker до него |
+| Собственный вычисленный proof нарушил проверяемую postcondition | RuntimeError | Public operation owner после внутреннего transform и до result; не выдаёт synthetic пользовательский path и не возвращает успех |
+| Сбой owning IO/authority, cancellation или unknown outcome | Исходный owning exception/cancellation | Не оборачивать все exceptions в RuntimeError и не подменять доменным отсутствием |
+
+RuntimeError здесь — программная ошибка реализации, не типизированная бизнес-диагностика. Переход manual POJO ValueError к согласованным SourceFieldIssue/SourceLogicIssue/SourceFailure этим не закрывается. Не анализировать текст исключения для выбора code. Не использовать assert как единственную production проверку postcondition. Checks выполняют общие invariant owners, не новый validator с копиями правил. В error message не включать сырые bodies/request; исходную причину сохранять там, где операция действительно переводит известное нарушение своего результата в postcondition failure.
+
+Приёмочные сценарии: подменённый transform выдаёт invalid computed proof → RuntimeError и отсутствие result; invalid исходный persisted proof → исходные typed request diagnostics; плохой internal fact index → ValueError; infrastructure failure/cancellation проходят без изменения класса. Это concrete предложение Source transport, не уже принятый внешний error contract. До его приёмки прежний пункт programming-error transport остаётся proposal, а не неназванной задачей.
 
 | Граница | Результат / отказ | Что запрещено |
 |---|---|---|

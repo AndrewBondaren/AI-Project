@@ -51,6 +51,32 @@ def subject_section(suffix="A"):
 
 
 class ApplyPredicateTests(unittest.TestCase):
+    def test_native_constructor_cannot_bypass_required_transition_coverage(self):
+        native, _, _, base = native_and_reads()
+        entry = native.domain_evidence[0]
+        variants = {
+            "empty": (),
+            "partial": native.domain_evidence[1:],
+            "duplicate": (*native.domain_evidence, entry),
+            "extra": (*native.domain_evidence, entry.model_copy(update={"change_uid": "unrelated"})),
+            "change": (entry.model_copy(update={"change_uid": "unrelated"}), *native.domain_evidence[1:]),
+            "entity": (entry.model_copy(update={"effect": entry.effect.model_copy(update={
+                "entity": entry.effect.entity.model_copy(update={"entity_uid": "unrelated"})})}), *native.domain_evidence[1:]),
+            "effect": (entry.model_copy(update={"effect": entry.effect.model_copy(update={
+                "effect": "create" if entry.effect.effect != "create" else "end"})}), *native.domain_evidence[1:]),
+            "action": (entry.model_copy(update={"effect": entry.effect.model_copy(update={
+                "reason_action_uid": "unrelated"})}), *native.domain_evidence[1:]),
+        }
+        # Direct constructors, no model_construct; the semantic gate must run
+        # before any dependency on the caller's claimed source projection.
+        for name, evidence in variants.items():
+            with self.subTest(name=name):
+                malformed = type(native)(header=native.header.model_copy(update={"depends_on": ()}),
+                                         patches=native.patches, domain_evidence=evidence)
+                with self.assertRaisesRegex(ValueError, "domain_evidence"):
+                    MockLifecycleEvidenceValidator().validate(malformed, prepared_domain_sections=(),
+                        expected_world=base, operation_id="publish")
+
     def test_native_evidence_requires_all_matching_refs_in_source_order(self):
         pairs = [sections.prepared_and_coverage(LifecycleOperation.CREATE, "A", i) for i in range(2)]
         source = subject_section()

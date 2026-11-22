@@ -55,6 +55,13 @@ class CurrentPublicationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             replace(self.binding, record_model=OperationRecord[SnapshotApplyResult])
 
+    def test_encode_rejects_terminal_outside_replay_budgets(self):
+        for name in ("max_bytes", "max_nodes", "max_depth", "max_items"):
+            with self.subTest(budget=name):
+                binding = replace(self.binding, limits=replace(self.limits, **{name: 1}))
+                with self.assertRaises(PublicationInfrastructureError):
+                    StoredTerminalCodec(binding=binding).encode(self.result)
+
     def test_missing_nested_manifest_type_is_rejected_at_construction(self):
         schema = CanonicalSchemaManifest(entries=tuple(entry for entry in self.schema.entries
             if entry.python_type is not SnapshotApplyCode))

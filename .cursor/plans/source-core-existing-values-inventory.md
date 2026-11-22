@@ -50,4 +50,24 @@ sourceDescriptor: SourceDescriptorCategory, SourceDescriptorScope, SourceMemberK
 
 ## Остаток инвентаризации
 
+### Проектируемые Source POJO: размещение отдельно от actual
+
+Актуализация 2026-11-22: concrete local methods `registry_identity`, `batch_shape`, `revision_shape`, `refusal_shape` и общие predicates описаны в source-core-mutation-contract.md §3 «Собственные local POJO methods». Эта детализация заменяет прежние отметки ниже «имена validators не зафиксированы» для перечисленных моделей; runtime и приёмка не заявлены. SourceRevisionChanges остаётся отдельным internal value, не public POJO.
+
+Все пути ниже относительно `backend/app/dataModel/sourceVersioning/`; эти классы не объявляются существующими imports. Единственный источник exact полей и инвариантов — source-core-mutation-contract.md §§1, 4. Новые mirrors не создаются.
+
+| Файл / класс | Ответственность и поля | Методы / проверка границы |
+|---|---|---|
+| sourceRegistryMutation.py / SourceRegistryCreate | CREATE operand: kind, identity, body | Construction/локальная validation; не создаёт revision и не пишет body |
+| sourceRegistryMutation.py / SourceRegistryUpdate | UPDATE operand: kind, expected, body | Construction/локальная validation; expected остаётся precondition, не назначением seq |
+| sourceRegistryMutation.py / SourceRegistryDelete | DELETE operand: kind, expected | Construction/локальная validation; не physical prune и не снятие holds |
+| sourceRegistryMutation.py / SourceCollectionMutation | Membership operand: collection_id, expected_revision, body | Construction/локальная validation; None означает ожидаемое отсутствие revision, не missing artifact |
+| sourceRegistryMutation.py / SourceRegistryMutationInput | operation_id, world_uid, execution_version, changes, membership | Локальная validation immutable batch §1; нет storage/phase/commit; concrete имена validators ещё не зафиксированы |
+| sourceMutationOutcome.py / SourceMutationApplied | operation_id, world_uid, request_fingerprint, object_revisions, collection_revisions | Construction/shape validation; constructor не подтверждает commit; evidence обязан предъявить owning producer |
+| sourceMutationOutcome.py / SourceMutationRefused | operation_id, world_uid, request_fingerprint, failure | Construction/shape validation; terminal refusal не смешивается с preflight failure |
+
+SourceRegistryMutationKind — enum create/update/delete в sourceRegistryMutation.py; SourceRegistryChange — discriminated union существующих вариантов, не отдельный DTO-класс. Типы полей, strict/frozen правила и nullable обязательность см. owning §1/4; таблица не задаёт альтернативной schema.
+
+`SourceRevisionChanges` отдельно находится в проекте `backend/app/application/worldData/sourceVersioning/mutation/revisionChanges.py`: internal frozen value с object_revisions/collection_revisions, без public/persisted/terminal роли. Его placement нельзя незаметно переносить в dataModel или выдавать как SourceMutationApplied. Собственные validator methods и единые predicate owners будущих моделей ещё требуют детализации; названия методов не выдумываются как уже принятые.
+
 Это concrete список Source values, не завершение всей АР-6. Требуется отдельно сопоставить shared collaborators (ArtifactRef, FieldPathError, FieldRef/CheckedPath, aggregation, codec) с их owning контрактами и перечислить методы будущих исполнителей после АР-1…АР-5. Новые типы не созданы. Предлагаемые mutation outcomes/prepared values отсутствуют в фактическом inventory и не объявляются поставленными.

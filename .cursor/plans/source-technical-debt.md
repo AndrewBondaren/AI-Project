@@ -87,6 +87,8 @@ Snapshot/Artifacts-publication должны подтвердить exact reader/
 
 ## Границы записей
 
+Актуальная привязка каждого внешнего долга к классу Source и отделение собственной незавершённой работы — [матрица ответственности, §5](source-core-responsibility-matrix.md#5-выход-проверки), актуализация 2026-11-22. Request validation, pure algorithms, собственные revision/candidate/prune contracts, POJO predicates и configuration lifecycle не объявляются заблокированными целиком из-за X-READ/foreign writer. Исторические scoped/adoption упоминания в реестре не разрешают отозванный маршрут; текущий X-READ описан в source-closure-operands-2026-11-22.md.
+
 ### Lifecycle — условие уточнения, не активная интеграционная зависимость
 
 2026-11-17. Основание: [entity-lifecycle.md](entity-lifecycle.md) и [ТЗ Lifecycle](../../docs/tz_entity_lifecycle.md). В рассмотренных документах прямой согласованный контракт Source ↔ Lifecycle и потребность включать lifecycle-записи в Source proof не установлены. Эта запись не входит в перечень OPEN bindings выше, не блокирует ядро Source и не добавляет шаг реализации.

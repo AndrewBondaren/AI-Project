@@ -3,7 +3,7 @@
 This tests the shared validation barrier, not durable publication/rollback.
 """
 from unittest import IsolatedAsyncioTestCase
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from types import SimpleNamespace
 from app.application.patch.contracts.sectionHandler import SectionContract
 from app.application.patch.registry.sectionRegistry import SectionRegistry
@@ -85,6 +85,25 @@ def scenario(*, retry=False, false_effect=False, lifecycle_first=False, guard_ap
 
 
 class SnapshotValidationTests(IsolatedAsyncioTestCase):
+    async def test_missing_native_coverage_blocks_validate_and_append_even_on_equal_retry(self):
+        for retry in (False, True):
+            with self.subTest(retry=retry):
+                service, request, scope, native, _, lifecycle = scenario(retry=retry, guard_apply=False)
+                malformed = type(native)(header=native.header.model_copy(update={"depends_on": ()}),
+                                         patches=native.patches, domain_evidence=())
+                request = type(request)(**{**dict(request), "sections": (request.sections[0], malformed)})
+                validation = service._contexts.build(request, scope=scope.read_scope, resolved_dependencies=())
+                target = WorldSnapshotRef(world_uid=request.world_uid, timeline_id=request.timeline_id, snapshot_id="assigned")
+                context = SnapshotApplyContext(validation=validation, world_snapshot=target, player_snapshots=(),
+                    scope=scope, next_publication=request.expected_world.model_copy(update={
+                        "publication_id": "assigned-publication", "snapshot_head": target}))
+                with patch.object(lifecycle._writer_binding, "append", new_callable=AsyncMock) as append:
+                    with self.assertRaisesRegex(ValueError, "domain_evidence"):
+                        await lifecycle.validate(malformed, validation)
+                    with self.assertRaisesRegex(ValueError, "domain_evidence"):
+                        await lifecycle.apply(malformed, context)
+                    append.assert_not_awaited()
+
     async def test_handler_apply_maps_assigned_refs_and_noop_receipt(self):
         service, request, scope, native, subject, lifecycle = scenario(guard_apply=False)
         validation = await service._validate_sections(request, scope=scope.read_scope,

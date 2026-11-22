@@ -52,6 +52,10 @@ class StoredTerminalCodec[R: SnapshotApplyResult]:
             raise TypeError("terminal must be a typed record")
         outcome = type(outcome).model_validate(outcome, strict=True)
         data = encode(outcome, self._manifest)
+        try:
+            decode_bounded(data, type(outcome), self._manifest, limits=self._binding.limits)
+        except CanonicalEncodingError as exc:
+            raise PublicationInfrastructureError("terminal cannot be replayed within decode budgets") from exc
         if isinstance(outcome, SnapshotApplyResult):
             tag, category = OperationKind.SNAPSHOT_APPLY.value, outcome.category.value
         elif isinstance(outcome, PackActivationResult):

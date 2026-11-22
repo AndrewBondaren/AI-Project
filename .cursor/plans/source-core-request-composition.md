@@ -77,7 +77,7 @@ Operation фиксирована классом: ADMIT, READ, ADMIT_GROUPS, VERI
 2026-11-16: пользователь выбрал **вариант 1 — immutable facts и diagnostics**, затем подтвердил оба ограничения ответственности. Это второй выбор (форма результата), не отмена ранее выбранного подхода «typed traversal по ветвям».
 
 1. Функции обхода только извлекают известные поля/элементы и проверяют structural пригодность. Они **не вызывают semantic checkers**, не назначают SourceOperation и не формируют итоговый SourceFailure.
-2. Request checker использует общие функции обхода, **не реализует этот обход повторно**. Его ответственность — порядок semantic checks, сбор независимых diagnostics и итоговый SourceFailure с фиксированной operation либо None.
+2. Request checker использует общие функции обхода, **не реализует этот обход повторно**. Его ответственность — порядок semantic checks, сбор независимых diagnostics и итоговый SourceFailure с фиксированной operation либо три typed origins maps по §1.
 
 Результат функции — конкретные immutable tuples пригодных facts и существующих diagnostics. Каждый fact сохраняет исходные indices и typed path; повреждённая ветвь не заменяется исправленным POJO или пустым контейнером. Например, при повреждённом objects[0] пригодный objects[1] возвращается с индексом 1, а issue — по пути элемента 0. Не вводятся universal context, mutable accumulator во внешнем интерфейсе, callbacks, ленивый поток событий либо новый публичный DTO. Вызов возвращает все доступные structural diagnostics своей ветви, не требует дочитывания iterator.
 
