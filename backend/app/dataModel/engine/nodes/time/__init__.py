@@ -1,0 +1,1 @@
+"""Time node contracts."""

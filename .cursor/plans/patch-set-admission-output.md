@@ -1,5 +1,11 @@
 # PatchSet admission: owning Output для Snapshot
 
+## BUG-ENUM-01 — owning fix, 2026-11-25
+
+`admissionReasons.py::_CompatibilityFact.reject_foreign_code_enum` отвергает исходный чужой Enum до нормализации Literal. Четыре concrete facts сохраняют Literal[PatchSetAdmissionCode.member], discriminator, JSON values и direct reuse Snapshot. Проверяется также подмена через model_copy при повторной валидации. `_Versions.json_versions_tuple` сохраняет JSON array→tuple после model-before materialization; Python list и нестрогие элементы не допускаются. Новых diagnostics/DTO, IO и изменений порядка DAG нет.
+
+26 targeted tests PASS на Pydantic 2.13.4 и отдельно 2.14.2: `tests.snapshotCore.contracts.test_patch_admission`, `tests.snapshotCore.contracts.test_snapshot_admission`, `tests.errorContracts.test_tagged_paths`. Покрыты constructor, tagged union, forged-instance revalidation, exact enum identity, JSON round-trip и invalid versions. Исправление готово со стороны PatchSet; итоговую consumer-приёмку фиксирует Snapshot. Координаторы уведомлены; общий public apply этим не принимается.
+
 ## Actual producer readiness — 2026-11-24
 
 Реализованы validate_configuration/__post_init__/validate_request и encode reuse в PatchSetCodec; SectionRegistry.section_models и admission_issues(section, *, section_index); closed admissionReasons, PatchSetAdmissionError, PatchSetValidationClassificationError; root classifier и PatchSetCoreInvariantError с исходными facts. Нормативная internal→public дельта синхронизирована в tz_patch_system.md и docstring. Configuration использует named exact models и registered subset: старые consumers с непосредственным PatchSet[S] должны перейти на named specialization. Snapshot/Publication и shared CheckedPath не менялись.

@@ -1,5 +1,7 @@
 """Admission stays pure and preserves exact owning facts before encoding."""
 import unittest
+import json
+from enum import StrEnum
 from unittest.mock import patch
 from typing import Annotated
 from pydantic import Field, TypeAdapter
@@ -42,13 +44,32 @@ class AdmissionTests(unittest.TestCase):
         )
         for model, code, fields in cases:
             with self.subTest(code=code):
+                foreign = StrEnum("ForeignAdmissionCode", {"SAME_VALUE": code.value}).SAME_VALUE
+                self.assertEqual(foreign, code)
+                with self.assertRaises(ValidationError):
+                    model(code=foreign, **fields)
+                with self.assertRaises(ValidationError):
+                    adapter.validate_python(dict(code=foreign, **fields), strict=True)
                 fact = model(code=code, **fields)
+                forged = fact.model_copy(update={"code": foreign})
+                with self.assertRaises(ValidationError):
+                    model.model_validate(forged, strict=True)
+                with self.assertRaises(ValidationError):
+                    adapter.validate_python(forged, strict=True)
                 self.assertIs(fact.code, code)
+                self.assertEqual(adapter.validate_python(fact, strict=True), fact)
                 self.assertEqual(fact.model_dump(mode="json")["code"], code.value)
                 restored = adapter.validate_json(fact.model_dump_json(), strict=True)
                 self.assertIs(type(restored), model)
                 self.assertIs(restored.code, code)
                 self.assertEqual(restored, fact)
+                if "supported_versions" in fields:
+                    with self.assertRaises(ValidationError):
+                        model.model_validate(dict(code=code, **(fields | {"supported_versions": [1]})))
+                    for invalid in ([], [1, 1], [2, 1], [True], ["1"]):
+                        payload = fact.model_dump(mode="json") | {"supported_versions": invalid}
+                        with self.subTest(supported_versions=invalid), self.assertRaises(ValidationError):
+                            adapter.validate_json(json.dumps(payload), strict=True)
                 with self.assertRaises(ValidationError):
                     model(code="patch_set.admission.unknown", **fields)
 

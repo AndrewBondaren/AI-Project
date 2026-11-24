@@ -22,6 +22,24 @@ Fingerprint включает весь canonical request, в том числе ex
 
 ## 2. Pure revision rule
 
+### Единственный владелец arithmetic — проект 2026-11-25
+
+Модуль `backend/app/application/worldData/sourceVersioning/revision/revisionRule.py` содержит одну pure функцию, не отдельный service-класс:
+
+```python
+def next_revision(
+    previous: SourceRevision | None, *, semantic_hash: RevisionHex,
+) -> SourceRevision: ...
+```
+
+Это единственное место правила: None → seq=1; equal semantic hash → previous; changed hash → seq+1. Функция получает structurally допустимые existing values, не world/body/status/authority и не IO. SourceRevisionTransitionBuilder.build делегирует ей; SourceRevisionBatchBuilder использует builder, не повторяет arithmetic. Internal transition __post_init__ вызывает ту же функцию и сравнивает результат с предъявленным next.source.revision. Identity/mapping constraints остаются у transition validation; их revision rule не проверяет.
+
+DELETE отдельно требует changed semantic state: tombstone hash не может означать unchanged live state. После проверки этого предусловия ожидаемая tombstone revision получается той же next_revision, не второй формулой seq+1. Если tombstone encoding дал live hash, это postcondition/encoding failure, а не разрешение сохранить прежнюю revision. Builder не принимает флаг delete и не выбирает semantic policy.
+
+Модуль application, как и internal transitions; существующий dataModel.SourceRevision ничего из него не импортирует и проверяет только форму seq/hash. Predicate owners в dataModel не вызывают builder. Таким образом arithmetic не переносится в POJO и не образует import cycle.
+
+Проверки единственности: initial, unchanged (возвращается прежнее значение), A→B→A; ошибочный предъявленный transition отклоняется сравнением с общим правилом; DELETE с unchanged hash отвергается до append; отсутствуют собственные seq/hash ветвления в batch builder и дублирующие arithmetic formulas в validators. Это конкретизация architecture, не уже поставленный код или independent PASS.
+
 Переиспользуется existing SourceRevision(seq, content_hash), новые revision DTO не нужны. Кандидат `revision/revisionTransitionBuilder.py`:
 
 ```python
@@ -314,7 +332,7 @@ Serialization requirement принадлежит Source семантически
 
 Критерии завершения АР-2: exact state-admission class/input/result/error; concrete appender/runner/resolver contracts; подтверждённые foreign методы вместо описания роли; доказательство serialization admission→append с gameplay transition; failure trace каждой стадии; replay без повторной arithmetic; отсутствие прямого Source→foreign domain call. Проверки race: expected state изменилось после admission; gameplay стартовал до append; append прошёл, commit outcome unknown. Ни один из этих случаев не может дать ложный Applied. Этот trace конкретизирует оставшуюся композицию, но P2 не закрывается до получения перечисленных контрактов.
 
-Разделить функции: SourceMutationOutcomeResolver читает authoritative terminal/binding и классифицирует исход; отдельный approved attempt runner исполняет разрешённую попытку. Resolver не вызывает mutation сам и не делает takeover по одному отсутствию terminal. Recovery state machine/claims/fences принадлежит существующей publication инфраструктуре, не дублируется Source.
+Разделить функции: SourceMutationOutcomeResolver сопоставляет уже предъявленный authoritative terminal с request binding; сам ledger не читает. Отдельный approved attempt runner исполняет разрешённую локальную попытку. Resolver не вызывает mutation и не делает takeover по отсутствию terminal. Recovery state machine/claims/fences принадлежит существующей publication инфраструктуре, не дублируется Source. Актуальная композиция — §9; прежние формулировки о чтении ledger самим resolver отозваны.
 
 1. Проверить operation id и immutable request fingerprint.
 2. При committed terminal вернуть сохранённый outcome; executor прежней версии для replay не нужен.
@@ -395,3 +413,53 @@ Internal PreflightRejected переводится в public SourceFailure тол
 Внешние долги: INT-WRITER (Snapshot authored-write/borrowed scope), INT-ARTIFACTS (terminal/holds/root/finalization), INT-TERRAIN (body/projector evidence), INT-DAG (маршрут). Они не мешают принять независимые Source value/algorithm границы, но запрещают выдавать runtime mutation за готовую.
 
 Приёмочные сценарии будущего среза: CREATE/UPDATE/DELETE, A→B→A, unchanged hash с другим body, stale membership, same operation/different request, confirmed rollback, unknown commit и unknown rollback, replay после изменения latest, несовместимый execution_version, сохранение всех независимых diagnostics. Здесь tests не выполнялись, код не изменён, независимая приёмка не заявлена.
+
+## 9. Единая композиция mutation — актуальный проект 2026-11-25
+
+Этот раздел сводит §1–8; не вводит новую попытку или самостоятельную междоменную оркестрацию. Immutable request один, operation_id/fingerprint/execution_version не заменяются между стадиями. Read/write/terminal capabilities — EXTERNAL / DEFERRED. Собственные обязанности ниже не ждут выбора foreign API, но не считаются уже реализованными.
+
+### 9.1. Граница владельцев и данных
+
+| Исполнитель / файл под application/worldData/sourceVersioning | Единственная функция | Собственные входы → выход | Не делает |
+|---|---|---|---|
+| SourceRegistryMutationRequestChecker / mutation/validation/registryMutationRequestChecker.py | check: проверить исходный request | SourceRegistryMutationInput → SourceFailure или None; §6 | Не читает state, не назначает revisions |
+| SourceMutationStateChecker / mutation/validation/mutationStateChecker.py | check: допустить действия относительно exact observation | Request + live/tombstones/absent/pruned_expected/collection_current → SourceFailure или None; §7 | Не получает state сам, не подтверждает phase |
+| SourceRevisionBatchBuilder / mutation/revisionBatchBuilder.py | build: применить одно revision rule | Checked operand triples → SourceRevisionChanges; §3 | Не вычисляет hashes, не проверяет permission |
+| SourceRevisionTransitionBuilder / revision/revisionTransitionBuilder.py | build: построить одну revision | previous + semantic_hash → SourceRevision через next_revision; §2 | Не дублирует arithmetic в batch/validators |
+| Internal transition records / revision/revisionTransitions.py | __post_init__: локальная целостность expected→next | Existing refs/mappings → immutable transition; §7 | Не создают holds и не удостоверяют commit |
+| SourceRevisionAppender / revision/revisionAppender.py | append: один atomic Source history/latest batch | objects/collections transitions + permitted write binding → provisional SourceRevisionChanges | Не выбирает semantic policy, не commit owner |
+| SourceMutationAttemptRunner / mutation/mutationAttemptRunner.py | run: одна фиксированная локальная последовательность разрешённой попытки | Checked request, согласованная state observation, semantic evidence, exact mappings и permitted execution binding → provisional changes либо отказ попытки | Не reader/projector чужого домена; не выдаёт terminal; не запускает recovery |
+| SourceMutationOutcomeResolver / mutation/mutationOutcomeResolver.py | resolve: проверить корреляцию предъявленного подтверждённого Source terminal | Request + canonical request fingerprint + SourceMutationApplied/Refused → тот же exact terminal | Не читает ledger, не превращает отсутствие terminal в разрешение исполнения |
+
+Constructor graph собственных collaborators: runner использует request checker, state checker, batch builder и appender; batch builder использует revision builder; revision builder использует next_revision. Resolver stateless (`__init__(self) -> None`), без reader dependency. Request validation выполняется ровно один раз на invocation: если caller уже выполнил её до получения execution binding, runner не создаёт второй публичный вызов и не переписывает diagnostic algorithm. Конкретная точка вызова фиксируется при final execution binding, а не выбирается caller-флагом skip_validation.
+
+Exact pure resolver proposal:
+
+```python
+def resolve(
+    self, request: SourceRegistryMutationInput, *,
+    request_fingerprint: RevisionHex,
+    terminal: SourceMutationApplied | SourceMutationRefused,
+) -> SourceMutationApplied | SourceMutationRefused: ...
+```
+
+Проверяет operation_id/world_uid/request_fingerprint; для Applied также exact touched identities и collection identity относительно request, без сверки с текущим latest. request_fingerprint вычислен единственным canonical request encoder, не caller assertion публичного API. При совпадении возвращает предъявленный terminal без reconstruction/пересчёта revisions. Несовпадение здесь после owning admission означает internal correlation failure; исходный ledger binding mismatch не маскируется — его owning typed отказ возникает на интеграционной границе. Publication unknown, absence и OperationCancelled не преобразуются в Source Applied/Refused: owning boundary сохраняет их отдельный transport. Cancellation replay с проверенным request binding не требует вызова этого Source terminal resolver.
+
+### 9.2. Порядок одной попытки и точка остановки
+
+1. **Request:** check и все независимые diagnostics до dependent work. При failure никаких transition/append; это preflight, не persisted refusal.
+2. **Admission:** внешний путь предъявляет согласованную observation/phase authority; state checker проверяет Source expected/live/tombstone/membership. Отсутствие observation не считается absent. Отказ прекращает dependent calculation.
+3. **Evidence:** owning semantic evidence и mappings уже получены через разрешённый маршрут; Source сопоставляет их full identities/execution_version/request. Runner не запускает foreign projector. DELETE использует Source tombstone encoding.
+4. **Calculation:** batch builder выдаёт refs. Runner формирует соответствующие internal transitions из request/observation/mappings; это упаковка одной локальной попытки, не второй revision algorithm. Unchanged UPDATE сохраняет исторический mapping, не candidate body; DELETE не содержит live body.
+5. **Append:** appender повторно защищает expected/current в permitted atomic boundary и пишет весь batch. Положительный admission вне этой boundary не заменяет guard. Расхождение touched sets и mappings запрещает запись. Результат остаётся provisional.
+6. **Publication/terminal:** завершение принадлежит внешнему commit owner по согласованному маршруту. Source runner не вызывает Publication/Snapshot pipeline и не пишет terminal в свой store. Только confirmed owning outcome поступает в resolver; unknown/cancellation сохраняются как отдельные исходы.
+
+Обнаружение terminal для replay происходит до новой попытки; replay не выполняет пункты 2–5 и не зависит от latest. Recovery без terminal требует owning grant; этот документ не назначает новую recovery state machine. Внутренний run не выбирает apply/recover/publish ветвь публичного workflow.
+
+### 9.3. Отказы, критерии и предел готовности
+
+До writes SourceFailure останавливает попытку; после начала writes отказ нельзя вернуть как обычный preflight до подтверждённого owning rollback. Appender не завершает transaction самостоятельно. Unknown commit/rollback не даёт права повторно append или освобождать holds. При replay exact terminal не прогоняется через state admission. Same next rows не доказывают идемпотентность operation: нужен exact immutable request binding.
+
+Проверки composition: malformed request блокирует state/calculation/append; stale state блокирует builder; неверная correlation evidence блокирует append; одна identity отсутствует в transitions — ноль writes; stale race/gameplay start между admission и append отвергается owning guard; partial write failure не возвращает успех; append success без confirmed commit не создаёт Applied; resolver не читает latest и возвращает exact terminal. Все stages имеют request-local данные, без shared mutable diagnostics. Ноль прямых foreign domain calls в Source collaborators.
+
+**Готово как собственный проект:** роли и размещение, typed request/state/arithmetic/transitions, pure terminal correlation, последовательность и failure boundaries. **Не закрыто:** exact permitted execution/write binding и terminal admission transport, общий error transport дельт и архитектурная приёмка. Не называть эти ограничения отсутствием собственного trace, но и не выдавать таблицу за executable signature appender/run. Старые scoped applier с provisional Applied и resolver с ledger IO не являются альтернативными реализациями.

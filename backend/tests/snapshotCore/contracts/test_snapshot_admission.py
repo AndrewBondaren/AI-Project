@@ -109,6 +109,21 @@ class SnapshotAdmissionTests(unittest.TestCase):
             (4, PatchSetAdmissionCode.SECTION_VERSION_UNSUPPORTED, "patch_set.admission.section_version_unsupported"),
         )
         foreign_codes = StrEnum("ForeignAdmissionCode", {code.name: wire_code for _, code, wire_code in expected_codes})
+        for index in (3, 4):
+            for versions in ([], [1], (True,), ("1",), (1, 1), (2, 1), ()):
+                with self.subTest(index=index, python_versions=versions), self.assertRaises(ValidationError):
+                    SnapshotPublicFault.model_validate(fault.model_copy(update={"input_issues": (
+                        reasons[index].model_copy(update={"supported_versions": versions}),)}))
+            for versions in ([True], ["1"], [1, 1], [2, 1], [], "1", 1):
+                bad_wire = {**wire, "input_issues": [
+                    {**wire["input_issues"][index], "supported_versions": versions}]}
+                with self.subTest(index=index, json_versions=versions), self.assertRaises(ValidationError):
+                    SnapshotPublicFault.model_validate_json(json.dumps(bad_wire))
+            for actual in (True, "2"):
+                bad_wire = {**wire, "input_issues": [
+                    {**wire["input_issues"][index], "actual_version": actual}]}
+                with self.subTest(index=index, actual=actual), self.assertRaises(ValidationError):
+                    SnapshotPublicFault.model_validate_json(json.dumps(bad_wire))
         for index, code, wire_code in expected_codes:
             with self.subTest(code=code):
                 for result in (fault, python_restored, restored):

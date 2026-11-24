@@ -1,5 +1,17 @@
 # Переход Pack на публичные staging и completion
 
+## Новое разрешение пользователя и разграничение поставки — 2026-11-25
+
+**Owning зависимости проверены:** Pack подтвердил отсутствие нового Pack IO/Error prerequisite generic prepare/stage при отсутствии Pack specialization registration, изменений manifest_format и consumer cutover. Publication подтвердил: новый public writable issuer нужен маршруту получения lease, не реализации stage с уже выданным lease. Existing issuance с persisted authority допустима для positive tests; closed lease обязан получить отказ stage без reopen. Closed/stale/foreign negatives обязательны. Оба ответа — PASS разграничению core/route, не приёмка runtime; standalone/composition/persisted-first/Error obligations остаются у Artifacts. Таким образом concrete Pack endpoints и public issuer не являются текущими внешними blockers разрешённого generic implementation-среза.
+
+Пользователь прямо поручил Artifacts реализовать ядро/публичные методы. Основной координатор подтвердил PASS разграничению implementation scope: независимый owning срез prepare_stage(ArtifactPrepareStageInput[C]) → PreparedArtifact[C] и stage(ArtifactStageInput[C]) → ArtifactRef с exact declared errors разрешён этим поручением. Повторное разрешение не требуется. Полный foreign producer → nodes → consumer маршрут не blanket prerequisite реализации этого среза. Это приоритетное уточнение прежнего запрета ниже только в названных пределах.
+
+Реализация owning core, приёмка публичного контракта и приёмка node route — отдельные статусы. Разграничение не является PASS реализации ядра или полного ARCH-STAGE, не отменяет гарантий методов и не разрешает несогласованные междоменные POJO. Domain storage/codec/error internals и их implementation-план принадлежат Artifacts, не DAG-координатору.
+
+Остаются отдельно OPEN: concrete Pack specialization, foreign producer/consumer cutover, node wrappers/registration/activation и сквозная приёмка. Generator/gameplay и scoped Snapshot handoff OUT этого разрешения. Generic C не доказывает конкретный format binding; явно названные concrete test fixtures допустимы без выдачи их за принятую Pack specialization.
+
+Stage authority/lifetime доказывается real lawful lease infrastructure, не fake authority. Если действительно отсутствует exact issuer Input → OperationLeaseRef/declared refusal boundary, Artifacts предъявляет конкретный незамкнутый вход stage; этот вопрос не блокирует independent prepare_stage и прочую работу без такой зависимости. Новые producer/issuer APIs не назначаются автоматически ради generic core.
+
 ## Приоритетная граница пользовательского задания — 2026-11-24
 
 Пользователь: «Пока маршрут не закрыт, я не даю добро», затем поручил замкнуть маршрут с явным исключением генератора и gameplay. Текущая работа — контрактная сверка полного маршрута в границах плана; локальный PASS не означает разрешение зависимой реализации/активации. Прежние положения о независимых работах не заменяют это решение для незакрытого маршрута.

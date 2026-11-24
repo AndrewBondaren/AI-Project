@@ -9,6 +9,7 @@ from app.dataModel.patch.sections.section import DomainSection
 from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
 from tests.lifecycle.support.mixedContracts import RefA, RefB, EffectA, EffectB
+from app.dataModel.patch.sections.dependency import PreparedSectionDependency
 
 
 class MockSubjectCode(StrEnum):
@@ -88,3 +89,29 @@ class MockSubjectCaptureB(BaseModel):
     model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
     publication: WorldPublicationRef
     observations: tuple[MockSubjectObservationB, ...]
+
+
+class MockEffectLinkA(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
+    change_uid: EntityUid
+    effect: EffectA
+
+
+class MockEffectLinkB(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
+    change_uid: EntityUid
+    effect: EffectB
+
+
+class BuildMockEvidenceA(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
+    section: TestDomainSectionA
+    dependency: PreparedSectionDependency
+    links: tuple[MockEffectLinkA, ...] = Field(min_length=1)
+
+
+class BuildMockEvidenceB(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
+    section: TestDomainSectionB
+    dependency: PreparedSectionDependency
+    links: tuple[MockEffectLinkB, ...] = Field(min_length=1)
