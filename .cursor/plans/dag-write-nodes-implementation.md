@@ -1,5 +1,37 @@
 # Реализация нод записи: Time, настройки Time, Lifecycle
 
+Concrete node cards и поимённые POJO/связи: [контракты нод записи](dag-write-node-pojo-contracts.md). Первое предъявленное ребро — assemble_patch_set → apply_snapshot в mock_lifecycle_world; новые bindings явно PROPOSED.
+
+## Приоритет работы координатора — решение пользователя 2026-11-24
+
+**Последнее уточнение пользователя, приоритет над прежним широким scope сверок:** ответственность DAG — связывание конкретных POJO входов и выходов нод и согласованная оркестрация этих CALL. Внутреннее устройство доменов, их helpers/storage/transaction/codec и внутренние межкомпонентные контракты не входят в работу DAG-координатора. Владельцы сами отвечают за выполнение своего публичного метода. Координатор запрашивает exact public Input/Output/Error, гарантии метода и статус их готовности, но не проектирует и не принимает внутреннюю реализацию. Старые записи об отдельных внутренних ревью — история, не расширение текущей ответственности.
+
+На каждом ребре проверяются concrete producer Output → concrete consumer Input, mapping полей, сохранение типов/значений/identity по контракту, correlation и передача всех исходов. Если POJO несовместимы, владелец предъявляет публичную контрактную дельту; DAG не компенсирует её доменными вычислениями. Неготовность публичной операции отмечается как статус target соответствующей ноды, без переноса внутреннего backlog домена в план DAG.
+
+Единица работы и отчёта — конкретная нода и её входящий/исходящий контракт. Для каждой ноды фиксируются: имя/NodeId и статус регистрации; семейство/роль; exact named Input с полями и источником каждого поля; exact Output/Error со всеми исходами; публичный owning метод для leaf либо CALL-контракты детей для orchestrator; Output→Input mapping следующего потребителя; конкретный остаток, владелец, evidence. Неназванные wrappers остаются OPEN, не заменяются догадкой или Any.
+
+Статусы вести раздельно: контракт принят; public method реализован; node реализована; binding зарегистрирован; проверки выполнены. Прогресс домена не равен готовности ноды. Локальный PASS не равен закрытому маршруту. Пока маршрут не предъявлен целиком в своём scope, пользователь не дал добро на зависимую реализацию/активацию; текущая работа — фиксация и замыкание границ.
+
+Вход верхнего процесса — готовые typed inputs. Генератор/gameplay и их реализация OUT: новые задания, API и ноды им в рамках этого плана не выдаются. Внутренние доменные методы/transaction/retention helpers не становятся DAG-нодами или их Input-полями. Зависимость домена фиксируется только в привязке к невозможности выполнить конкретный заявленный Output/Error; owner закрывает её в своём плане. Самостоятельные новые domain workstreams из такой зависимости не выводятся.
+
+### Текущая карточка: apply_snapshot
+
+| Поле | Зафиксированная граница |
+|---|---|
+| Роль | Самостоятельный operation leaf семейства Snapshot; одна публичная операция |
+| Вход | Проектный ApplySnapshotInput[S].patch_set:PatchSet[S]; named concrete specialization/registration freeze отдельно OPEN |
+| Публичный вызов | await IWorldSnapshotApply[S,T].apply(input.patch_set) → T |
+| Выход | Проектный ApplySnapshotOutput[T].value:T; concrete T задаётся принятой composition, не универсальный union всех доменов |
+| Входящий producer | Успешный output assemble_patch_set; write_changes переносит exact PatchSet в input.patch_set |
+| Исходящий consumer | write_changes возвращает concrete owning результат caller; нода не превращает receipt в committed |
+| Отказы/faults | Business outcomes внутри T; SnapshotPublicError, durable SnapshotOperationCancelledError, invocation cancellation/unknown сохраняются раздельно. Exact engine Error mapping OPEN; новый carrier по предположению не создаётся |
+| Нельзя помещать в ноду | Claim/transaction/handler dispatch, receipt checks, назначение refs, metadata/CAS, удержания/handoff, rollback/replay |
+| Остаток public target | Полный apply ещё должен обеспечивать заявленные outcome/atomic guarantees; принятый admission→claim не равен полному apply |
+| Адресная внутренняя зависимость target | Snapshot/Artifacts уточняют scoped held-refs/handoff в owning планах. Это не новая нода, не новый Input и не требование генератора/gameplay |
+| Остаток DAG | Concrete Input/Output/NodeContract/NodeId binding и lossless Error mapping, затем проверка одного public call и передачи результата |
+
+Эта карточка фиксирует текущую известную границу, не объявляет OPEN bindings согласованными. Следующий результат координатора — точные node-contract дельты этой карточки и связь assemble output → apply input, а не разбор внутренних алгоритмов Snapshot.
+
 2026-11-21. Составлен по поручению пользователя «Делай план». Статус: план поставки с явными контрактными gates, не общая приёмка новых нод и не начало изменений кода. Отдельные разрешения реализации владельцам не отменяются. Выполненных шагов этим документом не заявлено.
 
 ## 1. Результат и границы

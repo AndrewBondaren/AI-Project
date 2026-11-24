@@ -277,7 +277,7 @@ from tests.snapshotCore.support.fakeSection import FakeAssemblyInput, FakePatchS
 
 def invalid_assembly(parent: PatchSetData[FakeSection],
                      foreign: PatchSetAssemblyInput[DomainSection[HeaderOnlyPatch]]) -> None:
-    assembler = PatchSetAssembler[FakeSection](FakeAssemblyInput, FakePatchSet)
+    assembler = PatchSetAssembler[FakeAssemblyInput, FakePatchSet](FakeAssemblyInput, FakePatchSet)
     assembler.assemble(parent)  # EXPECT: reportArgumentType
     assembler.assemble(foreign)  # EXPECT: reportArgumentType
-    PatchSetAssembler[FakeSection](FakeAssemblyInput, PatchSet[DomainSection[HeaderOnlyPatch]])  # EXPECT: reportArgumentType
+    PatchSetAssembler[FakeAssemblyInput, FakePatchSet](FakeAssemblyInput, PatchSet[DomainSection[HeaderOnlyPatch]])  # EXPECT: reportArgumentType

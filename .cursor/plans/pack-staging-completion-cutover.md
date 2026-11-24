@@ -1,5 +1,52 @@
 # Переход Pack на публичные staging и completion
 
+## Приоритетная граница пользовательского задания — 2026-11-24
+
+Пользователь: «Пока маршрут не закрыт, я не даю добро», затем поручил замкнуть маршрут с явным исключением генератора и gameplay. Текущая работа — контрактная сверка полного маршрута в границах плана; локальный PASS не означает разрешение зависимой реализации/активации. Прежние положения о независимых работах не заменяют это решение для незакрытого маршрута.
+
+Генераторы, gameplay, их алгоритмы, подготовка входов верхнего процесса и production rollout — EXTERNAL / OUT. В рамках этого плана их реализация, новые APIs/ноды и интеграционные задания не выдаются. На входе рассматриваются готовые типизированные данные; синтетический caller проверяет точную входную границу, но не изображает реализованный генератор/gameplay. Отсутствие этих внешних реализаций не критерий отказа в приёмке данного маршрута.
+
+Внутренние обязанности нельзя выносить в OUT: concrete content/format binding, owning validation, lawful lease issuer и его ошибки, exact Output→Input, сохранение identity и гарантии stage должны быть названы. Внешний caller предоставляет declared identity/context; право записи подтверждает owning инфраструктура, не произвольный fixture token. Для каждого незакрытого пункта фиксируются owner, exact deliverable и связь с шагом маршрута. Если решение выходит за утверждённый scope, оно отмечается внешней зависимостью без задания на реализацию в этом плане.
+
+Отдельно вести scoped handoff Snapshot.apply: он не замыкается PASS standalone staging. Запрос Snapshot→Artifacts должен содержать existing method/signature либо exact недостающую дельту, scope/holders/ref sets, rollback/unknown и отсутствие собственного commit; полный Pack completion или верхний gameplay flow к этому запросу не добавляются.
+
+## Узкая координаторская сверка ARCH-STAGE — 2026-11-24
+
+### Единая карта контрактного закрытия: standalone route
+
+Все IN ниже — обязанности контрактной поставки, не разрешение запускать зависимую реализацию. Candidate specialization не принимается от наличия этой таблицы.
+
+| Шаг | Scope / владелец | Точная граница и адресный deliverable |
+|---|---|---|
+| Получение верхних данных | EXTERNAL OUT: генератор/gameplay/caller | Вход рассматривается готовым typed request/context. Не проектировать их алгоритмы/APIs/ноды и не выдавать им задачи |
+| Подготовка manifest material | IN: Pack | Candidate PackManifestPreparationOpenPipeline.prepare_material(PackPreparationInput) → PackManifestMaterial.content:bytes. Зафиксировать accepted producer fields/error и semantic checks; готовые inputs не заменяют owning validation |
+| Связь content с format | IN: Pack + Artifacts composition | Existing manifest_format, world_pack.manifest.json/BLOB/storage v1 — candidate. Pack предъявляет consumer-safe перенос semantic decode/checks из storage callback в свои producer/consumer; Artifacts фиксирует concrete C/budget/version binding без выбора по payload |
+| Выдача staging lease | IN: Publication/Artifacts lifecycle, identity/context supplied caller | Existing open_operation(oid,world,kind,preparation_fingerprint) → OperationLeaseRef — кандидат, не accepted writable issuer. Предъявить authoritative immutable binding/fence, PREPARING/open issuance и точные Errors/repeat semantics. Не заменять fixture token или claim_publication |
+| Prepare | IN: существующая согласованная роль DAG + Artifacts | ArtifactPrepareStageInput[bytes].content → prepare_stage → PreparedArtifact[bytes]. Сохранение того же content instance; pure/no IO. Новых node IDs/порядка не назначать |
+| Stage | IN: существующая согласованная роль DAG + Artifacts | ArtifactStageInput(lease,prepared) → stage → ArtifactRef. Same in-memory content/prepared identity через реальные wrappers/registration; standalone fenced write/seal, не READY. Target storage/error п3 принят отдельно |
+| Admission staged manifest | IN: Pack | PackStagedManifestInput(material,lease,artifact:ArtifactRef) → admit_staged → PackStagedManifest. Candidate public endpoints требуют owning принятия; exact descriptor/material checks, без заявления live holds/READY |
+| Completion/публикация и верхний rollout | Отдельный согласуемый маршрут; вне данной standalone поставки | Не выдавать staged result за готовый candidate. Existing completion контракт не расширять задачами генератора/gameplay; ссылки на external dependencies не являются разрешением реализации |
+
+Остатки standalone строки: принятие concrete producer/consumer и format semantic cutover; exact writable issuer/Errors; Artifacts выбранный POJO/error closure (ответственность Artifacts); фактическая in-memory registration/identity спецификация. Нормативное и runtime состояния различать; локальный PASS п3 не замыкает эту строку.
+
+### Отдельная scoped цепочка Snapshot handoff
+
+Scope IN — подключение authority lookup и existing handoff внутри принятой Snapshot attempt; верхняя генерация/gameplay и production inputs EXTERNAL OUT. Artifacts предъявил [read_operation_held](artifacts-scoped-held-refs-contract.md), Publication поддержал internal boundary без расширения своего API, Snapshot дал документальный consumer PASS.
+
+Точный consumer placement: внутри yield _apply_to_target после всех handler.apply/immediate receipt checks → однократный build envelopes → append всех этих metadata → read_operation_held(context.scope,owner.lease) → intersection returned held refs с union retention_closure **тех же envelopes**, сохраняя порядок held → existing handoff → world CAS → player CAS → terminal → outer commit. Snapshot делает результат одного build доступным closure calculation и не принимает supplied transferred как full-apply authority. Existing private subset helper не объявляется полной public policy.
+
+Artifacts: полный проверенный unique active set в той же UOW, registry scope operation accessor, immutable lease/current fence/APPLYING/closed/drained, persisted-first/corruption/orphan/seal checks, no mutations/no own commit. Lookup fault откатывает appended metadata/domain writes через outer owner; handoff/CAS не вызываются. Existing handoff сохраняет собственные checks и subset semantics; scoped lookup не заменяет их и не становится переносимым permit. Standalone guard к этому маршруту неприменим.
+
+Адресные deliverables: Artifacts — exact internal lookup contract/Errors (предъявлен); Snapshot — same-envelope intersection/placement (подтверждён документально); Publication — unchanged owning UOW/claim authority и guards; координатор — общая узкая сверка. Зависимый код/активация ждут закрытия маршрута и решения пользователя; synthetic caller допустим для границы, но не имитирует authority.
+
+Основной координатор подтвердил **PASS TARGET пункта 3 storage/error ответственности** после owning ответа Publication: standalone guard проверяет тот же graph; exact identity fail-fast до IO; private operations links допустимы только внутри SQLite composition, не в public port/DAG; persisted-first _lease проверяет corruption/orphan до requested binding→fence; writable и closed modes сохраняют отдельные правила. Repeated codec fault до seal и post-seal logging fault не обещают rollback/compensation/unknown. H2 single-R identity не переносится и не дублируется в writer.
+
+Это архитектурный PASS, не runtime: actual early catalog comparisons, новый stage graph и negative evidence требуют реализации. Не переоткрывать этот согласованный пункт как общий OPEN; проверять реализацию его условий.
+
+**Пункт 1 — concrete specialization остаётся OPEN адресно:** принятие Pack producer/consumer endpoints; semantic codec cutover; exact writable lease issuer Input/Output/Error; runtime content/prepared identity и регистрации; owning POJO/error closure выбранного binding. Candidate Pack manifest bytes / world_pack.manifest.json / BLOB / existing storage v1 не принят автоматически. Полный completion/Source не являются blanket prerequisite независимого stage. Пункт 3 не закрывает ARCH-STAGE/ARCH-0 целиком.
+
+**Не смешивать маршруты:** standalone staging не является scoped handoff Snapshot.apply. Этот PASS не закрывает atomic handoff/retention; standalone guard не переносится на handoff внутри caller transaction. Completion и Snapshot handoff сохраняют собственные scoped контракты.
+
 ## Скоуп — 2026-11-21
 
 Пользователь поручил оформить рекомендации после сверки Artifacts staging architecture. Это адресная контрактная работа без кода. Независимый staging-срез продолжается при сохранении действующих lifecycle-контрактов; весь completion не становится его автоматическим prerequisite. Удаление старого фасада и готовность полного Pack-маршрута требуют отдельного завершённого cutover.

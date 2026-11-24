@@ -1,5 +1,13 @@
 # Artifacts: архитектура staging, 2026-11-21
 
+## Приоритетное ограничение пользователя — 2026-11-24
+
+По уточнению основного координатора: пользователь сказал «Пока маршрут не закрыт, я не даю добро», затем поручил закрыть маршрут, оставив генератор/gameplay и верхнее получение inputs вне scope. Текущая работа — контрактный маршрут; прежнее разрешение реализации не является code-go зависимой реализации/активации. Исторические заявления ниже о сохранённом разрешении читать с этим ограничением.
+
+Concrete binding рассматривается от готовых typed inputs; synthetic caller допустим. Реализация генератора/gameplay, новые APIs/ноды для них и верхняя orchestration не добавляются в план и не становятся gates. Клетка producer в binding matrix означает owning преобразование готового входа (например Pack), а не обязательную реализацию внешнего источника. Authority и lease issuance внутри согласуемой owning boundary требуют реального контракта, не synthetic lease или доверия caller payload. Закрываются Pack/Artifacts/issuer IO/Error, format binding, внутренний транспорт и POJO inventory; без implicit BLOB выбора.
+
+Snapshot scoped handoff — отдельный bounded контракт из `artifacts-scoped-held-refs-contract.md`, не standalone stage и не ожидание полного completion. Предложение scoped lookup передано координатору (2), реализация до сведения с Publication не выполняется. Ни внешние generator/gameplay, ни full Source/Pack production для этого стыка не требуются.
+
 Статус: **PROPOSED, ARCH-STAGE OPEN**. Детализация первого архитектурного пункта [owning-плана](artifacts-public-staging-dag.md), не разрешение реализации. При конфликте с принятым междоменным контрактом действует принятый контракт до согласования указанной здесь дельты. BLOB — существующий storage kind; Blob/God Object и BLOB-first обход архитектуры запрещены.
 
 ## Граница решения
@@ -233,6 +241,30 @@ P1 Pack integration остаётся OPEN. [Карта перехода](pack-st
 Тесты сейчас не запускались: документ не содержит реализованных TARGET классов. Написание этих тестов относится к отдельно разрешённой реализации; их PASS требуется для регистрации и приёмки реализации, не выдаётся заранее.
 
 ## Приёмка по правилу агента
+
+### Уточнение inventory и координации — 2026-11-24
+
+**Результат адресной сверки агента (2), получен 2026-11-24:** п3 PASS TARGET — standalone guard до IO, backend.write_admission identity и catalog.assert_write_admission graph; Publication явно подтвердил private operations links внутри SQLite composition check (не generic writer/Pack/DAG), без расширения Publication API. PASS TARGET — persisted operation/terminal/evidence → admission chain по persisted fence → requested binding/fence → writable; missing+orphan infrastructure, clean missing OPERATION_MISSING. Existing catalogStore ещё не соответствует этому порядку: это implementation delta, не повторно открытый архитектурный finding. При изменении _lease проверить всех callers и сохранить closed contract writable=False. Callback/post-seal/log mapping поддержан с no false rollback/unknown/compensation; runtime tests остаются обязательными.
+
+Уточнение actual H2 по сверке: leases generic, store/ledger identity checks уже есть; ArtifactStagingService ещё nongeneric, новый stage graph отсутствует. Исторические формулировки «всё только TARGET» не применяются к уже реализованным owning компонентам. Полная ARCH-STAGE приёмка по этому сообщению не выдана.
+
+**П1 — точная кандидатная строка Pack, пока PROPOSED:** `app.application.worldData.pack.preparation.packManifestPreparationOpenPipeline.PackManifestPreparationOpenPipeline.prepare_material(PackPreparationInput) -> PackManifestMaterial`; `app.dataModel.worldPack.preparation.manifestMaterial.PackManifestMaterial.content:bytes` → ArtifactPrepareStageInput[bytes] → PreparedArtifact[bytes] → ArtifactStageInput[bytes](lease,prepared) → ArtifactRef → `PackStagedManifestInput.artifact` → `admit_staged -> PackStagedManifest`. Owning источник endpoints/DTO — `pack-staging-owning-contract-delta.md`; это не actual или accepted маршрут.
+
+Existing format-кандидат: `app.application.worldData.pack.encoding.manifestFormat.manifest_format`, key `world_pack.manifest.json`, BLOB/bytes/row_count=None, actual storage version 1 (не назначение final schema). Existing encode вызывает semantic decode_manifest; перенос semantics в Pack producer/consumer требует owning consumer inventory и согласованного cutover, не скрытой замены format factory в Artifacts.
+
+Точные оставшиеся binding gaps: (а) принятие proposed producer/consumer IO/Error и semantic placement; (б) exact issuer error/live admission contract — existing ArtifactStagingService.open_operation является только кандидатом, повтор может вернуть CLOSED lease, не гарантирует writable; (в) concrete in-memory DAG binding и identity gate. Fake lease/synthetic authority и новые nodes не вводятся. Эти уточнения заменяют формулировку «кандидат вообще неизвестен», но не заполняют accepted value в binding matrix. Full completion не prerequisite этого среза. POJO/error inventory данной кандидатной цепочки продолжает Artifacts после сверки owning DTO, без объявления proposal принятым.
+
+По прямому поручению пользователя concrete binding и приёмка изменённых storage/error границ переданы агенту «Between domain operations (2)», `01a1f529-898c-7342-82f4-1e68983b3a9c`. POJO/error inventory остаётся работой Artifacts; не делегируется пользователю или координатору. Передача запроса не означает закрытие gate.
+
+Сверка actual shared diagnostics уточняет общий inventory:
+
+- `dataModel/validation/diagnostics/fieldPathError.py::FieldPathError[CodeT]`: code:concrete Enum, path:ValidatedFieldPath, message:StrictStr. Strict/frozen/extra-forbid/revalidate always; допустим только именованный concrete subclass. TARGET ArtifactInputIssue наследует его, не копирует поля и не создаёт generic FieldPathError экземпляры.
+- `validation/importIssues/jsonFieldError.py::JsonFieldError`: унаследованные code/path/message плюс location:WireLocation, wire_path:tuple[WirePart,...] (непустой), schema_id:StrictStr|None, pydantic_type:ErrorType|None. pydantic_type присутствует ровно для SCHEMA_VIOLATION. path — canonical declared field, wire_path — фактический alias; Artifacts не подменяет одно другим.
+- `validation/importIssues/wireShapeIssue.py::WireShapeIssue`: code:JsonValidationCode, location:WireLocation, message:StrictStr, pydantic_type:ErrorType|None с тем же условием SCHEMA_VIOLATION. Не FieldPathError: применяется, когда declared POJO field отсутствует. Фиктивный path не создаётся.
+- TARGET `ArtifactInputError.issues` — непустой tuple этих двух existing concrete classes либо ArtifactInputIssue; aggregation через existing ValidatorAggregationHelper, независимые issues в стабильном порядке. Lease failure остаётся logic POJO, corruption/codec/unknown не добавляются в issues.
+- Все TARGET runtime wrappers и carriers остаются без назначенных wire IDs. Generic node wrappers из owning DAG-плана не получают копии content/descriptor/lease полей; concrete schema/field-selector inventory дополняет Artifacts после получения owning C, а не запрашивает его проектирование у пользователя.
+
+**Изменение runtime с предыдущей сверки:** `dataModel/artifacts/lifecycle/operation/record.py` теперь содержит `OperationRecord[R: SnapshotApplyResult]`: operation_id, world_uid, kind, preparation_fingerprint, publication_fingerprint?, phase, fence>=1, leased_artifacts и terminal:R|PackActivationResult|GameplayStarted|OperationCancelled|None. Проверяются terminal↔phase, fingerprint при APPLYING, уникальность refs, operation/world/kind/result correlation. Это existing generic POJO, не новое зеркало stage. Поэтому историческое утверждение о bare OperationRecord нельзя распространять на весь текущий runtime. При этом наличие generic record само по себе не доказывает завершённые H2 factory checks всех adapters; они сверяются отдельно по актуальному коду. Данные terminal не включаются в public stage result.
 
 ### Повторная независимая проверка — 2026-11-22
 

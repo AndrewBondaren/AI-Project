@@ -864,7 +864,20 @@ flowchart TD
 
 **Проверка v6.10:** добавлен draft LOD трек и обратные ссылки без изменения hard-edge реестра. Markdown/Mermaid/ссылки и static graph должны быть проверены; implementation/runtime evidence отсутствует, GRAPH-AC остаётся OPEN.
 
-## 12. Действующая очередь на 2026-11-08
+## 12. Очередь: проверка актуальности 2026-11-24
+
+**Сверка не завершена; ниже сохранена очередь на 2026-11-08, а не подтверждённое разрешение следующих implementation-шагов на 24 ноября.** Новые owning-записи требуют пооперационной сверки всех разделов карты. Эта запись не закрывает GRAPH-AC и не изменяет hard-edge реестры.
+
+| План | Номер трека | О чём трек | Следующий трек (свой или конкретная внешняя зависимость) |
+|---|---|---|---|
+| [Source](./source-core-remaining-2026-11-24.md) | АР-2 → АР-3/4 → АР-5 → АР-6 | Композиция исполнения, finalization/prune, configuration, консолидация | Собственная архитектура CHANGES REQUIRED; свести композицию и предъявить целый план. Foreign bindings отдельно; не блокировать Time/Lifecycle завершением Source. |
+| [Snapshot](./snapshot-public-methods-contract.md) | BUG-ENUM-01 | Admission direct reuse PatchSet facts | После owning FINAL READY повторить consumer negatives на Pydantic 2.13.4 и 2.14.2. Имеющиеся 19/25 targeted tests и scoped Pyright не закрывают обнаруженный foreign StrEnum failure; полный public apply/ARCH-0 не готов. |
+| [Time](./time-domain.md#48-внешние-зависимости-production-интеграции-t4t5-2026-11-03) | T4 / T5 | Coherent read / atomic apply | T4 имеет интеграционное evidence; T5 требует SN-TIME-APPLY и применимого Time/World handler в общем CommitScope. Branch требует отдельного SN-TIME-BRANCH, не historical read. |
+| [GEN-DAG Artifacts](./gen-dag-artifacts-node-contracts.md) | prepare_artifact / stage_artifact | Две согласованные роли, проект concrete bindings | ARCH-STAGE и concrete producer → content/format/version → lease issuer → consumer остаются OPEN по сверке 22 ноября. Не регистрировать generic payload или принимать BLOB по умолчанию; это не prerequisite Time/Lifecycle. |
+
+Таблица фиксирует найденные owning evidence, не полную проверку остальных треков и не новую пользовательскую приёмку. Новые междоменные решения остаются у назначенного координатора и пользователя. Общие файлы PatchSet admission, Snapshot mapper/tests и shared validation нельзя считать независимыми параллельными scope без сверки текущего diff. Production-код и owning-планы этим обновлением не меняются.
+
+### Очередь на 2026-11-08 — исторический срез, требует сверки
 
 **После завершения основной очереди:** [LEGACY-POST — поиск оставшихся legacy-путей](./world-generation-post-graph-legacy-audit.md). Трек отложен. При закрытии основных работ координатор фиксирует итоговую ревизию и передаёт её на аудит. LEGACY-POST не входит в условия закрытия основной очереди; локальные проверки legacy у владельцев выполняются в своих срезах.
 

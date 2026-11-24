@@ -77,7 +77,7 @@ from tests.snapshotCore.support.fakeSection import FakeAssemblyInput, FakePatchS
 
 
 def typed_assembly(request: FakeAssemblyInput) -> PatchSetAssemblyResult[FakeSection]:
-    service: IPatchSetAssembly[FakeSection] = PatchSetAssembler[FakeSection](FakeAssemblyInput, FakePatchSet)
+    service: IPatchSetAssembly[FakeAssemblyInput, FakePatchSet] = PatchSetAssembler(FakeAssemblyInput, FakePatchSet)
     return service.assemble(request)
 
 

@@ -12,13 +12,13 @@ from app.dataModel.patch.changes.patchData import PatchData
 from app.dataModel.patch.changes.header import PatchHeader
 from app.dataModel.patch.request.assembly import PatchSetAssemblyInput
 from app.dataModel.patch.request.patchSet import PatchSet
-from app.dataModel.patch.results.assembly import PatchSetAssemblyRefused, PatchSetAssemblyResult
+from app.dataModel.patch.results.assembly import PatchSetAssemblyRefused
 from app.dataModel.patch.sections.section import DomainSection, SectionHeader
 
 
-class PatchSetAssembler[S: DomainSection]:
-    def __init__(self, request_model: type[PatchSetAssemblyInput[S]],
-                 result_model: type[PatchSet[S]]) -> None:
+class PatchSetAssembler[Q: PatchSetAssemblyInput, P: PatchSet]:
+    def __init__(self, request_model: type[Q],
+                 result_model: type[P]) -> None:
         for model, base in ((request_model, PatchSetAssemblyInput), (result_model, PatchSet)):
             if not isinstance(model, type) or not issubclass(model, base):
                 raise TypeError("assembly requires input and result child models")
@@ -80,7 +80,7 @@ class PatchSetAssembler[S: DomainSection]:
                 or model.model_config.get("revalidate_instances") != "always"):
             raise TypeError("assembly models must retain strict immutable validation")
 
-    def assemble(self, request: PatchSetAssemblyInput[S]) -> PatchSetAssemblyResult[S]:
+    def assemble(self, request: Q) -> P | PatchSetAssemblyRefused:
         if type(request) is not self._request_model:
             raise TypeError("request must be the exact bound input child")
         request = self._request_model.model_validate(request, strict=True)

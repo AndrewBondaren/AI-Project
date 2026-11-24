@@ -52,6 +52,14 @@ def native(key="x", refs=None, dependencies=(), model=NativeSection):
 
 
 class PatchAssemblyTests(unittest.TestCase):
+    def test_mock_named_result_and_foreign_section_binding(self):
+        from tests.lifecycle.support.snapshotContracts import MockAssemblyInput, MockPatchSet
+        assembler = PatchSetAssembler(MockAssemblyInput, MockPatchSet)
+        result = assembler.assemble(MockAssemblyInput(**values()))
+        self.assertIs(type(result), MockPatchSet)
+        with self.assertRaisesRegex(TypeError, "same closed section union"):
+            PatchSetAssembler(MockAssemblyInput, AssemblyResult)
+
     def setUp(self):
         self.assembler = PatchSetAssembler(AssemblyInput, AssemblyResult)
 

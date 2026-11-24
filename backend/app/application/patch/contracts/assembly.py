@@ -2,9 +2,9 @@
 
 from typing import Protocol
 from app.dataModel.patch.request.assembly import PatchSetAssemblyInput
-from app.dataModel.patch.results.assembly import PatchSetAssemblyResult
-from app.dataModel.patch.sections.section import DomainSection
+from app.dataModel.patch.results.assembly import PatchSetAssemblyRefused
+from app.dataModel.patch.request.patchSet import PatchSet
 
 
-class IPatchSetAssembly[S: DomainSection](Protocol):
-    def assemble(self, request: PatchSetAssemblyInput[S]) -> PatchSetAssemblyResult[S]: ...
+class IPatchSetAssembly[Q: PatchSetAssemblyInput, P: PatchSet](Protocol):
+    def assemble(self, request: Q) -> P | PatchSetAssemblyRefused: ...

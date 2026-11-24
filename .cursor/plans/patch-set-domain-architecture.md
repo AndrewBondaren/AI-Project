@@ -1,5 +1,9 @@
 # PatchSet: архитектура самостоятельного домена
 
+## Exact assembly public typing — 2026-11-24
+
+По разрешению пользователя и PASS координатора public API уточнён: `IPatchSetAssembly[Q: PatchSetAssemblyInput, P: PatchSet].assemble(request: Q) -> P | PatchSetAssemblyRefused`; implementation `PatchSetAssembler[Q,P](request_model:type[Q], result_model:type[P])`. Для mock — Q=MockAssemblyInput, P=MockPatchSet. S остаётся внутри named Q/P; согласованность sections annotations обеспечивает existing constructor runtime check, не неподдерживаемый dependent generic bound. Исторические S-only signatures ниже заменены этой формой. Execution path, predicates, errors и refusal value неизменны. Positive assemblyExact.py — 0 Pyright errors; negative assemblyExactInvalid.py — ровно 3 ожидаемых ошибки foreign input/result/port assignment; 9 assembly unittest PASS. Node implementation/registration — отдельный владелец.
+
 Дата: 2026-11-19. Статус: **архитектура ядра принята (§10); реализация PS-I1 → PS-I2 принята в согласованном scope по итоговому результату, переданному пользователем; P2 закрыт. Evidence — план реализации §6 и patch-set-core-review.md. Production-интеграция не реализована**.
 
 Это первый этап выделения PatchSet. Код, DAG, canonical format и ТЗ этим документом не изменены. Основание: решение пользователя о самостоятельном домене и CRUD только по необходимости; консультация `Between domain operations`; [owning-план](world-domain-patches-snapshots.md), раздел «PatchSet как самостоятельный домен»; [ТЗ Patch System](../../docs/tz_patch_system.md); [правило архитектурной приёмки](../rules/dag-generator-interface.mdc).
