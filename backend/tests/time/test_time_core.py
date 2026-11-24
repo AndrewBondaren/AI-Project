@@ -114,6 +114,24 @@ class TimeCoreTests(unittest.TestCase):
             self.assertEqual(paths[0], ("header", "format_version"))
             for path in patch_paths:
                 self.assertIn(("patches", 0, *path), paths)
+        invalid_proposal = bad_patch.model_copy(update={"proposal": proposal.model_copy(update={"operation_id": None})})
+        invalid_ordinal = bad_patch.model_copy(update={"header": bad_patch.header.model_copy(update={
+            "ref": bad_patch.header.ref.model_copy(update={"ordinal": -1})})})
+        for malformed, required, absent in (
+            (invalid_proposal, (("proposal", "operation_id"), ("header", "ref", "ordinal"),
+                               ("header", "format_version")), (("header", "ref", "operation_id"),)),
+            (invalid_ordinal, (("header", "ref", "ordinal"), ("header", "format_version"),
+                              ("header", "ref", "operation_id")), ()),
+        ):
+            for validate in (lambda: type(malformed).model_validate(malformed),
+                             lambda: type(malformed).model_validate_json(malformed.model_dump_json())):
+                with self.assertRaises(ValidationError) as caught:
+                    validate()
+                paths = tuple(error["loc"] for error in caught.exception.errors())
+                for path in required:
+                    self.assertIn(path, paths)
+                for path in absent:
+                    self.assertNotIn(path, paths)
 
     def test_publication_state_tracks_active_branch_before_first_snapshot(self):
         state = TimeClockState(point=point())

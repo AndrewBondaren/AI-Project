@@ -433,7 +433,7 @@ Internal PreflightRejected переводится в public SourceFailure тол
 | SourceMutationAttemptRunner / mutation/mutationAttemptRunner.py | run: одна фиксированная локальная последовательность разрешённой попытки | Checked request, согласованная state observation, semantic evidence, exact mappings и permitted execution binding → provisional changes либо отказ попытки | Не reader/projector чужого домена; не выдаёт terminal; не запускает recovery |
 | SourceMutationOutcomeResolver / mutation/mutationOutcomeResolver.py | resolve: проверить корреляцию предъявленного подтверждённого Source terminal | Request + canonical request fingerprint + SourceMutationApplied/Refused → тот же exact terminal | Не читает ledger, не превращает отсутствие terminal в разрешение исполнения |
 
-Constructor graph собственных collaborators: runner использует request checker, state checker, batch builder и appender; batch builder использует revision builder; revision builder использует next_revision. Resolver stateless (`__init__(self) -> None`), без reader dependency. Request validation выполняется ровно один раз на invocation: если caller уже выполнил её до получения execution binding, runner не создаёт второй публичный вызов и не переписывает diagnostic algorithm. Конкретная точка вызова фиксируется при final execution binding, а не выбирается caller-флагом skip_validation.
+Единственная точка request validation — public Source apply/recover owner в начале invocation, до terminal resolution и входа в runner. Оба owners используют один SourceRegistryMutationRequestChecker; повторный public invocation проверяет свой request заново. Runner не имеет request checker в constructor и принимает только уже допущенный request от этого owner; это внутреннее предусловие, не caller flag/новый trusted DTO. Constructor graph runner: state checker, after-graph checker, batch builder, appender. Batch builder использует revision builder, тот — next_revision. Resolver stateless (__init__ без зависимостей), ledger не читает. Owning execution binding не меняет выбранную точку validation.
 
 Exact pure resolver proposal:
 
@@ -452,6 +452,7 @@ def resolve(
 1. **Request:** check и все независимые diagnostics до dependent work. При failure никаких transition/append; это preflight, не persisted refusal.
 2. **Admission:** внешний путь предъявляет согласованную observation/phase authority; state checker проверяет Source expected/live/tombstone/membership. Отсутствие observation не считается absent. Отказ прекращает dependent calculation.
 3. **Evidence:** owning semantic evidence и mappings уже получены через разрешённый маршрут; Source сопоставляет их full identities/execution_version/request. Runner не запускает foreign projector. DELETE использует Source tombstone encoding.
+   **Итоговые relations:** до revision calculation и append runner вызывает SourceMutationAfterGraphChecker.check по полным before/after membership и owning ссылочным facts. Ошибка прекращает dependent calculation/writes. Request/state admission не заменяют эту стадию; точный контракт §9.4.
 4. **Calculation:** batch builder выдаёт refs. Runner формирует соответствующие internal transitions из request/observation/mappings; это упаковка одной локальной попытки, не второй revision algorithm. Unchanged UPDATE сохраняет исторический mapping, не candidate body; DELETE не содержит live body.
 5. **Append:** appender повторно защищает expected/current в permitted atomic boundary и пишет весь batch. Положительный admission вне этой boundary не заменяет guard. Расхождение touched sets и mappings запрещает запись. Результат остаётся provisional.
 6. **Publication/terminal:** завершение принадлежит внешнему commit owner по согласованному маршруту. Source runner не вызывает Publication/Snapshot pipeline и не пишет terminal в свой store. Только confirmed owning outcome поступает в resolver; unknown/cancellation сохраняются как отдельные исходы.
@@ -465,3 +466,27 @@ def resolve(
 Проверки composition: malformed request блокирует state/calculation/append; stale state блокирует builder; неверная correlation evidence блокирует append; одна identity отсутствует в transitions — ноль writes; stale race/gameplay start между admission и append отвергается owning guard; partial write failure не возвращает успех; append success без confirmed commit не создаёт Applied; resolver не читает latest и возвращает exact terminal. Все stages имеют request-local данные, без shared mutable diagnostics. Ноль прямых foreign domain calls в Source collaborators.
 
 **Готово как собственный проект:** роли и размещение, typed request/state/arithmetic/transitions, pure terminal correlation, последовательность и failure boundaries. **Не закрыто:** exact permitted execution/write binding и terminal admission transport, общий error transport дельт и архитектурная приёмка. Не называть эти ограничения отсутствием собственного trace, но и не выдавать таблицу за executable signature appender/run. Старые scoped applier с provisional Applied и resolver с ledger IO не являются альтернативными реализациями.
+
+### 9.4. Итоговые Source relations — адресная дельта
+
+`application/worldData/sourceVersioning/mutation/validation/mutationAfterGraphChecker.py::SourceMutationAfterGraphChecker` отвечает за согласованность итогового membership с batch и разрешимость предъявленных ссылочных отношений. Не извлекает ссылки из Terrain/material/settings bodies: их смысл и полноту extraction подтверждает owning domain. Предложение pure signature:
+
+```python
+class SourceMutationAfterGraphChecker:
+    def __init__(self, *, descriptors: SourceDescriptorLookup) -> None: ...
+    def check(
+        self, request: SourceRegistryMutationInput, *,
+        before: SourceCollectionBody | None,
+        after: SourceCollectionBody,
+        references: tuple[tuple[ArtifactRef, SourceObjectId], ...],
+        surviving_targets: tuple[SourceObjectId, ...],
+    ) -> tuple[SourceLogicIssue, ...]: ...
+```
+
+before=None только для authoritative initial collection. After коррелирует с request.membership.body; before — с допущенной previous membership. Source проверяет точный итог membership: CREATE добавляет identity, DELETE удаляет, UPDATE не меняет identity; не затронутые identities сохраняются. SET сравнивается по membership; для SEQUENCE ordering policy принадлежит immutable descriptor execution binding, checker не сортирует after по догадке. Отсутствующее правило sequence не считается успешным допуском.
+
+references — owning-extracted отношения (ref ссылающегося **итогового** body, target identity). surviving_targets — полный допущенный live target set для области проверки, не только newly created members. Между ними и request/evidence должен быть exact binding; missing/неподтверждённый coverage не превращается в пустой references. Source проверяет, что каждый target остаётся разрешимым, и не применяет hidden rename old→new. Удаление старого материала при сохранённой ссылке settings на него даёт отказ даже при валидных revisions всех changes. Подтверждение полного набора затронутых входящих ссылок — внешний evidence binding; Source не строит чужой reverse index и не объявляет arbitrary caller tuple полным графом.
+
+Предлагаемые SourceLogicCode: MEMBERSHIP_MISMATCH (membership_mismatch) при неверном after membership, artifact=request.membership.body; MUTATION_REFERENCE_CONFLICT (mutation_reference_conflict) при неразрешимой связи, artifact=ref ссылающегося body. source=None, group/use=None: существующий carrier не имеет target identity без revision, fake SourceVersionRef запрещён. Однотипные конфликты одного artifact стабильно сводятся; точную target-per-issue локализацию публичный carrier не обещает. Дельта кодов требует координации, не подменяется DEPENDENCY_NOT_CAPTURED/INVALID_SHAPE.
+
+Issues агрегирует runner в APPLY_MUTATION failure до writes. Проверки: delete old/create new без retarget settings — отказ; same batch с owning-подтверждённым retarget — допускает relations; незатронутый member потерян — MEMBERSHIP_MISMATCH; empty references без completeness evidence — не success; checker не вызывает projector/storage и не вычисляет revisions. Полная validation выполняется один раз у public owner; runner только использует допущенный request. Это собственный проект, не уже принятый foreign evidence transport.

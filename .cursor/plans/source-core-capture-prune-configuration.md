@@ -48,6 +48,16 @@ async def finalize(self, request: SourceCaptureWitness, *,
 
 ## 2. Prune: не присваивать Source чужой reachability
 
+### Public prune boundary — Source proposal на координацию
+
+Пути POJO: `backend/app/dataModel/sourceVersioning/sourceRevisionPrune.py`. Новые записи не копируют existing refs/diagnostics: `SourceRevisionPruneInput(world_uid: EntityUid, requested: tuple[SourceVersionRef, ...])`; `SourceRevisionPruneConfirmInput(operation_id: EntityUid, request: SourceRevisionPruneInput)`; `SourceRevisionPrunePreview(request: SourceRevisionPruneInput, candidates: tuple[SourceVersionRef, ...])`; `SourceRevisionPruneResult(operation_id: EntityUid, request_fingerprint: RevisionHex, pruned: tuple[SourceVersionRef, ...])`. Все обязательные, strict/frozen/deep immutable. Requested nonempty, canonical/unique, одна object identity/world; candidates/pruned canonical unique subsets исходного requested. Result — confirmed Source markers, не physical GC receipt. Preview не authority и не принимается вместо confirm request.
+
+Два отдельных класса в `application/worldData/sourceVersioning/operations`: `revisionPrunePreviewPipelineOpenPipeline.py::SourceRevisionPrunePreviewPipelineOpenPipeline.preview(request: SourceRevisionPruneInput) -> SourceRevisionPrunePreview | SourceFailure` и `revisionPruneConfirmPipelineOpenPipeline.py::SourceRevisionPruneConfirmPipelineOpenPipeline.confirm(request: SourceRevisionPruneConfirmInput) -> SourceRevisionPruneResult | SourceFailure`; оба async. Proposed SourceOperation: PREVIEW_PRUNE="preview_prune", CONFIRM_PRUNE="confirm_prune". Не APPLY_MUTATION и не dispatcher с mode flag. Constructors включают own request/state admission и policy; exact external read/write/retention collaborators deferred, не placeholder.
+
+Каждый owner проверяет свой request один раз; preview получает observation и вычисляет candidates без effects. Confirm повторно проверяет актуальное состояние и owning retention authority; preview public method не вызывается из confirm. Internal admission возвращает issues, public owner назначает свой operation tag. REVISION_NOT_FOUND/REVISION_PRUNED сохраняют exact source ref и indices=None; wrong request fields адресуются actual root. После writes SourceFailure не выдаётся до подтверждённого rollback; unknown/authority/cancellation сохраняют owning transport. Terminal replay confirm требует immutable operation/request binding, проверяет fingerprint и возвращает exact saved result; новый request не маскируется already-pruned success.
+
+POJO validators: input.requested_shape — unique/order/world/identity; preview.selection_shape — subset без утверждения holds; result.refs_shape — local refs invariants, связь с original request проверяет producer; confirm input не дублирует поля request. Shared ref predicates и canonical rule переиспользуются. New result/operation registration и finalized imports требуют координации; код не изменён. Публичная семантика Source описана независимо от реализации Artifacts, внешняя binding готовность не заявлена.
+
 ### Собственный admission и outcome — проект 2026-11-25
 
 Candidate closure finalization актуализирован в source-x-read-internal-boundary.md §3: collect_candidate использует actual witness как graph context, не finalized proof. Foreign finalize binding отделён от этого собственного метода.

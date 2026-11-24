@@ -4,6 +4,8 @@
 
 ## 1. Ровно три предлагаемых дополнения SourceLogicCode
 
+Адресное дополнение после ревью: mutation-contract §9.4 предлагает ещё MEMBERSHIP_MISMATCH и MUTATION_REFERENCE_CONFLICT для after-graph проверки; capture-prune-configuration §2 — SourceOperation.PREVIEW_PRUNE/CONFIRM_PRUNE. Следующая таблица сохраняет первоначальные три кода, не полный roster всех последующих proposals. Ни дополнения, ни public prune POJO не считаются принятыми до координации. State-admission не использует after-graph коды; prune owner назначает собственный tag при агрегации REVISION_NOT_FOUND/REVISION_PRUNED, не APPLY_MUTATION.
+
 | Enum member / wire value | Основание | Что не является основанием |
 |---|---|---|
 | REVISION_NOT_FOUND / revision_not_found | Authoritative Source observation подтверждает отсутствие требуемой exact revision | Нет записи во входном materialized наборе; отсутствует observation |

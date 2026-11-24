@@ -1,6 +1,6 @@
 from typing import Self
 
-from pydantic import Field, ValidationError, field_validator, model_validator
+from pydantic import Field, ValidationError, ValidationInfo, ModelWrapValidatorHandler, model_validator
 from pydantic_core import InitErrorDetails
 
 from app.dataModel.fields.checkedPath import CheckedPath
@@ -16,6 +16,8 @@ from app.dataModel.time.values.point import TimeRecord
 from app.dataModel.validation.diagnostics.validatorAggregationHelper import ValidatorAggregationHelper
 from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
 
+from .admission import raw_field, valid_field, json_collections
+
 TIME_ADVANCE_PATCH_FORMAT = 1
 TIME_ADVANCE_SECTION_FORMAT = 1
 
@@ -29,47 +31,73 @@ class PrepareTimeAdvanceSection(TimeRecord):
 class TimeAdvancePatch(PatchData):
     proposal: TimeAdvanceProposal
 
-    @model_validator(mode="after")
-    def native_header(self) -> Self:
-        header = self.header
+    @model_validator(mode="wrap")
+    @classmethod
+    def native_header(cls, value: object, handler: ModelWrapValidatorHandler[Self], info: ValidationInfo) -> Self:
+        if info.mode == "json":
+            value = json_collections(value)
+        structural = []
+        result = None
+        try:
+            result = handler(value)
+        except ValidationError as error:
+            structural = error.errors(include_url=False)
         errors = ValidatorAggregationHelper((TimeSectionFieldIssue,))
-        path = CheckedPath.root(TimeAdvancePatch).field(
-            FieldRef(lambda: TimeAdvancePatch, lambda value: value.header))
-        ref = path.field(FieldRef(lambda: PatchHeader, lambda value: value.ref))
+        header_field = FieldRef(lambda: TimeAdvancePatch, lambda patch: patch.header)
+        ref_field = FieldRef(lambda: PatchHeader, lambda header: header.ref)
+        header = raw_field(value, header_field)
+        ref_value = raw_field(header, ref_field)
+        path = CheckedPath.root(TimeAdvancePatch).field(header_field)
+        ref = path.field(ref_field)
+        proposal = raw_field(value, FieldRef(lambda: TimeAdvancePatch, lambda patch: patch.proposal))
+        operation = valid_field(proposal, FieldRef(lambda: TimeAdvanceProposal, lambda proposal: proposal.operation_id))
         checks = (
-            (ref.field(FieldRef(lambda: PatchRef, lambda value: value.section_key)),
-             header.ref.section_key, CLOCK_SECTION, TimeSectionIssueCode.INVALID_KEY),
-            (ref.field(FieldRef(lambda: PatchRef, lambda value: value.ordinal)),
-             header.ref.ordinal, 0, TimeSectionIssueCode.INVALID_ORDINAL),
-            (path.field(FieldRef(lambda: PatchHeader, lambda value: value.format_version)),
-             header.format_version, TIME_ADVANCE_PATCH_FORMAT, TimeSectionIssueCode.UNSUPPORTED_VERSION),
-            (path.field(FieldRef(lambda: PatchHeader, lambda value: value.depends_on)),
-             header.depends_on, (), TimeSectionIssueCode.DEPENDENCIES_FORBIDDEN),
-            (path.field(FieldRef(lambda: PatchHeader, lambda value: value.artifacts)),
-             header.artifacts, (), TimeSectionIssueCode.ARTIFACTS_FORBIDDEN),
-            (ref.field(FieldRef(lambda: PatchRef, lambda value: value.operation_id)),
-             header.ref.operation_id, self.proposal.operation_id, TimeSectionIssueCode.OPERATION_MISMATCH),
+            (ref, ref_value, FieldRef(lambda: PatchRef, lambda ref: ref.section_key),
+             CLOCK_SECTION, TimeSectionIssueCode.INVALID_KEY),
+            (ref, ref_value, FieldRef(lambda: PatchRef, lambda ref: ref.ordinal),
+             0, TimeSectionIssueCode.INVALID_ORDINAL),
+            (path, header, FieldRef(lambda: PatchHeader, lambda header: header.format_version),
+             TIME_ADVANCE_PATCH_FORMAT, TimeSectionIssueCode.UNSUPPORTED_VERSION),
+            (path, header, FieldRef(lambda: PatchHeader, lambda header: header.depends_on),
+             (), TimeSectionIssueCode.DEPENDENCIES_FORBIDDEN),
+            (path, header, FieldRef(lambda: PatchHeader, lambda header: header.artifacts),
+             (), TimeSectionIssueCode.ARTIFACTS_FORBIDDEN),
+            (ref, ref_value, FieldRef(lambda: PatchRef, lambda ref: ref.operation_id),
+             operation, TimeSectionIssueCode.OPERATION_MISMATCH),
         )
         inputs = {}
-        for checked_path, actual, expected, code in checks:
-            if actual != expected:
-                frozen = checked_path.freeze()
+        for parent, owner, field, expected, code in checks:
+            actual = valid_field(owner, field)
+            if actual is not None and expected is not None and actual != expected:
+                frozen = parent.field(field).freeze()
                 inputs[frozen.projection()] = actual
                 errors.add(TimeSectionFieldIssue(path=frozen, code=code, message=code.value))
-        errors.raise_if_any(lambda issues: ValidationError.from_exception_data(type(self).__name__, [
+        details = [*structural, *[
             InitErrorDetails(type="value_error", loc=issue.path.projection(),
                              input=inputs[issue.path.projection()], ctx={"error": ValueError(issue.message)})
-            for issue in issues
-        ]))
-        return self
+            for issue in errors.snapshot()
+        ]]
+        if details:
+            raise ValidationError.from_exception_data(cls.__name__, details)
+        assert result is not None
+        return result
 
 
 class TimeAdvanceSection(DomainSection[TimeAdvancePatch]):
     patches: tuple[TimeAdvancePatch, ...] = Field(min_length=1, max_length=1)
 
-    @field_validator("header")
+    @model_validator(mode="wrap")
     @classmethod
-    def native_header(cls, value: SectionHeader) -> SectionHeader:
+    def native_header(cls, value: object, handler: ModelWrapValidatorHandler[Self], info: ValidationInfo) -> Self:
+        if info.mode == "json":
+            value = json_collections(value)
+        structural = []
+        result = None
+        try:
+            result = handler(value)
+        except ValidationError as error:
+            structural = error.errors(include_url=False)
+        raw_header = raw_field(value, FieldRef(lambda: TimeAdvanceSection, lambda section: section.header))
         errors = ValidatorAggregationHelper((TimeSectionFieldIssue,))
         header = CheckedPath.root(TimeAdvanceSection).field(
             FieldRef(lambda: TimeAdvanceSection, lambda value: value.header))
@@ -81,12 +109,19 @@ class TimeAdvanceSection(DomainSection[TimeAdvancePatch]):
             (FieldRef(lambda: SectionHeader, lambda value: value.depends_on), (),
              TimeSectionIssueCode.DEPENDENCIES_FORBIDDEN),
         )
+        inputs = {}
         for field, expected, code in checks:
-            if field.select(value) != expected:
+            actual = valid_field(raw_header, field)
+            if actual is not None and actual != expected:
+                inputs[header.field(field).freeze().projection()] = actual
                 errors.add(TimeSectionFieldIssue(path=header.field(field).freeze(), code=code, message=code.value))
-        errors.raise_if_any(lambda issues: ValidationError.from_exception_data(cls.__name__, [
-            InitErrorDetails(type="value_error", loc=issue.path.projection()[1:],
-                             input=getattr(value, issue.path.projection()[-1]),
-                             ctx={"error": ValueError(issue.message)}) for issue in issues
-        ]))
-        return value
+        details = [*structural, *[
+            InitErrorDetails(type="value_error", loc=issue.path.projection(),
+                             input=inputs[issue.path.projection()], ctx={"error": ValueError(issue.message)})
+            for issue in errors.snapshot()
+        ]]
+        details.sort(key=lambda detail: 0 if detail["loc"][:1] == ("header",) else 1)
+        if details:
+            raise ValidationError.from_exception_data(cls.__name__, details)
+        assert result is not None
+        return result
