@@ -1,5 +1,7 @@
 """Snapshot admission with real owning codec and explicit mocked claim boundary."""
 import unittest
+import json
+from enum import StrEnum
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from pydantic import ValidationError
@@ -17,6 +19,7 @@ from app.dataModel.patch.validation.admissionReasons import (
 )
 from app.dataModel.fields.validatedFieldPath import ModelIdentity
 from app.dataModel.patch.validation.structuralErrorKind import PatchSetStructuralErrorKind
+from app.dataModel.patch.validation.admissionCode import PatchSetAdmissionCode
 from app.dataModel.validation.importIssues.jsonValidationCode import JsonValidationCode
 from app.dataModel.patch.validation.patchSetInvariants import PatchSetInvariants
 from app.dataModel.patch.validation.invariantViolation import PatchSetInvariantViolation
@@ -78,21 +81,52 @@ class SnapshotAdmissionTests(unittest.TestCase):
 
     def test_mixed_facts_roundtrip_with_all_compatibility_branches(self):
         reasons = (
-            PatchSetSectionKeyUnknown(code="patch_set.admission.section_key_unknown", section_index=3, section_key="x"),
+            PatchSetSectionKeyUnknown(code=PatchSetAdmissionCode.SECTION_KEY_UNKNOWN, section_index=3, section_key="x"),
             PatchSetStructuralFailure(error_type=PatchSetStructuralErrorKind.INT_TYPE, loc=("turn_id",), message="Input should be a valid integer"),
-            PatchSetSectionModelMismatch(code="patch_set.admission.section_model_mismatch", section_index=4,
+            PatchSetSectionModelMismatch(code=PatchSetAdmissionCode.SECTION_MODEL_MISMATCH, section_index=4,
                 section_key="x", expected_model=ModelIdentity.of(FakeSection), actual_type_name="mock.Other"),
-            PatchSetRequestVersionUnsupported(code="patch_set.admission.request_version_unsupported",
+            PatchSetRequestVersionUnsupported(code=PatchSetAdmissionCode.REQUEST_VERSION_UNSUPPORTED,
                 actual_version=2, supported_versions=(1,)),
-            PatchSetSectionVersionUnsupported(code="patch_set.admission.section_version_unsupported",
+            PatchSetSectionVersionUnsupported(code=PatchSetAdmissionCode.SECTION_VERSION_UNSUPPORTED,
                 section_index=5, section_key="x", actual_version=3, supported_versions=(1, 2)),
         )
-        with patch.object(PatchSetCodec, "validate_request", side_effect=PatchSetAdmissionError(reasons)):
+        with patch.object(PatchSetCodec, "validate_request", side_effect=PatchSetAdmissionError(reasons)), \
+             patch.object(PatchSetCodec, "fingerprint", side_effect=AssertionError("hash after refusal")) as fingerprint:
             fault = self.fault(self.request).fault
+        fingerprint.assert_not_called()
+        self.assertIs(fault.kind, Kind.ADMISSION_REFUSED)
         restored = SnapshotPublicFault.model_validate_json(fault.model_dump_json())
         self.assertEqual(restored, fault)
         self.assertEqual(tuple(map(type, restored.input_issues)), tuple(map(type, fault.input_issues)))
         self.assertEqual([restored.input_issues[i].section_index for i in (0, 2, 4)], [3, 4, 5])
+        schema = SnapshotPublicFault.model_json_schema()
+        python_restored = SnapshotPublicFault.model_validate(fault.model_dump())
+        wire = json.loads(fault.model_dump_json())
+        expected_codes = (
+            (0, PatchSetAdmissionCode.SECTION_KEY_UNKNOWN, "patch_set.admission.section_key_unknown"),
+            (2, PatchSetAdmissionCode.SECTION_MODEL_MISMATCH, "patch_set.admission.section_model_mismatch"),
+            (3, PatchSetAdmissionCode.REQUEST_VERSION_UNSUPPORTED, "patch_set.admission.request_version_unsupported"),
+            (4, PatchSetAdmissionCode.SECTION_VERSION_UNSUPPORTED, "patch_set.admission.section_version_unsupported"),
+        )
+        foreign_codes = StrEnum("ForeignAdmissionCode", {code.name: wire_code for _, code, wire_code in expected_codes})
+        for index, code, wire_code in expected_codes:
+            with self.subTest(code=code):
+                for result in (fault, python_restored, restored):
+                    self.assertIs(type(result.input_issues[index]), type(reasons[index]))
+                    self.assertIs(result.input_issues[index].code, code)
+                    self.assertEqual(result.input_issues[index], reasons[index])
+                self.assertEqual(wire["input_issues"][index]["code"], wire_code)
+                self.assertEqual(schema["$defs"][type(reasons[index]).__name__]["properties"]["code"]["const"], wire_code)
+                foreign_code = foreign_codes[code.name]
+                with self.assertRaises(ValidationError):
+                    type(reasons[index])(**{**reasons[index].model_dump(), "code": foreign_code})
+                for bad_code in ("unknown", PatchSetStructuralErrorKind.INT_TYPE, foreign_code):
+                    with self.assertRaises(ValidationError):
+                        SnapshotPublicFault.model_validate(fault.model_copy(update={"input_issues": (
+                            reasons[index].model_copy(update={"code": bad_code}),)}))
+                invalid_wire = {**wire, "input_issues": [{**wire["input_issues"][index], "code": "unknown"}]}
+                with self.assertRaises(ValidationError):
+                    SnapshotPublicFault.model_validate_json(json.dumps(invalid_wire))
         for changes in ({"operation_id": "op"}, {"operation_id": "op", "request_fingerprint": "a" * 64},
                         {"kind": Kind.INVALID_INPUT}, {"input_issues": ()}):
             with self.assertRaises(ValidationError):
@@ -188,7 +222,7 @@ class SnapshotAdmissionTests(unittest.TestCase):
     def test_public_fault_rejects_foreign_subclass_before_union_downcast(self):
         class ForeignIssue(PatchSetSectionKeyUnknown):
             pass
-        reason = PatchSetSectionKeyUnknown(code="patch_set.admission.section_key_unknown", section_index=0, section_key="x")
+        reason = PatchSetSectionKeyUnknown(code=PatchSetAdmissionCode.SECTION_KEY_UNKNOWN, section_index=0, section_key="x")
         with patch.object(PatchSetCodec, "validate_request", side_effect=PatchSetAdmissionError((reason,))):
             fault = self.fault(self.request).fault
         with self.assertRaises(ValidationError):

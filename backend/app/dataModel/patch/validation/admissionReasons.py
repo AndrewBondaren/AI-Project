@@ -1,5 +1,6 @@
 """Immutable admission facts. Compatibility facts can be exported by consumers."""
 from typing import Annotated, Literal, Self
+from app.dataModel.patch.validation.admissionCode import PatchSetAdmissionCode
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, model_validator
 from app.dataModel.patch.validation.structuralErrorKind import PatchSetStructuralErrorKind
 from app.dataModel.fields.validatedFieldPath import ModelIdentity
@@ -29,7 +30,7 @@ class _Versions(_AdmissionFact):
 
 
 class PatchSetRequestVersionUnsupported(_Versions):
-    code: Literal["patch_set.admission.request_version_unsupported"]
+    code: Literal[PatchSetAdmissionCode.REQUEST_VERSION_UNSUPPORTED]
 
 
 class _SectionFact(_AdmissionFact):
@@ -38,17 +39,17 @@ class _SectionFact(_AdmissionFact):
 
 
 class PatchSetSectionKeyUnknown(_SectionFact):
-    code: Literal["patch_set.admission.section_key_unknown"]
+    code: Literal[PatchSetAdmissionCode.SECTION_KEY_UNKNOWN]
 
 
 class PatchSetSectionModelMismatch(_SectionFact):
-    code: Literal["patch_set.admission.section_model_mismatch"]
+    code: Literal[PatchSetAdmissionCode.SECTION_MODEL_MISMATCH]
     expected_model: ModelIdentity
     actual_type_name: StrictStr
 
 
 class PatchSetSectionVersionUnsupported(_SectionFact, _Versions):
-    code: Literal["patch_set.admission.section_version_unsupported"]
+    code: Literal[PatchSetAdmissionCode.SECTION_VERSION_UNSUPPORTED]
 
 
 class PatchSetStructuralFailure(_AdmissionFact):

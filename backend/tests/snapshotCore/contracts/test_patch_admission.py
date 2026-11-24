@@ -1,6 +1,9 @@
 """Admission stays pure and preserves exact owning facts before encoding."""
 import unittest
 from unittest.mock import patch
+from typing import Annotated
+from pydantic import Field, TypeAdapter
+from app.dataModel.patch.validation.admissionCode import PatchSetAdmissionCode
 from pydantic import ValidationError, model_validator
 from app.application.patch.encoding.patchSetCodec import PatchSetCodec
 from app.application.patch.contracts.sectionHandler import SectionContract
@@ -9,6 +12,7 @@ from app.application.patch.errors import PatchSetAdmissionError, PatchSetValidat
 from app.application.patch.validation.modelValidationErrors import PatchSetModelValidationErrors
 from app.dataModel.patch.validation.admissionReasons import (
     PatchSetRequestVersionUnsupported, PatchSetSectionKeyUnknown, PatchSetStructuralFailure,
+    PatchSetSectionModelMismatch, PatchSetSectionVersionUnsupported, PatchSetCompatibilityIssue,
 )
 from app.dataModel.patch.validation.patchSetInvariants import PatchSetInvariants
 from app.dataModel.patch.validation.invariantViolation import PatchSetInvariantViolation
@@ -22,6 +26,32 @@ from tests.snapshotCore.contracts.test_patch_invariants import values, section
 
 
 class AdmissionTests(unittest.TestCase):
+    def test_compatibility_codes_preserve_wire_and_discriminator(self):
+        from app.dataModel.fields.validatedFieldPath import ModelIdentity
+        adapter = TypeAdapter(Annotated[PatchSetCompatibilityIssue, Field(discriminator="code")])
+        cases = (
+            (PatchSetRequestVersionUnsupported, PatchSetAdmissionCode.REQUEST_VERSION_UNSUPPORTED,
+             dict(actual_version=2, supported_versions=(1,))),
+            (PatchSetSectionKeyUnknown, PatchSetAdmissionCode.SECTION_KEY_UNKNOWN,
+             dict(section_index=0, section_key="x")),
+            (PatchSetSectionModelMismatch, PatchSetAdmissionCode.SECTION_MODEL_MISMATCH,
+             dict(section_index=0, section_key="x", expected_model=ModelIdentity.of(FakeSection),
+                  actual_type_name="wrong.Model")),
+            (PatchSetSectionVersionUnsupported, PatchSetAdmissionCode.SECTION_VERSION_UNSUPPORTED,
+             dict(section_index=0, section_key="x", actual_version=2, supported_versions=(1,))),
+        )
+        for model, code, fields in cases:
+            with self.subTest(code=code):
+                fact = model(code=code, **fields)
+                self.assertIs(fact.code, code)
+                self.assertEqual(fact.model_dump(mode="json")["code"], code.value)
+                restored = adapter.validate_json(fact.model_dump_json(), strict=True)
+                self.assertIs(type(restored), model)
+                self.assertIs(restored.code, code)
+                self.assertEqual(restored, fact)
+                with self.assertRaises(ValidationError):
+                    model(code="patch_set.admission.unknown", **fields)
+
     def test_structural_fact_rejects_unknown_error_type(self):
         with self.assertRaises(ValidationError):
             PatchSetStructuralFailure.model_validate({
@@ -61,6 +91,8 @@ class AdmissionTests(unittest.TestCase):
         self.assertEqual(tuple(map(type, caught.exception.reasons)),
                          (PatchSetRequestVersionUnsupported, PatchSetSectionKeyUnknown))
         self.assertEqual(caught.exception.reasons[1].section_index, 0)
+        self.assertIs(caught.exception.reasons[0].code, PatchSetAdmissionCode.REQUEST_VERSION_UNSUPPORTED)
+        self.assertIs(caught.exception.reasons[1].code, PatchSetAdmissionCode.SECTION_KEY_UNKNOWN)
         self.assertEqual(self.encoder.calls, [])
         self.assertEqual(self.handler.calls, [])
 

@@ -1,6 +1,7 @@
 """The single checked heterogeneous section dispatch boundary."""
 
 from collections.abc import Awaitable, Callable
+from app.dataModel.patch.validation.admissionCode import PatchSetAdmissionCode
 from types import UnionType
 from typing import Union, cast, get_args, get_origin
 from pydantic import BaseModel, TypeAdapter
@@ -181,17 +182,17 @@ class SectionRegistry[D: BaseModel]:
             PatchSetSectionKeyUnknown | PatchSetSectionModelMismatch | PatchSetSectionVersionUnsupported, ...]:
         bound = self._codecs.get(section.header.key)
         if bound is None:
-            return (PatchSetSectionKeyUnknown(code="patch_set.admission.section_key_unknown",
+            return (PatchSetSectionKeyUnknown(code=PatchSetAdmissionCode.SECTION_KEY_UNKNOWN,
                 section_index=section_index, section_key=section.header.key),)
         issues = ValidatorAggregationHelper[PatchSetSectionModelMismatch | PatchSetSectionVersionUnsupported](
             (PatchSetSectionModelMismatch, PatchSetSectionVersionUnsupported))
         if not self._model_matches(section, bound):
-            issues.add(PatchSetSectionModelMismatch(code="patch_set.admission.section_model_mismatch",
+            issues.add(PatchSetSectionModelMismatch(code=PatchSetAdmissionCode.SECTION_MODEL_MISMATCH,
                 section_index=section_index, section_key=section.header.key,
                 expected_model=ModelIdentity.of(bound.section_model),
                 actual_type_name=f"{type(section).__module__}.{type(section).__qualname__}"))
         if not self._version_supported(section, bound):
-            issues.add(PatchSetSectionVersionUnsupported(code="patch_set.admission.section_version_unsupported",
+            issues.add(PatchSetSectionVersionUnsupported(code=PatchSetAdmissionCode.SECTION_VERSION_UNSUPPORTED,
                 section_index=section_index, section_key=section.header.key,
                 actual_version=section.header.format_version,
                 supported_versions=tuple(sorted(bound.metadata.supported_versions))))

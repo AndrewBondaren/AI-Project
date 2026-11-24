@@ -1,6 +1,7 @@
 """Versioned canonical tuple projection; domain section codecs own their payloads."""
 
 from dataclasses import dataclass
+from app.dataModel.patch.validation.admissionCode import PatchSetAdmissionCode
 from typing import ClassVar, Union, get_args, get_origin
 from types import UnionType
 from pydantic import TypeAdapter, ValidationError
@@ -75,7 +76,7 @@ class PatchSetCodec[S: DomainSection]:
             raise PatchSetAdmissionError(PatchSetModelValidationErrors.classify(error)) from error
         errors = ValidatorAggregationHelper[PatchSetAdmissionReason](ADMISSION_REASON_TYPES)
         if request.format_version not in self.SUPPORTED_VERSIONS:
-            errors.add(PatchSetRequestVersionUnsupported(code="patch_set.admission.request_version_unsupported",
+            errors.add(PatchSetRequestVersionUnsupported(code=PatchSetAdmissionCode.REQUEST_VERSION_UNSUPPORTED,
                 actual_version=request.format_version, supported_versions=tuple(sorted(self.SUPPORTED_VERSIONS))))
         for index, section in enumerate(request.sections):
             for issue in self.registry.admission_issues(section, section_index=index):
