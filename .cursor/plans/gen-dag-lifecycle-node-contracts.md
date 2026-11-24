@@ -1,5 +1,9 @@
 # Lifecycle: локальные ноды варианта А и пакет согласования
 
+Приоритетное правило размещения 2026-11-24: одна нода — один .py файл — один класс, включая mock. Девять классов из nodeBindings.py подлежат разделению в tests/lifecycle/support/nodes/lifecycle/; точная карта файлов — в реестре размещения. Registration отдельно в этой папке, POJO отдельно. Упоминания nodeBindings.py ниже описывают прежнее/текущее размещение до переноса, не целевое исключение.
+
+Размещение каждой описанной ноды, её POJO, регистрации и родительских связей: [единый реестр](dag-node-layout-register.md). Реестр различает существующие файлы и целевые пути; размещение не закрывает OPEN контрактов и не означает production wiring.
+
 ## Шаг 1 — окончательная карта регистраций текущего mock scope
 
 2026-11-21, по поручению пользователя «Делаем 1, затем 2». Ниже конкретизирована карта для контрактной приёмки, без регистрации в runtime. Она заменяет сокращённые/proposed имена ниже. Семейство Lifecycle, пять logical operation leaf без собственного parent. В mock registry девять distinct registrations; все named synthetic classes только backend/tests/lifecycle/support/nodeContracts.py и nodeBindings.py. Общие реализации/owning wrappers остаются в ранее указанных application/dataModel путях.

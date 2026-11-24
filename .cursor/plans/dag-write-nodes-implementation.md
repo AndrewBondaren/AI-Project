@@ -1,6 +1,8 @@
 # Реализация нод записи: Time, настройки Time, Lifecycle
 
-Concrete node cards и поимённые POJO/связи: [контракты нод записи](dag-write-node-pojo-contracts.md). Первое предъявленное ребро — assemble_patch_set → apply_snapshot в mock_lifecycle_world; новые bindings явно PROPOSED.
+Размещение каждой описанной ноды, её POJO, регистрации и родительских связей: [единый реестр](dag-node-layout-register.md). Реестр различает существующие файлы и целевые пути; размещение не закрывает OPEN контрактов и не означает production wiring.
+
+Concrete node cards и поимённые POJO/связи: [контракты нод записи](dag-write-node-pojo-contracts.md). Первое предъявленное ребро — assemble_patch_set → apply_snapshot в mock_lifecycle_world; concrete mock leaf и локальные bindings уже существуют. Статус каждого нового binding фиксируется отдельно, без общей пометки PROPOSED для реализованных файлов.
 
 ## Приоритет работы координатора — решение пользователя 2026-11-24
 
@@ -10,7 +12,7 @@ Concrete node cards и поимённые POJO/связи: [контракты �
 
 Единица работы и отчёта — конкретная нода и её входящий/исходящий контракт. Для каждой ноды фиксируются: имя/NodeId и статус регистрации; семейство/роль; exact named Input с полями и источником каждого поля; exact Output/Error со всеми исходами; публичный owning метод для leaf либо CALL-контракты детей для orchestrator; Output→Input mapping следующего потребителя; конкретный остаток, владелец, evidence. Неназванные wrappers остаются OPEN, не заменяются догадкой или Any.
 
-Статусы вести раздельно: контракт принят; public method реализован; node реализована; binding зарегистрирован; проверки выполнены. Прогресс домена не равен готовности ноды. Локальный PASS не равен закрытому маршруту. Пока маршрут не предъявлен целиком в своём scope, пользователь не дал добро на зависимую реализацию/активацию; текущая работа — фиксация и замыкание границ.
+Статусы вести раздельно: контракт принят; public method реализован; node реализована; binding зарегистрирован; проверки выполнены. Прогресс домена не равен готовности ноды. Локальный PASS не равен закрытому маршруту. Последующее решение пользователя разрешает реализовывать ноды и сводить остаток контрактов в коде; прежний общий запрет зависимой реализации не применяется как blanket gate к этому поручению. Production activation и готовность полного маршрута не следуют автоматически из реализации отдельных нод.
 
 Вход верхнего процесса — готовые typed inputs. Генератор/gameplay и их реализация OUT: новые задания, API и ноды им в рамках этого плана не выдаются. Внутренние доменные методы/transaction/retention helpers не становятся DAG-нодами или их Input-полями. Зависимость домена фиксируется только в привязке к невозможности выполнить конкретный заявленный Output/Error; owner закрывает её в своём плане. Самостоятельные новые domain workstreams из такой зависимости не выводятся.
 
@@ -149,7 +151,7 @@ DoD: per-node контрактная таблица и выбранный огр
 
 ### N1. Leaf подготовки Lifecycle и Time clock
 
-После G0/G1 и готовности соответствующего owning public method реализовать thin leaf/binding и reuse Input.request/Output.value. Lifecycle synthetic nodeContracts.py/nodeBindings.py находятся только backend/tests/lifecycle/support; общие implementations — в принятых owning/engine модулях. Существующую готовую реализацию не дублировать.
+После G0/G1 и готовности соответствующего owning public method реализовать thin leaf/binding и reuse Input.request/Output.value. Девять Lifecycle mock node-классов размещаются по одному в файле в backend/tests/lifecycle/support/nodes/lifecycle/, регистрация отдельно в registration.py этой папки; POJO остаются в backend/tests/lifecycle/support/nodeContracts.py. Точные пути заданы реестром. Existing nodeBindings.py — исходное размещение для переноса, не целевой общий implementation файл. Существующие классы переносить без дублирования реализации и изменения NodeId.
 
 Проверки: A/B mismatch, open generic/foreign subtype, duplicate NodeId, contract identity; exact success и все owning refusal; call count=1, no writes, неверный output остановлен engine. Проверить static Never и runtime exception отдельно. DoD: per-node diff/acceptance и typed wiring, не только созданные файлы. G2/G4 не prerequisite pure leaf.
 

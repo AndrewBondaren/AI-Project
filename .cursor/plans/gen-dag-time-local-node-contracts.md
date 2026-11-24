@@ -1,10 +1,12 @@
 # Time: локальные ноды и публичные контракты
 
+Размещение каждой описанной ноды, её POJO, регистрации и родительских связей: [единый реестр](dag-node-layout-register.md). Реестр различает существующие файлы и целевые пути; размещение не закрывает OPEN контрактов и не означает production wiring.
+
 Отдельная фиксация оркестрации настроек и привязки восьми операций к публичным методам: [Настройки времени — контракты методов](gen-dag-time-settings-method-contracts.md). Она не меняет родство четырёх нод ниже; ownership, batch-семантика и producer settings section отмечены там отдельно как OPEN.
 
 **Решение пользователя 2026-11-21:** фиксируются четыре предложенные локальные ноды prepare_time_section/read_current_time/read_pinned_time/read_historical_time как самостоятельные operation leaf семейства Time, без родительской исполняемой ноды в этом срезе. Семейство — логическая группа; CALL не задаёт родство. Эта фиксация не закрывает отмеченные ниже owning nested-read/Error/runtime gaps и не разрешает реализацию. Исторические PROPOSED именно по именам/группировке заменены решением; настройки рассматриваются отдельно по owning контрактам.
 
-2026-11-21. PROPOSED NodeId, родство и node POJO; пользователь поручил предложить ноды и сохранить диаграмму. Это документация, не реализация/регистрация нод и не приёмка runtime. Только локальные ноды Time, без общего read_world/write flow. Подготовка advance выше по процессу, initial artifact-read и settings в этот срез не добавлены.
+2026-11-21. Имена и самостоятельное родство четырёх Time leaf зафиксированы пользователем; concrete wrappers/регистрация учитываются отдельно. Это документация, не реализация/регистрация нод и не приёмка runtime. Только локальные ноды Time, без общего read_world/write flow. Подготовка advance выше по процессу, initial artifact-read и settings в этот срез не добавлены.
 
 ## Семейство и связи
 
@@ -72,6 +74,6 @@ prepare_time_section не пишет данные. Публичная общая
 
 ## Ответственность и проверка
 
-Каждый node-класс (proposed PrepareTimeSectionNode, ReadCurrentTimeNode, ReadPinnedTimeNode, ReadHistoricalTimeNode в backend/app/application/engine/nodes/time/) только передаёт контракт, вызывает одну owning операцию и возвращает owning value. Запрет: IO/storage/codec/Time predicates/foreign calls в ноде, вычисление времени, node-to-node execute, скрытый retry. POJO только данные, без scopes/services/callbacks. Time pipeline отвечает за prepare semantics; TimeReader за свой публичный контракт; Time storage/dependencies должны пройти отдельную nested проверку. Родство/NodeId/wrappers и Error завершаются через координатора и пользователя; код не разрешён этим документом.
+Каждый node-класс (proposed PrepareTimeSectionNode, ReadCurrentTimeNode, ReadPinnedTimeNode, ReadHistoricalTimeNode в backend/app/application/engine/nodes/time/) только передаёт контракт, вызывает одну owning операцию и возвращает owning value. Запрет: IO/storage/codec/Time predicates/foreign calls в ноде, вычисление времени, node-to-node execute, скрытый retry. POJO только данные, без scopes/services/callbacks. Time pipeline отвечает за prepare semantics; TimeReader за свой публичный контракт; Внутренняя реализация Time остаётся у владельца домена. Concrete node wrappers/регистрация и Error завершаются через координатора и пользователя; реализация нод разрешена последующим поручением пользователя в выбранном write scope, без автоматического включения read-нод.
 
 Источники: [Time owning план](time-domain.md), [общая запись](dag-multidomain-patch-publication-draft.md), [DAG критерии](../rules/dag-generator-interface.mdc). Эти четыре ноды не являются полным CRUD-каталогом Time и не проектируют read_world.

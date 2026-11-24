@@ -1,8 +1,10 @@
 # Конкретные POJO нод записи и связи
 
+Размещение и родительские связи: [единый реестр нод](dag-node-layout-register.md). Приоритетный статус 2026-11-24: concrete mock leaf-файлы, POJO и локальная регистрация уже существуют. Ниже контрактные карточки сохраняют целевой публичный маршрут; наличие wrappers не доказывает готовность полного Snapshot.apply или родителя write_changes.
+
 Сверочная таблица ребра и owning evidence: [assemble → apply](dag-assemble-apply-edge.md). Конкретные wrappers/предложенные регистрации задаёт этот документ; сверочная таблица не вводит второй набор. Изменения после engine/public-boundary проверки вносятся сюда адресной дельтой. Отсутствие cast/reconstruction при передаче base-typed результата требует доказательства exact typing binding до реализации, не компенсируется обещанием runtime subtype.
 
-2026-11-24. Проработка по поручению пользователя. PROPOSED node wrappers/registration/errors; существующие owning POJO не меняются. Это контрактная работа, не code-go незакрытого маршрута. Domain internals OUT. Первый concrete scenario — mock_lifecycle_world; generator/gameplay OUT, входы уже подготовлены. Следующие карточки не объявляют full write_changes реализованным.
+2026-11-24. Concrete mock wrappers, error carriers и локальная регистрация реализованы; независимая приёмка и production activation учитываются отдельно. Пользователь разрешил реализацию нод с последующим сведением незакрытых контрактов в коде. Domain internals OUT. Первый concrete scenario — mock_lifecycle_world; generator/gameplay OUT, входы уже подготовлены. Следующие карточки не объявляют full write_changes реализованным.
 
 ## 1. Concrete owning типы
 
@@ -23,7 +25,7 @@ MockAssemblyInput содержит existing поля: format_version, operation_
 
 | Параметр | Предлагаемый контракт |
 |---|---|
-| Logical name / family / role | assemble_patch_set / запись / operation leaf; caller write_changes |
+| Logical name / family / role | assemble_patch_set / PatchSet / operation leaf; caller write_changes |
 | Concrete NodeId = ContractId | engine.patch.mock_lifecycle.assemble_patch_set; test registration, не production ID |
 | Version | ContractVersion('1'), не wire format |
 | Input | MockAssemblePatchSetInput(request: MockAssemblyInput) |
@@ -83,7 +85,9 @@ Field mapping только один: assembled.value → apply.input.patch_set. 
 
 ## 5. Размещение и границы приёмки
 
-Concrete mock Input/Output — proposed tests/lifecycle/support/writeNodeContracts.py; concrete test bindings — tests/lifecycle/support/writeNodeBindings.py. Engine-only reusable error carriers — proposed app/dataModel/engine/nodes/snapshot/contracts.py. Никаких production registrations для synthetic типов. Existing Lifecycle 9 registrations не переименовываются.
+Целевое правило пользователя: одна нода — один .py файл — один класс; всё семейство в одной папке, включая mock. Поэтому фактические пути ниже подлежат переносу в tests/lifecycle/support/nodes/patchSet/assemblePatchSetNode.py и nodes/snapshot/applySnapshotNode.py, с отдельным registration.py каждого семейства. POJO остаются отдельно. Полная карта и статус переноса — dag-node-layout-register.md; перенос ещё не выполнен.
+
+Concrete mock Input/Output и оба error carriers находятся в tests/lifecycle/support/writeNodeContracts.py. Реализации разделены: tests/lifecycle/support/assemblePatchSetNode.py и applySnapshotNode.py. NodeContract/локальная регистрация — tests/lifecycle/support/writeNodeBindings.py. Прежнее предложенное размещение carriers в app/dataModel/engine/nodes/snapshot/contracts.py заменено этим фактическим размещением; создавать параллельный дубль не требуется. Никаких production registrations для synthetic типов. Existing Lifecycle 9 registrations не переименовываются.
 
 Перед кодом проверить отсутствие существующих wrappers/carriers с той же ролью и exact target protocol path; reuse при наличии. Результат owning метода, готовность реализации ноды и регистрация — отдельные статусы.
 
@@ -91,7 +95,7 @@ Concrete mock Input/Output — proposed tests/lifecycle/support/writeNodeContrac
 |---|---|---|
 | Assembly owning POJO/API | Существуют | PatchSet подтверждает exact named result binding и exception boundary, без внутреннего trace |
 | Apply owning POJO/API | POJO/порт существуют, full public implementation не готова по последней проверке | Snapshot подтверждает публичный IO/Error roster и статус готовности target |
-| Node wrappers/IDs/Error | PROPOSED в этой карте | Совместная приёмка новых node-контрактов; не выдавать за уже зарегистрированные |
+| Node wrappers/IDs/Error | Concrete mock файлы и локальная регистрация существуют | Независимая проверка node-контрактов/evidence; production wiring этим не принимается |
 | assemble → apply edge | Mapping полностью предъявлен | Type test exact classes/values; refusal/fault не вызывает apply |
 | write_changes / prepare_changes | Остаток конкретизации | Отдельные concrete Input/Output/CALL cards; не закрываются этой парой leaf |
 

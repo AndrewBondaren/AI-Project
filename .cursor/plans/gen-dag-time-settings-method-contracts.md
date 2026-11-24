@@ -1,16 +1,39 @@
 # Настройки времени: оркестрация и привязка контрактов к методам
 
-Решение пользователя 2026-11-21: зафиксировать оркестрацию настроек и закрепить контракты за конкретными методами. Документальный срез; реализация и runtime-приёмка не разрешены этой фиксацией.
+Размещение каждой описанной ноды, её POJO, регистрации и родительских связей: [единый реестр](dag-node-layout-register.md). Реестр различает существующие файлы и целевые пути; размещение не закрывает OPEN контрактов и не означает production wiring.
+
+Решение пользователя 2026-11-21: зафиксировать оркестрацию настроек и закрепить контракты за конкретными методами. Последующее поручение пользователя разрешило реализацию нод; восемь single leaf уже реализованы с локальной регистрацией. Приёмка полного маршрута и production activation учитываются отдельно.
 
 ## Структура
 
-Приоритетное уточнение 2026-11-21: пользователь выбрал последовательную Time-owned batch preparation; прежний OPEN выбора batch-семантики ниже исторический. Для одной команды orchestrator вызывает соответствующий single leaf, для нескольких — один batch leaf → TimeSettingsBatchPipelineOpenPipeline.prepare_batch. NodeId/wrappers/error mapping ещё OPEN. Orchestrator возвращает PreparedTimeSettingsChange либо полный owning отказ в prepare_changes; section producer вызывает prepare_changes через отдельный leaf. В orchestrator нет сравнения base, вычисления command indices/budget, промежуточных settings, no-op/retention checks. Эти алгоритмы остаются Time-owned. Границы CALL и transport — dag-write-nodes-implementation.md, «Обязательная граница оркестрации».
+Приоритетное уточнение 2026-11-21: пользователь выбрал последовательную Time-owned batch preparation; прежний OPEN выбора batch-семантики ниже исторический. Для одной команды orchestrator вызывает соответствующий single leaf, для нескольких — один batch leaf → TimeSettingsBatchPipelineOpenPipeline.prepare_batch. NodeId/wrappers/error mapping parent и batch ещё OPEN; восемь single leaf уже имеют локальную регистрацию. Orchestrator возвращает PreparedTimeSettingsChange либо полный owning отказ в prepare_changes; prepare_changes вызывает section producer через отдельный leaf. В orchestrator нет сравнения base, вычисления command indices/budget, промежуточных settings, no-op/retention checks. Эти алгоритмы остаются Time-owned. Границы CALL и transport — dag-write-nodes-implementation.md, «Обязательная граница оркестрации».
 
-`prepare_world_time_settings_changes` — проектируемая orchestration node. Получает типизированные команды, вызывает соответствующие operation leaf и передаёт результаты следующему согласованному этапу подготовки. Методы, callbacks и pipelines не передаются как данные команды. Название сохраняет ранее предложенную форму; окончательная принадлежность семейства зависит от разрешения ownership ниже.
+`prepare_world_time_settings_changes` — проектируемая orchestration node. Получает типизированные команды, вызывает соответствующие operation leaf и передаёт результаты следующему согласованному этапу подготовки. Методы, callbacks и pipelines не передаются как данные команды. Название сохраняет ранее предложенную форму; семейство timeSettings включает родителя и его single/batch children; owning настройки принадлежат Time.
 
 Каждая из восьми дочерних нод отвечает за одну операцию и вызывает один закреплённый публичный метод. Внутренние календарные алгоритмы не переносятся в DAG. Четыре ранее принятые самостоятельные Time leaf остаются без родительской ноды: этот orchestrator к ним родство не добавляет.
 
 ## Закреплённая карта методов и существующих POJO
+
+### Реализация operation leaf (2026-11-24)
+
+Восемь single-operation leaf имеют NodeId, равные именам методов в таблице
+(`prepare_hours_change`, `prepare_calendar_create`, `prepare_calendar_update`,
+`prepare_calendar_select`, `prepare_calendar_remove`, `prepare_epoch_create`,
+`prepare_epoch_update`, `prepare_epoch_remove`). Для каждой операции
+`Prepare<Operation>Input.request` имеет точный owning request из таблицы;
+`Prepare<Operation>Output.value` имеет полный union соответствующей строки.
+Конкретные POJO — `backend/app/dataModel/engine/nodes/timeSettingsContracts.py`,
+реализации — восемь отдельных классов в
+`backend/app/application/engine/nodes/timeSettings/prepare*Node.py`,
+NodeContract и явная регистрация — `timeSettings/registration.py`.
+Проектируемая родительская нода принадлежит отдельному классу и файлу в
+той же папке; её реализация не входит в этот срез.
+ContractId каждого leaf: `engine.time.settings.<NodeId>`, версия `1`,
+`reads=()`, `calls=()`, `error_types=(TimeSettingsNodeError,)`.
+Owning refusals передаются через Output.value; исключения исполнения не
+преобразуются. Регистрация локальная через `register_time_settings_nodes`;
+production wiring вне этого среза. Согласование будущего orchestrator,
+batch и section producer остаётся OPEN.
 
 Полные имена классов публичных целей:
 
@@ -18,7 +41,7 @@
 - C = `WorldCalendarSettingsPipelineOpenPipeline`, `application/worldData/timeSettings/preparation/calendarPipelineOpenPipeline.py`.
 - E = `WorldEpochSettingsPipelineOpenPipeline`, `application/worldData/timeSettings/preparation/epochPipelineOpenPipeline.py`.
 
-Пути относятся к `backend/app/`. Имена дочерних NodeId ниже — конкретное проектное предложение, регистрации ещё нет. Сигнатуры методов сверены с кодом; это не утверждение соответствия их вложенных вызовов целевой архитектуре.
+Пути относятся к `backend/app/`. Для восьми single leaf ниже реализация и локальная регистрация уже существуют, как указано в разделе от 2026-11-24 выше. Parent/batch/section остаются отдельными целевыми нодами; их файлы закреплены в реестре размещения. Сигнатуры методов не означают приёмку внутренней реализации доменов.
 
 | Operation leaf | Публичный метод | Input POJO | Полный возвращаемый union |
 |---|---|---|---|
@@ -61,7 +84,7 @@ SettingsInvalid несёт непустой tuple CalendarFieldIssue; SettingsAn
 3. Успех подготовки ещё требует согласованного producer native settings section. Затем секция участвует в общей сборке PatchSet и единственном вызове Snapshot.apply по write flow. PreparedTimeSettingsChange не выдаётся за готовую секцию.
 4. Prepare-методы не вызывают Snapshot.apply. Remove означает подготовку изменения настроек; фактическое сохранение проходит общий маршрут.
 
-Несколько команд нельзя автоматически выполнить независимо на одном capture и затем выбрать последний after: это теряет изменения. Нельзя и самостоятельно подменять capture промежуточным кандидатом. Контракт пакетной подготовки, порядок зависимых команд и разрешение пересечений принадлежат владельцу настроек и остаются OPEN. До их согласования документ закрепляет отдельные операции, а не готовую batch-семантику orchestrator.
+Несколько команд нельзя автоматически выполнить независимо на одном capture и затем выбрать последний after: это теряет изменения. Нельзя и самостоятельно подменять capture промежуточным кандидатом. Последовательная batch preparation принята и выполняется публичным методом Time. DAG выбирает single/batch, не вычисляет промежуточные состояния. Остаются concrete node wrappers/CALL/error transport, а не повторный выбор batch-семантики.
 
 ## Сверка и открытые границы
 
@@ -69,8 +92,8 @@ SettingsInvalid несёт непустой tuple CalendarFieldIssue; SettingsAn
 - RESOLVED, ownership: owning update Time в SETTINGS-CONTRACT-2026-11-21 подтвердил пользовательское решение — runtime настройки мира принадлежат Time. World* в именах и путях не обозначает другого владельца. Противоречивый REVIEW-FIX отозван владельцем. Отдельный initial маршрут сохраняется.
 - RESOLVED, граница вложенных вычислений: CalendarValidator и CalendarProjector внутри H/C/E — Time-owned алгоритмы, их не требуется выносить в DAG. Это не разрешает вложенный Snapshot.apply и не закрывает остальные runtime-проверки.
 - OPEN: producer native WorldTimeSettingsSection, его exact Input/Output/Error и consumer mapping до assemble_patch_set.
-- OPEN: batch Input/Output, зависимости и порядок команд, общий результат отказа; retry/cancellation и engine error mapping.
-- OPEN: окончательные NodeId/family registration и обязательная приёмка ответственности всех задействованных классов/POJO по dag-generator-interface.mdc. Полная приёмка плана пока не пройдена.
+- OPEN: concrete batch node Input/Output/Error wrappers и CALL binding к owning prepare_batch; engine retry/cancellation mapping. Последовательный порядок и owning batch-семантика не переоткрываются.
+- OPEN: NodeId/registration parent, batch и section leaf; их контрактная приёмка. Восемь single leaf имеют NodeId и локальную регистрацию; это не приёмка всего маршрута.
 
 Initial settings и чтение мира не добавлены в этот срез. Связанный план локальных Time-нод: [gen-dag-time-local-node-contracts.md](gen-dag-time-local-node-contracts.md).
 

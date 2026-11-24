@@ -1,5 +1,7 @@
 # DAG: общая карта междоменных процессов и контрактов
 
+Размещение каждой описанной ноды, её POJO, регистрации и родительских связей: [единый реестр](dag-node-layout-register.md). Реестр различает существующие файлы и целевые пути; размещение не закрывает OPEN контрактов и не означает production wiring.
+
 Порядок поставки нод, локальные gates и проверки: [план реализации](dag-write-nodes-implementation.md). Диаграмма задаёт контракты процесса; этот отдельный план не объявляет отсутствующие bindings принятыми.
 
 Архитектурное уточнение: write_changes управляет только prepare → assemble → apply; prepare_changes связывает объявленные доменные ветви, но не повторяет dispatch settings orchestrator. Только prepare_world_time_settings_changes выбирает single/batch и concrete single leaf. Все section leaf вызывают owning producer; native patch/header/dependencies создаёт домен. Сбор успешных outputs в prepare_changes — транспорт, не нормализация/проверка/сборка PatchSet. Exact CALL/mapping и запреты закреплены в плане реализации, подраздел «Обязательная граница оркестрации». G3/G5 остаются OPEN до named wrappers и корреляции; утечка логики в parent не допускается как временная реализация.
@@ -23,7 +25,7 @@
 | Settings section operation leaf (имя/NodeId OPEN) | Лист упаковки настроек, вызывается prepare_changes после успешной подготовки | PrepareTimeSettingsSection(change,operation_id,expected_world) → WorldTimeSettingsSection либо SettingsSectionContextMismatch | TimeSettingsSectionPipelineOpenPipeline.prepare_section |
 | prepare_lifecycle_create/replacement/end/reactivate | Четыре самостоятельных logical operation leaf Lifecycle | PrepareLifecycleXInput.request:exact PrepareLifecycleX[T,R] → PrepareLifecycleXOutput.value:exact PreparedLifecycleX[T,R] или LifecycleFieldError или LifecycleLogicError | Соответствующий LifecycleXPipelineOpenPipeline.prepare_x |
 | prepare_lifecycle_section | Самостоятельный operation leaf Lifecycle | PrepareLifecycleSectionInput.request:PrepareLifecycleSectionAB → PrepareLifecycleSectionOutput.value:LifecycleSectionAB или LifecycleSectionRefused | LifecycleSectionPipelineOpenPipeline.prepare_section |
-| assemble_patch_set | Operation leaf семейства записи | PatchSetAssemblyInput[S] → PatchSet[S] или PatchSetAssemblyRefused; engine wrappers отдельно | IPatchSetAssembly[S].assemble |
+| assemble_patch_set | Самостоятельный operation leaf семейства PatchSet; caller write_changes | Q → P или PatchSetAssemblyRefused; mock Q=MockAssemblyInput, P=MockPatchSet | IPatchSetAssembly[Q, P].assemble |
 | apply_snapshot | Самостоятельный operation leaf Snapshot | ApplySnapshotInput[S].patch_set → ApplySnapshotOutput[T].value; fault отдельно | await IWorldSnapshotApply[S,T].apply |
 
 T в Lifecycle mock composition — отдельный closed result с согласованными Lifecycle/subject diagnostics; он не подменяет и не расширяет молча TimeSnapshotApplyResult/root20150. S — закрытый union действительно участвующих секций (LifecycleAB и subject A/B для данного mock); не только LifecycleSectionAB, когда evidence требует subject patches. Пара Time format1/root20150 принята и не назначается новым synthetic roots.
@@ -117,7 +119,7 @@ Pure LifecycleSectionRefused не apply carrier: apply использует owni
 
 **Актуальная редакция схем — 2026-11-21, по поручению пользователя.** Три диаграммы ниже заменяют старые схемы: внутренняя граница Snapshot.apply, семейства нод и последовательность публичных вызовов. Карточки контрактов этого раздела приоритетнее исторических таблиц K и статусов первого круга ниже. Схемы конкретизируют Time/IC-1; другие домены подключаются через собственные согласованные bindings по необходимости. Source/Pack/Artifacts/Cache/Lifecycle не объявляются обязательными стадиями и не исключаются из каталога семейств. Отдельные read_world, initial-read и подготовка Pack вне текущего write flow.
 
-S — закрытый набор concrete sections, для локального IC-1 TimeAdvanceSection. T — одна текущая concrete модель TimeSnapshotApplyResult для новой записи и её replay. Legacy union/readers не вводятся. OPEN означает отсутствие завершённого контракта, PROPOSED — предложение, не утверждённый NodeId/binding. Фиксация схем не закрывает эти gaps и не разрешает код.
+S — закрытый набор concrete sections, для локального IC-1 TimeAdvanceSection. T — одна текущая concrete модель TimeSnapshotApplyResult для новой записи и её replay. Legacy union/readers не вводятся. OPEN означает отсутствие завершённого контракта, PROPOSED — предложение, не утверждённый NodeId/binding. Фиксация схем не закрывает эти gaps. Последующее поручение пользователя разрешает реализацию нод, не означает production activation.
 
 ## Карточки POJO и публичных целей — 2026-11-21
 
@@ -126,7 +128,7 @@ S — закрытый набор concrete sections, для локального
 | write_changes | Orchestration, корень семейства записи | Готовые типизированные изменения и контекст → owning отказ подготовки/сборки либо T; именованные Input/Output union OPEN | Engine CALL prepare_changes, assemble_patch_set, затем межсемейный CALL apply_snapshot; прямых domain calls нет |
 | prepare_changes | Orchestration, ребёнок write_changes | Готовые доменные изменения + контекст → полный обязательный набор native sections либо owning отказ; aggregate POJO OPEN | Engine CALL доменных нод; Time leaf ниже. Не вычисляет изменения, не собирает PatchSet |
 | Time preparation leaf (NodeId OPEN) | Operation leaf семейства Time; immediate parent OPEN | PrepareTimeAdvanceSection → TimeAdvanceSection либо TimeSectionContextMismatch; собственный node-wrapper/error binding OPEN | Один PUBLIC CALL ITimeAdvancePipelineOpenPipeline.prepare_section; реализация TimeAdvancePipelineOpenPipeline |
-| assemble_patch_set | Operation leaf, ребёнок write_changes | PatchSetAssemblyInput[S] → PatchSet[S] либо PatchSetAssemblyRefused; node-wrapper/error binding OPEN | Один PUBLIC CALL IPatchSetAssembly[S].assemble; реализация PatchSetAssembler; без sorting/conversion/fingerprint в DAG |
+| assemble_patch_set | Самостоятельный operation leaf семейства PatchSet; caller write_changes | Q → P либо PatchSetAssemblyRefused; concrete mock wrappers существуют, другие bindings отдельно | Один PUBLIC CALL IPatchSetAssembly[Q, P].assemble; реализация PatchSetAssembler[Q, P]; без sorting/conversion/fingerprint в DAG |
 | apply_snapshot | Самостоятельная operation leaf семейства Snapshot, не ребёнок write_changes | ApplySnapshotInput[S] → ApplySnapshotOutput[T]; SnapshotNodeError, cancellation transport OPEN | Один PUBLIC CALL await IWorldSnapshotApply[S,T].apply(input.patch_set); concrete owner WorldSnapshotService |
 
 Owning вход Time:
@@ -211,7 +213,7 @@ COMMITTED требует committed refs и пустые diagnostics; refusal —
 
 Единый [реестр восьми открытых контрактных направлений](interdomain-contract-register.md) содержит владельцев, общие зависимости без дублей, конкретные предложения и критерии закрытия. Общая карта ниже показывает процессы; реестр — состояние контрактной работы.
 
-Дата: 2026-11-18. Статус: СХЕМА СЕМЕЙСТВ И РОЛЕЙ ЗАФИКСИРОВАНА пользователем вместо прежней черновой схемы. Корень — write_changes; его дети — prepare_changes и assemble_patch_set; apply_snapshot остаётся в семействе Snapshot и вызывается через engine CALL. Точные POJO, bindings, внутренние доменные последовательности и полная архитектурная приёмка остаются OPEN. Фиксация схемы не является разрешением реализации.
+Исходная фиксация 2026-11-18, актуализирована 2026-11-24. Корень — write_changes; его ребёнок — prepare_changes. assemble_patch_set принадлежит семейству PatchSet, apply_snapshot — Snapshot; обе вызываются write_changes через engine CALL. Порядок prepare → assemble → apply неизменен. Реализация нод разрешена последующим поручением пользователя; это не приёмка полного маршрута или production activation. Незакрытые aggregate POJO и bindings учитываются адресно.
 
 ## Общая карта контрактов — 2026-11-19
 
@@ -292,7 +294,7 @@ flowchart TB
     subgraph WRITE["Семейство записи изменений"]
         W["write_changes<br/>Orchestration: корень<br/>IN: запрос записи, POJO OPEN<br/>OUT: T или refusal, union OPEN"]
         P["prepare_changes<br/>Orchestration: ребёнок write_changes<br/>IN: изменения + контекст, POJO OPEN<br/>OUT: полный набор sections или refusal, POJO OPEN"]
-        A["assemble_patch_set<br/>Operation leaf: ребёнок write_changes<br/>IN: PatchSetAssemblyInput[S]<br/>OUT: PatchSet[S] или PatchSetAssemblyRefused<br/>Node-wrapper binding OPEN"]
+        A["assemble_patch_set<br/>Operation leaf семейства PatchSet; caller write_changes<br/>IN: Q (mock: MockAssemblyInput)<br/>OUT: P (mock: MockPatchSet) или PatchSetAssemblyRefused<br/>Concrete mock wrappers существуют"]
         W ---|"Родство: ребёнок"| P
         W ---|"Родство: ребёнок"| A
     end
@@ -342,7 +344,7 @@ sequenceDiagram
     TN-->>P: Owning результат без изменения семантики
     P-->>W: Native sections или owning отказ
     W->>A: Engine CALL: PatchSetAssemblyInput[S]
-    A->>PS: IPatchSetAssembly[S].assemble(request)
+    A->>PS: IPatchSetAssembly[Q, P].assemble(request)
     PS-->>A: PatchSet[S] или PatchSetAssemblyRefused
     A-->>W: Owning результат сборки
     W->>AN: Engine CALL: ApplySnapshotInput[S](patch_set)
@@ -423,7 +425,7 @@ Cache включён в карту по поручению пользовате�
 |---|---|---|---|
 | K1: caller → write_changes | Готовые типизированные патчи/изменения + контекст общей операции | Общий исход; точный Input/Output/Error OPEN | DAG orchestration; определить форму запроса, identity/expected versions и сохранение owning исходов без универсального dict |
 | K2: write_changes → prepare_changes (ребёнок) | Данные K1, необходимые для подготовки записи | Полный набор результатов для сборки либо owning отказ; POJO OPEN | DAG orchestration; определить требуемые CALL и output→input связи K5–K10; не повторять предметную подготовку |
-| K3: write_changes → assemble_patch_set (ребёнок) | Результаты K2 + контекст публикации | PatchSet с закрытым набором секций; error OPEN | Отдельная ответственность сборки; определить границу простой композиции и публичной owning операции, если сборка требует доменной логики. Такая логика в ноде запрещена |
+| K3: write_changes → assemble_patch_set (межсемейный CALL в PatchSet) | Результаты K2 + контекст публикации | PatchSet с закрытым набором секций; error OPEN | Отдельная ответственность сборки; определить границу простой композиции и публичной owning операции, если сборка требует доменной логики. Такая логика в ноде запрещена |
 | K4: write_changes → apply_snapshot (межсемейный CALL) | ApplySnapshotInput.patch_set | ApplySnapshotOutput.value: SnapshotApplyResult; проект SnapshotNodeError(SnapshotPublicFault), отдельная cancellation boundary | Один публичный Snapshot apply. Порт IWorldSnapshotApply.apply существует; concrete public lifecycle, named specialization PatchSet и error/cancellation binding не завершены |
 
 Источник K4: [Snapshot node contracts](gen-dag-snapshot-node-contracts.md). SnapshotApplyResult сохраняет COMMITTED/CONFLICT/REJECTED; успех исполнения ноды не означает commit. PatchSet не конструируется заново в apply_snapshot.
