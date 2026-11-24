@@ -171,6 +171,8 @@ PreflightRejected и Rollback — разные internal control carriers, не �
 
 ## 6. Единый error roster
 
+Актуальная собственная error delta 2026-11-25 — source-core-error-contract.md: exact REVISION_NOT_FOUND/REVISION_PRUNED, отсутствие дублирующего MUTATION_ID_CONFLICT и граница programming/owning transport. Это owner proposal на координацию, не runtime enum change. Раннее перечисление всех четырёх кодов ниже — история кандидатов; оно не разрешает автоматически добавлять MEMBERSHIP_MISMATCH.
+
 ### Request diagnostics: собственная детализация, 2026-11-22
 
 Exact mutation inspect-functions, nullable slots, nested trace и критерии — [source-mutation-traversal-contract.md](source-mutation-traversal-contract.md). Его §4 уточняет общие predicates: duplicate_identity_positions/invalid_identity_order_positions заменяют ранние duplicate_change_positions/invalid_change_order_positions из §3, чтобы malformed branches не требовали repaired records. Это одна реализация правил для POJO и application, не дополнительный алгоритм.

@@ -85,7 +85,7 @@ Field mapping только один: assembled.value → apply.input.patch_set. 
 
 ## 5. Размещение и границы приёмки
 
-Целевое правило пользователя: одна нода — один .py файл — один класс; всё семейство в одной папке, включая mock. Поэтому фактические пути ниже подлежат переносу в tests/lifecycle/support/nodes/patchSet/assemblePatchSetNode.py и nodes/snapshot/applySnapshotNode.py, с отдельным registration.py каждого семейства. POJO остаются отдельно. Полная карта и статус переноса — dag-node-layout-register.md; перенос ещё не выполнен.
+Целевое правило пользователя: одна нода — один .py файл — один класс; всё семейство в одном корневом каталоге с допустимыми подпапками, включая mock. Поэтому фактические пути ниже подлежат переносу в tests/lifecycle/support/nodes/patchSet/assemblePatchSetNode.py и nodes/snapshot/applySnapshotNode.py, с отдельным registration.py каждого семейства. POJO остаются отдельно. Полная карта и статус переноса — dag-node-layout-register.md; перенос ещё не выполнен.
 
 Concrete mock Input/Output и оба error carriers находятся в tests/lifecycle/support/writeNodeContracts.py. Реализации разделены: tests/lifecycle/support/assemblePatchSetNode.py и applySnapshotNode.py. NodeContract/локальная регистрация — tests/lifecycle/support/writeNodeBindings.py. Прежнее предложенное размещение carriers в app/dataModel/engine/nodes/snapshot/contracts.py заменено этим фактическим размещением; создавать параллельный дубль не требуется. Никаких production registrations для synthetic типов. Existing Lifecycle 9 registrations не переименовываются.
 

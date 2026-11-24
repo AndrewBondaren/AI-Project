@@ -1,5 +1,7 @@
 # Реализация нод записи: Time, настройки Time, Lifecycle
 
+Уточнение структуры 2026-11-25: для каждого семейства один корневой каталог, допускающий внутренние группы операций. Time settings находятся в nodes/time/timeSettings/, а не в соседнем nodes/timeSettings/. То же правило применяется к Lifecycle/PatchSet/Snapshot/Artifacts/Cache/Pack/Source по таблице единых корней реестра. Одна нода — один .py файл — один класс; registration и POJO отдельно. Группировка папок не меняет CALL/родство или NodeId.
+
 Размещение каждой описанной ноды, её POJO, регистрации и родительских связей: [единый реестр](dag-node-layout-register.md). Реестр различает существующие файлы и целевые пути; размещение не закрывает OPEN контрактов и не означает production wiring.
 
 Concrete node cards и поимённые POJO/связи: [контракты нод записи](dag-write-node-pojo-contracts.md). Первое предъявленное ребро — assemble_patch_set → apply_snapshot в mock_lifecycle_world; concrete mock leaf и локальные bindings уже существуют. Статус каждого нового binding фиксируется отдельно, без общей пометки PROPOSED для реализованных файлов.

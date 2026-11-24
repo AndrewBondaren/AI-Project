@@ -1,5 +1,7 @@
 # Source core — публичные границы и методы
 
+Error delta 2026-11-25: собственный mapping state-admission/completeness/postcondition определён в source-core-error-contract.md. Он заменяет прежние формулировки «Source transport неполноты ещё не выбран» как актуальный проект: MATERIALIZED_INPUT_INCOMPLETE через existing SourceFailure, programming failures отдельно. Дельта пока OWNER PROPOSAL, не принятый wire/runtime.
+
 **Решения пользователя 2026-11-21:** целевой layout — пять отдельных публичных методов/пайплайнов ниже, а не единый многометодный owner. Термин frontend API к этим Python-контрактам не применяется. Старый единый класс в spec — baseline до адресной синхронизации через координатора, не второй целевой вариант. Для protected reads выбран путь Artifacts public operation → DAG → переданные данные → Source; exact named IO и полнота набора ещё согласуются. Предложение общего storage-механизма отложено в source-protected-read-infrastructure-proposal.md. Выбран вариант А публикации; Source включается только при конкретном producer/consumer mapping. АР-2…АР-6 выполняются в прежнем порядке, без новых локальных срезов.
 
 Следствие для методов: текущие proof-only inputs и scope-based collector нельзя считать окончательными для выбранного data-input пути. Требуется owning результат Artifacts и адресная дельта Source input/collector, без mirror payload или скрытого дочитывания. Пользователь принял направление, не отсутствующие exact POJO, их реализации или всю междоменную цепочку.

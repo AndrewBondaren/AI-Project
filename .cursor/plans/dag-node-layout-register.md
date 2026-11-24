@@ -5,15 +5,33 @@
 ## Правила
 
 - Одна нода — один .py файл — один класс ноды. Правило обязательно для production и mock/test нод без исключений. POJO и registration размещаются отдельно от реализации ноды.
-- Всё семейство размещается в одной папке: родитель и его дочерние ноды. Разные семейства получают отдельные папки, даже если участвуют в одном процессе.
+- У каждого семейства один корневой каталог. Внутри разрешены группы операций в подпапках; родитель и дети соответствующей группы размещаются внутри этого корня. Не создавать соседние семейства по именам отдельных операций. Правило одинаково для production и mock.
 - Семейство — логическая группа. Caller не означает parent: самостоятельные Time/Lifecycle/Snapshot leaf вызываются из write flow, но не становятся его дочерним семейством.
-- Parent settings и его children размещаются в одном timeSettings пакете; родство задаётся CALL contracts, не Python import/расположением.
+- timeSettings — группа внутри Time: N/time/timeSettings/. Папки отражают группировку; parent/child отношения определяются контрактом оркестрации, не любым CALL или импортом.
 - NodeId не выводится автоматически из path. Existing IDs сохраняются. Для новых путей идентификаторы остаются proposed/OPEN по node-card, никакой массовой регистрации.
 - Generator/gameplay/другие будущие домены OUT. Внутренние методы доменов не становятся строками этого реестра.
 
 Пути таблиц относительно backend/. Обозначения: N=app/application/engine/nodes; P=app/dataModel/engine/nodes; L=tests/lifecycle/support. Это сокращения путей, не новые каталоги.
 
 ## Общая запись и mock binding
+
+### Единые корни семейств — уточнение 2026-11-25
+
+| Семейство / процесс | Production root | Mock root в текущем test-support | Организация внутри корня |
+|---|---|---|---|
+| Общая запись | N/writeChanges/ | Не назначен | write_changes и prepare_changes; один registration.py |
+| Time | N/time/ | Не назначен | Clock/read leaf в корне; настройки в timeSettings/; root registration собирает регистрацию группы |
+| Lifecycle | N/lifecycle/ (target при появлении production binding) | L/nodes/lifecycle/ | Все девять mock leaf в одном корне; будущие группы только внутри него |
+| PatchSet | N/patchSet/ (target при появлении production binding) | L/nodes/patchSet/ | Assembly leaf; будущие группы внутри того же корня |
+| Snapshot | N/snapshot/ (target при появлении production binding) | L/nodes/snapshot/ | Apply leaf; будущие группы внутри корня. Publication — часть Snapshot, соседнее семейство нод не вводится |
+| Artifacts | N/artifacts/ | Не назначен | Prepare/stage leaf в корне; будущие группы внутри него |
+| Cache | N/cache/ | Не назначен | Read/write parents и existing leaf в корне |
+| Pack | N/pack/ (target) | Не назначен | Read/write группы, если приняты, размещаются внутри pack/, не как соседние packRead/packWrite |
+| Source | N/source/ (target) | Не назначен | Все будущие принятые Source node bindings внутри source/, не отдельные корни по proof/capture операциям |
+
+Это карта каталогов, не принятие новых нод, NodeId, публичных методов или CALL. Pack/Source concrete node roster остаётся в своих контрактных планах; папка не добавляет их в текущий write flow. Production и test-support — разные пространства размещения, synthetic типы не переносятся в app. Для малых семейств дополнительные подпапки не обязательны. Если появляются группы, их registration.py собирает корневой registration.py семейства без повторной регистрации; импорт модулей не должен автоматически регистрировать ноды. Регистрация не исполняет оркестрацию.
+
+POJO остаются отдельно от node implementation. Эта правка не перемещает owning domain DTO и не создаёт новые корни dataModel автоматически. NodeId/ContractId и граф CALL сохраняются при смене каталогов.
 
 | Нода / класс | Семейство; caller | Implementation | POJO / registration | Статус |
 |---|---|---|---|---|
@@ -39,21 +57,21 @@ Actual mock NodeId/ContractId: engine.patch.mock_lifecycle.assemble_patch_set и
 
 ## Настройки Time
 
-POJO всех existing single leaf: P/timeSettingsContracts.py. Registration: N/timeSettings/registration.py. Родитель prepare_world_time_settings_changes — orchestrator; single children вызываются им. Parent вызывается prepare_changes и возвращает prepared/refusal; prepare_changes отдельно вызывает section producer.
+POJO всех existing single leaf: P/timeSettingsContracts.py. Registration: N/time/timeSettings/registration.py. Родитель prepare_world_time_settings_changes — orchestrator; single children вызываются им. Parent вызывается prepare_changes и возвращает prepared/refusal; prepare_changes отдельно вызывает section producer.
 
 | Нода / класс | Implementation | Статус |
 |---|---|---|
-| prepare_world_time_settings_changes / PrepareWorldTimeSettingsChangesNode | N/timeSettings/prepareWorldTimeSettingsChangesNode.py | Target parent; IO/CALL contract OPEN |
-| prepare_hours_change / PrepareHoursChangeNode | N/timeSettings/prepareHoursChangeNode.py | Existing |
-| prepare_calendar_create / PrepareCalendarCreateNode | N/timeSettings/prepareCalendarCreateNode.py | Existing |
-| prepare_calendar_update / PrepareCalendarUpdateNode | N/timeSettings/prepareCalendarUpdateNode.py | Existing |
-| prepare_calendar_select / PrepareCalendarSelectNode | N/timeSettings/prepareCalendarSelectNode.py | Existing |
-| prepare_calendar_remove / PrepareCalendarRemoveNode | N/timeSettings/prepareCalendarRemoveNode.py | Existing |
-| prepare_epoch_create / PrepareEpochCreateNode | N/timeSettings/prepareEpochCreateNode.py | Existing |
-| prepare_epoch_update / PrepareEpochUpdateNode | N/timeSettings/prepareEpochUpdateNode.py | Existing |
-| prepare_epoch_remove / PrepareEpochRemoveNode | N/timeSettings/prepareEpochRemoveNode.py | Existing |
-| Settings batch leaf / PrepareTimeSettingsBatchNode (project name) | N/timeSettings/prepareTimeSettingsBatchNode.py | Target; NodeId/IO freeze OPEN |
-| Settings section leaf / PrepareTimeSettingsSectionNode (project name) | N/timeSettings/prepareTimeSettingsSectionNode.py | Target; NodeId/IO freeze OPEN |
+| prepare_world_time_settings_changes / PrepareWorldTimeSettingsChangesNode | N/time/timeSettings/prepareWorldTimeSettingsChangesNode.py | Target parent; IO/CALL contract OPEN |
+| prepare_hours_change / PrepareHoursChangeNode | N/time/timeSettings/prepareHoursChangeNode.py | Existing |
+| prepare_calendar_create / PrepareCalendarCreateNode | N/time/timeSettings/prepareCalendarCreateNode.py | Existing |
+| prepare_calendar_update / PrepareCalendarUpdateNode | N/time/timeSettings/prepareCalendarUpdateNode.py | Existing |
+| prepare_calendar_select / PrepareCalendarSelectNode | N/time/timeSettings/prepareCalendarSelectNode.py | Existing |
+| prepare_calendar_remove / PrepareCalendarRemoveNode | N/time/timeSettings/prepareCalendarRemoveNode.py | Existing |
+| prepare_epoch_create / PrepareEpochCreateNode | N/time/timeSettings/prepareEpochCreateNode.py | Existing |
+| prepare_epoch_update / PrepareEpochUpdateNode | N/time/timeSettings/prepareEpochUpdateNode.py | Existing |
+| prepare_epoch_remove / PrepareEpochRemoveNode | N/time/timeSettings/prepareEpochRemoveNode.py | Existing |
+| Settings batch leaf / PrepareTimeSettingsBatchNode (project name) | N/time/timeSettings/prepareTimeSettingsBatchNode.py | Target; NodeId/IO freeze OPEN |
+| Settings section leaf / PrepareTimeSettingsSectionNode (project name) | N/time/timeSettings/prepareTimeSettingsSectionNode.py | Target; NodeId/IO freeze OPEN |
 
 Existing single NodeId равны указанным logical names; ContractId engine.time.settings.<NodeId>. Exact payload unions и actual error transport — gen-dag-time-settings-method-contracts.md/actual contracts.py. Для target parent/batch/section: отдельный P/timeSettingsWorkflowContracts.py, соответствующие декларации в том же registration.py только после freeze. Новый файл разделяет ещё проектируемый workflow и existing single contracts; owning DTO не дублируются. Проектное имя класса/файла не утверждает NodeId или public method readiness.
 

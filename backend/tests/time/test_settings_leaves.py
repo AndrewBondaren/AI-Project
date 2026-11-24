@@ -3,7 +3,7 @@ import unittest
 from importlib import import_module
 from unittest.mock import patch
 
-from app.application.engine.nodes.timeSettings import registration as bindings
+from backend.app.application.engine.nodes.time.timeSettings import registration as bindings
 from app.application.engine.registration.nodeRegistry import NodeRegistry
 from app.application.engine.runtime.dag.context.dagContext import DAGContext
 from app.application.engine.runtime.execution.nodeRunner import NodeRunner

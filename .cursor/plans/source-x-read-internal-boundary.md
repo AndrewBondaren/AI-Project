@@ -1,5 +1,7 @@
 # X-READ: внутренняя граница Source и внешняя интеграция
 
+Уточнение error mapping 2026-11-25 — source-core-error-contract.md §3: внутренние gaps проецируются в proposed MATERIALIZED_INPUT_INCOMPLETE через existing SourceLogicIssue/SourceFailure, с capture origins. Старые отметки ниже о невыбранном Source transport superseded этим owner proposal; внешние authority errors по-прежнему не переопределяются, приёмка wire delta не заявлена.
+
 2026-11-22. Проект собственной архитектуры; X-READ transport/authority/protection/producer binding — EXTERNAL / DEFERRED. Этот документ не вводит публичный DTO или новый DAG маршрут, не утверждает foreign гарантии и не разрешает локальный implementation-срез. Требования к данным — source-closure-operands-2026-11-22.md; semantic closure v1 — source-proof-v2-contract-spec.md.
 
 ## 1. Что Source определяет сейчас

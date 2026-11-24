@@ -8,7 +8,7 @@
 
 Приоритетное уточнение 2026-11-21: пользователь выбрал последовательную Time-owned batch preparation; прежний OPEN выбора batch-семантики ниже исторический. Для одной команды orchestrator вызывает соответствующий single leaf, для нескольких — один batch leaf → TimeSettingsBatchPipelineOpenPipeline.prepare_batch. NodeId/wrappers/error mapping parent и batch ещё OPEN; восемь single leaf уже имеют локальную регистрацию. Orchestrator возвращает PreparedTimeSettingsChange либо полный owning отказ в prepare_changes; prepare_changes вызывает section producer через отдельный leaf. В orchestrator нет сравнения base, вычисления command indices/budget, промежуточных settings, no-op/retention checks. Эти алгоритмы остаются Time-owned. Границы CALL и transport — dag-write-nodes-implementation.md, «Обязательная граница оркестрации».
 
-`prepare_world_time_settings_changes` — проектируемая orchestration node. Получает типизированные команды, вызывает соответствующие operation leaf и передаёт результаты следующему согласованному этапу подготовки. Методы, callbacks и pipelines не передаются как данные команды. Название сохраняет ранее предложенную форму; семейство timeSettings включает родителя и его single/batch children; owning настройки принадлежат Time.
+`prepare_world_time_settings_changes` — проектируемая orchestration node. Получает типизированные команды, вызывает соответствующие operation leaf и передаёт результаты следующему согласованному этапу подготовки. Методы, callbacks и pipelines не передаются как данные команды. Название сохраняет ранее предложенную форму; группа timeSettings внутри семейства Time включает родителя и его single/batch children; owning настройки принадлежат Time.
 
 Каждая из восьми дочерних нод отвечает за одну операцию и вызывает один закреплённый публичный метод. Внутренние календарные алгоритмы не переносятся в DAG. Четыре ранее принятые самостоятельные Time leaf остаются без родительской ноды: этот orchestrator к ним родство не добавляет.
 
@@ -24,8 +24,8 @@
 `Prepare<Operation>Output.value` имеет полный union соответствующей строки.
 Конкретные POJO — `backend/app/dataModel/engine/nodes/timeSettingsContracts.py`,
 реализации — восемь отдельных классов в
-`backend/app/application/engine/nodes/timeSettings/prepare*Node.py`,
-NodeContract и явная регистрация — `timeSettings/registration.py`.
+`backend/app/application/engine/nodes/time/timeSettings/prepare*Node.py`,
+NodeContract и явная регистрация группы — `time/timeSettings/registration.py`; общая регистрация семейства — `time/registration.py`.
 Проектируемая родительская нода принадлежит отдельному классу и файлу в
 той же папке; её реализация не входит в этот срез.
 ContractId каждого leaf: `engine.time.settings.<NodeId>`, версия `1`,
