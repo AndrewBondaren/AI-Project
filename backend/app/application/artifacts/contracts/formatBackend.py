@@ -46,6 +46,11 @@ class ArtifactFormatContract[C: bytes | BaseModel]:
 
 class ArtifactBackend[C: bytes | BaseModel](ABC):
     @property
+    def write_admission(self) -> object:
+        """Unknown backends cannot be composed with the standalone writer."""
+        return None
+
+    @property
     @abstractmethod
     def contract(self) -> ArtifactFormatContract[C]: ...
 

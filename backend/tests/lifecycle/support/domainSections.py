@@ -1,6 +1,6 @@
 """Synthetic subject payload and diagnostics; no runtime subject behavior."""
 from enum import StrEnum
-from typing import Literal
+from typing import Literal, ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 from app.dataModel.identity.uid import EntityUid
@@ -8,8 +8,10 @@ from app.dataModel.patch.changes.patchData import PatchData
 from app.dataModel.patch.sections.section import DomainSection
 from app.dataModel.worldSnapshot.identity.publication import WorldPublicationRef
 from app.dataModel.validation.diagnostics.fieldPathError import FieldPathError
-from tests.lifecycle.support.mixedContracts import RefA, RefB, EffectA, EffectB
+from tests.lifecycle.support.mixedContracts import RefA, RefB, EffectA, EffectB, AdmissionA, AdmissionB
 from app.dataModel.patch.sections.dependency import PreparedSectionDependency
+from app.dataModel.patch.registry.sectionMetadata import SectionKey, PatchSectionRegistry
+from app.dataModel.registryKey import RegistryKey
 
 
 class MockSubjectCode(StrEnum):
@@ -40,6 +42,8 @@ class TestDomainPatchA(PatchData):
 
 
 class TestDomainSectionA(DomainSection[TestDomainPatchA]):
+    KEY: ClassVar[SectionKey] = RegistryKey[PatchSectionRegistry]("mock.subject.a")
+    FORMAT_VERSION: ClassVar[int] = 2
     __test__ = False
     patches: tuple[TestDomainPatchA, ...] = Field(min_length=1)
 
@@ -61,6 +65,8 @@ class TestDomainPatchB(PatchData):
 
 
 class TestDomainSectionB(DomainSection[TestDomainPatchB]):
+    KEY: ClassVar[SectionKey] = RegistryKey[PatchSectionRegistry]("mock.subject.b")
+    FORMAT_VERSION: ClassVar[int] = 2
     __test__ = False
     patches: tuple[TestDomainPatchB, ...] = Field(min_length=1)
 
@@ -115,3 +121,39 @@ class BuildMockEvidenceB(BaseModel):
     section: TestDomainSectionB
     dependency: PreparedSectionDependency
     links: tuple[MockEffectLinkB, ...] = Field(min_length=1)
+
+
+class MockBatchA(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
+    mutations: tuple[MockMutationA, ...] = Field(min_length=1)
+
+
+class MockBatchB(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
+    mutations: tuple[MockMutationB, ...] = Field(min_length=1)
+
+
+class PrepareMockSubjectA(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
+    publication: WorldPublicationRef
+    operation_id: EntityUid
+    batches: tuple[MockBatchA, ...] = Field(min_length=1)
+
+
+class PrepareMockSubjectB(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
+    publication: WorldPublicationRef
+    operation_id: EntityUid
+    batches: tuple[MockBatchB, ...] = Field(min_length=1)
+
+
+class PreparedMockSubjectA(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
+    section: TestDomainSectionA
+    admissions: tuple[AdmissionA, ...] = Field(min_length=1)
+
+
+class PreparedMockSubjectB(BaseModel):
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
+    section: TestDomainSectionB
+    admissions: tuple[AdmissionB, ...] = Field(min_length=1)

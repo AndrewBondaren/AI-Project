@@ -4,9 +4,12 @@ from pydantic import BaseModel, TypeAdapter
 
 from app.application.artifacts.contracts.formatBackend import ArtifactFormatContract
 from app.application.artifacts.errors import ArtifactCodecError
+from app.application.artifacts.staging.stageErrors import ArtifactInputRejected
 from app.application.artifacts.registry.artifactRegistry import ArtifactFormatRegistryBinding
 from app.dataModel.artifacts.references import ArtifactRef
 from app.dataModel.artifacts.staging.preparedArtifact import PreparedArtifact
+from app.dataModel.artifacts.staging.inputErrors import ArtifactInputError, ArtifactInputIssue, ArtifactInputIssueCode
+from app.dataModel.fields.validatedFieldPath import FieldSegment, ModelIdentity, ValidatedFieldPath
 from app.dataModel.patch.values import FormatVersion
 from app.encoding.canonicalCodec import content_digest
 
@@ -37,4 +40,8 @@ class ArtifactDescriptorBuilder[C: bytes | BaseModel]:
 
     def check(self, prepared: PreparedArtifact[C]) -> None:
         if self.build(prepared.content) != prepared.descriptor:
-            raise ValueError("prepared artifact descriptor mismatch")
+            owner = ModelIdentity(module=PreparedArtifact.__module__, qualname=PreparedArtifact.__qualname__)
+            path = ValidatedFieldPath(root=owner, segments=(FieldSegment(owner=owner, name="descriptor"),))
+            raise ArtifactInputRejected(ArtifactInputError(issues=(ArtifactInputIssue(
+                code=ArtifactInputIssueCode.DESCRIPTOR_MISMATCH, path=path,
+                message="prepared artifact descriptor differs from content"),)))

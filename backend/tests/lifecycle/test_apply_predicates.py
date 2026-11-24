@@ -9,6 +9,7 @@ from app.dataModel.patch.changes.header import PatchHeader, PatchRef
 from app.dataModel.patch.sections.section import SectionHeader
 from tests.lifecycle.support import mixedContracts as m
 from tests.lifecycle.support import domainSections as d
+from tests.lifecycle.support import subjectMock as subject
 from tests.lifecycle.support.acceptedContracts import AcceptedChangeFoundAB, AcceptedChangesResultAB
 from tests.lifecycle.support.snapshotContracts import MockLifecycleSectionRefused, MockSubjectSectionRefused
 from tests.lifecycle.support.subjectMock import MockSubjectPayloadVerifierA, MockSubjectPayloadVerifierB
@@ -42,15 +43,11 @@ def subject_section(suffix="A"):
     entity_type = getattr(m, "Ref" + suffix)
     entities = tuple(entity_type(kind="test_entity_" + suffix.lower(), entity_uid=name) for name in ("one", "two"))
     base = sections.mixed_request().expected_world
-    effects = tuple(getattr(m, "Effect" + suffix)(entity=entity, effect=LifecycleOperation.CREATE, reason_action_uid="action") for entity in entities)
-    patches = tuple(getattr(d, "TestDomainPatch" + suffix)(
-        header=PatchHeader(ref=PatchRef(operation_id="publish", section_key="mock.subject." + suffix.lower(), ordinal=i),
-                           format_version=2, depends_on=(), artifacts=()), base=base,
+    batches = tuple(getattr(d, "MockBatch" + suffix)(
         mutations=tuple(getattr(d, "MockMutation" + suffix)(entity=entity, slot=slot, before=None, after=True, action_uid="action")
-                        for entity in entities), effects=effects)
-        for i, slot in enumerate(("primary", "index")))
-    return getattr(d, "TestDomainSection" + suffix)(
-        header=SectionHeader(key="mock.subject." + suffix.lower(), format_version=2, depends_on=()), patches=patches)
+                        for entity in entities)) for slot in ("primary", "index"))
+    request = getattr(d, "PrepareMockSubject" + suffix)(publication=base, operation_id="publish", batches=batches)
+    return getattr(subject, "MockSubjectProducer" + suffix)().prepare(request).section
 
 
 class ApplyPredicateTests(unittest.TestCase):

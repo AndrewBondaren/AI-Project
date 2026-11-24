@@ -48,15 +48,19 @@ def capture_roots(
 ) -> tuple[ArtifactRef, ...]: ...
 
 # Private tuple aliases, не public DTO или evidence token.
-type CaptureRefs = tuple[tuple[SourceCaptureRef, tuple[ArtifactRef, ...]], ...]
-type CaptureRefGaps = tuple[tuple[SourceCaptureRef, ArtifactRef], ...]
+type RootRefs[ContextT: (SourceCaptureRef, SourceCaptureWitness)] = tuple[
+    tuple[ContextT, tuple[ArtifactRef, ...]], ...]
+type RootGaps[ContextT: (SourceCaptureRef, SourceCaptureWitness)] = tuple[
+    tuple[ContextT, ArtifactRef], ...]
+type CaptureRefs = RootRefs[SourceCaptureRef]
+type CaptureRefGaps = RootGaps[SourceCaptureRef]
 type DependencyGraph = tuple[tuple[ArtifactRef, tuple[ArtifactRef, ...]], ...]
 
-def inspect_graph(
-    roots: CaptureRefs,
+def inspect_graph[ContextT: (SourceCaptureRef, SourceCaptureWitness)](
+    roots: RootRefs[ContextT],
     dependencies: DependencyGraph,
     admitted_refs: tuple[ArtifactRef, ...],
-) -> tuple[CaptureRefs, CaptureRefGaps, CaptureRefGaps]: ...
+) -> tuple[RootRefs[ContextT], RootGaps[ContextT], RootGaps[ContextT]]: ...
 ```
 
 missing_refs сохраняет порядок первого появления required, устраняет повторы результата и сравнивает полные refs. Available означает «материализовано/допущено внешней boundary для нужной проверки», а не «лежит в storage». Caller не выводит physical absence из результата.
@@ -73,7 +77,8 @@ inspect_graph возвращает (discovered_by_capture, missing_entries, miss
 
 ```python
 class SourceProofClosureCollector:
-    def __init__(self, *, membership: SourceCaptureMembershipChecker) -> None: ...
+    def __init__(self, *, membership: SourceCaptureMembershipChecker,
+                 candidate: SourceCaptureCandidateChecker) -> None: ...
 
     def collect[RootT: BaseModel](
         self, proof: SourceDurableProof, *,
@@ -101,6 +106,35 @@ Collector связывает witness по full capture ref, capture по witness
 Graph вызывается один раз с roots по captures; при успехе refs объединяются и canonical сортируются. Discovered_by_capture сохраняет provenance до завершения checks: каждый transitive ref связан со всеми captures, где достижим. Gaps остаются typed capture/ref facts; semantic issues локализуются existing origins functions, без fake atom для required physical body. Collector не вызывает public operations, не хранит mutable invocation state и не делает IO. Его signature — собственный проект, не новый внешний контракт; evidence→tuple mapping и окончательные пять public inputs по-прежнему EXTERNAL / DEFERRED.
 
 ## 3. Внутренний trace без storage
+
+### Candidate closure — адресная дельта 2026-11-25
+
+Graph context generic по двум existing values: finalized SourceCaptureRef и candidate SourceCaptureWitness. Это ключ provenance, не authority или режим. inspect_graph использует visited=(context, ref), без ветвления по классу context и без второго graph engine.
+
+Единственная `proof/closureInputs.py::capture_body_roots(capture_body: ArtifactRef, capture: SourceCapture) -> tuple[ArtifactRef, ...]` перечисляет capture body и все body mappings со stable dedup. Existing capture_roots добавляет witness artifact к результату этой функции, не дублирует enumeration.
+
+В SourceProofClosureCollector добавляется отдельный метод closure candidate body **без witness artifact**:
+
+```python
+def collect_candidate(
+    self, witness: SourceCaptureWitness, *, capture: SourceCapture,
+    collections: tuple[tuple[SourceCollectionVersion, SourceCollectionBody], ...],
+    dependencies: DependencyGraph,
+    admitted_refs: tuple[ArtifactRef, ...],
+) -> tuple[
+    tuple[ArtifactRef, ...], RootGaps[SourceCaptureWitness],
+    RootGaps[SourceCaptureWitness], RootGaps[SourceCaptureWitness],
+    tuple[SourceLogicIssue, ...],
+]: ...
+```
+
+Slots: canonical body refs, missing Source values/graph entries/admission, semantic issues. При любом gap/issue refs пусты, partial success запрещён. Constructor получает candidate checker; collect использует membership, collect_candidate — candidate, общие relation rules не запускаются дважды. Отсутствие самого capture отклоняет materialized boundary по witness.capture_body до вызова метода; пустой capture не подставляется. Missing collection останавливает зависимые relations, известные graph gaps собираются общим inspect_graph.
+
+Предусловие ref→content correlation и structurally допустимые values сохраняется. Candidate не проверяется как committed witness и не требует witness artifact в admitted_refs. Контекст — actual SourceCaptureWitness, proof origins не выдумываются. Ошибки FINALIZE_CAPTURE имеют group/use=None; completeness использует source-core-error-contract.md.
+
+Новая попытка finalize: completeness → collect_candidate → authoritative exact revision eligibility → exact candidate witness artifact через owning canonical format → добавить его к body closure → permitted atomic append/verify/seal/retention → confirmed result. SourceCaptureRef не создаётся ради входа в proof collect; public READ не вызывается. Committed replay по exact identity не повторяет latest eligibility новой попытки. Foreign capability/atomic binding deferred; этот trace не разрешает прямые foreign domain calls.
+
+Проверки: body closure без committed witness; все mappings включены; один graph algorithm для обоих contexts; missing capture не empty success; никакого fabricated proof; result ref не выдаётся по одному успешному collect_candidate. Старый scoped collect_capture_body не является альтернативной реализацией нового pure метода.
 
 1. Request checker допускает исходный proof/usage и возвращает original maps. ADMIT/GROUPS/SELECT выполняют свой pure transform; READ сохраняет исходный proof; VERIFY различает expected и presented стороны.
 2. Operation owner проецирует origins на фактический output proof. Maps не восстанавливаются из synthetic request или первого совпавшего artifact.

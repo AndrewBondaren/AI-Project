@@ -25,7 +25,7 @@ ArtifactRef→decoded content correlation должна быть обеспече
 
 **Обязательное предусловие обоих callers:** до вызова check_capture_relations boundary проверяет полноту materialized content: каждому требуемому capture collection mapping соответствует переданный decoded collection body с подтверждённой exact ref→content корреляцией. Отсутствующий operand останавливает relation evaluation как неполный вход producer, а не как semantic membership failure. Exact typed transport этой неполноты — часть OPEN data-input контракта; ни MISSING_BODY, ни INCOMPLETE_COLLECTION не назначаются по одному отсутствию переданного body. Caller не подставляет пустую collection вместо отсутствующей.
 
-Общие issues имеют group_index/use_index=None. Source occurrence localization назначает реальные proof origins только для proof caller; candidate не получает фиктивные group/use=0. World mismatch → WRONG_WORLD; предъявленная collection mapping не соответствует capture → BODY_MAPPING_CONFLICT. INCOMPLETE_COLLECTION допускается только при полном проверенном materialized input и установленном нарушении semantic membership по §11.3, например когда предъявленная collection требует member, не представленный exact mappings capture. Переданный tuple не связывается по позиции: сравнение по exact collection version/body mapping. Повторную реализацию completeness check в candidate и proof checker не создавать: оба используют одну согласованную data-input boundary.
+Общие issues имеют group_index/use_index=None. Source occurrence localization назначает реальные proof origins только для proof caller; candidate не получает фиктивные group/use=0. World mismatch → WRONG_WORLD; предъявленная collection mapping не соответствует capture → BODY_MAPPING_CONFLICT. При полном materialized input member предъявленной collection без соответствующего exact capture mapping даёт INCOMPLETE_CLOSURE согласно spec §10.4, а не INCOMPLETE_COLLECTION. Последний сохраняет только собственный смысл нарушения полноты коллекции по §11.3 и не назначается универсально всем membership ошибкам. Переданный tuple не связывается по позиции: сравнение по exact collection version/body mapping. Повторную реализацию completeness check в candidate и proof checker не создавать: оба используют одну согласованную data-input boundary.
 
 Проверки: foreign world; отсутствующий collection body отклоняется до вызова relation function без INCOMPLETE_COLLECTION/MISSING_BODY; полный materialized input с member вне exact object mappings даёт semantic отказ; подмена body нарушает exact correlation boundary; допустимый пустой capture; candidate и proof callers одинаково соблюдают completeness prerequisite и используют единственные relation rules. Нарушение этого prerequisite прямым internal вызовом — ошибка caller, не доказательство semantic дефекта capture. Refusal не допускает finalize writes. Exact required physical dependencies owning форматов и их availability остаются вне функции.
 
@@ -47,6 +47,32 @@ async def finalize(self, request: SourceCaptureWitness, *,
 Проверки границ: capture constructor не читает DB; невалидные world/duplicate mappings отвергаются; создание witness не считается committed finalize; никакая pure проверка не утверждает наличие holds. Capture body/witness POJO не дублируются.
 
 ## 2. Prune: не присваивать Source чужой reachability
+
+### Собственный admission и outcome — проект 2026-11-25
+
+Candidate closure finalization актуализирован в source-x-read-internal-boundary.md §3: collect_candidate использует actual witness как graph context, не finalized proof. Foreign finalize binding отделён от этого собственного метода.
+
+Prune admission не переиспользует mutation CREATE/UPDATE/DELETE checker. Internal класс `application/worldData/sourceVersioning/revision/revisionPruneAdmissionChecker.py::SourceRevisionPruneAdmissionChecker`, constructor без зависимостей:
+
+```python
+def check(
+    self, *, requested: tuple[SourceVersionRef, ...],
+    present: tuple[SourceVersionRef, ...],
+    pruned: tuple[SourceVersionRef, ...],
+    absent: tuple[SourceVersionRef, ...],
+    latest: SourceVersionRef,
+) -> tuple[SourceLogicIssue, ...]: ...
+```
+
+Каждый requested ref имеет ровно один authoritative observation present/pruned/absent; пропущенный факт не означает absence. Refs относятся к одному object_id с latest; duplicate/conflicting observations — internal input failure. Missing/pruned requested → proposed REVISION_NOT_FOUND/REVISION_PRUNED, source=exact requested, artifact=None, group/use=None; порядок исходный requested. Current latest сам по себе не business error: после успешного admission existing policy исключает его из candidates. Same seq/different hash не exact match и не чинится. Present включает live либо tombstone history; checker не выводит held/free из статуса.
+
+Internal preview result — tuple candidates от existing policy. Это не durable receipt, не token для позднего confirm. Confirm заново получает authoritative latest/history и owning retention permission, запускает тот же admission/policy; изменение latest не разрешает использовать старый preview как authority. Concrete public Input/Output/Error и operation tag prune ещё требуют приёмки; новый enum не вводится молча. Внутренний checker возвращает issues без SourceFailure.operation, не подставляет APPLY_MUTATION.
+
+**Source outcome confirm:** только после подтверждённого atomic completion возвращается exact tuple revisions, для которых записан prune marker в данной операции. Исключённый latest не входит в tuple, tombstone не удаляется автоматически и не означает already-pruned. Identity, seq/hash и immutable mapping provenance сохраняются как исторические факты; marker сообщает недоступность для нового exact read, не разрешает переиспользование identity/revision. Физическое удаление bytes отдельно принадлежит GC и может ещё не произойти. Исторический mapping не используется для выдачи уже pruned body как доступного Source content.
+
+При отказе одного required confirm condition весь batch без partial success. Replay возможен только по подтверждённому immutable operation binding с точным сохранённым результатом; pruned facts сами по себе не доказывают replay. Без такого binding already-pruned request получает REVISION_PRUNED, а не fabricated successful receipt. Unknown commit/rollback сохраняет owning error; не возвращается пустой tuple как успех. Owning root release и marker должны быть атомарно согласованы, а иные holders сохраняются.
+
+Проверки: incomplete observation не absence; present/pruned конфликт отвергнут; tombstone present проходит admission как history; latest исключён; новый latest/hold между preview и confirm не даёт stale разрешение; mixed missing/pruned собирает независимые issues; подтверждённый результат не включает пропущенный latest; replay не пересчитывает tuple по текущему latest. Это собственные семантика/result и методы, не готовая public prune операция или SQL binding.
 
 ### Pure candidate contract — проект 2026-11-22
 

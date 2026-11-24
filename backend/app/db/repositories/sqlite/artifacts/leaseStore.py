@@ -39,6 +39,14 @@ class SqliteArtifactLeases[R: SnapshotApplyResult]:
         self._scopes._require_unbound()
         return self._scopes.commits.transaction(operation_id)
 
+    def require_standalone(self) -> None:
+        self._scopes._require_unbound()
+        self._scopes.commits.registry.assert_available()
+        conn = self._scopes.commits._db.main_conn
+        from app.db.guardedConnection import GuardedConnection
+        if not isinstance(conn, GuardedConnection) or conn.owns_unit_of_work or conn.owns_transaction:
+            raise PublicationInfrastructureError("ambient artifact staging transaction is forbidden")
+
     async def _record(self, scope, operation_id) -> OperationRecord[R]:
         record = await self._operations._load(operation_id, scope)
         if record is None:

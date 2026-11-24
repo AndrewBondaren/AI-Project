@@ -7,6 +7,8 @@ from app.dataModel.artifacts.lifecycle.lease import OperationLeaseRef, StagingRe
 
 
 class IArtifactCatalog(Protocol):
+    def assert_write_admission(self, admission: object) -> None: ...
+
     def guard(self, ref: ArtifactRef) -> AbstractAsyncContextManager[None]:
         """Serialize reserve/seal/holders/writers/GC checks using the same storage guard."""
         ...

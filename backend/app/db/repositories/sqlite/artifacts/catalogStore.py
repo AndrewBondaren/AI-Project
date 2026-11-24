@@ -4,6 +4,9 @@ from contextlib import AbstractAsyncContextManager
 from pydantic import TypeAdapter
 
 from app.application.publication.errors import PublicationInfrastructureError
+from app.application.artifacts.lifecycle.leaseErrors import ArtifactLeaseRefused
+from app.application.artifacts.errors import ArtifactDescriptorConflictError
+from app.dataModel.artifacts.lifecycle.leaseFailure import ArtifactLeaseFailure, ArtifactLeaseFailureCode, ArtifactLeaseRequirement
 from app.application.worldSnapshot.contracts.commitScope import CommitReadScope, CommitScope
 from app.dataModel.artifacts.references import ArtifactRef, ArtifactKind, ArtifactFormatKey
 from app.dataModel.artifacts.lifecycle.gc import ArtifactStorageEventKind
@@ -40,6 +43,25 @@ class SqliteArtifactCatalog:
     def guard(self, ref: ArtifactRef) -> AbstractAsyncContextManager[None]:
         return self._scopes.guard(ref)
 
+    def assert_write_admission(self, admission: object) -> None:
+        from app.db.repositories.sqlite.artifacts.leaseStore import SqliteArtifactLeases
+        if not isinstance(admission, SqliteArtifactLeases) or not all((
+            admission._scopes is self._scopes,
+            admission._operations is self._operations,
+            admission._access is self._access,
+            self._access is self._scopes.access,
+            self._operations._commits is self._scopes.commits,
+            self._operations._access is self._access,
+            self._operations._artifacts is self._artifacts,
+            self._artifacts._access is self._access,
+            self._access.registry is self._scopes.commits.registry,
+            admission._catalog._scopes is self._scopes,
+            admission._catalog._operations is self._operations,
+            admission._catalog._artifacts is self._artifacts,
+            admission._catalog._access is self._access,
+        )):
+            raise PublicationInfrastructureError("artifact write admission uses another storage graph")
+
     @staticmethod
     def _descriptor(row: ArtifactCatalogRow) -> ArtifactRef:
         _values(uids=(row.artifact_id,))
@@ -55,7 +77,7 @@ class SqliteArtifactCatalog:
             WHERE kind=? AND format_key=? AND format_version=? AND content_hash=?""",
             (ref.kind.value, ref.format_key, ref.format_version, ref.content_hash))
         if row is not None and self._descriptor(row) != ref:
-            raise ValueError("artifact identity reused with another descriptor")
+            raise ArtifactDescriptorConflictError("artifact identity reused with another descriptor")
         return row
 
     async def _by_id(self, scope: CommitReadScope | CommitScope, artifact_id: EntityUid) -> ArtifactRef:
@@ -83,13 +105,13 @@ class SqliteArtifactCatalog:
 
     async def _lease(self, scope: CommitReadScope | CommitScope, lease: OperationLeaseRef,
                      *, writable: bool) -> None:
+        requirement = ArtifactLeaseRequirement.WRITABLE if writable else ArtifactLeaseRequirement.CLOSED
+        def refuse(code: ArtifactLeaseFailureCode) -> None:
+            raise ArtifactLeaseRefused(ArtifactLeaseFailure(lease=lease, requirement=requirement, code=code))
         try:
             record = await self._operations._load(lease.operation_id, scope)
         except (ValueError, TypeError) as error:
             raise PublicationInfrastructureError("invalid persisted operation binding") from error
-        if record is None or OperationLeaseRef(operation_id=record.operation_id, world_uid=record.world_uid,
-                kind=record.kind, preparation_fingerprint=record.preparation_fingerprint, fence=record.fence) != lease:
-            raise ValueError("missing or stale operation lease")
         # The existing mapper turns a SQL bool into Python bool; reject malformed raw
         # values by predicate before typed hydration, without raw field access.
         malformed = await self._access.all_rows(scope, ArtifactLeaseEventRow, """SELECT * FROM artifact_lease_events
@@ -98,6 +120,10 @@ class SqliteArtifactCatalog:
             raise PublicationInfrastructureError("invalid raw lease admission boolean")
         rows = await self._access.all_rows(scope, ArtifactLeaseEventRow,
             "SELECT * FROM artifact_lease_events WHERE operation_id=? ORDER BY event_seq", (lease.operation_id,))
+        if record is None:
+            if rows:
+                raise PublicationInfrastructureError("orphan artifact lease admission")
+            refuse(ArtifactLeaseFailureCode.OPERATION_MISSING)
         previous = None
         for row in rows:
             _values(uids=(row.event_id, row.operation_id), optional_uids=(row.predecessor_id,), positives=(row.event_seq, row.fence))
@@ -109,11 +135,22 @@ class SqliteArtifactCatalog:
                         or (not previous.admission_open and row.admission_open)))):
                 raise PublicationInfrastructureError("invalid lease admission chain")
             previous = row
-        if writable and (record.phase is not OperationPhase.PREPARING or previous is None
-                or not previous.admission_open or previous.fence != lease.fence):
-            raise ValueError("writer admission is closed or fenced")
-        if not writable and (previous is None or previous.admission_open or previous.fence != lease.fence):
-            raise ValueError("operation holds require closed admission")
+        if (record.world_uid != lease.world_uid or record.kind is not lease.kind
+                or record.preparation_fingerprint != lease.preparation_fingerprint):
+            refuse(ArtifactLeaseFailureCode.BINDING_MISMATCH)
+        if record.fence != lease.fence:
+            refuse(ArtifactLeaseFailureCode.FENCE_MISMATCH)
+        if previous is None:
+            refuse(ArtifactLeaseFailureCode.LEASE_ABSENT)
+        if writable:
+            if record.phase is not OperationPhase.PREPARING:
+                refuse(ArtifactLeaseFailureCode.PHASE_NOT_WRITABLE)
+            if not previous.admission_open:
+                refuse(ArtifactLeaseFailureCode.ADMISSION_CLOSED)
+        elif previous.admission_open:
+            refuse(ArtifactLeaseFailureCode.ADMISSION_OPEN)
+        if previous.fence != lease.fence:
+            raise PublicationInfrastructureError("admission fence differs from current operation")
 
     async def _writers(self, scope: CommitReadScope | CommitScope,
                        operation_id: EntityUid | None = None, artifact_id: EntityUid | None = None) -> tuple[ArtifactWriterClaimRow, ...]:

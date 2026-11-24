@@ -12,6 +12,7 @@ from collections.abc import Callable
 from app.application.artifacts.contracts.blobRead import ReadableBlobBackend
 from app.application.artifacts.contracts.formatBackend import ArtifactFormatContract
 from app.application.artifacts.storage.artifactLeases import IArtifactLeases
+from app.application.artifacts.errors import ArtifactCodecError, ArtifactStorageInvariantError
 from app.application.publication.errors import PublicationInfrastructureError
 from app.dataModel.artifacts.lifecycle.lease import StagingReservation
 from app.dataModel.artifacts.references import ArtifactKind, ArtifactRef
@@ -30,6 +31,10 @@ class ContentAddressedBlobBackend(ReadableBlobBackend):
     @property
     def contract(self) -> ArtifactFormatContract[bytes]:
         return self._contract
+
+    @property
+    def write_admission(self) -> IArtifactLeases:
+        return self._leases
 
     def _ref(self, ref: ArtifactRef) -> ArtifactRef:
         ref = ArtifactRef.model_validate(ref, strict=True)
@@ -140,9 +145,14 @@ class ContentAddressedBlobBackend(ReadableBlobBackend):
         ref = self._ref(reservation.ref)
         if type(content) is not bytes:
             raise TypeError("BLOB content must be bytes")
-        data = self.contract.encode(content)
+        try:
+            data = self.contract.encode(content)
+        except ArtifactCodecError:
+            raise
+        except Exception as error:
+            raise ArtifactCodecError("artifact encoder failed during write") from error
         if type(data) is not bytes or len(data) != ref.nbytes or hashlib.sha256(data).hexdigest() != ref.content_hash:
-            raise ValueError("content differs from reserved descriptor")
+            raise ArtifactCodecError("encoded content differs from reserved descriptor")
         async with self._leases.writer(reservation):
             await self._leases.assert_writable(reservation.lease)
             # Keep ownership of the temp even when cancellation arrives during its creation.
