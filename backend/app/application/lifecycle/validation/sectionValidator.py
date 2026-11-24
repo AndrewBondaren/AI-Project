@@ -53,7 +53,7 @@ class LifecycleSectionValidator[Q: BaseModel, S: DomainSection[Any]]:
                 if entity in seen_entities:
                     issue(R.PARTICIPANT_OVERLAP, cp.item(index), "Independent transitions must not share an entity")
                 local_entities.add(entity)
-                effect = ("end" if entity in intent.predecessors else "create") if intent.operation is Op.REPLACEMENT else intent.operation.value
+                effect = (Op.END if entity in intent.predecessors else Op.CREATE) if intent.operation is Op.REPLACEMENT else intent.operation
                 expected[(intent.change_uid, entity, effect)] = (index, cast(ReasonView, intent.reason).action_uid)
             seen_entities.update(local_entities)
 

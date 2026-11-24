@@ -7,7 +7,7 @@ from pydantic import BaseModel, TypeAdapter
 from typing import get_args, get_origin, Union
 from types import UnionType
 from app.application.publication.contracts.resultBinding import PublicationResultBinding
-from app.application.patch.errors import SectionHandlerContractError
+from app.application.patch.errors import SectionHandlerContractError, PatchSetValidationClassificationError
 
 from app.dataModel.validation.diagnostics.validatorAggregationHelper import ValidatorAggregationHelper
 from app.application.worldSnapshot.validation.missingPersistedSnapshotBase import MissingPersistedSnapshotBase
@@ -19,6 +19,10 @@ from app.application.worldSnapshot.validation.receiptProvenance import collect_p
 from app.application.worldSnapshot.service.attemptContextBuilder import SnapshotAttemptContextBuilder
 from app.application.worldSnapshot.validation.preparedDependencyValidator import SnapshotPreparedDependencyValidator
 from app.application.patch.encoding.sectionFingerprint import SectionFingerprint
+from app.application.patch.encoding.patchSetCodec import PatchSetCodec
+from app.application.worldSnapshot.validation.snapshotRequestValidator import SnapshotRequestValidator
+from app.application.worldSnapshot.errors import SnapshotPublicError
+from app.dataModel.worldSnapshot.errors.publicFault import SnapshotPublicFault, SnapshotPublicOperation, SnapshotPublicFailureKind
 from app.dataModel.patch.request.patchSet import PatchSet
 from app.dataModel.patch.sections.dependency import SectionDependency
 from app.application.worldSnapshot.contracts.context import SnapshotApplyContext, SnapshotValidationContext
@@ -81,7 +85,9 @@ class _SnapshotValidationRefused[D: BaseModel](Exception):
 class WorldSnapshotService[S: DomainSection, D: BaseModel, T: SnapshotApplyResult]:
     def __init__(self, registry: SectionRegistry[D], world: IWorldPublicationStore, players: IPlayerPublicationStore,
                  history: ISnapshotHistoryStore, *, publication_binding: PublicationResultBinding[T],
-                 operations: IOperationStore[T]) -> None:
+                 operations: IOperationStore[T], request_codec: PatchSetCodec[S]) -> None:
+        if not isinstance(request_codec, PatchSetCodec) or request_codec.registry is not registry:
+            raise ValueError("Snapshot and request codec must share the exact registry")
         if not isinstance(publication_binding, PublicationResultBinding):
             raise TypeError("expected PublicationResultBinding")
         if publication_binding is not operations.result_binding or operations.record_model is not publication_binding.record_model:
@@ -101,6 +107,25 @@ class WorldSnapshotService[S: DomainSection, D: BaseModel, T: SnapshotApplyResul
         self._history = history
         self._contexts = SnapshotAttemptContextBuilder(registry=registry)
         self._dependencies = SnapshotPreparedDependencyValidator(fingerprints=SectionFingerprint(registry))
+        self._request_codec = request_codec
+        self._request_validator = SnapshotRequestValidator(request_codec)
+
+    async def _admit_and_claim(self, request: PatchSet[S]) -> PublicationOwner | T:
+        """Internal entry seam; a new owner still needs the full apply transaction."""
+        try:
+            checked = self._request_validator.validate(request)
+        except (PatchSetValidationClassificationError, PublicationInfrastructureError) as error:
+            raise SnapshotPublicError(SnapshotPublicFault(operation=SnapshotPublicOperation.APPLY,
+                kind=SnapshotPublicFailureKind.INFRASTRUCTURE_FAILURE, operation_id=None,
+                request_fingerprint=None, input_issues=())) from error
+        try:
+            request_fingerprint = self._request_codec.fingerprint(checked)
+        except Exception as error:
+            raise SnapshotPublicError(SnapshotPublicFault(operation=SnapshotPublicOperation.APPLY,
+                kind=SnapshotPublicFailureKind.INFRASTRUCTURE_FAILURE, operation_id=None,
+                request_fingerprint=None, input_issues=())) from error
+        return await self._claim_publication(checked.operation_id, checked.world_uid,
+            checked.preparation_fingerprint, request_fingerprint)
 
     async def _validate_sections(self, request: PatchSet[S], *, scope: CommitReadScope,
                                  resolved_dependencies: tuple[SectionDependency, ...]

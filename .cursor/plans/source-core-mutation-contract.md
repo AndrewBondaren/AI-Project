@@ -193,6 +193,108 @@ Existing SourceFieldIssue/SourceLogicIssue/SourceFailure остаются еди
 
 ## 7. Recovery — одна ответственность: установить или законно завершить исход
 
+### Собственный state admission — детализация 2026-11-24
+
+Проект internal класса `application/worldData/sourceVersioning/mutation/validation/mutationStateChecker.py::SourceMutationStateChecker`. Одна ответственность — проверить допустимость изменения относительно предъявленного exact Source state. Он не получает право читать storage или проверять phase/holds. Request уже прошёл structural/request checks. Source state facts формируются после authoritative чтения, а не из expected полей запроса.
+
+```python
+class SourceMutationStateChecker:
+    def __init__(self) -> None: ...
+    def check(
+        self, request: SourceRegistryMutationInput, *,
+        live: tuple[SourceVersionRef, ...],
+        tombstones: tuple[SourceVersionRef, ...],
+        absent: tuple[RegistryMemberId, ...],
+        pruned_expected: tuple[SourceVersionRef, ...],
+        collection_current: SourceCollectionVersionRef | None,
+    ) -> SourceFailure | None: ...
+```
+
+Это private facts existing values, не новый state DTO/authority token. Для каждой touched identity ровно один current факт: live, tombstone либо authoritative never-created absence. Категории не пересекаются, extra/duplicate identities и недостаточное покрытие — ошибка формирования internal input; отсутствующий факт **не** означает absent. collection_current=None допускается только после подтверждения отсутствия collection revision. pruned_expected сообщает отдельный факт истории exact expected ref; он не заменяет current state. Факты должны относиться к одной согласованной state observation; требования serialization перед append указаны ниже.
+
+| Действие / current state | Решение Source | Диагностика |
+|---|---|---|
+| CREATE / absent | Допустить создание с previous=None | Нет ошибки; не создаёт revision |
+| CREATE / live | Отказать: identity уже занята | REVISION_CONFLICT, source=current ref |
+| CREATE / tombstone | Отказать: restore-контракт не принят | TOMBSTONE, source=current ref |
+| UPDATE или DELETE / live равен expected целиком | Допустить переход | Сравниваются seq и semantic hash, не только seq |
+| UPDATE или DELETE / live отличается от expected | Отказать stale/conflicting expected | REVISION_CONFLICT, source=expected |
+| UPDATE или DELETE / tombstone | Отказать изменению уже tombstoned identity | TOMBSTONE, source=current ref |
+| UPDATE или DELETE / absent | Отказать отсутствующему объекту | Предложенный REVISION_NOT_FOUND, source=expected |
+| Exact expected содержится в pruned_expected | Отказать до арифметики | Предложенный REVISION_PRUNED, source=expected; для этой change не дублировать stale/absence диагноз |
+| Collection expected=None / current отсутствует | Допустить initial membership revision | Не доказывает отсутствие body bytes |
+| Collection expected=None / current существует | Отказать expected absence | REVISION_CONFLICT, source=current collection ref |
+| Collection expected задан / current совпадает | Допустить membership transition | Full identity/revision equality |
+| Collection expected задан / current отличается или отсутствует | Отказать | REVISION_CONFLICT либо предложенный REVISION_NOT_FOUND по exact expected collection ref |
+
+group_index/use_index всегда None, artifact=None: state checker не делает выводов о физических bodies. Failure.operation=APPLY_MUTATION. Независимые changes и membership проверяются все; stable порядок — исходные changes, затем membership. Коды REVISION_NOT_FOUND/REVISION_PRUNED уже предложены §6, но ещё не добавлены в enum; до приёмки этой дельты реализовать checker с подменёнными кодами нельзя. Совпадающие issues стабильно сводятся; unknown/incomplete state не диагностируется как business absence.
+
+Semantic equality content_hash не разрешает stale expected: admission сравнивает exact revision до вызова builder. Rename остаётся delete+create, recreation tombstone запрещена. Actual after-membership/ref-integrity — самостоятельная проверка полных предъявленных bodies, не задача этого checker.
+
+Проверки ответственности: все строки таблицы; two independent stale changes + stale membership дают три различимых source contexts; missing observation не разрешает CREATE; pruned expected не даёт одновременно REVISION_CONFLICT; ни одна ветвь не вызывает builder/writer/projector. После успешного check нельзя применять изменения к другой state observation без повторного допуска или owning атомарного guard.
+
+### Appender, runner, resolver: собственные обязательства и внешний предел
+
+#### Source append transitions — собственный проект 2026-11-24
+
+Existing SourceBodyVersion и SourceCollectionVersion уже задают exact live revision→body mapping; они переиспользуются целиком. SourceRevisionChanges содержит только refs и не подходит для записи mappings. Не расширять его body/scope/status полями и не выдавать его за append request.
+
+Internal frozen records размещаются в `backend/app/application/worldData/sourceVersioning/revision/revisionTransitions.py`. Они не persisted/public POJO и не canonical terminal payload; их собственная ответственность — предыдущее ожидаемое состояние плюс предлагаемый переход, а не новый вариант live ref.
+
+```python
+@dataclass(frozen=True, slots=True)
+class SourceLiveRevisionTransition:
+    expected: SourceVersionRef | None
+    next: SourceBodyVersion
+
+@dataclass(frozen=True, slots=True)
+class SourceTombstoneRevisionTransition:
+    expected: SourceVersionRef
+    next: SourceVersionRef
+
+@dataclass(frozen=True, slots=True)
+class SourceCollectionRevisionTransition:
+    expected: SourceCollectionVersionRef | None
+    next: SourceCollectionVersion
+
+type SourceObjectTransition = (
+    SourceLiveRevisionTransition | SourceTombstoneRevisionTransition
+)
+```
+
+Все поля обязательны; входные existing values проверяются строго, tuple containers immutable. `__post_init__(self) -> None` каждого record проверяет только локальную форму перехода общими predicates модуля, без IO, assignment seq или вычисления hash. Live переход: expected=None требует next.source.revision.seq=1; иначе полная object identity совпадает, при unchanged semantic hash next.source=expected, при changed hash seq=expected.seq+1. Collection переход имеет те же правила по collection identity. Tombstone: identity совпадает, seq=expected.seq+1; body отсутствует по структуре типа, а не fake ArtifactRef. Его semantic hash определяется Source tombstone encoding до construction; record не принимает body hash вместо этого.
+
+Эти predicates проверяют arithmetic через единое revision rule, не копируют алгоритм SourceRevisionTransitionBuilder в application. До реализации нужно вынести общее rule в единственный pure Source owner и использовать его из builder/transition validation, сохранив dataModel→application запрет. Records находятся в application, поэтому обращение к existing builder rule не создаёт обратного импорта. Tombstone обязан быть отдельным semantic state; совпадение его hash с live state не разрешает unchanged DELETE.
+
+Store batch вход — `objects: tuple[SourceObjectTransition, ...]` и `collections: tuple[SourceCollectionRevisionTransition, ...]`. Это полные operands append, без нового batch DTO. Canonical/unique touched identities, единый world, наличие transitions и correspondence checked request обязательны. CREATE соответствует live expected=None; UPDATE — live expected=заявленный expected; DELETE — tombstone с exact expected. Membership соответствует request.membership identity/expected. Application не восстанавливает эти соответствия по position двух разных tuples: сравнивает полные identity keys.
+
+**Ответственность SourceRevisionAppender.append:** принять проверенный batch в легитимной write boundary, атомарно сравнить expected/current и append immutable history/latest для всего batch; вернуть provisional SourceRevisionChanges из next refs. Получение scope/authority остаётся внешним binding, не полем transition. Полная executable signature до этого binding не объявляется; собственные два typed batch operands и результат определены здесь, без Any writer/callback.
+
+Обязательные Source store инварианты:
+
+1. Compare expected и запись входят в одну разрешённую атомарную boundary. Положительный preflight state check не заменяет compare при append.
+2. expected=None означает подтверждённое never-created состояние; tombstoned или pruned history не превращается в CREATE slot.
+3. Один exact revision имеет один immutable status/mapping. Другой body того же live ref — BODY_MAPPING_CONFLICT; live↔tombstone под тем же ref запрещён. Исторические mappings/roots при DELETE не удаляются.
+4. Unchanged UPDATE сохраняет прежний exact body mapping, даже если candidate request body другой. Новый body не привязывается к старой revision. Owning authored/audit writes относятся к своему writer, не меняют это правило.
+5. Повторный append не разрешается только по совпадению next rows. Идемпотентность новой попытки зависит от подтверждённого immutable operation binding; terminal replay идёт через resolver, без повторного append. Partial rows не признаются успешным batch.
+6. Любой поздний конфликт/сбой отменяет весь batch через owning rollback. Return provisional не удостоверяет outer commit; unknown outcome не трактуется как отсутствие записей.
+
+Store-level conflict codes переиспользуют REVISION_CONFLICT/BODY_MAPPING_CONFLICT; ошибки missing/pruned и недопустимого tombstone сохраняют §7 state-admission mapping. Infrastructure exceptions не преобразуются в эти коды. Сама SQL schema/transaction capability не проектируется этим record contract.
+
+Проверки: mixed CREATE+UPDATE+DELETE+membership; stale expected одного элемента отменяет весь batch; unchanged hash с другим candidate body сохраняет old mapping; A→B→A имеет разные seq; DELETE не содержит fabricated live body; same seq/different hash и same ref/different body отвергаются; tombstone CREATE не допускается; возврат provisional при unknown commit не становится Applied. Эти сценарии фиксируют own store semantics независимо от конкретного external writer transport.
+
+| Компонент | Собственный input/result и действие | Что остаётся external/deferred |
+|---|---|---|
+| SourceRevisionAppender.append | Checked request/touched set, допущенные previous refs, SourceRevisionChanges и exact body mappings. Проверить полное соответствие identities/seq/mapping до записи; применить один атомарный append batch. Результат только provisional SourceRevisionChanges; identical revision/mapping повтор не перезаписывает историю, другой mapping — отказ | Exact write capability и Source store binding; generic callable/Any writer не вводится |
+| SourceMutationAttemptRunner.run | Одна разрешённая попытка: request/state admission → owning semantic evidence → batch arithmetic → permitted append. Не выбирает новую попытку и не делает recovery takeover. После domain refusal не допускает дальнейших writes/успешного результата | Выдача grant, допустимая write boundary, подтверждение rollback/commit; foreign domain calls из runner запрещены |
+| SourceMutationOutcomeResolver.resolve | Сопоставить immutable request identity/fingerprint и предъявленный authoritative terminal observation. При exact binding вернуть существующий outcome без повторной arithmetic. Отсутствие terminal остаётся отсутствием наблюдаемого terminal, не разрешением новой попытки | Actual terminal observation type/reader и owning mismatch/unknown transport; resolver не читает чужой ledger самостоятельно |
+
+Эти строки уточняют собственные обязанности, но не выдаются за exact исполнимые signatures трёх интеграционных компонентов. В частности, одним SourceRevisionChanges нельзя выразить body mappings, expected-state guard или authority. Не создавать урезанный append(request, changes), который скроет эти зависимости. Конкретные Source transition records/store input ещё требуют собственной детализации; это не внешний долг. Exact execution capability/terminal types остаются внешним binding.
+
+Serialization requirement принадлежит Source семантически: между проверкой expected state и append не может измениться допускаемая revision/membership или фаза разрешённой новой pregame attempt. Реализует его согласованный owning commit/guard механизм. Ранний read phase/state без защиты не достаточен. Для replay готового terminal эта проверка не запускается повторно. Unknown commit/rollback не создаёт SourceMutationRefused и не разрешает автоматическую новую попытку.
+
+Полные tests этой композиции должны подменять observation между admission и append и доказывать отказ без partial commit; отдельно проверять append success с unknown outer outcome, повтор exact terminal после смены latest и другой fingerprint. До owning binding эти сценарии — требования интеграционной приёмки, не блокер pure state checker design.
+
 ### АР-2: единый trace попытки и границы authority
 
 Уточнение P2, 2026-11-22. Batch arithmetic не завершает композицию попытки. Ниже trace одной **новой разрешённой попытки**, а не утверждение готовности runner или новый порядок DAG. Request binding/terminal replay/recovery grant проверяются до выбора новой попытки по существующему §7/8: подтверждённый terminal возвращается без повторного state admission/projector/revision calculation; отсутствие terminal само по себе не разрешает выполнение. Маршрут между публичными доменными операциями остаётся у DAG.

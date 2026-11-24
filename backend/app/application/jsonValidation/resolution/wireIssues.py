@@ -32,7 +32,18 @@ def field_issue(ctx: ResolveContext, root: type[BaseModel] | None, loc: tuple[st
     model_loc = ("root", *loc) if is_root_model else loc
     path = CheckedPath.from_pydantic_loc(root, model_loc) if root is not None else None
     if path is None:
-        return WireShapeIssue(code=code, location=ctx.location.child(*loc),
+        wire_loc = loc
+        if root is not None:
+            # An undeclared suffix is a wire address, never a fabricated field.
+            # Resolve its known prefix through the same schema path boundary.
+            for end in range(len(model_loc) - 1, 0, -1):
+                prefix = CheckedPath.from_pydantic_loc(root, model_loc[:end])
+                if prefix is not None:
+                    rendered = tuple(part for part, segment in zip(model_loc[:end], prefix.segments, strict=True)
+                                     if not isinstance(segment, VariantSegment)) + model_loc[end:]
+                    wire_loc = rendered[1:] if is_root_model else rendered
+                    break
+        return WireShapeIssue(code=code, location=ctx.location.child(*wire_loc),
                               message=message, pydantic_type=pydantic_type)
     segments = path.segments[1:] if is_root_model else path.segments
     wire_path = tuple(part for part, segment in zip(loc, segments, strict=True)

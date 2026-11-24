@@ -227,6 +227,25 @@ class FieldPathErrorTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             Carrier(issue=forged)
 
+    def test_carrier_schema_rebuild_keeps_concrete_own_field_validation(self) -> None:
+        class DetailedIssue(FieldPathError[Code]):
+            indices: tuple[int, ...]
+
+        class Holder(BaseModel):
+            issue: FieldPathError[Code]
+
+        issue = DetailedIssue(code=Code.MISSING, path=_name_path(), message="x", indices=(2, 3))
+        for _ in range(2):
+            DetailedIssue.model_rebuild(force=True)
+            Holder.model_rebuild(force=True)
+            self.assertIs(type(Holder(issue=issue).issue), DetailedIssue)
+            self.assertEqual(DetailedIssue.model_validate_json(issue.model_dump_json()), issue)
+            for carrier in (FieldPathError, FieldPathError[Code]):
+                with self.assertRaises(ValidationError):
+                    carrier.model_validate(issue.model_copy(update={"indices": [2, 3]}))
+                with self.assertRaises(ValidationError):
+                    carrier.model_validate_json(issue.model_dump_json())
+
 
 class CollectorTests(unittest.TestCase):
     def test_exact_admission_order_and_failure(self) -> None:

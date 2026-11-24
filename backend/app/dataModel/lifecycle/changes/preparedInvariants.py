@@ -8,6 +8,8 @@ from app.dataModel.lifecycle.reads.facts import AbsentLifecycle, PresentLifecycl
 
 def validate_prepared[P: BaseModel](prepared: P) -> P:
     intent = prepared.transition.intent
+    if intent.reason.operation is not intent.operation:
+        raise ValueError("successful transition reason.operation must match intent.operation")
     participants = prepared.transition.participants
     replacement = intent.operation is Op.REPLACEMENT
     refs = intent.predecessors + intent.successors if replacement else (intent.entity,)
@@ -19,6 +21,8 @@ def validate_prepared[P: BaseModel](prepared: P) -> P:
         if participant.after.entity != ref:
             raise ValueError("participant order/identity must follow the intent")
         before = participant.before
+        if isinstance(before, PresentLifecycle) and before.state.last_transition.world_uid != prepared.base.world_uid:
+            raise ValueError("before state references a transition from another world")
         before_ref = before.state.entity if isinstance(before, PresentLifecycle) else before.entity
         if before_ref != ref:
             raise ValueError("participant before/after identities differ")

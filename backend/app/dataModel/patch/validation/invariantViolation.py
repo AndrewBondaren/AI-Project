@@ -1,4 +1,4 @@
-"""Internal location of a fact, without presentation field paths."""
+"""Public immutable invariant fact; indices address the original request."""
 
 from typing import Annotated, Self
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator

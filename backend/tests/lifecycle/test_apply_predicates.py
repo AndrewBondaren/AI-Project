@@ -25,7 +25,10 @@ def native_and_reads(found=()):
     for suffix in ("A", "B"):
         entries = tuple(p.before for patch in native.patches for p in patch.prepared.transition.participants
                         if type(p) is getattr(m, "Participant" + suffix))
-        captures.append(getattr(m, "Capture" + suffix)(publication=request.expected_world, entities=entries, last_transitions=()))
+        facts = tuple(getattr(m, "LastTransitionFact" + suffix)(entity=f.state.entity,
+            ref=f.state.last_transition, operation=LifecycleOperation.END)
+            for f in entries if f.status == "present" and not f.state.active)
+        captures.append(getattr(m, "Capture" + suffix)(publication=request.expected_world, entities=entries, last_transitions=facts))
     lookup = AcceptedChangesResultAB(publication=request.expected_world, entries=tuple(
         AcceptedChangeFoundAB(ref=patch.prepared.transition.participants[0].after.last_transition,
                              transition=patch.prepared.transition)
@@ -39,18 +42,103 @@ def subject_section(suffix="A"):
     entity_type = getattr(m, "Ref" + suffix)
     entities = tuple(entity_type(kind="test_entity_" + suffix.lower(), entity_uid=name) for name in ("one", "two"))
     base = sections.mixed_request().expected_world
-    effects = tuple(getattr(m, "Effect" + suffix)(entity=entity, effect="create", reason_action_uid="action") for entity in entities)
+    effects = tuple(getattr(m, "Effect" + suffix)(entity=entity, effect=LifecycleOperation.CREATE, reason_action_uid="action") for entity in entities)
     patches = tuple(getattr(d, "TestDomainPatch" + suffix)(
         header=PatchHeader(ref=PatchRef(operation_id="publish", section_key="mock.subject." + suffix.lower(), ordinal=i),
-                           format_version=1, depends_on=(), artifacts=()), base=base,
+                           format_version=2, depends_on=(), artifacts=()), base=base,
         mutations=tuple(getattr(d, "MockMutation" + suffix)(entity=entity, slot=slot, before=None, after=True, action_uid="action")
                         for entity in entities), effects=effects)
         for i, slot in enumerate(("primary", "index")))
     return getattr(d, "TestDomainSection" + suffix)(
-        header=SectionHeader(key="mock.subject." + suffix.lower(), format_version=1, depends_on=()), patches=patches)
+        header=SectionHeader(key="mock.subject." + suffix.lower(), format_version=2, depends_on=()), patches=patches)
 
 
 class ApplyPredicateTests(unittest.TestCase):
+    def test_foreign_world_before_and_current_are_rejected(self):
+        validator = LifecycleStateValidator(MockLifecycleSectionRefused)
+        native, lookup, captures, base = native_and_reads()
+        for patch in native.patches:
+            transition = patch.prepared.transition
+            participant = transition.participants[0]
+            if participant.before.status != "present":
+                continue
+            state = participant.before.state
+            foreign_ref = type(state.last_transition)(**{**dict(state.last_transition), "world_uid": "foreign-world"})
+            foreign_state = type(state)(**{**dict(state), "last_transition": foreign_ref})
+            before = type(participant.before)(state=foreign_state)
+            changed_participant = type(participant)(before=before, after=participant.after)
+            changed_transition = type(transition)(intent=transition.intent,
+                participants=(changed_participant, *transition.participants[1:]))
+            with self.subTest(operation=transition.intent.operation, entity=state.entity):
+                with self.assertRaisesRegex(ValueError, "another world"):
+                    type(patch.prepared)(**{**dict(patch.prepared), "transition": changed_transition})
+                changed_captures = tuple(type(c)(publication=base, last_transitions=c.last_transitions,
+                    entities=tuple(before if f.status == "present" and f.state.entity == state.entity else f
+                                   for f in c.entities)) for c in captures)
+                # Current-reader provenance is checked independently of native
+                # before comparison, including accepted equal retries.
+                for found in ((), tuple(range(8))):
+                    _, accepted, _, _ = native_and_reads(found)
+                    with self.assertRaisesRegex(ValueError, "another world"):
+                        validator.validate(native, accepted=accepted, captures=changed_captures, expected_world=base)
+
+    def test_native_prepared_rejects_reason_for_another_operation(self):
+        native, lookup, captures, base = native_and_reads()
+        for index, patch in enumerate(native.patches):
+            prepared = patch.prepared
+            transition = prepared.transition
+            intent = transition.intent
+            wrong = (LifecycleOperation.END if intent.operation is not LifecycleOperation.END
+                     else LifecycleOperation.CREATE)
+            reason = type(intent.reason)(**{**dict(intent.reason), "operation": wrong})
+            intent = type(intent)(**{**dict(intent), "reason": reason})
+            transition = type(transition)(intent=intent, participants=transition.participants)
+            with self.subTest(patch=index):
+                with self.assertRaisesRegex(ValueError, "reason.operation"):
+                    type(prepared)(**{**dict(prepared), "transition": transition})
+                # Unchecked copies must also fail revalidation at apply admission.
+                malformed_patch = patch.model_copy(update={
+                    "prepared": prepared.model_copy(update={"transition": transition})})
+                malformed = native.model_copy(update={"patches": (
+                    *native.patches[:index], malformed_patch, *native.patches[index + 1:])})
+                with self.assertRaisesRegex(ValueError, "reason.operation"):
+                    LifecycleStateValidator(MockLifecycleSectionRefused).validate(
+                        malformed, accepted=lookup, captures=captures, expected_world=base)
+
+    def test_new_reactivate_requires_matching_end_history(self):
+        native, lookup, captures, base = native_and_reads()
+        validator = LifecycleStateValidator(MockLifecycleSectionRefused)
+        self.assertIs(type(validator.validate(native, accepted=lookup, captures=captures,
+                                             expected_world=base)), SectionAccepted)
+        for capture_index, capture in enumerate(captures):
+            fact = capture.last_transitions[0]
+            variants = {
+                "missing": (),
+                "duplicate": (fact, fact),
+                "replacement": (fact.model_copy(update={"operation": LifecycleOperation.REPLACEMENT}),),
+                "create": (fact.model_copy(update={"operation": LifecycleOperation.CREATE}),),
+                "reactivate": (fact.model_copy(update={"operation": LifecycleOperation.REACTIVATE}),),
+                "wrong_ref": (fact.model_copy(update={"ref": fact.ref.model_copy(update={"change_uid": "other"})}),),
+                "wrong_entity": (fact.model_copy(update={"entity": fact.entity.model_copy(update={"entity_uid": "other"})}),),
+            }
+            for name, facts in variants.items():
+                with self.subTest(kind=capture_index, case=name):
+                    changed = list(captures)
+                    changed[capture_index] = type(capture)(publication=base, entities=capture.entities,
+                                                          last_transitions=facts)
+                    with self.assertRaisesRegex(ValueError, "Reactivate"):
+                        validator.validate(native, accepted=lookup, captures=tuple(changed), expected_world=base)
+
+    def test_equal_reactivate_retry_does_not_require_old_history(self):
+        native, lookup, captures, base = native_and_reads((6, 7))
+        validator = LifecycleStateValidator(MockLifecycleSectionRefused)
+        for replacement_history in (False, True):
+            changed = tuple(type(c)(publication=base, entities=c.entities, last_transitions=tuple(
+                f.model_copy(update={"operation": LifecycleOperation.REPLACEMENT}) for f in c.last_transitions)
+                if replacement_history else ()) for c in captures)
+            self.assertIs(type(validator.validate(native, accepted=lookup, captures=changed,
+                                                 expected_world=base)), SectionAccepted)
+
     def test_native_constructor_cannot_bypass_required_transition_coverage(self):
         native, _, _, base = native_and_reads()
         entry = native.domain_evidence[0]
@@ -63,7 +151,7 @@ class ApplyPredicateTests(unittest.TestCase):
             "entity": (entry.model_copy(update={"effect": entry.effect.model_copy(update={
                 "entity": entry.effect.entity.model_copy(update={"entity_uid": "unrelated"})})}), *native.domain_evidence[1:]),
             "effect": (entry.model_copy(update={"effect": entry.effect.model_copy(update={
-                "effect": "create" if entry.effect.effect != "create" else "end"})}), *native.domain_evidence[1:]),
+                "effect": LifecycleOperation.CREATE if entry.effect.effect is not LifecycleOperation.CREATE else LifecycleOperation.END})}), *native.domain_evidence[1:]),
             "action": (entry.model_copy(update={"effect": entry.effect.model_copy(update={
                 "reason_action_uid": "unrelated"})}), *native.domain_evidence[1:]),
         }
@@ -120,7 +208,7 @@ class ApplyPredicateTests(unittest.TestCase):
                 (m.PresentA if isinstance(replacements.get(f.state.entity if f.status == "present" else f.entity), m.EntityStateA) else m.PresentB)(
                     state=replacements[f.state.entity if f.status == "present" else f.entity])
                 if (f.state.entity if f.status == "present" else f.entity) in replacements else f
-                for f in c.entities), last_transitions=()) for c in captures)
+                for f in c.entities), last_transitions=c.last_transitions) for c in captures)
             self.assertIs(type(validator.validate(native, accepted=lookup, captures=captures, expected_world=base)), SectionAccepted)
 
     def test_conflicts_aggregate_in_original_patch_order(self):
@@ -157,7 +245,7 @@ class ApplyPredicateTests(unittest.TestCase):
             self.assertIs(type(verifier.verify(section)), SectionAccepted)
             patch = section.patches[0]
             bad = section.model_copy(update={"patches": (patch.model_copy(update={
-                "effects": tuple(e.model_copy(update={"effect": "end"}) for e in patch.effects)}), section.patches[1])})
+                "effects": tuple(e.model_copy(update={"effect": LifecycleOperation.END}) for e in patch.effects)}), section.patches[1])})
             result = verifier.verify(bad)
             self.assertIs(type(result), MockSubjectSectionRefused)
             self.assertEqual([i.code for i in result.diagnostics], [d.MockSubjectCode.EFFECT_PAYLOAD_MISMATCH])

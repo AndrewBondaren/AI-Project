@@ -11,7 +11,8 @@ from dataclasses import dataclass
 from enum import Enum, StrEnum
 from typing import Any, Generic, Self, TypeVar
 
-from pydantic import BaseModel, ConfigDict, ModelWrapValidatorHandler, StrictStr, model_validator
+from pydantic import BaseModel, ConfigDict, GetCoreSchemaHandler, ModelWrapValidatorHandler, StrictStr
+from pydantic_core import CoreSchema, core_schema
 
 from app.dataModel.fields.validatedFieldPath import ValidatedFieldPath
 
@@ -61,12 +62,18 @@ class FieldPathError(BaseModel, Generic[CodeT]):
         if not (isinstance(code, type) and issubclass(code, Enum)):
             raise TypeError(f"{cls.__qualname__} must bind CodeT to a concrete Enum, got {code!r}")
 
-    @model_validator(mode="wrap")
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source: type[BaseModel], handler: GetCoreSchemaHandler) -> CoreSchema:
+        schema = handler(source)
+        metadata = cls.__pydantic_generic_metadata__
+        if metadata["origin"] is not None or metadata["parameters"]:
+            return core_schema.no_info_wrap_validator_function(cls._validate_carrier, schema)
+        # Named concrete models keep native JSON validation, including strict tuples.
+        return schema
+
     @classmethod
     def _validate_carrier(cls, value: Any, handler: ModelWrapValidatorHandler[Any]) -> Any:
         """Base/parameterized annotations admit concrete subclasses, revalidated by their own schema."""
-        if not _is_carrier(cls):
-            return handler(value)
         if not isinstance(value, FieldPathError):
             raise ValueError("FieldPathError carrier needs a named concrete domain subclass instance")
         kind = type(value)

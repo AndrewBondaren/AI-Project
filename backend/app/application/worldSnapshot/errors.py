@@ -4,6 +4,13 @@ from typing import Annotated
 from pydantic import Field, TypeAdapter
 from app.application.publication.errors import PublicationInfrastructureError
 from app.dataModel.worldSnapshot.diagnostics.receiptContract import ReceiptContractIssue
+from app.dataModel.worldSnapshot.errors.publicFault import SnapshotPublicFault
+
+
+class SnapshotPublicError(Exception):
+    def __init__(self, fault: SnapshotPublicFault) -> None:
+        self.fault = SnapshotPublicFault.model_validate(fault, strict=True)
+        super().__init__(self.fault.kind.value)
 
 
 class SnapshotReceiptContractError(PublicationInfrastructureError):

@@ -16,9 +16,10 @@ from app.application.patch.encoding.coreManifest import PATCH_CORE_SCHEMA
 from app.application.artifacts.encoding.coreManifest import ARTIFACT_CORE_SCHEMA
 from app.application.worldSnapshot.encoding.coreManifest import SNAPSHOT_CORE_SCHEMA
 from app.application.patch.encoding.patchSetCodec import PatchSetCodec
+from app.application.patch.errors import PatchSetAdmissionError
 from app.application.worldSnapshot.encoding.snapshotCodec import SnapshotEnvelopeCodec
 from app.application.patch.registry.sectionRegistry import SectionRegistry
-from tests.snapshotCore.support.fakeSection import FakeSectionRefused
+from tests.snapshotCore.support.fakeSection import FakeSectionRefused, FakePatchSet
 from app.application.patch.contracts.sectionCodec import SectionCodec
 from app.application.patch.contracts.sectionHandler import SectionContract, DomainSectionHandler
 from app.application.worldData.pack.io.tileCodec import TileCodec, PAYLOAD_KIND_WORLD_MAP
@@ -51,10 +52,10 @@ class CanonicalRequestCodecTests(unittest.TestCase):
         self.section_codec = FakeSectionCodec(self.contract)
         self.registry = SectionRegistry(FakeSectionRefused)
         self.registry.register(self.contract, self.handler, self.section_codec)
-        self.codec = PatchSetCodec(self.registry, PatchSet[FakeSection])
+        self.codec = PatchSetCodec(self.registry, FakePatchSet)
         self.publication = WorldPublicationRef(world_uid="w", publication_id="p", pack_hash="a" * 64,
             snapshot_head=None, active_timeline_id="t", gameplay_started=True)
-        self.empty = PatchSet[FakeSection](format_version=1, operation_id="o", preparation_fingerprint="b" * 64,
+        self.empty = FakePatchSet(format_version=1, operation_id="o", preparation_fingerprint="b" * 64,
             world_uid="w", timeline_id="t", turn_id=1, expected_world=self.publication, expected_players=(), sections=())
         self.section = FakeSection(header=SectionHeader(key=self.key, format_version=1, depends_on=()), patches=(
             FakePatch(header=PatchHeader(ref=PatchRef(operation_id="o", section_key=self.key, ordinal=0),
@@ -199,7 +200,7 @@ class CanonicalRequestCodecTests(unittest.TestCase):
         self.assertEqual(self.codec.decode(payload), self.request)
         self.assertEqual(self.codec.fingerprint(self.request), content_digest(payload).hex())
         self.assertEqual(self.codec.fingerprint_bytes(payload), self.codec.fingerprint(self.request))
-        with self.assertRaises(ValidationError):
+        with self.assertRaises(PatchSetAdmissionError):
             self.codec.encode(self.request.model_copy(update={"operation_id": "other"}))
         changed_patch = self.section.patches[0].model_copy(update={"header":
             self.section.patches[0].header.model_copy(update={"ref":
@@ -238,8 +239,10 @@ class CanonicalRequestCodecTests(unittest.TestCase):
             patches=(self.section.patches[0].model_copy(update={"header":
                 self.section.patches[0].header.model_copy(update={"ref":
                     self.section.patches[0].header.ref.model_copy(update={"section_key": other_key})})}),))
-        codec = PatchSetCodec(self.registry, PatchSet[FakeSection | OtherSection])
-        request = PatchSet[FakeSection | OtherSection].model_validate(
+        class MixedRequest(PatchSet[FakeSection | OtherSection]):
+            pass
+        codec = PatchSetCodec(self.registry, MixedRequest)
+        request = MixedRequest.model_validate(
             {**self.empty.model_dump(), "sections": (self.section, other)})
         self.assertEqual(tuple(section.header.key for section in codec.decode(codec.encode(request)).sections),
                          (self.key, other_key))
@@ -270,7 +273,7 @@ class CanonicalRequestCodecTests(unittest.TestCase):
         for encoded in (b"", self.codec.encode(self.request)[:-1], self.codec.encode(self.request) + b"trailing"):
             with self.assertRaises(CanonicalEncodingError):
                 self.codec.decode(encoded)
-        with self.assertRaises(CanonicalEncodingError):
+        with self.assertRaises(PatchSetAdmissionError):
             self.codec.encode(self.request.model_copy(update={"format_version": 2}))
 
     def test_section_key_version_noncanonical_and_unknown_types_refuse_without_domain_work(self):

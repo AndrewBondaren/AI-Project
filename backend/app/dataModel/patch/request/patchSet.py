@@ -9,6 +9,7 @@ from pydantic import model_validator
 from app.dataModel.patch.request.patchSetData import PatchSetData
 from app.dataModel.patch.sections.section import DomainSection
 from app.dataModel.patch.validation.patchSetInvariants import PatchSetInvariants
+from app.dataModel.patch.validation.coreInvariantError import PatchSetCoreInvariantError
 
 
 class PatchSet[S: DomainSection](PatchSetData[S]):
@@ -16,5 +17,5 @@ class PatchSet[S: DomainSection](PatchSetData[S]):
     def coherent_request(self) -> Self:
         violations = PatchSetInvariants.check_core(self)
         if violations:
-            raise ValueError(tuple(violation.details for violation in violations))
+            raise PatchSetCoreInvariantError(violations)
         return self

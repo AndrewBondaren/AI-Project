@@ -153,8 +153,8 @@ class LifecycleTransitionValidator[Q: BaseModel, P: BaseModel]:
             relation(R.REASON_OPERATION_MISMATCH, ip, "Reason refers to another lifecycle operation")
         if reason.action_uid != admission.action_uid:
             relation(R.ADMISSION_MISMATCH, ap, "Admission belongs to another subject action", ip)
-        expected = tuple((ref, "end" if replacement and i < predecessor_count else
-                          "create" if replacement else operation.value, reason.action_uid)
+        expected = tuple((ref, LifecycleOperation.END if replacement and i < predecessor_count else
+                          LifecycleOperation.CREATE if replacement else operation, reason.action_uid)
                          for i, ref in enumerate(refs))
         actual = tuple((effect.entity, effect.effect, effect.reason_action_uid) for effect in admission.effects)
         if len(set(actual)) != len(actual) or set(actual) != set(expected):

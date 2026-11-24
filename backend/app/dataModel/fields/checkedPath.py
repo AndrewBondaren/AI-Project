@@ -8,9 +8,10 @@ The path is not serialized: ``freeze`` yields ``ValidatedFieldPath``.
 
 from collections.abc import Mapping, Sequence
 from types import NoneType, UnionType
-from typing import Annotated, Any, Generic, TypeVar, Union, cast, get_args, get_origin, overload
+from typing import Annotated, Any, Generic, Literal, TypeVar, Union, cast, get_args, get_origin, overload
 
-from pydantic import AliasChoices, BaseModel, TypeAdapter, ValidationError
+from pydantic import AliasChoices, BaseModel, Discriminator, TypeAdapter, ValidationError
+from pydantic.fields import FieldInfo
 
 from app.dataModel.annotationPolicy import unwrap_wire_type
 from app.dataModel.fields.fieldBinding import bind_field
@@ -75,27 +76,37 @@ def _union_members(annotation: Any) -> tuple[Any, ...]:
 
 
 class CheckedPath(Generic[RootT, CurrentT]):
-    __slots__ = ("_root", "_current", "_segments")
+    __slots__ = ("_root", "_current", "_segments", "_discriminator")
 
-    def __init__(self, root: ModelIdentity, current: Any, segments: tuple[PathSegment, ...]) -> None:
+    def __init__(self, root: ModelIdentity, current: Any, segments: tuple[PathSegment, ...],
+                 discriminator: str | Discriminator | None = None) -> None:
         self._root = root
-        self._current = current
+        while get_origin(current) is Annotated:
+            annotation, *metadata = get_args(current)
+            for entry in metadata:
+                if isinstance(entry, FieldInfo) and entry.discriminator is not None:
+                    discriminator = entry.discriminator
+            current = annotation
+        self._current = _strip(current)
         self._segments = segments
+        self._discriminator = discriminator
 
     @staticmethod
     def root(model: type[RootModelT]) -> "CheckedPath[RootModelT, RootModelT]":
         return CheckedPath(ModelIdentity.of(model), model, ())
 
-    def _step(self, current: Any, segment: PathSegment) -> "CheckedPath[Any, Any]":
-        return CheckedPath(self._root, current, (*self._segments, segment))
+    def _step(self, current: Any, segment: PathSegment,
+              discriminator: str | Discriminator | None = None) -> "CheckedPath[Any, Any]":
+        return CheckedPath(self._root, current, (*self._segments, segment), discriminator)
 
     def field(self: "CheckedPath[RootT, ModelT]", ref: FieldRef[ModelT, ValueT]) -> "CheckedPath[RootT, ValueT]":
         binding = bind_field(ref)
         current = self._current
         if not isinstance(current, type) or not issubclass(current, binding.model):
             raise CheckedPathError(f"field {binding.field!r} does not belong to the current path model")
-        annotation = _strip(current.model_fields[binding.field].annotation)
-        return self._step(annotation, FieldSegment(owner=ModelIdentity.of(binding.model), name=binding.field))
+        info = current.model_fields[binding.field]
+        return self._step(info.annotation, FieldSegment(owner=ModelIdentity.of(binding.model), name=binding.field),
+                          info.discriminator)
 
     def present(self: "CheckedPath[RootT, ValueT | None]") -> "CheckedPath[RootT, ValueT]":
         members = _union_members(self._current)
@@ -103,7 +114,7 @@ class CheckedPath(Generic[RootT, CurrentT]):
             raise CheckedPathError("present() requires a nullable current value")
         rest = tuple(member for member in members if member is not NoneType)
         current = rest[0] if len(rest) == 1 else Union[rest]
-        return CheckedPath(self._root, _strip(current), self._segments)
+        return CheckedPath(self._root, current, self._segments, self._discriminator)
 
     @overload
     def item(self: "CheckedPath[RootT, tuple[ItemT, ...]]", index: int) -> "CheckedPath[RootT, ItemT]": ...
@@ -124,7 +135,7 @@ class CheckedPath(Generic[RootT, CurrentT]):
             element = args[index]
         else:
             element = args[0]
-        return self._step(_strip(element), IndexSegment(index=index))
+        return self._step(element, IndexSegment(index=index))
 
     @overload
     def key(self: "CheckedPath[RootT, dict[KeyT, ValueT]]", key: KeyT) -> "CheckedPath[RootT, ValueT]": ...
@@ -140,7 +151,7 @@ class CheckedPath(Generic[RootT, CurrentT]):
             TypeAdapter(args[0]).validate_python(key, strict=True)
         except ValidationError as exc:
             raise CheckedPathError("key() key does not match the mapping key type") from exc
-        return self._step(_strip(args[1]), KeySegment(key=key))
+        return self._step(args[1], KeySegment(key=key))
 
     def variant(self, branch: type[BranchT]) -> "CheckedPath[RootT, BranchT]":
         members = tuple(_strip(member) for member in _union_members(self._current))
@@ -169,9 +180,27 @@ class CheckedPath(Generic[RootT, CurrentT]):
         members = _union_members(current)
         if members:
             present = tuple(_strip(member) for member in members if member is not NoneType)
+            if self._discriminator is not None:
+                if not isinstance(self._discriminator, str):
+                    raise CheckedPathError("callable discriminator is not a schema loc selector")
+                tagged = []
+                for member in present:
+                    if not isinstance(member, type) or not issubclass(member, BaseModel):
+                        raise CheckedPathError("discriminator branch must be a model")
+                    field = _field_for_wire_name(member, self._discriminator)
+                    tag_type = _strip(member.model_fields[field].annotation)
+                    if get_origin(tag_type) is not Literal:
+                        raise CheckedPathError("discriminator must declare literal tags")
+                    if element in get_args(tag_type):
+                        tagged.append(member)
+                if len(tagged) != 1:
+                    raise CheckedPathError("unknown or ambiguous discriminator tag")
+                return self._step(tagged[0], VariantSegment(branch=ModelIdentity.of(tagged[0])))
             named = [member for member in present if getattr(member, "__name__", None) == element]
-            if named:
+            if len(named) == 1:
                 return self._step(named[0], VariantSegment(branch=ModelIdentity.of(named[0])))
+            if named:
+                raise CheckedPathError("ambiguous union branch name")
             if len(present) != 1:
                 raise CheckedPathError("ambiguous union in loc")
             return CheckedPath(self._root, present[0], self._segments)._resolve_loc(element)
@@ -179,8 +208,9 @@ class CheckedPath(Generic[RootT, CurrentT]):
             if not isinstance(element, str):
                 raise CheckedPathError("loc field is not declared")
             name = _field_for_wire_name(current, element)
-            annotation = _strip(current.model_fields[name].annotation)
-            return self._step(annotation, FieldSegment(owner=ModelIdentity.of(current), name=name))
+            info = current.model_fields[name]
+            return self._step(info.annotation, FieldSegment(owner=ModelIdentity.of(current), name=name),
+                              info.discriminator)
         origin = get_origin(current)
         if origin in _SEQUENCES and isinstance(element, int):
             return cast(Any, self).item(element)

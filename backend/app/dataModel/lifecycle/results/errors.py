@@ -1,11 +1,12 @@
 from typing import Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.dataModel.lifecycle.results.issues import LifecycleFieldIssue, LifecycleIssue, LifecycleRelationIssue
+from app.dataModel.lifecycle.results.refusalKind import LifecycleRefusalKind
 
 
 class LifecycleFieldError(BaseModel):
     model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
-    kind: Literal["field_refusal"] = "field_refusal"
+    kind: Literal[LifecycleRefusalKind.FIELD_REFUSAL] = LifecycleRefusalKind.FIELD_REFUSAL
     issues: tuple[LifecycleIssue, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -17,11 +18,11 @@ class LifecycleFieldError(BaseModel):
 
 class LifecycleLogicError(BaseModel):
     model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
-    kind: Literal["logic_refusal"] = "logic_refusal"
+    kind: Literal[LifecycleRefusalKind.LOGIC_REFUSAL] = LifecycleRefusalKind.LOGIC_REFUSAL
     issues: tuple[LifecycleRelationIssue, ...] = Field(min_length=1)
 
 
 class LifecycleSectionRefused(BaseModel):
     model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
-    kind: Literal["section_refusal"] = "section_refusal"
+    kind: Literal[LifecycleRefusalKind.SECTION_REFUSAL] = LifecycleRefusalKind.SECTION_REFUSAL
     issues: tuple[LifecycleIssue, ...] = Field(min_length=1)

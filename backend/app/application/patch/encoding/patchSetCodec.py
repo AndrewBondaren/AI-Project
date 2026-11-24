@@ -1,8 +1,20 @@
 """Versioned canonical tuple projection; domain section codecs own their payloads."""
 
 from dataclasses import dataclass
-from typing import ClassVar
-from pydantic import TypeAdapter
+from typing import ClassVar, Union, get_args, get_origin
+from types import UnionType
+from pydantic import TypeAdapter, ValidationError
+from app.dataModel.annotationPolicy import unwrap_wire_type
+from app.dataModel.fields.validatedFieldPath import ModelIdentity, is_model_identity_owner
+from app.dataModel.fields.fieldRef import FieldRef
+from app.dataModel.fields.fieldBinding import bind_field
+from app.dataModel.validation.modelContractChecks import ModelContractChecks
+from app.dataModel.validation.diagnostics.validatorAggregationHelper import ValidatorAggregationHelper
+from app.dataModel.patch.validation.admissionReasons import (
+    PatchSetAdmissionReason, ADMISSION_REASON_TYPES, PatchSetRequestModelMismatch, PatchSetRequestVersionUnsupported,
+)
+from app.application.patch.errors import PatchSetAdmissionError
+from app.application.patch.validation.modelValidationErrors import PatchSetModelValidationErrors
 
 from app.encoding.canonicalCodec import (
     CanonicalEncodingError, content_digest, decode as canonical_decode, encode as canonical_encode,
@@ -22,12 +34,57 @@ class PatchSetCodec[S: DomainSection]:
     request_model: type[PatchSet[S]]
     SUPPORTED_VERSIONS: ClassVar[frozenset[FormatVersion]] = frozenset({1})
 
-    def encode(self, request: PatchSet[S]) -> bytes:
+    def __post_init__(self) -> None:
+        self.validate_configuration()
+
+    def validate_configuration(self) -> None:
+        model = self.request_model
+        if not is_model_identity_owner(model) or not issubclass(model, PatchSet):
+            raise TypeError("codec requires a named closed PatchSet model")
+        if not ModelContractChecks.same_validation_config(model.model_config, PatchSet.model_config):
+            raise TypeError("request model must retain strict immutable validation")
+        sections_name = bind_field(FieldRef(lambda: PatchSet, lambda value: value.sections)).field
+        if tuple(model.model_fields) != tuple(PatchSet.model_fields):
+            raise TypeError("request model must retain PatchSet fields")
+        for name, field in PatchSet.model_fields.items():
+            actual = model.model_fields[name]
+            if (not actual.is_required() or actual.metadata != field.metadata
+                    or name != sections_name and actual.annotation != field.annotation):
+                raise TypeError("request model must retain field constraints")
+        if not ModelContractChecks.same_validators(model, PatchSet):
+            raise TypeError("request model must retain PatchSet validators")
+        annotation = model.model_fields[sections_name].annotation
+        args = get_args(annotation)
+        if get_origin(annotation) is not tuple or len(args) != 2 or args[1] is not Ellipsis:
+            raise TypeError("sections must be an ordered tuple")
+        member = unwrap_wire_type(args[0])
+        members = get_args(member) if get_origin(member) in (Union, UnionType) else (member,)
+        if any(not is_model_identity_owner(item) or not issubclass(item, DomainSection) for item in members):
+            raise TypeError("sections must bind named native models")
+        if not frozenset(members) <= self.registry.section_models:
+            raise ValueError("request section models are not registered")
+
+    def validate_request(self, request: PatchSet[S]) -> PatchSet[S]:
         if type(request) is not self.request_model:
-            raise CanonicalEncodingError("request must have the declared concrete PatchSet model")
-        request = self.request_model.model_validate(request, strict=True)
+            raise PatchSetAdmissionError((PatchSetRequestModelMismatch(
+                expected_model=ModelIdentity.of(self.request_model),
+                actual_type_name=f"{type(request).__module__}.{type(request).__qualname__}"),))
+        try:
+            request = self.request_model.model_validate(request, strict=True)
+        except ValidationError as error:
+            raise PatchSetAdmissionError(PatchSetModelValidationErrors.classify(error)) from error
+        errors = ValidatorAggregationHelper[PatchSetAdmissionReason](ADMISSION_REASON_TYPES)
         if request.format_version not in self.SUPPORTED_VERSIONS:
-            raise CanonicalEncodingError("unsupported PatchSet format version")
+            errors.add(PatchSetRequestVersionUnsupported(code="patch_set.admission.request_version_unsupported",
+                actual_version=request.format_version, supported_versions=tuple(sorted(self.SUPPORTED_VERSIONS))))
+        for index, section in enumerate(request.sections):
+            for issue in self.registry.admission_issues(section, section_index=index):
+                errors.add(issue)
+        errors.raise_if_any(PatchSetAdmissionError)
+        return request
+
+    def encode(self, request: PatchSet[S]) -> bytes:
+        request = self.validate_request(request)
         fields: list[tuple[str, object]] = []
         for name in self.request_model.model_fields:
             value = getattr(request, name)

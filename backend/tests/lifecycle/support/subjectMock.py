@@ -1,5 +1,8 @@
 """Synthetic subject behavior; payload semantics belong only to this mock."""
-from app.dataModel.lifecycle.evidence.effects import LifecycleEffectKind
+from app.dataModel.lifecycle.evidence.effects import (
+    LifecycleEffectKind,
+)
+from app.dataModel.lifecycle.operations.kind import LifecycleOperation
 from app.dataModel.fields.checkedPath import CheckedPath
 from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.patch.results.sectionResult import SectionAccepted
@@ -15,11 +18,11 @@ from tests.lifecycle.support.snapshotContracts import MockSubjectSectionRefused
 
 def _effect(before: bool | None, after: bool) -> LifecycleEffectKind | None:
     if before is None and after is True:
-        return "create"
+        return LifecycleOperation.CREATE
     if before is True and after is False:
-        return "end"
+        return LifecycleOperation.END
     if before is False and after is True:
-        return "reactivate"
+        return LifecycleOperation.REACTIVATE
     return None
 
 

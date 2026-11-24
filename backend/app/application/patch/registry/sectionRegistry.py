@@ -20,6 +20,11 @@ from app.dataModel.patch.results.sectionResult import SectionAccepted, SectionAp
 from app.dataModel.patch.sections.section import DomainSection
 from app.application.patch.contracts.sectionCodec import SectionCodec
 from app.application.patch.registry.boundSectionCodec import BoundSectionCodec
+from app.dataModel.fields.validatedFieldPath import ModelIdentity
+from app.dataModel.validation.diagnostics.validatorAggregationHelper import ValidatorAggregationHelper
+from app.dataModel.patch.validation.admissionReasons import (
+    PatchSetSectionKeyUnknown, PatchSetSectionModelMismatch, PatchSetSectionVersionUnsupported,
+)
 
 
 _REFUSAL_DIAGNOSTICS = bind_field(FieldRef(lambda: SectionRefused, lambda refusal: refusal.diagnostics))
@@ -160,6 +165,38 @@ class SectionRegistry[D: BaseModel]:
     def manifest(self) -> CanonicalSchemaManifest:
         return self._manifest
 
+    @property
+    def section_models(self) -> frozenset[type[DomainSection]]:
+        return frozenset(bound.section_model for bound in self._codecs.values())
+
+    @staticmethod
+    def _model_matches(section: DomainSection, bound: BoundSectionCodec) -> bool:
+        return type(section) is bound.section_model
+
+    @staticmethod
+    def _version_supported(section: DomainSection, bound: BoundSectionCodec) -> bool:
+        return section.header.format_version in bound.metadata.supported_versions
+
+    def admission_issues(self, section: DomainSection, *, section_index: int) -> tuple[
+            PatchSetSectionKeyUnknown | PatchSetSectionModelMismatch | PatchSetSectionVersionUnsupported, ...]:
+        bound = self._codecs.get(section.header.key)
+        if bound is None:
+            return (PatchSetSectionKeyUnknown(code="patch_set.admission.section_key_unknown",
+                section_index=section_index, section_key=section.header.key),)
+        issues = ValidatorAggregationHelper[PatchSetSectionModelMismatch | PatchSetSectionVersionUnsupported](
+            (PatchSetSectionModelMismatch, PatchSetSectionVersionUnsupported))
+        if not self._model_matches(section, bound):
+            issues.add(PatchSetSectionModelMismatch(code="patch_set.admission.section_model_mismatch",
+                section_index=section_index, section_key=section.header.key,
+                expected_model=ModelIdentity.of(bound.section_model),
+                actual_type_name=f"{type(section).__module__}.{type(section).__qualname__}"))
+        if not self._version_supported(section, bound):
+            issues.add(PatchSetSectionVersionUnsupported(code="patch_set.admission.section_version_unsupported",
+                section_index=section_index, section_key=section.header.key,
+                actual_version=section.header.format_version,
+                supported_versions=tuple(sorted(bound.metadata.supported_versions))))
+        return issues.snapshot()
+
     def require(self, key: SectionKey) -> BoundSectionHandler[D]:
         try:
             return self._bindings[key]
@@ -184,9 +221,9 @@ class SectionRegistry[D: BaseModel]:
 
     def resolve_codec(self, section: DomainSection) -> BoundSectionCodec:
         bound = self.require_codec(section.header.key)
-        if type(section) is not bound.section_model:
+        if not self._model_matches(section, bound):
             raise TypeError("section does not have the exact registered model")
         bound.section_model.model_validate(section, strict=True)
-        if section.header.format_version not in bound.metadata.supported_versions:
+        if not self._version_supported(section, bound):
             raise ValueError("unsupported section version")
         return bound

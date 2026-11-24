@@ -1,4 +1,5 @@
 """Partial admission and caller-specific ordering of shared provenance checks."""
+from tests.snapshotCore.support.mockRequestCodec import mock_request_codec
 import unittest
 from dataclasses import replace
 from unittest.mock import AsyncMock
@@ -137,7 +138,8 @@ class ReceiptWiringTests(unittest.IsolatedAsyncioTestCase):
         self.registry = SimpleNamespace(diagnostic_types=frozenset(), resolve=lambda section: None)
         self.service = WorldSnapshotService(self.registry, None, None, self.history,
             publication_binding=configuration.binding, operations=SimpleNamespace(
-                result_binding=configuration.binding, record_model=configuration.binding.record_model))
+                result_binding=configuration.binding, record_model=configuration.binding.record_model),
+            request_codec=mock_request_codec(self.registry))
         self.scope = fixture.scope
         self.configuration = configuration
 

@@ -43,6 +43,21 @@ RIVERS = WireLocation(parts=("hydrology", "rivers", 2))
 
 
 class JsonFieldErrorTests(unittest.TestCase):
+    def test_concrete_json_roundtrip_preserves_strict_python_tuple_boundary(self) -> None:
+        issue = JsonFieldError(code=JsonValidationCode.SCHEMA_VIOLATION, path=_path(("widths", 2)),
+            wire_path=("widths", 2), message="Input should be a valid integer", location=RIVERS,
+            pydantic_type="int_type")
+        restored = JsonFieldError.model_validate_json(issue.model_dump_json())
+        self.assertEqual(restored, issue)
+        self.assertIs(type(restored), JsonFieldError)
+        self.assertIs(restored.code, JsonValidationCode.SCHEMA_VIOLATION)
+        with self.assertRaises(ValidationError):
+            JsonFieldError.model_validate(issue.model_dump(mode="json"), strict=True)
+        for changes in ({"wire_path": ["widths", 2]}, {"location": {"parts": ["rows", 2]}},
+                        {"path": {**issue.path.model_dump(), "segments": list(issue.path.segments)}}):
+            with self.assertRaises(ValidationError):
+                JsonFieldError.model_validate({**issue.model_dump(), **changes}, strict=True)
+
     def test_pydantic_type_only_for_schema_violation(self) -> None:
         JsonFieldError(code=JsonValidationCode.SCHEMA_VIOLATION, path=_path(("widths", 0)), wire_path=("widths", 0), message="m",
                        location=RIVERS, pydantic_type="int_type")

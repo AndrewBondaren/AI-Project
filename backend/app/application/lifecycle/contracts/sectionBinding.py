@@ -61,8 +61,8 @@ class LifecycleSectionBinding[Q: BaseModel, S: DomainSection[Any]]:
             raise TypeError("request and section must preserve the same concrete evidence union")
         for evidence in union_members(request_evidence):
             require_named_model(evidence)
-        if len(self.section_contract.supported_versions) != 1:
-            raise ValueError("local v1 producer binding requires one explicit write version")
+        if self.section_contract.supported_versions != frozenset({LifecycleSection.FORMAT_VERSION}):
+            raise ValueError("Lifecycle producer requires the current effect-enum section version")
         object.__setattr__(self, "_patch_models", MappingProxyType(dict(zip(prepared, patches, strict=True))))
 
     def patch_model(self, prepared: BaseModel) -> type[LifecycleTransitionPatch[BaseModel]]:

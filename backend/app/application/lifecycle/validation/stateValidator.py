@@ -10,7 +10,8 @@ from app.dataModel.lifecycle.publication.patch import LifecycleTransitionPatch
 from app.dataModel.lifecycle.publication.section import LifecycleSection
 from app.dataModel.lifecycle.evidence.coverage import PreparedEffectBinding
 from app.dataModel.lifecycle.reads.capture import LifecycleCapture
-from app.dataModel.lifecycle.reads.facts import AbsentLifecycle, PresentLifecycle
+from app.dataModel.lifecycle.reads.facts import AbsentLifecycle, PresentLifecycle, LastTransitionFact
+from app.dataModel.lifecycle.operations.kind import LifecycleOperation
 from app.dataModel.lifecycle.storage.acceptedChanges import AcceptedChangeAbsent, AcceptedChangeFound, AcceptedChangesResult
 from app.dataModel.lifecycle.results.applyIssue import LifecycleApplyIssue, LifecycleApplyCode
 from app.dataModel.patch.results.sectionResult import SectionAccepted, SectionRefused
@@ -48,6 +49,7 @@ class LifecycleStateValidator[F: SectionRefused[LifecycleApplyIssue]]:
         for patch in native.patches:
             required.update(participant.after.entity for participant in patch.prepared.transition.participants)
         observations: dict[LifecycleEntityRef[object], AbsentLifecycle[object] | PresentLifecycle[object]] = {}
+        history: dict[LifecycleEntityRef[object], list[LastTransitionFact[object]]] = {}
         kinds: set[object] = set()
         for raw in captures:
             capture_model = type(raw)
@@ -60,6 +62,8 @@ class LifecycleStateValidator[F: SectionRefused[LifecycleApplyIssue]]:
             for fact in capture.entities:
                 if fact.status == "unknown":
                     raise ValueError("unknown authoritative Lifecycle observation")
+                if fact.status == "present" and fact.state.last_transition.world_uid != expected_world.world_uid:
+                    raise ValueError("current Lifecycle state references a transition from another world")
                 entity = fact.state.entity if fact.status == "present" else fact.entity
                 if entity in observations:
                     raise ValueError("duplicate current entity observation")
@@ -71,6 +75,8 @@ class LifecycleStateValidator[F: SectionRefused[LifecycleApplyIssue]]:
             if local_kind in kinds:
                 raise ValueError("duplicate current capture kind")
             kinds.add(local_kind)
+            for fact in capture.last_transitions:
+                history.setdefault(fact.entity, []).append(fact)
         if set(observations) != required:
             raise ValueError("current capture must cover exactly the requested entities")
 
@@ -104,6 +110,19 @@ class LifecycleStateValidator[F: SectionRefused[LifecycleApplyIssue]]:
                     errors.add(LifecycleApplyIssue(code=LifecycleApplyCode.BEFORE_STATE_MISMATCH,
                         path=participants_path.item(ordinal).field(before_ref).freeze(),
                         message="New transition before-state differs from the authoritative publication"))
+                    continue
+                if transition.intent.operation is LifecycleOperation.REACTIVATE:
+                    current = observations[participant.after.entity]
+                    facts = history.get(participant.after.entity, [])
+                    # D5 applies to new transitions only. Accepted equal retries
+                    # have already returned above, regardless of current history.
+                    if not isinstance(current, PresentLifecycle) or len(facts) != 1:
+                        raise ValueError("new Reactivate requires exactly one authoritative last-transition fact")
+                    fact = facts[0]
+                    if fact.ref != current.state.last_transition or fact.ref.world_uid != expected_world.world_uid:
+                        raise ValueError("Reactivate last-transition fact differs from the authoritative state")
+                    if fact.operation is not LifecycleOperation.END:
+                        raise ValueError("D5: new Reactivate requires a preceding End transition")
         issues = errors.snapshot()
         return (self._refusal_model(category=SnapshotApplyOutcomeKind.CONFLICT, diagnostics=issues)
                 if issues else SectionAccepted())

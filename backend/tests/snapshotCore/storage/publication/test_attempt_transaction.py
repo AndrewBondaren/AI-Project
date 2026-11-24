@@ -1,4 +1,5 @@
 """Synthetic participants through Snapshot seams and a real SQLite transaction owner."""
+from tests.snapshotCore.support.mockRequestCodec import mock_request_codec
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 from contextlib import nullcontext
@@ -68,7 +69,7 @@ class AttemptTransactionTests(unittest.TestCase):
                 registry.diagnostic_types = frozenset({FakeTargetIssue})
                 registry.resolve.return_value = handler
                 service = WorldSnapshotService(registry, world, players, history,
-                    publication_binding=operations.result_binding, operations=operations)
+                    publication_binding=operations.result_binding, operations=operations, request_codec=mock_request_codec(registry))
                 read = history.read
                 append = history.append
                 in_storage_append = False

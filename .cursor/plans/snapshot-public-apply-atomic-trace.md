@@ -1,6 +1,53 @@
 # Snapshot public apply — S3 atomic trace и contract gates
 
-Актуальные concrete предложения R1–R3: [snapshot-retention-cancel-diagnostics-contract.md](snapshot-retention-cancel-diagnostics-contract.md). R1 заменяет preliminary artifact→destinations запись на state/history-bound retention, поскольку иначе наследование остаётся неоднозначным. Подробные proposals ниже читаются с этим уточнением; accepted DTO/code ещё не изменены.
+## Актуальный срез 2026-11-24: public apply после повторного ревью
+
+Зафиксирована обратная связь второго междоменного координатора (`Between domain operations (2)`, `01a1f529-898c-7342-82f4-1e68983b3a9c`). Это ограниченная сверка, не общая архитектурная/runtime-приёмка. Три прежних локальных замечания независимого ревью закрыты; локальный C2 и проверенное внутреннее service wiring получили PASS (56 независимо выполненных тестов). Public apply, конкретная Lifecycle integration и ARCH-0 остаются OPEN. Synthetic caller частных методов не доказывает публичный маршрут.
+
+Разделы 1–7 ниже сохранены как исторический trace от 2026-11-14: их preliminary R1–R3, сообщения об отсутствии cancellation carrier и старых mismatch carriers не являются текущими OPEN и не отменяют последующие C2/H2/H3 решения. Текущие owning уточнения: [C2 facts/diagnostics](snapshot-receipt-facts-diagnostics.md), [atomic boundary](snapshot-lifecycle-atomic-boundary.md), [H2](snapshot-refusal-transport-h2.md). Новые междоменные предложения требуют общей сверки назначенным DAG-координатором и решения пользователя; эта запись не объявляет их принятыми.
+
+### Пять стыков для последовательного разбора
+
+| № | Стык / статус | Что требуется зафиксировать до зависимой реализации | Ответственность и критерий проверки |
+|---|---|---|---|
+| 1 | Admission → claim — OPEN | Exact admission Input/Output/Error, источник concrete request model/registry, producer request fingerprint и соединение с `_claim_publication` | PatchSet владеет invariants и canonical encoding; Snapshot адаптирует admission к своему публичному контракту. Нет копии predicates/serializer, нет предположения «caller уже вызвал assemble». Invalid input не доходит до claim; exact replay не запускает новую попытку. |
+| 2 | Owner → transaction — OPEN | Constructor dependency transaction owner, exact вызов и привязка scope к полученному claim | Publication владеет transaction/acknowledgement; Snapshot собирает вызовы. Чужой claim/scope отклоняется; unknown rollback/commit не превращается в business refusal. |
+| 3 | Expected/source bindings — OPEN | Exact guards/resolver calls, исходные данные и outputs в attempt context | Snapshot проверяет общую publication/source boundary; доменные predicates остаются владельцам. Caller POJO не доказательство authority. Все bindings pinned к исходной publication; все validations раньше любого apply. |
+| 4 | Assigned refs / metadata — OPEN | Кто назначает world/player refs, откуда turn_id/created_at, dependency holders и точный transferred set | Snapshot назначает refs и собирает metadata; Artifacts владеет handoff. Нет угадывания destinations/retention. Metadata, handoff, CAS и terminal атомарны; пустой synthetic route не доказывает маршрут с artifact refs. |
+| 5 | Public Error boundary — OPEN | Полный exact mapping public ошибок и существующих carriers, включая отказ при сохранении refusal | Infrastructure не становится business diagnostic. Refusal сохраняется после подтверждённого rollback; COMMITTED возвращается после commit acknowledgement. Durable OperationCancelled сохраняет operation_id и отличается от invocation CancelledError; engine mapping остаётся отдельным OPEN. |
+
+### Неизменный порядок публичной попытки
+
+Request admission + request fingerprint → claim / exact terminal replay → outer transaction → expected-context checks → H3 source metadata binding → dependency binding + actual section fingerprints → все handler.validate → remaining pinned bases с reuse source → каждый handler.apply с немедленной receipt validation → metadata / handoff → world CAS → player CAS → terminal в той же transaction → confirmed commit → concrete T.
+
+Replay не означает «без любых hashes»: request fingerprint нужен для claim; проверки целостности persistence сохраняются. Exact terminal replay пропускает новую попытку, dependency/section fingerprint checks, handlers и source reads для повторного исполнения. Actual section fingerprint остаётся после claim/replay и до первого validate, через PatchSet-owned `SectionFingerprint`.
+
+Validation/apply/CAS refusal должен выйти за outer transaction. Сохранение refusal допустимо только после confirmed rollback; возвращать durable refusal можно только после подтверждения его записи. Unknown исход имеет приоритет. Ни private helper, ни новый public caller не вправе менять этот порядок.
+
+### Пункт 1: факты к обсуждению и минимальное направление
+
+**Сведение 2026-11-24:** подробное предложение, owning feedback и делегирование реализации пункта 1 вынесены в [Snapshot apply admission → claim](snapshot-apply-admission-claim.md). Пользователь поручил фиксацию и делегирование ограниченного среза; общая сверка основным координатором остаётся обязательной. Нижний текст фиксирует исходные факты, а не отменяет уточнённый mixed diagnostic transport/owning admission API. Публичный apply и остальные четыре стыка этой делегацией не разрешены.
+
+В actual коде уже существуют:
+
+- `PatchSet.coherent_request()` → `PatchSetInvariants.check_core(self)`: constructor invariants; prepared-order прямо исключён из constructor guarantee.
+- `PatchSetInvariants.check_prepared_order(data)` → tuple violations: существующий чистый predicate владельца PatchSet; его не копировать в Snapshot и не заменять повторным assemble.
+- `PatchSetCodec[S](registry, request_model).fingerprint(request: PatchSet[S]) -> RevisionHex`: existing canonical producer через `encode` и `content_digest`. Encode проверяет exact concrete model, strict validation, supported format и checked section codecs. Это request fingerprint, не проверка declared section fingerprint.
+- `WorldSnapshotService._claim_publication(operation_id, world_uid, preparation_fingerprint, request_fingerprint) -> PublicationOwner | T`: существующий seam, отдельно передающий persisted cancellation. Публичный `apply` пока не соединяет эти части.
+
+Предлагаемое направление для согласования: Snapshot admission использует существующие PatchSet predicates и codec; его собственная ответственность — порядок вызовов и перевод результатов/ошибок в accepted Snapshot boundary. Доменные validate и actual dependency fingerprint checks остаются внутри новой попытки. Не вводить второй serializer, второй набор invariants или Snapshot-owned доменное доказательство. `snapshotRequestValidator.py` в actual validation package отсутствует: такое имя нельзя выдавать за реализованный контракт.
+
+Остаток пункта 1: назвать exact adapter method/signature и источник его зависимостей, roster admission checks и mapping каждого отказа (включая prepared-order и ошибки encoding/registry), проверить выход в claim без повторного assembly. Пока это не предъявлено и не согласовано, пункт 1 остаётся OPEN; выбор направления не равен готовности контракта.
+
+### Следующий delivery и граница scope
+
+Сначала последовательно закрыть пять строк exact контрактами в owning документах и общей координаторской сверкой. Затем реализовать public assembly и synthetic/SQLite tests, вызывающие публичный `apply`; после этого — конкретную Time/Lifecycle integration. Проверки должны покрыть replay, validation refusal, immediate receipt fault, rollback предыдущих writes, CAS, unknown, scope expiry и acknowledgement, а не только private helpers.
+
+IN: Snapshot / Publication transaction-persistence / PatchSet registry, доступные synthetic participants; artifacts handoff для маршрута с refs. OUT: реальные producers, write_changes, завершение Pack, production rollout. OUT не блокирует независимую работу. Новых DAG nodes/IDs/порядка не вводить; C2/H2/H3/D1–D7 не переоткрывать. Эта фиксация документальная: новые тесты в данном проходе не запускались, код не менялся.
+
+## Исторический срез 2026-11-14 (статусы на дату записи)
+
+Concrete предложения R1–R3 на дату этого среза: [snapshot-retention-cancel-diagnostics-contract.md](snapshot-retention-cancel-diagnostics-contract.md). R1 заменяет preliminary artifact→destinations запись на state/history-bound retention, поскольку иначе наследование остаётся неоднозначным. Подробные proposals ниже читаются с этим уточнением; утверждение о ещё не изменённых DTO/code относится только к исторической дате.
 
 2026-11-14. Документальный этап плана snapshot-public-contracts-dag-integration.md. Публичные три метода описаны в snapshot-public-methods-contract.md. Этот документ проверяет именно apply; код/DDL/DAG, Source authored writer, Pack authority и Time T5 не меняются.
 

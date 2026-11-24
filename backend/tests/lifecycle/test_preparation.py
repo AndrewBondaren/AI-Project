@@ -41,11 +41,11 @@ def request_for(operation, suffix):
     if operation is Op.REPLACEMENT:
         intent = getattr(m, name + "Intent" + suffix)(change_uid="change", reason=reason, predecessors=(ref,), successors=(successor,))
         observations = (present(state=state), absent(entity=successor))
-        changes = (effects(entity=ref, effect="end", reason_action_uid="action"), effects(entity=successor, effect="create", reason_action_uid="action"))
+        changes = (effects(entity=ref, effect=Op.END, reason_action_uid="action"), effects(entity=successor, effect=Op.CREATE, reason_action_uid="action"))
     else:
         intent = getattr(m, name + "Intent" + suffix)(change_uid="change", reason=reason, entity=ref)
         observations = (absent(entity=ref) if operation is Op.CREATE else present(state=state),)
-        changes = (effects(entity=ref, effect=operation.value, reason_action_uid="action"),)
+        changes = (effects(entity=ref, effect=operation, reason_action_uid="action"),)
     return getattr(m, name + "Request" + suffix)(intent=intent,
         capture=getattr(m, "Capture" + suffix)(publication=base, entities=observations,
             last_transitions=(fact,) if operation is Op.REACTIVATE else ()),

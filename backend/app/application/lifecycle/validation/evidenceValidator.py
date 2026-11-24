@@ -1,12 +1,14 @@
 """Relations to admitted subject claims; never interprets subject mutations."""
-from typing import Protocol, cast
+from typing import Protocol, assert_never, cast
 from pydantic import BaseModel
 from app.application.lifecycle.validation.stateValidator import Native
 from app.application.lifecycle.contracts.typedViews import ReasonView
 from app.dataModel.fields.checkedPath import CheckedPath
 from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.identity.uid import EntityUid
-from app.dataModel.lifecycle.evidence.effects import DomainEffect, LifecycleEffectKind
+from app.dataModel.lifecycle.evidence.effects import (
+    DomainEffect, LifecycleEffectKind,
+)
 from app.dataModel.lifecycle.identity import LifecycleEntityRef
 from app.dataModel.lifecycle.operations.kind import LifecycleOperation
 from app.dataModel.lifecycle.results.applyIssue import LifecycleApplyCode, LifecycleApplyIssue
@@ -48,13 +50,15 @@ def _require_transition_coverage(native: Native) -> None:
             entity = participant.after.entity
             effect: LifecycleEffectKind
             if intent.operation is LifecycleOperation.REPLACEMENT:
-                effect = "end" if entity in intent.predecessors else "create"
+                effect = LifecycleOperation.END if entity in intent.predecessors else LifecycleOperation.CREATE
             elif intent.operation is LifecycleOperation.CREATE:
-                effect = "create"
+                effect = LifecycleOperation.CREATE
             elif intent.operation is LifecycleOperation.END:
-                effect = "end"
+                effect = LifecycleOperation.END
+            elif intent.operation is LifecycleOperation.REACTIVATE:
+                effect = LifecycleOperation.REACTIVATE
             else:
-                effect = "reactivate"
+                assert_never(intent)
             key = (intent.change_uid, entity, effect, action)
             if key in required:
                 raise ValueError("native transitions contain a duplicate required effect")

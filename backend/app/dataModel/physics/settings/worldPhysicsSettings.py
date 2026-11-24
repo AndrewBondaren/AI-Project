@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, ModelWrapValidatorHandler, mo
 from pydantic_core import PydanticCustomError
 
 from app.dataModel.annotationPolicy import DefaultWhenMissing
+from app.dataModel.physics.settings.settingsValidationCode import PhysicsSettingsValidationCode
 from app.dataModel.validation.immutableValue import validate_immutable
 
 STANDARD_GRAVITY_M_S2 = 9.80665
@@ -27,5 +28,5 @@ class WorldPhysicsSettings(BaseModel):
             try:
                 validate_immutable(value)
             except ValueError as exc:
-                raise PydanticCustomError("physics_settings_immutable", "incomplete or invalid immutable settings") from exc
+                raise PydanticCustomError(PhysicsSettingsValidationCode.IMMUTABLE.value, "incomplete or invalid immutable settings") from exc
         return handler(value)

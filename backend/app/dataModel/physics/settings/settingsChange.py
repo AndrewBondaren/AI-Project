@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 from pydantic_core import PydanticCustomError
 
 from app.dataModel.identity.uid import EntityUid
+from app.dataModel.physics.settings.settingsValidationCode import PhysicsSettingsValidationCode
 from app.dataModel.physics.settings.settingsCapture import WorldPhysicsSettingsRef, WorldPhysicsSettingsView
 from app.dataModel.physics.settings.worldPhysicsSettings import WorldPhysicsSettings
 
@@ -19,7 +20,7 @@ class WorldPhysicsSettingsReplace(BaseModel):
     @model_validator(mode="after")
     def matching_world(self) -> Self:
         if self.world_uid != self.expected_ref.world_uid:
-            raise PydanticCustomError("physics_settings_world", "settings world mismatch", {
+            raise PydanticCustomError(PhysicsSettingsValidationCode.WORLD.value, "settings world mismatch", {
                 "expected_world_uid": self.world_uid, "observed_world_uid": self.expected_ref.world_uid,
             })
         return self
@@ -33,7 +34,7 @@ class WorldPhysicsSettingsReset(BaseModel):
     @model_validator(mode="after")
     def matching_world(self) -> Self:
         if self.world_uid != self.expected_ref.world_uid:
-            raise PydanticCustomError("physics_settings_world", "settings world mismatch", {
+            raise PydanticCustomError(PhysicsSettingsValidationCode.WORLD.value, "settings world mismatch", {
                 "expected_world_uid": self.world_uid, "observed_world_uid": self.expected_ref.world_uid,
             })
         return self
@@ -51,11 +52,11 @@ class PreparedPhysicsSettingsChange(BaseModel):
         if not self.world_uid == self.expected_ref.world_uid == self.proposed_ref.world_uid:
             observed = (self.expected_ref.world_uid if self.expected_ref.world_uid != self.world_uid
                         else self.proposed_ref.world_uid)
-            raise PydanticCustomError("physics_settings_world", "settings world mismatch", {
+            raise PydanticCustomError(PhysicsSettingsValidationCode.WORLD.value, "settings world mismatch", {
                 "expected_world_uid": self.world_uid, "observed_world_uid": observed,
             })
         if self.expected_ref.schema_version != self.proposed_ref.schema_version:
-            raise PydanticCustomError("physics_settings_schema", "settings schema mismatch", {
+            raise PydanticCustomError(PhysicsSettingsValidationCode.SCHEMA.value, "settings schema mismatch", {
                 "expected_version": self.expected_ref.schema_version,
                 "observed_version": self.proposed_ref.schema_version,
             })

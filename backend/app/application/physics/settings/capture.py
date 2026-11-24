@@ -17,6 +17,7 @@ from app.dataModel.physics.settings.settingsIssues import (
     SettingsMalformedContract, SettingsSchemaMismatch, SettingsWorldMismatch,
 )
 from app.dataModel.physics.settings.worldPhysicsSettings import WorldPhysicsSettings
+from app.dataModel.physics.settings.settingsValidationCode import PhysicsSettingsValidationCode
 from app.dataModel.validation.immutableValue import validate_immutable
 from app.dataModel.validation.importIssues.jsonFieldError import JsonFieldError
 from app.dataModel.validation.importIssues.jsonValidationCode import JsonValidationCode
@@ -56,20 +57,20 @@ def validation_failure(
         error = errors[0]
         context = error.get("ctx", {})
         try:
-            if error["type"] == "physics_settings_world":
+            if error["type"] == PhysicsSettingsValidationCode.WORLD:
                 return PhysicsSettingsAdmissionFailure(causes=(SettingsWorldMismatch.model_validate(context),))
-            if error["type"] == "physics_settings_schema":
+            if error["type"] == PhysicsSettingsValidationCode.SCHEMA:
                 return PhysicsSettingsAdmissionFailure(causes=(SettingsSchemaMismatch.model_validate(context),))
-            if error["type"] == "physics_settings_content":
+            if error["type"] == PhysicsSettingsValidationCode.CONTENT:
                 return PhysicsSettingsAdmissionFailure(causes=(SettingsContentMismatch.model_validate(context),))
         except ValidationError as mapper_error:
             raise PhysicsSettingsBoundaryFault("invalid Physics invariant arguments") from mapper_error
     # Unknown custom validator kinds must not fall through the generic mapper.
-    if any(error["type"] not in _ERROR_TYPES and error["type"] != "physics_settings_immutable" for error in errors):
+    if any(error["type"] not in _ERROR_TYPES and error["type"] != PhysicsSettingsValidationCode.IMMUTABLE for error in errors):
         raise PhysicsSettingsBoundaryFault("unmapped Physics settings validation code") from exc
     issues: list[JsonFieldError | WireShapeIssue] = []
     for error in exc.errors():
-        if error["type"] == "physics_settings_immutable":
+        if error["type"] == PhysicsSettingsValidationCode.IMMUTABLE:
             issues.append(WireShapeIssue(
                 code=JsonValidationCode.VALIDATION_ERROR,
                 location=WireLocation(parts=error["loc"]), message="incomplete or invalid immutable settings",

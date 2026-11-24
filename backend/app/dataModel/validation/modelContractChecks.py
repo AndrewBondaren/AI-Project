@@ -30,6 +30,8 @@ class ModelContractChecks:
             if actual_group.keys() != expected_group.keys():
                 return False
             for name, decorator in actual_group.items():
+                if decorator.info != expected_group[name].info:
+                    return False
                 actual_func = decorator.func
                 expected_func = expected_group[name].func
                 if ismethod(actual_func):

@@ -1,5 +1,137 @@
 # Snapshot public methods — предложение для согласования перед DAG
 
+## Приоритетная дельта 2026-11-24: согласованный admission transport и owning детализация
+
+### Реализация ограниченного admission-среза — 2026-11-24
+
+**Consumer enum cutover, 2026-11-24:** Snapshot потребляет `PatchSetStructuralFailure.error_type: PatchSetStructuralErrorKind` из owning structuralErrorKind.py. Fixtures создают enum members; dispatch использует `is PatchSetStructuralErrorKind.ENUM`. Только `SnapshotPublicInputValidation.map_structural` переводит `.value` через existing Pydantic `TypeAdapter[ErrorType]` на presentation boundary. Второго enum/allowlist/raw-string fallback нет; несовместимость presentation сохраняет ValidationError cause как infrastructure fault. Проверены весь owning roster, raw-string bypass negatives, unknown classification, root loc и mixed JSON. `test_snapshot_admission + test_patch_admission + test_tagged_paths`: **25 tests OK** на shared 2.13.4 и отдельно на pinned 2.14.2 (import path/version подтверждены); scoped Snapshot Pyright **0 errors**. Тяжёлая full regression повторно не запускалась. Изменены только consumer mapper/tests и эта статусная запись; PatchSet owning predicates/классы не дублируются.
+
+Приоритет над историческим статусом shared-only ниже: Snapshot fault, mapper, validator, constructor identity и внутренний claim seam реализованы. Actual PatchSet exports потребляются напрямую; public invariant facts синхронизированы владельцем в tz_patch_system.md. Это локальная реализация admission → fingerprint → existing claim, не готовность полного public apply/ARCH-0.
+
+| Actual класс/метод | Единственная ответственность и проверка границы |
+|---|---|
+| SnapshotPublicInputValidation.map_structural(PatchSetStructuralFailure, *, model) | Представление уже классифицированного root-relative loc через общий field_issue/CheckedPath; не реконструирует ValidationError и не запускает model validation запроса |
+| SnapshotRequestValidator.validate(request) | Owning codec.validate_request → ordered mapping → owning check_prepared_order; без hash/IO/claim и копий predicates |
+| SnapshotPublicFault / SnapshotPublicError | Closed immutable transport, exact concrete diagnostics, mixed order и обе admission identities None; direct reuse четырёх PatchSet compatibility facts |
+| WorldSnapshotService._admit_and_claim(request) | Validator → request_codec.fingerprint → прежний _claim_publication; narrow classification catch, отдельный fingerprint catch с cause; не создаёт partial public apply |
+| WorldSnapshotService.__init__(..., request_codec=...) | Один codec и identity его registry; model/registration configuration остаётся у PatchSetCodec; прежние H2 checks сохранены |
+| CheckedPath / existing wireIssues.field_issue | Единственный schema resolver сохраняет discriminator metadata/VariantSegment и original loc; unknown/ambiguous не выбирает branch, extra key остаётся wire shape |
+| FieldPathError.__get_pydantic_core_schema__ | Carrier wrapping только bare/parameterized schemas; named concrete использует native JSON schema. __new__, exact CodeT/subtype admission и revalidation собственных полей сохранены |
+
+Shared JSON reproduction: strict tuple + native concrete JSON проходит; pass-through wrap `handler(value)` на concrete даёт tuple_type при JSON validation, отдельно __new__ дефект не воспроизводит. Исправление не вводит strict=False, mirror, decoder или list→tuple preprocessor. Snapshot public roster дополнительно проверяет exact Python instances через Python-only schema guard; штатная JSON ветка сохраняет arrays→tuples semantics. Проверены direct/nested JsonFieldError, typed path/indices/wire_path, concrete enum/class, generic specialization и повторный model_rebuild; Python lists, foreign code/subclass и bare carrier dict/JSON отвергаются.
+
+Existing post-admission private-stage fixtures используют явно названный mock_request_codec: validate_request/fingerprint немедленно падают при случайном вызове. Это не admission evidence. Новые admission tests используют настоящий зарегистрированный PatchSetCodec + named FakePatchSet; существующий claim подменён явно обозначенным boundary mock. Lifecycle fixture использует реальный codec с полным roster MockPatchSet. Полный production orchestrator не заявлен.
+
+Проверки этого прохода: C0 + Lifecycle validation — 54 tests OK; Snapshot admission/model/C0 targeted — 67 tests OK; scoped Snapshot Pyright — 0 errors. Итоговый `python -B -m unittest discover -s tests/snapshotCore -t .` — 257 tests, OK (skipped=1), 155.976s: 256 пройдено, Windows symlink privilege test пропущен. Ранее полученный единственный failure pure validation import whitelist исправлен добавлением `pydantic_core`; запрет application/IO/storage imports сохранён. Diff кода/fixtures просмотрен; diff --check чистый.
+
+**Pinned regression закрыта 2026-11-24:** отдельно установлены Pydantic 2.14.2 / pydantic-core 2.50.2 и их зависимости через `pip install --target` в `C:/Users/andrb/AppData/Local/Temp/snapshot-pydantic-2142-6fedf41680794304a7b2111d877148a5`. Runtime версии и пути импорта проверены в том же процессе перед unittest. Целевые C0 JSON/carrier/subtype/rebuild negatives, Snapshot fault roundtrip и Snapshot/PatchSet admission: **64 tests OK**, 0.045s. Shared backend/.venv после проверки сохранил Pydantic 2.13.4 / core 2.46.4; requirements/pins не менялись. Это изолированный dependency overlay на существующем Python, не полная пересборка requirements и не повтор всей тяжёлой регрессии.
+
+Воспроизводимый targeted run из backend (PYTHONPATH устанавливается только для отдельного shell-процесса):
+
+```powershell
+$env:PYTHONPATH = 'C:\Users\andrb\AppData\Local\Temp\snapshot-pydantic-2142-6fedf41680794304a7b2111d877148a5'
+.venv/Scripts/python.exe -B -m unittest tests.errorContracts.test_core tests.errorContracts.test_import_issues tests.errorContracts.test_model_identity tests.errorContracts.test_resolve_issues tests.errorContracts.test_tagged_paths tests.snapshotCore.contracts.test_snapshot_admission tests.snapshotCore.contracts.test_patch_admission
+```
+
+Остатки OUT: полный apply/transaction composition, production/DAG caller, общий runtime/ARCH-0. Ни IO-вход, ни DAG порядок, ни C2/H2/H3 semantics этим срезом не менялись.
+
+**Shared C0 implementation, 2026-11-24:** назначенная Snapshot узкая поправка исполнена в checkedPath.py / jsonValidation/resolution/wireIssues.py. Перед записью список активных чатов и git status целевых файлов не показали конкурирующего C0 исполнителя/правок. Сохраняется discriminator metadata, unknown/ambiguous branch не выбирается, extra-key остаётся WireShapeIssue с rendered address без распознанных branch labels; исходный loc не меняется. Проверены nested section, два union уровня, aliases, tuple element, RootModel, extra key с именем tag, unknown/ambiguous tags и class-name ambiguity. Команда `python -B -m unittest tests.errorContracts.test_tagged_paths tests.errorContracts.test_core tests.errorContracts.test_model_identity tests.errorContracts.test_import_issues tests.errorContracts.test_resolve_issues tests.errorContracts.test_typing tests.snapshotCore.contracts.test_patch_assembly`: 54 tests OK, включая positive/negative typing. Diff просмотрен, diff --check чистый. Это локальная проверка shared зависимости, не admission/runtime/ARCH-0 PASS. PatchSet actual exports и нормативный public export появились в ходе работы владельца; Snapshot fault/mapper/validator/constructor/claim seam ещё не реализованы этим shared срезом.
+
+Этот раздел и обновлённый §3 задают единственную текущую public fault schema для owning детализации. Решение admission→claim согласовано пользователем по уточнению второго координатора; оно не возвращается в общий PROPOSED. Предыдущий shape-only roster заменён. Конкретные Output→Input и нормативная синхронизация завершаются владельцами, без нового пользовательского выбора внутренних имён. Runtime PASS не заявляется. Основание: [admission→claim](snapshot-apply-admission-claim.md). H2/C2 и durable outcomes не меняются. Public export `PatchSetInvariantViolation` требует owning нормативной синхронизации PatchSet (прочитанное ТЗ пока говорит Internal).
+
+### Точный roster и обязательные validators
+
+Один carrier `application/worldSnapshot/errors.py::SnapshotPublicError(fault: SnapshotPublicFault)`. Один record `dataModel/worldSnapshot/errors/publicFault.py::SnapshotPublicFault`:
+
+```python
+operation: SnapshotPublicOperation
+kind: SnapshotPublicFailureKind
+operation_id: EntityUid | None
+request_fingerprint: RevisionHex | None
+input_issues: tuple[JsonFieldError | WireShapeIssue |
+                   PatchSetInvariantViolation | PatchSetRequestVersionUnsupported |
+                   PatchSetSectionKeyUnknown | PatchSetSectionModelMismatch |
+                   PatchSetSectionVersionUnsupported, ...]
+```
+
+Все поля обязательны, без defaults; strict/frozen/extra-forbid/revalidate-always. Existing proposed operation values `apply`, `read_snapshot`, `read_publication` сохраняются. Failure values: `invalid_input`, **`admission_refused`**, `busy`, `infrastructure_failure`, `outcome_unknown`.
+
+- INVALID_INPUT: непустой tuple только exact JsonFieldError/WireShapeIssue; обе identity строго None.
+- ADMISSION_REFUSED: только APPLY; непустой mixed closed tuple указанного roster, минимум один exact PatchSetInvariantViolation либо один из четырёх owning compatibility facts; обе identity строго None.
+- BUSY / INFRASTRUCTURE_FAILURE / OUTCOME_UNKNOWN: input_issues=(); прежняя фазовая identity policy сохраняется: оба binding-поля одновременно None либо одновременно non-null. Reads всегда без binding; BUSY/OUTCOME_UNKNOWN только APPLY с binding. Ошибка fingerprint до получения hash — INFRASTRUCTURE_FAILURE с обоими None.
+- Запрет частичного binding (только operation_id либо только fingerprint), неизвестных issue subclasses и неизвестных diagnostic kinds. SnapshotApplyRelationIssue в admission roster **не входит**: он не различает registry reasons и не содержит section_index; existing business result roster не меняется.
+- Mixed reasons не группируются: relative producer order и все повторные/независимые diagnostics сохраняются. Наличие relation выбирает ADMISSION_REFUSED, иначе INVALID_INPUT. Нет claim/record_refusal для обоих admission kinds.
+
+### Compatibility diagnostics: direct reuse owning facts
+
+Четыре предложенных ранее Snapshot details и SnapshotAdmissionCompatibilityIssue **отозваны до реализации как ненужные зеркала**. Модуль admissionCompatibility.py не создаётся. Препятствий для direct reuse четырёх immutable PatchSet facts не найдено: все operands уже сериализуемы, Python classes/exceptions отсутствуют, section_index сохраняется. В closed public roster включаются exact классы PatchSetRequestVersionUnsupported, PatchSetSectionKeyUnknown, PatchSetSectionModelMismatch, PatchSetSectionVersionUnsupported из owning admissionReasons.py.
+
+Новые Snapshot reason codes не вводятся. Последняя owning редакция PatchSet задаёт обязательные Literal codes `patch_set.admission.request_version_unsupported`, `patch_set.admission.section_key_unknown`, `patch_set.admission.section_model_mismatch`, `patch_set.admission.section_version_unsupported` и plain union PatchSetCompatibilityIssue. Snapshot включает этот union с discriminated annotation по code, без wrapper/details и без второго enum; JSON round-trip проверяет exact branches.
+
+Existing ModelIdentity и actual_type_name переносятся напрямую. Последнее — inert diagnostic string, не dispatch/identity. По последней owning редакции supported_versions уже tuple[FormatVersion,...], nonempty/unique/ascending; producer формирует его из registry frozenset. Snapshot не сортирует и не меняет тип, не создаёт свой serializer или зеркало. JSON round-trip сохраняет owning tuple и code.
+
+### Полная reason → public mapping (требования потребителя к PatchSet)
+
+Owning источник прочитан полностью: [patch-set-admission-output.md](patch-set-admission-output.md). Ниже exact объявленные владельцем classes из `dataModel/patch/validation/admissionReasons.py`, плюс existing invariant facts; exception — `application/patch/errors.py::PatchSetAdmissionError`. Это подтверждение документального Output, не наличия runtime exports. Snapshot не создаёт substitutes.
+
+| Runtime concrete reason / operands | Public diagnostic / exact mapping |
+|---|---|
+| PatchSetRequestModelMismatch(expected_model:ModelIdentity, actual_type_name:StrictStr) | WireShapeIssue(code=JsonValidationCode.VALIDATION_ERROR, location=WireLocation(parts=()), message="request must have the configured concrete model", pydantic_type=None). Wrong exact class не выдаётся за ошибку объявленного поля; identity/type operands не сериализуются в shape message. Их diagnostic projection здесь намеренно root-level |
+| PatchSetRequestVersionUnsupported(actual_version, supported_versions) | Тот же exact immutable reason в public tuple; оба operands без изменения |
+| PatchSetSectionKeyUnknown(section_index, section_key) | Тот же exact reason; исходные index/key без изменения |
+| PatchSetSectionModelMismatch(section_index, section_key, expected_model:ModelIdentity, actual_type_name:StrictStr) | Тот же exact reason со всеми четырьмя operands, без ModelIdentity.of/повторной проверки exact model |
+| PatchSetSectionVersionUnsupported(section_index, section_key, actual_version, supported_versions) | Тот же exact reason; исходные index/key/version/tuple и code без изменения |
+| PatchSetStructuralFailure(error_type:StrictStr, loc:tuple[StrictStr|StrictInt,...], message:StrictStr) | map_structural(fact, model=codec.request_model); result вставляется на место fact, без переноса через relations. loc должен быть относительно корневого request с исходными section/patch indices; не локальный loc секции без prefix |
+| PatchSetInvariantViolation(details, section_index, patch_index, dependency_index, player_index, related_index) | Тот же immutable concrete fact без обёртки/переименования/потери nullable indices; публичный export должен быть принят PatchSet |
+| check_prepared_order(checked) → tuple[PatchSetInvariantViolation,...] | Каждый факт сохраняется напрямую в порядке producer; predicate вызывается только после успешного validate_request, до hash |
+| Необъявленный reason / неизвестный ctx.error / mapper contract violation | Infrastructure/contract failure с cause; не частичный admission result и не классификация по тексту |
+
+Core facts имеют девять exact details branches, сохраняемых без изменения: WorldMismatchDetails (expected_world_uid/actual_world_uid), MissingPackDetails (publication), DuplicatePlayerDetails (player_uid), DuplicateSectionDetails (section_key), MissingPreparedDependencyDetails (source_section_key/missing_section_key), PreparedDependencyOrderDetails (source_section_key/dependency_section_key), PatchOperationMismatchDetails (patch_ref/expected_operation_id), PatchSectionMismatchDetails (patch_ref/expected_section_key), DuplicatePatchOrdinalDetails (section_key/ordinal). Code Literals и поля берутся из owning invariantDetails.py, не копируются в Snapshot.
+
+### Structural-only facts: единственный mapper и точная consumer boundary
+
+```python
+SnapshotPublicInputValidation.map_structural(
+    fact: PatchSetStructuralFailure, *, model: type[BaseModel],
+) -> tuple[JsonFieldError | WireShapeIssue, ...]
+```
+
+Этот контракт **заменяет**, а не дополняет прежний mapper с ValidationError/entry_indices и reconstruction. PatchSet один раз классифицирует source.errors в original order. Typed core ctx.error раскрывается в owning facts на своём месте; неизвестный ctx.error даёт PatchSetValidationClassificationError, а не partial admission refusal. Каждый confirmed structural entry даёт один immutable fact на своём месте. Snapshot не повторяет allowlist classification. Нельзя обещать after-validator facts при неуспешных structural prerequisites.
+
+Минимальные consumer requirements подтверждены owning PatchSet: fact.error_type — подтверждённый builtin ErrorType; fact.loc — исходный root-request-relative loc в исходном порядке, с section/patch indices и union labels без потери; fact.message — безопасное owning structural message без input repr/exception payload. Единственный источник — непосредственная codec.request_model.model_validate. Prefix не добавляется НИ РАЗУ. Модель mapper — exact codec.request_model. После успешной root validation локальный ValidationError registry/section revalidation — infrastructure/contract fault с cause, не новый structural reason. Snapshot не вызывает mapper для такого исключения и не восстанавливает отсутствующий outer scope.
+
+Reuse presentation: existing `field_issue` / CheckedPath из `application/jsonValidation/resolution/wireIssues.py`; не `pydantic_issues`, который требует полного ValidationError. Для enum сохраняется existing UNKNOWN_ENUM с pydantic_type=None; остальные confirmed builtin types дают SCHEMA_VIOLATION с exact ErrorType. Existing message policy enum prefix сохраняется. Root/unknown declared key используют WireShapeIssue, известное объявленное поле — JsonFieldError. Никакой reconstruction ValidationError, resolve_model/import facade/log sink и повторной model validation. Один fact должен дать один diagnostic; tuple API сохраняется для единого consumer контракта. Unknown code/неразрешимая служебная loc-семантика — contract fault, не фиктивный WireLocation.
+
+Проверенный consumer defect существующего helper (read-only probe 2026-11-24): `payload: Annotated[Cat|Dog, Field(discriminator='kind')]`, Cat.kind=Literal['cat'], Cat.age:int; input payload={kind:'cat',age:'bad'} даёт loc=('payload','cat','age'). Existing pydantic_issues/CheckedPath выдаёт WireShapeIssue location=['payload','cat','age'], хотя cat — branch tag, а age — declared field. Нельзя объявлять этот output корректным public address. Для этого примера **новое поле producer не требуется**: model содержит discriminator/branch schema. Consumer должен разрешить tag через declared schema, сохранить VariantSegment и исключить tag из wire_path. Исправление должно переиспользовать/дополнить owning checked-path resolver, а не вводить второй набор path predicates в Snapshot. Unknown/ambiguous branch нельзя угадывать. Полное покрытие допустимых loc остаётся конкретным тестовым seam, не основанием менять принятое admission решение.
+
+Cause сохраняется по цепочке SnapshotPublicError → PatchSetAdmissionError → исходный ValidationError. Для standalone prepared-order source exception отсутствует; fabricated ValidationError не создаётся. В fault нет ValidationError, Python classes, input/ctx/error objects. Structural fact + exact root model достаточны для приведённого discriminated-union case; безопасность message и остальные loc branches подтверждаются regression при реализации, не предположением о generic fallback.
+
+### JSON и acceptance этой дельты
+
+### Nested section + discriminated union: точный consumer example
+
+Synthetic named schema: MockRequest.sections:tuple[MockSection,...]; MockSection.payload:Annotated[Cat|Dog,Field(discriminator='kind')]; Cat.kind:Literal['cat']; Cat.age:int. Секция имеет исходный index=2. PatchSet передаёт PatchSetStructuralFailure(error_type='int_type', loc=('sections',2,'payload','cat','age'), message='Input should be a valid integer'). Mapper получает model=MockRequest.
+
+Ожидаемый JsonFieldError: code=SCHEMA_VIOLATION, pydantic_type='int_type', location=WireLocation(parts=()), wire_path=('sections',2,'payload','age'). Typed path.root=ModelIdentity.of(MockRequest); segments: FieldSegment(owner=MockRequest,name='sections') → IndexSegment(2) → FieldSegment(owner=MockSection,name='payload') → VariantSegment(branch=ModelIdentity.of(Cat)) → FieldSegment(owner=Cat,name='age'). Model names в этой записи означают соответствующие ModelIdentity, не Python classes внутри DTO. path.projection()=('sections',2,'payload','age'). Tag 'cat' не становится полем/ключом и не попадает в wire_path; index 2 не перенумеровывается.
+
+Только root request revalidation создаёт этот fact; prefix не добавляется ни producer, ни consumer. Отдельная section revalidation с local loc=('payload','cat','age') после root success даёт infrastructure/contract fault, не shape fact с придуманным prefix. Внешний union sections:tuple[MockSectionA|MockSectionB,...] дополнительно сохраняет original Pydantic branch label в loc и второй VariantSegment в typed path; оба branch labels исключаются из wire_path, индекс остаётся исходным.
+
+Negative criteria: двойной prefix; потерянный section index; branch tag в wire_path; фиктивный FieldSegment('cat'); plain WireShapeIssue вместо declared age field; неизвестный/неоднозначный tag угадывается по первому union member. Для реального extra key WireShapeIssue допустим, но его location не должен содержать служебные branch labels; это отдельная проверка boundary presentation, не основание invent field path.
+
+### Узкая shared dependency: checked-path resolver
+
+Owning слой — общее error-contracts ядро `dataModel/fields`, не Snapshot/PatchSet. Применимый план [error-contracts-1.md](error-contracts-1.md) §3.9 C0-4/C0-8 и VARIANT-1. Exact module/class/method: `backend/app/dataModel/fields/checkedPath.py::CheckedPath.from_pydantic_loc(root, loc) -> ValidatedFieldPath | None`, внутренний `_resolve_loc`. Presentation consumer — `backend/app/application/jsonValidation/resolution/wireIssues.py::field_issue` (уже использует resolver и исключает VariantSegment из wire_path).
+
+Минимальное изменение shared owner: сохранить доступ к discriminator metadata из FieldInfo/Annotated при продвижении schema cursor; при union step сопоставить loc tag с единственной ветвью по объявленному string discriminator и её Literal values. Выдать existing VariantSegment(branch=ModelIdentity.of(branch)), затем продолжить исходный loc. Не сканировать любые Literal поля в поисках совпадения; не вызывать user discriminator callback и не выбирать первую из неоднозначных ветвей. Сохранить plain union class-name resolution с проверкой единственности, aliases, nullable, tuple/map checks и существующую None boundary для unsupported/ambiguous path. Public signature, VariantSegment wire schema и ручной field/item/key/variant API не меняются. Snapshot не хранит свою таблицу tag→class и не копирует `_resolve_loc`.
+
+Для известных declared paths текущего example изменение `field_issue` не требуется: существующий zip с VariantSegment уже исключает branch label. Extra-key под tagged union требует отдельного точного результата shared boundary normalization, прежде чем обещать корректный WireShapeIssue для этого случая; `None` от resolver само по себе не разрешает сериализовать raw service labels как wire address. Callable discriminator/general path redesign вне этой минимальной поправки; если такие loc реально входят в admission schema, предъявляется конкретный additional case, а не silent fallback.
+
+Regression consumers: `backend/tests/errorContracts/test_core.py` (existing from_pydantic_loc/plain union/aliases/tuple/map плюс nested discriminator и ambiguous tag), `test_model_identity.py` (named concrete branches), `test_import_issues.py` и `test_resolve_issues.py` (JsonFieldError/WireShapeIssue address и wire projection). Сохранить typing gates общего CheckedPath из error-contracts плана; после изменения shared core проверить PatchSet assembly paths и Snapshot mapper на том же nested fixture. В этом документальном проходе эти regression tests не запускались. Назначение исполнителя shared owner остаётся координатору; отдельный чат/новый resolver не создаётся.
+
+`SnapshotPublicFault.model_dump(mode='json')` и `model_validate_json` должны round-trip mixed tuple с сохранением exact issue/details classes, порядка и всех индексов. Compatibility branches — exact owning records без wrappers, invariant details сохраняют owning discriminator. Никакого Any/SerializeAsAny/base-only поля, отбрасывающего concrete fields; никаких wire IDs/ledger manifests этим неперсистентным transport не назначается.
+
+Обязательные cases: все 9 invariant details branches + 4 compatibility branches + оба shape types; relations-shape-relations; root/extra/union branch paths и section prefix; exact JSON concrete types; admission identity populated запрещён (включая оба populated); pure shape с ADMISSION_REFUSED запрещён; relation с INVALID_INPUT запрещён; пустые issues запрещены. Unknown section/model/version одного section_index различимы concrete type после JSON round-trip и сохраняют operands. Проверить отсутствие hash/claim/record_refusal после fault. Model validator с неизвестным ValueError не проходит structural mapper. Public schema изменения не считаются принятыми по одному зелёному тесту.
+
 **2026-11-15, ARCH-0:** актуальная карта и ограничения — ARCH-0.1–ARCH-0.6 [owning-плана](world-domain-patches-snapshots.md). Read/write signatures ниже сохраняются как proposal; утверждение об одном concrete public owner ниже не является завершённым архитектурным решением. Предъявлено разделение apply lifecycle и exact read owner по одной ответственности класса. До приёмки полной карты код не продолжается; public ports/read error transport, restore/branch/settings и concrete DAG bindings требуют своих exact решений. Исторические R1–R3 proposals читать с последующими приёмками в owning-плане, не считать автоматически вновь открытыми.
 
 Contract changes R1–R3 предъявлены отдельно: [snapshot-retention-cancel-diagnostics-contract.md](snapshot-retention-cancel-diagnostics-contract.md). В частности, предложены SectionStateRetention/SectionHistoryRetention, existing OperationCancelled carrier и расширение core diagnostic union. Это требует приёмки до изменения accepted DTO/codec; готовность полного apply пока не объявляется.
@@ -63,17 +195,17 @@ Existing infrastructure carriers в application/publication/errors.py: Operation
 `SnapshotPublicError` в backend/app/application/worldSnapshot/errors.py содержит `fault: SnapshotPublicFault`, исходное исключение сохраняет через cause. Новый fault в backend/app/dataModel/worldSnapshot/errors/publicFault.py:
 
 - SnapshotPublicOperation(StrEnum): APPLY, READ_SNAPSHOT, READ_PUBLICATION.
-- SnapshotPublicFailureKind(StrEnum): INVALID_INPUT, BUSY, INFRASTRUCTURE_FAILURE, OUTCOME_UNKNOWN. Это категории transport, не новые копии domain reason codes и не operation terminal.
-- SnapshotPublicFault: operation: SnapshotPublicOperation; kind: SnapshotPublicFailureKind; operation_id: EntityUid | None; request_fingerprint: RevisionHex | None; input_issues: tuple[JsonFieldError | WireShapeIssue, ...]. Все поля обязательны. Значения operation enum: apply/read_snapshot/read_publication; kind: invalid_input/busy/infrastructure_failure/outcome_unknown.
+- SnapshotPublicFailureKind(StrEnum): INVALID_INPUT, ADMISSION_REFUSED, BUSY, INFRASTRUCTURE_FAILURE, OUTCOME_UNKNOWN. Это категории transport, не operation terminal.
+- SnapshotPublicFault: operation: SnapshotPublicOperation; kind: SnapshotPublicFailureKind; operation_id: EntityUid | None; request_fingerprint: RevisionHex | None; input_issues — exact семичленный closed roster приоритетной дельты 2026-11-24 (два shape, invariant fact, четыре owning compatibility facts). Все поля обязательны. Второго shape-only schema или Snapshot compatibility mirrors нет.
 - JsonFieldError и WireShapeIssue — existing конкретные POJO из dataModel/validation/importIssues/jsonFieldError.py и wireShapeIssue.py, с existing JsonValidationCode и typed WireLocation. Новый SnapshotInputFieldCode/SnapshotInputFieldIssue **отозван как дубль**. FieldPathError применяется только к существующему объявленному полю; root/wrong model/extra unknown key описывается WireShapeIssue, не выдуманным FieldRef. Pydantic ErrorType сохраняется в pydantic_type для SCHEMA_VIOLATION по existing invariant.
 
-INVALID_INPUT требует непустые input_issues и null binding до успешной строгой валидации; нельзя извлекать trusted operation_id из malformed dict. Остальные kinds требуют пустые input_issues. Для reads operation_id/fingerprint всегда None. Для apply после успешной проверки immutable request binding оба non-null; до неё оба None. OUTCOME_UNKNOWN допустим только для APPLY и требует binding; причина остаётся UnknownCommitOutcome. BUSY сообщает отказ текущего вызова из-за занятости, не обещает auto-retry и не утверждает отсутствие effects другой попытки. Infrastructure fault не включает raw payload/SQL/exception message.
+INVALID_INPUT допускает непустые только shape diagnostics; ADMISSION_REFUSED допускает mixed closed roster с обязательной relation/compatibility причиной и только APPLY. Для обоих operation_id и request_fingerprint строго None. Остальные kinds требуют пустые input_issues. Для reads оба binding-поля всегда None. Для apply после получения checked fingerprint оба non-null; до него оба None, включая encoder fault. Частичный binding запрещён. OUTCOME_UNKNOWN/BUSY допустимы только для APPLY с binding; unknown cause остаётся UnknownCommitOutcome. BUSY не обещает auto-retry и не утверждает отсутствие effects другой попытки. Infrastructure fault не включает raw payload/SQL/exception message.
 
-Admission input fields агрегируется стандартным field-path/collector механизмом проекта, с типизированными путями. Proposed mapper application/worldSnapshot/validation/publicInputValidation.py::SnapshotPublicInputValidation отвечает только за revalidation трёх named входов и перенос structural ValidationError в existing F09 POJO; не вызывает общий world/import pipeline. Exact admitted collector tuple — (JsonFieldError, WireShapeIssue). Порядок — declaration fields, вложенные tuple индексы, затем независимые root/unknown-key issues в исходном decoder order. Не сортировать по сообщениям, не переносить raw input в message. Domain semantic/model invariants после structural admission сохраняют existing owning коды и фазы apply, не превращаются в generic schema errors. Unexpected programmer errors не маскировать под INVALID_INPUT. Обычный CancelledError распространяется как отмена invocation; подтверждённый/неизвестный storage outcome логируется по transaction acknowledgement, отмена не означает durable cancel operation. Если uncertainty установлена владельцем transaction, не заменять её обычным business result.
+Admission diagnostics агрегируются существующим ValidatorAggregationHelper с exact closed roster выше. application/worldSnapshot/validation/publicInputValidation.py::SnapshotPublicInputValidation — только mapper одного подтверждённого PatchSetStructuralFailure, не повторная revalidation; exact Input и loc contract заданы в приоритетной дельте. Structural collector допускает только JsonFieldError/WireShapeIssue. Request validator добавляет relation/compatibility outputs на исходных местах. Порядок producer/loc/indices сохраняется без grouping, sorting и deduplication. Domain semantic/model invariants не превращаются в schema errors. Неизвестные programmer/validator errors не маскируются под INVALID_INPUT. CancelledError остаётся отменой invocation; transaction uncertainty не заменяется business result.
 
-SnapshotPublicError — только граница F09/F05/F06 transport для этих методов. Existing F03 business SnapshotApplyResult и scoped D1 reasons не оборачиваются им как новые domain issues. Исходные PublicationInfrastructureError/OperationBusyError/UnknownCommitOutcome остаются cause. Это не общий errors framework и не замена exception классов storage. Публичные ошибки никогда не импортируют engine NodeError; их mapping принадлежит будущему DAG binding.
+SnapshotPublicError переносит неперсистентные admission faults и F05/F06 transport этих методов. Existing business SnapshotApplyResult после hash/claim не оборачивается им; scoped D1 остаётся прежним. PublicationInfrastructureError/OperationBusyError/UnknownCommitOutcome остаются cause. Это не общий errors framework и не замена storage exceptions. Публичные ошибки не импортируют engine NodeError; их mapping принадлежит DAG binding.
 
-Это предложение затрагивает публичную границу, поэтому требует пользовательского решения до кода. Scoped D1 collector и existing business codes не мигрируются этим предложением. Duplicate enums ошибки owning доменов не вводятся. Полный доказанный roster errors конкретных registered sections остаётся prerequisite их admission, а не повод конструировать новые mirror issues.
+Решение admission→claim и делегирование реализации уже согласованы; внутренняя детализация и Output→Input сводятся владельцами через координатора. Повторный общий пользовательский gate не вводится. Неизменные scoped D1 collector и business codes не мигрируются. Compatibility projection выше восполняет недостающие operands, не создаёт копии owning invariant codes. До зависимой реализации требуются exact PatchSet exports и нормативная синхронизация, а не новое разрешение всего среза.
 
 ## 4. Вложенные вызовы и transaction ownership
 
@@ -81,11 +213,11 @@ SnapshotPublicError — только граница F09/F05/F06 transport для
 
 Порядок existing freeze docs/tz_world_snapshot.md §«Snapshot.apply, результаты и порядок проверок» неизменен:
 
-1. Strict input/registry/formats/dependencies/fingerprint validation.
+1. Strict admission/core/prepared-order/registry/formats, затем request fingerprint. Actual dependency section fingerprint здесь не вычисляется.
 2. Immutable operation binding; exact terminal replay до повторного чтения refs. Same ID/different request не меняет original record.
 3. Один apply claim; artifact protection/verification.
 4. Общая publication transaction: expected world/player, gameplay/base/timeline/turn checks до handlers.
-5. Все handler.validate на одной базе в declared order; aggregation исходных diagnostics.
+5. После expected/source binding — actual dependency section fingerprints; затем все handler.validate на одной базе в declared order с aggregation исходных diagnostics.
 6. Handler.apply только после успешных validations; отказ прерывает последующие handlers и откатывает набор.
 7. Metadata → holder handoff → world/player publication CAS → terminal в одной transaction по owning freeze. COMMITTED наружу и success log только после confirmed COMMIT.
 
@@ -163,6 +295,7 @@ Concrete public implementation owner — WorldSnapshotService; существу�
 | Сценарий | Caller видит |
 |---|---|
 | Malformed input любого метода до IO | SnapshotPublicError INVALID_INPUT, непустые existing shape issues, binding None |
+| Apply admission relations/compatibility, в том числе mixed со shape | SnapshotPublicError ADMISSION_REFUSED, все concrete diagnostics/indices в producer order, оба binding-поля None; нет claim/record_refusal |
 | Missing snapshot ID / missing exact publication pair | Successful read-result с None соответствующего payload |
 | Stored identity/parent/chain inconsistency | SnapshotPublicError INFRASTRUCTURE_FAILURE, исходный cause; не None |
 | Concurrent publication после read | Read возвращает pinned historical result; он не обещает current head после scope |

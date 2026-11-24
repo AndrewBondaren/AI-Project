@@ -48,6 +48,8 @@ Traversal/occurrence functions не требуют дополнительных 
 
 ## 3. АР-2…АР-5: оставшиеся обязанности
 
+Детализация 2026-11-24: SourceMutationStateChecker в mutation/validation/mutationStateChecker.py имеет exact pure signature и таблицу CREATE/UPDATE/DELETE × live/tombstone/absent, expected collection/pruned evidence, errors и критерии в source-core-mutation-contract.md §7. Это собственный контракт Source, не foreign phase reader. Appender/runner/resolver там отделены от external write/terminal transport; exact Source append transition records ещё не завершены и не маскируются внешним долгом.
+
 Карточки с exact class names, файлами, методами, функциями и проверками ответственности: source-core-mutation-contract.md §3 «Карточки исполнителей Source» и source-core-capture-prune-configuration.md §4. Предлагаемые имена SourceRegistryMutationRequestChecker и SourceRevisionBatchBuilder заменяют безымянные роли validation/preparation; это design, не новая runtime-поставка. Незавершённые typed operands/constructors остаются видимыми в карточках.
 
 | Класс/обязанность | Метод и граница | Проверка чистоты | Незавершённость прежнего шага |

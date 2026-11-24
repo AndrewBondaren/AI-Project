@@ -24,7 +24,7 @@ from tests.lifecycle.test_apply_predicates import subject_section
 from tests.lifecycle.test_participant import MockCommitScope
 from tests.lifecycle.support import mixedContracts as m, domainSections as d
 from tests.lifecycle.support.subjectCodec import MockSubjectCodec
-from tests.lifecycle.support.subjectParticipant import MockSubjectParticipant, MockSubjectHandlerA
+from tests.lifecycle.support.subjectParticipant import MockSubjectParticipant, MockSubjectHandlerA, MockSubjectHandlerB
 from tests.lifecycle.support.lifecycleParticipant import MockLifecycleParticipant
 from tests.lifecycle.support.evidenceBinding import MockLifecycleEvidenceBinding
 from tests.lifecycle.support.manifest import MOCK_NATIVE_MANIFEST
@@ -50,10 +50,14 @@ def scenario(*, retry=False, false_effect=False, lifecycle_first=False, guard_ap
         d.MockSubjectObservationA(entity=mutation.entity, slot=mutation.slot, value=True)
         for patch in patches for mutation in patch.mutations) if retry else ())
     subject_contract = SectionContract(key=source.header.key, section_model=d.TestDomainSectionA,
-        supported_versions=frozenset({1}), manifest=MOCK_NATIVE_MANIFEST)
+        supported_versions=frozenset({2}), manifest=MOCK_NATIVE_MANIFEST)
     subject_handler = MockSubjectHandlerA(subject_contract, subject)
     registry = SectionRegistry(MockSectionRefused)
     registry.register(subject_contract, subject_handler, MockSubjectCodec(subject_contract))
+    subject_b_contract = SectionContract(key="mock.subject.b", section_model=d.TestDomainSectionB,
+        supported_versions=frozenset({2}), manifest=MOCK_NATIVE_MANIFEST)
+    registry.register(subject_b_contract, MockSubjectHandlerB(subject_b_contract, subject),
+                      MockSubjectCodec(subject_b_contract))
     fingerprint = SectionFingerprint(registry).fingerprint(source)
     refs = tuple(p.header.ref for p in patches)
     evidence = tuple(coverage[0].model_copy(update={"patch_refs": refs,
@@ -76,7 +80,9 @@ def scenario(*, retry=False, false_effect=False, lifecycle_first=False, guard_ap
     publication = PublicationResultBinding(result_model=MockSnapshotApplyResult, snapshot_format_version=1,
         record_model=OperationRecord[MockSnapshotApplyResult], manifest=MOCK_SNAPSHOT_MANIFEST,
         limits=DecodeLimits(max_bytes=1000000, max_nodes=100000, max_depth=100, max_items=10000))
+    from app.application.patch.encoding.patchSetCodec import PatchSetCodec
     service = WorldSnapshotService(registry, None, None, None, publication_binding=publication,
+        request_codec=PatchSetCodec(registry, MockPatchSet),
         operations=SimpleNamespace(result_binding=publication, record_model=publication.record_model))
     if guard_apply:
         subject_handler.apply = AsyncMock(side_effect=AssertionError("apply during validation"))

@@ -7,6 +7,7 @@ from pydantic_core import PydanticCustomError
 
 from app.dataModel.encoding.schemaManifest import CanonicalSchemaManifest
 from app.dataModel.identity.uid import EntityUid
+from app.dataModel.physics.settings.settingsValidationCode import PhysicsSettingsValidationCode
 from app.dataModel.physics.settings.worldPhysicsSettings import WorldPhysicsSettings
 from app.dataModel.validation.diagnostics.runtimeIssueContext import RevisionHex
 from app.dataModel.validation.immutableValue import validate_immutable
@@ -43,12 +44,12 @@ class WorldPhysicsSettingsView(BaseModel):
     @model_validator(mode="after")
     def matching_content(self) -> Self:
         if self.ref.schema_version != self.settings.SCHEMA_VERSION:
-            raise PydanticCustomError("physics_settings_schema", "settings schema mismatch", {
+            raise PydanticCustomError(PhysicsSettingsValidationCode.SCHEMA.value, "settings schema mismatch", {
                 "expected_version": self.settings.SCHEMA_VERSION, "observed_version": self.ref.schema_version,
             })
         computed = settings_ref(self.ref.world_uid, self.settings)
         if self.ref != computed:
-            raise PydanticCustomError("physics_settings_content", "settings content mismatch", {
+            raise PydanticCustomError(PhysicsSettingsValidationCode.CONTENT.value, "settings content mismatch", {
                 "declared": self.ref, "computed": computed,
             })
         return self

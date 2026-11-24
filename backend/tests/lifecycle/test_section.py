@@ -20,7 +20,7 @@ from tests.lifecycle import test_preparation as preparation
 
 def section_binding():
     contract = SectionContract(key="mock.lifecycle", section_model=m.LifecycleSectionAB,
-                               supported_versions=frozenset({1}), manifest=MOCK_NATIVE_MANIFEST)
+                               supported_versions=frozenset({2}), manifest=MOCK_NATIVE_MANIFEST)
     return LifecycleSectionBinding(request_model=m.PrepareLifecycleSectionAB, section_contract=contract,
         patch_bindings=tuple(LifecyclePatchModelBinding(getattr(m, name + suffix), getattr(m, name + "Patch" + suffix))
                              for name in ("Create", "Replace", "End", "Reactivate") for suffix in ("A", "B")))
@@ -32,7 +32,8 @@ def prepared_and_coverage(operation, suffix, index):
     intent = request.intent
     refs = intent.predecessors + intent.successors if operation is Op.REPLACEMENT else (intent.entity,)
     replacements = {ref: type(ref)(kind=ref.kind, entity_uid=f"{ref.entity_uid}-{index}") for ref in refs}
-    observations = tuple(type(fact)(state=fact.state.model_copy(update={"entity": replacements[fact.state.entity]}))
+    observations = tuple(type(fact)(state=fact.state.model_copy(update={"entity": replacements[fact.state.entity],
+                         "last_transition": fact.state.last_transition.model_copy(update={"change_uid": f"prior-{index}"})}))
                          if isinstance(fact, (m.PresentA, m.PresentB)) else type(fact)(entity=replacements[fact.entity])
                          for fact in request.capture.entities)
     intent_changes = {"change_uid": f"change-{index}"}
@@ -42,7 +43,8 @@ def prepared_and_coverage(operation, suffix, index):
     else:
         intent_changes["entity"] = replacements[intent.entity]
     effects = tuple(effect.model_copy(update={"entity": replacements[effect.entity]}) for effect in request.admission.effects)
-    facts = tuple(fact.model_copy(update={"entity": replacements[fact.entity]}) for fact in request.capture.last_transitions)
+    facts = tuple(fact.model_copy(update={"entity": replacements[fact.entity],
+        "ref": fact.ref.model_copy(update={"change_uid": f"prior-{index}"})}) for fact in request.capture.last_transitions)
     request = request.model_copy(update={
         "intent": intent.model_copy(update=intent_changes),
         "capture": request.capture.model_copy(update={"entities": observations, "last_transitions": facts}),
@@ -74,7 +76,7 @@ class SectionTests(unittest.TestCase):
         self.assertEqual(section.domain_evidence, request.domain_evidence)
         self.assertEqual([type(e) for e in section.domain_evidence], [type(e) for e in request.domain_evidence])
         codec = BoundSectionCodec(binding.section_contract, LifecycleSectionCodec(binding.section_contract))
-        restored = codec.decode(codec.encode(section), 1)
+        restored = codec.decode(codec.encode(section), 2)
         self.assertEqual(restored, section)
         self.assertEqual([type(p) for p in restored.patches], [type(p) for p in section.patches])
         self.assertEqual([type(e) for e in restored.domain_evidence], [type(e) for e in section.domain_evidence])
@@ -135,8 +137,8 @@ class SectionTests(unittest.TestCase):
         before = original.capture.entities[0].state
         observations = tuple(m.PresentA(state=before.model_copy(update={"entity": ref})) for ref in predecessors)
         observations += tuple(m.AbsentA(entity=ref) for ref in successors)
-        effects = tuple(m.EffectA(entity=ref, effect="end", reason_action_uid="action") for ref in predecessors)
-        effects += tuple(m.EffectA(entity=ref, effect="create", reason_action_uid="action") for ref in successors)
+        effects = tuple(m.EffectA(entity=ref, effect=Op.END, reason_action_uid="action") for ref in predecessors)
+        effects += tuple(m.EffectA(entity=ref, effect=Op.CREATE, reason_action_uid="action") for ref in successors)
         request = original.model_copy(update={
             "intent": original.intent.model_copy(update={"predecessors": predecessors, "successors": successors}),
             "capture": original.capture.model_copy(update={"entities": observations}),

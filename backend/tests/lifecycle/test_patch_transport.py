@@ -72,7 +72,7 @@ class PatchTransportTests(unittest.TestCase):
         registry.register(contract, RepresentationOnlyHandler(contract), LifecycleSectionCodec(contract))
         codec = registry.resolve_codec(section)
         payload = codec.encode(section)
-        restored = codec.decode(payload, 1)
+        restored = codec.decode(payload, 2)
         self.assertEqual(restored, section)
         self.assertEqual(tuple(map(type, restored.patches)), tuple(map(type, section.patches)))
         self.assertEqual(restored.domain_evidence, section.domain_evidence)
@@ -83,7 +83,7 @@ class PatchTransportTests(unittest.TestCase):
         self.assertNotEqual(fingerprint.fingerprint(changed), fingerprint.fingerprint(section))
         for invalid in (
             section.model_copy(update={"patches": ()}),
-            section.model_copy(update={"header": section.header.model_copy(update={"format_version": 2})}),
+            section.model_copy(update={"header": section.header.model_copy(update={"format_version": 1})}),
         ):
             with self.assertRaises(ValueError):
                 fingerprint.fingerprint(invalid)

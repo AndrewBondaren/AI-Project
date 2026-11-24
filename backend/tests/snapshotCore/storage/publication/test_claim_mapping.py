@@ -1,4 +1,5 @@
 """Service admission mapping with real independent SQLite connections."""
+from tests.snapshotCore.support.mockRequestCodec import mock_request_codec
 import asyncio
 import unittest
 from unittest.mock import AsyncMock, patch
@@ -25,8 +26,8 @@ class SnapshotClaimMappingTests(unittest.TestCase):
         async def check():
             async with live_database() as bundle, live_database(bundle[0].path, seed=False) as peer:
                 _, _, world, players, history, operations = bundle
-                service = WorldSnapshotService(SectionRegistry(FakeSectionRefused), world, players, history,
-                    publication_binding=operations.result_binding, operations=operations)
+                service = WorldSnapshotService(registry := SectionRegistry(FakeSectionRefused), world, players, history,
+                    publication_binding=operations.result_binding, operations=operations, request_codec=mock_request_codec(registry))
                 owner = await service._claim_publication("claim", "w1", "a"*64, "b"*64)
                 before = await peer[-1].read("claim")
                 with self.assertRaises(OperationBusyError):
@@ -68,8 +69,8 @@ class SnapshotClaimMappingTests(unittest.TestCase):
                 catalog, _ = adapters(bundle)
                 operations = bundle[-1]
                 leases = SqliteArtifactLeases(catalog._scopes, operations, operations._artifacts)
-                service = WorldSnapshotService(SectionRegistry(FakeSectionRefused), bundle[2], bundle[3], bundle[4],
-                    publication_binding=operations.result_binding, operations=operations)
+                service = WorldSnapshotService(registry := SectionRegistry(FakeSectionRefused), bundle[2], bundle[3], bundle[4],
+                    publication_binding=operations.result_binding, operations=operations, request_codec=mock_request_codec(registry))
                 for bound in (False, True):
                     op = "bound" if bound else "early"
                     lease = await leases.open_operation(op, "w1", OperationKind.SNAPSHOT_APPLY, "a"*64)

@@ -1,3 +1,4 @@
+from tests.snapshotCore.support.mockRequestCodec import mock_request_codec
 from app.application.worldSnapshot.validation.retentionClosure import retention_closure
 from app.dataModel.worldSnapshot.sections.retention import SectionHistoryRetention
 from app.dataModel.worldSnapshot.sections.refs import SectionHistoryRef
@@ -412,7 +413,7 @@ class AssignedPublicationTests(unittest.TestCase):
                 registry = Mock(spec=SectionRegistry)
                 registry.diagnostic_types = frozenset({FakeTargetIssue})
                 service = WorldSnapshotService(registry, world, player_store, history,
-                    publication_binding=operations.result_binding, operations=operations)
+                    publication_binding=operations.result_binding, operations=operations, request_codec=mock_request_codec(registry))
                 player_refs = ()
                 expectations = ()
                 if mode in ("players", "conflict", "player_conflict", "player_error", "player_cancel"):
@@ -574,8 +575,8 @@ class AssignedPublicationTests(unittest.TestCase):
                 snapshot = base.snapshot_head.model_copy(update={"snapshot_id": "candidate-world"})
                 head = PlayerHeadExpectation(player_uid=observed.player_uid, expected_head=None)
                 await operations.claim_publication(OperationKind.SNAPSHOT_APPLY, op, "w1", "a"*64, "b"*64)
-                service = WorldSnapshotService(SectionRegistry(FakeSectionRefused), world, players, history,
-                    publication_binding=operations.result_binding, operations=operations)
+                service = WorldSnapshotService(registry := SectionRegistry(FakeSectionRefused), world, players, history,
+                    publication_binding=operations.result_binding, operations=operations, request_codec=mock_request_codec(registry))
                 request = attempt_request(op, base, (head,))
                 with self.assertRaises(SnapshotCasConflict) as error:
                     async with commits.transaction(op) as scope:
@@ -618,7 +619,7 @@ class AssignedPublicationTests(unittest.TestCase):
                 h2 = PlayerHeadExpectation(player_uid="p2", expected_head=None)
                 snapshot = WorldSnapshotRef(world_uid="w1", timeline_id="t1", snapshot_id="assigned")
                 service = WorldSnapshotService(registry, bundle[2], bundle[3], bundle[4],
-                    publication_binding=bundle[-1].result_binding, operations=bundle[-1])
+                    publication_binding=bundle[-1].result_binding, operations=bundle[-1], request_codec=mock_request_codec(registry))
                 from pydantic import ValidationError
                 with self.assertRaises(ValidationError):
                     attempt_request("candidate", base, (h1, h1))
@@ -657,8 +658,8 @@ class AssignedPublicationTests(unittest.TestCase):
                 parent = prior.committed.player_snapshots[0]
                 snapshot = expected.snapshot_head.model_copy(update={"snapshot_id": "next-world"})
                 player = parent.model_copy(update={"snapshot_id": "next-player"})
-                service = WorldSnapshotService(SectionRegistry(FakeSectionRefused), world, players, history,
-                    publication_binding=operations.result_binding, operations=operations)
+                service = WorldSnapshotService(registry := SectionRegistry(FakeSectionRefused), world, players, history,
+                    publication_binding=operations.result_binding, operations=operations, request_codec=mock_request_codec(registry))
                 request = attempt_request("next", expected,
                     (PlayerHeadExpectation(player_uid=parent.player_uid, expected_head=parent),))
                 await operations.claim_publication(OperationKind.SNAPSHOT_APPLY, "next", "w1", "a"*64, "b"*64)
@@ -701,8 +702,8 @@ class AssignedPublicationTests(unittest.TestCase):
                 snapshot = WorldSnapshotRef(world_uid="w1", timeline_id="t1", snapshot_id="new-world")
                 player = PlayerSnapshotRef(player_uid="p1", snapshot_id="new-player")
                 head = PlayerHeadExpectation(player_uid="p1", expected_head=None)
-                service = WorldSnapshotService(SectionRegistry(FakeSectionRefused), world, players, history,
-                    publication_binding=operations.result_binding, operations=operations)
+                service = WorldSnapshotService(registry := SectionRegistry(FakeSectionRefused), world, players, history,
+                    publication_binding=operations.result_binding, operations=operations, request_codec=mock_request_codec(registry))
                 request = attempt_request(lease.operation_id, expected, (head,))
 
                 async def publish(transferred):
@@ -775,8 +776,8 @@ class AssignedPublicationTests(unittest.TestCase):
                 player = PlayerSnapshotRef(player_uid="p1", snapshot_id="p-new")
                 expected = active.model_copy(update={"snapshot_head": old})
                 target = active.model_copy(update={"snapshot_head": new, "publication_id": "q"})
-                service = WorldSnapshotService(SectionRegistry(FakeSectionRefused), world, players, history,
-                    publication_binding=operations.result_binding, operations=operations)
+                service = WorldSnapshotService(registry := SectionRegistry(FakeSectionRefused), world, players, history,
+                    publication_binding=operations.result_binding, operations=operations, request_codec=mock_request_codec(registry))
                 entry = SectionHistoryRetention(history=SectionHistoryRef(snapshot=old, section_key="a",
                     format_version=1), artifacts=())
                 a = SectionApplyReceipt(section_key="a", changed=(), states=(), history=(entry,))

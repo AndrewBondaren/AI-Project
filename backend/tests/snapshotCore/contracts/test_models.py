@@ -366,7 +366,7 @@ class CoreModelTests(unittest.TestCase):
 
     def test_core_dtos_only_import_data_and_pure_validation_dependencies(self) -> None:
         source_root = Path(__file__).resolve().parents[3] / "app" / "dataModel"
-        allowed = ("__future__", "enum", "typing", "datetime", "pydantic", "app.dataModel")
+        allowed = ("__future__", "enum", "typing", "datetime", "pydantic", "pydantic_core", "app.dataModel")
         for namespace in ("patch", "artifacts", "worldSnapshot"):
             for source in (source_root / namespace).rglob("*.py"):
                 module = ast.parse(source.read_text(encoding="utf-8"))

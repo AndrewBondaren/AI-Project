@@ -1,12 +1,13 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.dataModel.identity.uid import EntityUid
 from app.dataModel.lifecycle.identity import LifecycleEntityRef
+from app.dataModel.lifecycle.operations.kind import LifecycleOperation
 
 
-LifecycleEffectKind = Literal["create", "end", "reactivate"]
+LifecycleEffectKind = Literal[LifecycleOperation.CREATE, LifecycleOperation.END, LifecycleOperation.REACTIVATE]
 
 
 class DomainEffect[T](BaseModel):
@@ -14,3 +15,10 @@ class DomainEffect[T](BaseModel):
     entity: LifecycleEntityRef[T]
     effect: LifecycleEffectKind
     reason_action_uid: EntityUid
+
+    @field_validator("effect", mode="before")
+    @classmethod
+    def require_enum_member(cls, value: object) -> object:
+        if type(value) is not LifecycleOperation:
+            raise ValueError("effect requires a LifecycleOperation enum member")
+        return value

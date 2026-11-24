@@ -8,6 +8,7 @@ from app.dataModel.patch.sections.section import DomainSection
 from app.application.lifecycle.contracts.typedViews import section_request_view
 from app.dataModel.lifecycle.publication.section import LifecycleSection
 from app.dataModel.patch.changes.patchData import PatchData
+from app.dataModel.lifecycle.publication.patch import LifecycleTransitionPatch
 
 
 class LifecycleSectionBuilder[Q: BaseModel, S: DomainSection[Any]]:
@@ -21,7 +22,7 @@ class LifecycleSectionBuilder[Q: BaseModel, S: DomainSection[Any]]:
         dependencies = tuple(dict.fromkeys(entry.section for entry in request.domain_evidence))
         patches = tuple(self._binding.patch_model(prepared)(
             header=PatchHeader(ref=PatchRef(operation_id=request.operation_id, section_key=contract.key, ordinal=index),
-                               format_version=version, depends_on=(), artifacts=()),
+                               format_version=LifecycleTransitionPatch.FORMAT_VERSION, depends_on=(), artifacts=()),
             prepared=prepared) for index, prepared in enumerate(request.changes))
         # Binding verified owning section inheritance and exact nested schemas.
         model = cast(type[LifecycleSection[PatchData, BaseModel]], contract.section_model)
