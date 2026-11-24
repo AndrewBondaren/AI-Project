@@ -1,5 +1,16 @@
 # Реализация нод записи: Time, настройки Time, Lifecycle
 
+## Актуальный статус Time — 2026-11-25
+
+- Реализованы 9 нод: prepare_time_section и восемь single leaf настроек (hours_change; calendar_create/update/select/remove; epoch_create/update/remove).
+- Импорты после переноса исправлены. register_time_nodes() вызывает регистрацию time/timeSettings и успешно регистрирует ровно 9 NodeId. Это независимо проверенный PASS импортов и локальной регистрации, не production wiring или полная runtime-приёмка.
+- Проверка: из backend выполнен импорт register_time_nodes/NodeRegistry, регистрация и чтение registry.ids(); получены все 9 ожидаемых IDs.
+- Запуск `.venv/Scripts/python.exe -B -m unittest tests.time.test_settings_leaves` после исправления импортов не завершился за время проверки и был прерван. Итог исполнения неизвестен; ни PASS, ни установленная причина сбоя ему не приписываются. Прежний import failure устранён.
+- Не реализованы settings batch leaf, settings section leaf и prepare_world_time_settings_changes. По последней проверке owning batch/section methods/POJO отсутствовали; соответствующие exact bindings OPEN. Независимые реализованные ноды этим не переоткрываются.
+- Три Time read-ноды не реализованы и вне текущего write-среза. Семейство целиком не принято.
+
+Остаток записи: реализовать owning-ready batch/section bindings и родителя настроек по принятой цепочке; завершить проверку исполнения уже существующих нод. Наличие файлов, локальная регистрация и приёмка исполнения — отдельные статусы. Эта запись имеет приоритет над историческими общими OPEN/Target для указанных девяти нод ниже и в связанных планах.
+
 Уточнение структуры 2026-11-25: для каждого семейства один корневой каталог, допускающий внутренние группы операций. Time settings находятся в nodes/time/timeSettings/, а не в соседнем nodes/timeSettings/. То же правило применяется к Lifecycle/PatchSet/Snapshot/Artifacts/Cache/Pack/Source по таблице единых корней реестра. Одна нода — один .py файл — один класс; registration и POJO отдельно. Группировка папок не меняет CALL/родство или NodeId.
 
 Размещение каждой описанной ноды, её POJO, регистрации и родительских связей: [единый реестр](dag-node-layout-register.md). Реестр различает существующие файлы и целевые пути; размещение не закрывает OPEN контрактов и не означает production wiring.

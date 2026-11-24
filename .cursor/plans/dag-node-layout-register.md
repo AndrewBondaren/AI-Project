@@ -48,7 +48,7 @@ Actual mock NodeId/ContractId: engine.patch.mock_lifecycle.assemble_patch_set и
 
 | Нода / класс | Implementation | Input → Output envelope | Статус |
 |---|---|---|---|
-| prepare_time_section / PrepareTimeSectionNode | N/time/prepareTimeSectionNode.py | PrepareTimeSectionInput → PrepareTimeSectionOutput | Target, отдельное задание реализации |
+| prepare_time_section / PrepareTimeSectionNode | N/time/prepareTimeSectionNode.py | PrepareTimeSectionInput → PrepareTimeSectionOutput | Existing; импорт и общая регистрация проверены 2026-11-25; полная runtime-приёмка отдельно |
 | read_current_time / ReadCurrentTimeNode | N/time/readCurrentTimeNode.py | ReadCurrentTimeInput → ReadCurrentTimeOutput | Target, чтение вне текущего среза |
 | read_pinned_time / ReadPinnedTimeNode | N/time/readPinnedTimeNode.py | ReadPinnedTimeInput → ReadPinnedTimeOutput | Target, чтение вне текущего среза |
 | read_historical_time / ReadHistoricalTimeNode | N/time/readHistoricalTimeNode.py | ReadHistoricalTimeInput → ReadHistoricalTimeOutput | Target, чтение вне текущего среза |

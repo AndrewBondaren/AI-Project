@@ -3,7 +3,8 @@ import unittest
 from importlib import import_module
 from unittest.mock import patch
 
-from backend.app.application.engine.nodes.time.timeSettings import registration as bindings
+from app.application.engine.nodes.time import registration as time_bindings
+from app.application.engine.nodes.time.timeSettings import registration as bindings
 from app.application.engine.registration.nodeRegistry import NodeRegistry
 from app.application.engine.runtime.dag.context.dagContext import DAGContext
 from app.application.engine.runtime.execution.nodeRunner import NodeRunner
@@ -34,13 +35,13 @@ class SettingsLeafTests(unittest.IsolatedAsyncioTestCase):
         self.calendar = make_calendar_settings_pipeline(fixture.validator, fixture.projector)
         self.epoch = make_epoch_settings_pipeline(fixture.validator)
         self.registry = NodeRegistry()
-        bindings.register_time_settings_nodes(self.registry)
+        time_bindings.register_time_nodes(self.registry)
         self.runner = NodeRunner(ContractValidator(), NodeValidator())
 
     async def run_case(self, suffix, pipeline, request):
         name = "".join(part.title() for part in suffix.split("_"))
         node_type = getattr(import_module(
-            "app.application.engine.nodes.timeSettings.prepare" + name + "Node"
+            "app.application.engine.nodes.time.timeSettings.prepare" + name + "Node"
         ), "Prepare" + name + "Node")
         node = node_type(pipeline=pipeline)
         contract = getattr(bindings, "PREPARE_" + suffix.upper() + "_CONTRACT")
@@ -59,7 +60,7 @@ class SettingsLeafTests(unittest.IsolatedAsyncioTestCase):
         return outcome.output.value
 
     async def test_all_eight_real_methods_and_registration(self):
-        self.assertEqual(len(self.registry.ids()), 8)
+        self.assertEqual(len(self.registry.ids()), 9)
         entry = self.base.capture.settings.calendars.entries[0]
         epoch = WorldCalendarEpoch(system_epoch=RegistryKey("reign"), display_epoch="Reign",
                                    description="", calendar=self.key, start_seconds=0,
