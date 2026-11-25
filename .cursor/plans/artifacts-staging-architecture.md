@@ -1,5 +1,13 @@
 # Artifacts: архитектура staging, 2026-11-21
 
+## Public Error gate — решение пользователя 2026-11-25
+
+Публичный prepare/stage контракт **НЕ ПРИНЯТ** до предоставления Artifacts полного Error POJO с корректным typed path и подтверждённым Fields/C0 binding. Это обязательный блокер независимо от прежней метки P2 и PASS внутренних storage-границ. Нода переносит owning Error POJO целиком; не создаёт и не ремонтирует root/path/segment owners. Exact условия закрытия — в начале [owning-плана](artifacts-public-staging-dag.md). Named schema-base proposal не принят по умолчанию. Независимый PASS отдельных алгоритмов не является приёмкой public Error или основанием регистрации нод.
+
+## Текущий implementation status — 2026-11-25
+
+См. приоритетный раздел «Актуальный статус — 2026-11-25» в [owning-плане](artifacts-public-staging-dag.md). Public prepare_stage/stage, admission/descriptor/writer, wrappers/errors и storage guard/composition методы теперь существуют в коде; историческое «TARGET классов нет» ниже не является текущим фактом. Реализация ядра разрешена отдельно от foreign route; acceptance/runtime PASS ещё не выданы. P2 typed diagnostic paths остаётся OPEN до Fields/C0 решения; найденный код не доказывает typing/post-seal/test closure. Scoped read_operation_held по-прежнему proposal без actual export. Архитектурный scoped PASS storage/error п3 сохраняется; полный ARCH-STAGE/ARCH-0 и конкретная регистрация не закрыты.
+
 ## Приоритетное ограничение пользователя — 2026-11-24
 
 По уточнению основного координатора: пользователь сказал «Пока маршрут не закрыт, я не даю добро», затем поручил закрыть маршрут, оставив генератор/gameplay и верхнее получение inputs вне scope. Текущая работа — контрактный маршрут; прежнее разрешение реализации не является code-go зависимой реализации/активации. Исторические заявления ниже о сохранённом разрешении читать с этим ограничением.

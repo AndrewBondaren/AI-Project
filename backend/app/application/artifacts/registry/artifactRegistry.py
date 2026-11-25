@@ -2,11 +2,13 @@
 
 from collections.abc import Awaitable, Callable
 from typing import cast
+from copy import deepcopy
 from pydantic import BaseModel
 
 from app.application.artifacts.contracts.formatBackend import ArtifactBackend, ArtifactFormatContract
 from app.dataModel.artifacts.references import ArtifactFormatKey, ArtifactFormatMetadata, ArtifactRef
 from app.dataModel.patch.values import FormatVersion
+from app.dataModel.artifacts.staging.contentValidation import validate_content_instance
 
 
 class ArtifactFormatRegistryBinding:
@@ -66,7 +68,9 @@ class ArtifactFormatRegistryBinding:
         if type(content) is not contract.content_model:
             raise TypeError("content does not have the exact registered model")
         if isinstance(content, BaseModel):
-            content = cast(C, type(content).model_validate(content, strict=True))
+            # Preserve the existing schema-error category, but not its cloned result.
+            type(content).model_validate(deepcopy(content), strict=True)
+        validate_content_instance(content)
         payload = contract.encode(content)
         if type(payload) is not bytes:
             raise TypeError("artifact encoder must return bytes")

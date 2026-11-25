@@ -121,6 +121,7 @@ class RegisteredContract(BaseModel):
 class InvocationGraph(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     execution_id: ExecutionIdValue
+    identity_required: bool = False
     revision: PlanRevisionValue
     root: InvocationId
     initial_task: str | None = None

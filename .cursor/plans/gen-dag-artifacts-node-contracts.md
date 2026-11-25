@@ -1,5 +1,42 @@
 # GEN-DAG: базовые ноды Artifacts
 
+## Приоритетный результат независимой проверки — 2026-11-26
+
+Owning schema-base diagnostic P2 получил **scoped PASS**: actual producer paths content / prepared.content / prepared / prepared.descriptor, exact roots/segment owners, стабильная агрегация и full Error Python/JSON/canonical transport в test wrapper/manifest проверены. Команда test_content_identity + contracts.test_registry — 23 PASS на Pydantic 2.13.4. Подтверждена регистрация base owners в test-local manifest и отказ decode при их отсутствии; production IDs этим не назначены. Нижние заявления «P2 не исправлен» исторические и заменены этим статусом.
+
+**Полная пара нод не принята:** сохраняется Engine JSON identity gap; actual registered node Error binding и production manifest/route не предъявлены. Owning P2 fix не переоткрывается из-за отсутствия этих интеграций. Static/pinned-version checks не заявлены. Evidence — docs/artifacts-dag-identity-bug-2026-11-25.md, повторная проверка 2026-11-26.
+
+## Schema-base diagnostic semantics — scoped сверка 2026-11-25
+
+Пользователь выбрал направление named nongeneric schema bases; Fields/C0 предъявил совместимость по чтению кода. Координаторский verdict: **PASS проектной семантике путей и unchanged Error transport; OPEN реализации, manifest binding и полного public Error gate**. Это не code-go и не приёмка всего Artifacts.
+
+Diagnostic root обозначает именованную схему, а не runtime generic specialization/экземпляр. Existing generic inputs сохраняются; пересоздание request/content для диагностики не требуется. Прежнее требование строить root «относительно конкретной специализации input» заменяется в этом срезе следующей явной картой:
+
+| Публичная диагностика | Root | Последовательность owner / field |
+|---|---|---|
+| Prepare content | ArtifactPrepareStageInputBase | ArtifactPrepareStageInputBase / content |
+| Stage content | ArtifactStageInputBase | ArtifactStageInputBase / prepared → PreparedArtifactBase / content |
+| Stage format mismatch | ArtifactStageInputBase | ArtifactStageInputBase / prepared |
+| Stage descriptor mismatch | ArtifactStageInputBase | ArtifactStageInputBase / prepared → PreparedArtifactBase / descriptor |
+
+Base classes — owning Artifacts. Поля: prepare(content: bytes | BaseModel), prepared(content: bytes | BaseModel, descriptor: ArtifactRef), stage(lease: OperationLeaseRef, prepared: PreparedArtifactBase). Это diagnostic schema, не разрешение регистрировать open generic ноды или arbitrary BaseModel payload. Пути строятся CheckedPath/FieldRef, не ручным ModelIdentity. Вложенные поля произвольного C через bytes | BaseModel этим решением не разрешены. Context/correlation вызова связывает issue с запросом; wrapper не переписывает root/owners.
+
+Actual ModelIdentity.of допускает named nongeneric nonabstract models. Canonical decode требует referenced owners в manifest; одной общей регистрации Fields недостаточно. До runtime PASS предъявить exact manifest/allowlist binding и cold round-trip: возможность зарегистрировать сами schema bases с union bytes | BaseModel ещё не доказана, numeric IDs здесь не назначаются. Не обходить ограничения manifest и не заявлять, что чтение кода доказывает такой round-trip.
+
+Владелец Artifacts исправляет оба public diagnostic producer: ArtifactInputAdmission и ArtifactDescriptorBuilder.check. Проверки: actual inheritance/typing, все четыре root/owner цепочки, порядок независимых issues, unchanged Error через node wrapper, существующие generic inputs и success identity. Owner implementation, Fields/C0 semantics и DAG Error transport — разные объёмы приёмки. Engine JSON identity, storage/lease и внутренний staging design OUT этой сверки.
+
+## Независимый verdict 2026-11-25
+
+Owning identity fix получил scoped PASS: 20 tests на Pydantic 2.13.4 и direct in-memory wrappers/ContractValidator сохраняют original content/prepared. **Полный публичный контракт и конкретная регистрация пары НЕ ПРИНЯТЫ:** проверенный Engine JSON route теряет prepared identity, а Artifacts stage Error по-прежнему адресует content вместо prepared.content с непроверенной цепочкой segment owners. Это две отдельные границы, не общий storage/ARCH-STAGE блокер. Владельцы: Engine/DAG transport для маршрута; Artifacts для Error-path, Fields/C0 для согласования root semantics при необходимости. Точный объём PASS, причины отказа и evidence для закрытия: [BUG-ARTIFACTS-DAG-IDENTITY](../../docs/artifacts-dag-identity-bug-2026-11-25.md), раздел «Вердикт приёмки». Отчёт владельца или равенство POJO после JSON не заменяют проверку принятого is-контракта на actual registered route.
+
+## Блокер owning Error — решение пользователя 2026-11-25
+
+Публичный контракт Artifacts и зависимая регистрация этих нод **НЕ ПРИНЯТЫ**, пока Artifacts не предоставляет публичный Error POJO с корректным typed path, согласованным с Fields/C0. Generic signatures и таблицы ниже — проект, не закрытый Error mapping.
+
+Нода переносит owning Error POJO целиком в предусмотренную оболочку. Она не вычисляет root/segments, не исправляет `content` в `prepared.content`, не подменяет владельцев segments и не пересобирает issue list. Нужный path формирует Artifacts до возврата отказа. Тесты проверяют неизменность полного диагностического значения, root/owners/path и порядка issues. Обёртка не должна скрывать ошибку owning contract.
+
+Named schema-base вариант остаётся PROPOSED; менять supported inputs или трактовать storage PASS как приёмку public Error запрещено. Условия закрытия записаны в начале [owning-плана](artifacts-public-staging-dag.md); остальные transport/identity gates сохраняются.
+
 Размещение каждой описанной ноды, её POJO, регистрации и родительских связей: [единый реестр](dag-node-layout-register.md). Реестр различает существующие файлы и целевые пути; размещение не закрывает OPEN контрактов и не означает production wiring.
 
 Дата: 2026-11-18.

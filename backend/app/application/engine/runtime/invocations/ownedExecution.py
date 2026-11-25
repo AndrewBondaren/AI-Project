@@ -1,11 +1,14 @@
 from asyncio import Lock
 from dataclasses import dataclass, field
-from typing import Never
+from typing import TYPE_CHECKING, Never
 
 from app.application.engine.contracts.invocation.executionStore import Claim, ExecutionStore, OwnershipConflict
 from app.application.engine.contracts.invocation.inputWait import InputConflict
 from app.application.engine.runtime.invocations.checkpointCodec import CheckpointCodec
 from app.dataModel.engine.dag.invocations.record import ExecutionStopIntent, InvocationGraph, InvocationStatus, StopOutcome
+
+if TYPE_CHECKING:
+    from app.application.engine.runtime.invocations.invocationCoordinator import InvocationCoordinator
 
 
 class ExecutionStopping(RuntimeError):
@@ -23,6 +26,7 @@ class OwnedExecution:
     revision: int
     graph: InvocationGraph
     lease_seconds: int
+    live_coordinator: "InvocationCoordinator | None" = None
 
     _writes: Lock = field(default_factory=Lock, init=False)
 

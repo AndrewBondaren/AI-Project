@@ -7,9 +7,11 @@ from app.application.artifacts.errors import ArtifactCodecError
 from app.application.artifacts.staging.stageErrors import ArtifactInputRejected
 from app.application.artifacts.registry.artifactRegistry import ArtifactFormatRegistryBinding
 from app.dataModel.artifacts.references import ArtifactRef
-from app.dataModel.artifacts.staging.preparedArtifact import PreparedArtifact
+from app.dataModel.artifacts.staging.preparedArtifact import PreparedArtifact, PreparedArtifactBase
+from app.dataModel.artifacts.staging.stageInput import ArtifactStageInputBase
 from app.dataModel.artifacts.staging.inputErrors import ArtifactInputError, ArtifactInputIssue, ArtifactInputIssueCode
-from app.dataModel.fields.validatedFieldPath import FieldSegment, ModelIdentity, ValidatedFieldPath
+from app.dataModel.fields.checkedPath import CheckedPath
+from app.dataModel.fields.fieldRef import FieldRef
 from app.dataModel.patch.values import FormatVersion
 from app.encoding.canonicalCodec import content_digest
 
@@ -39,9 +41,12 @@ class ArtifactDescriptorBuilder[C: bytes | BaseModel]:
         return PreparedArtifact[self._contract.content_model](content=content, descriptor=self.build(content))
 
     def check(self, prepared: PreparedArtifact[C]) -> None:
-        if self.build(prepared.content) != prepared.descriptor:
-            owner = ModelIdentity(module=PreparedArtifact.__module__, qualname=PreparedArtifact.__qualname__)
-            path = ValidatedFieldPath(root=owner, segments=(FieldSegment(owner=owner, name="descriptor"),))
+        descriptor: FieldRef[PreparedArtifactBase, ArtifactRef] = FieldRef(
+            lambda: PreparedArtifactBase, lambda value: value.descriptor)
+        if self.build(prepared.content) != descriptor.select(prepared):
+            path = (CheckedPath.root(ArtifactStageInputBase)
+                .field(FieldRef(lambda: ArtifactStageInputBase, lambda value: value.prepared))
+                .field(descriptor).freeze())
             raise ArtifactInputRejected(ArtifactInputError(issues=(ArtifactInputIssue(
                 code=ArtifactInputIssueCode.DESCRIPTOR_MISMATCH, path=path,
                 message="prepared artifact descriptor differs from content"),)))

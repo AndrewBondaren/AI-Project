@@ -31,6 +31,8 @@ class InvocationCoordinator:
         self.graph = graph
         self.limit = limit
         self.interaction = interaction
+        # These admitted objects belong to this owner generation, never to a checkpoint.
+        self._live: dict[tuple[InvocationId, str], tuple[str, BaseModel, int, PlanRevision, int]] = {}
         for record in graph.records.values():
             registration = plan.registrations.get(record.node_id)
             if not registration or (registration.contract.contract_id, registration.contract.version) != (
@@ -42,14 +44,42 @@ class InvocationCoordinator:
 
     @classmethod
     def create(cls, plan: ExecutionPlan, execution_id: ExecutionId, revision: PlanRevision,
-               root: NodeId, limit: int, input: BaseModel | None):
+               root: NodeId, limit: int, input: BaseModel | None, identity_required: bool = False):
         graph = InvocationGraph(execution_id=execution_id, revision=revision,
+                                identity_required=identity_required,
                                 root=InvocationId(f"root/{root}"), registry=CheckpointCodec.registry(plan), records={})
         coordinator = cls(plan, graph, limit)
         record = coordinator.allocate(root, PlanInstanceId("root"))
         if input is not None:
             record.input = coordinator.encode(input, plan.registrations[root].contract.input_type)
+            coordinator._remember(record, "input", record.input, input)
         return coordinator
+
+    def _remember(self, record: InvocationRecord, slot: str, wire: str, value: BaseModel) -> None:
+        if self.graph.identity_required:
+            self._live[(record.invocation_id, slot)] = (
+                wire, value, record.attempt_counter, record.plan_revision, record.step_index,
+            )
+
+    def _refresh(self, record: InvocationRecord, *slots: str, previous: tuple[int, PlanRevision, int]) -> None:
+        for slot in slots:
+            saved = self._live.get((record.invocation_id, slot))
+            if saved is not None:
+                if saved[2:] != previous:
+                    raise RestoreFailure("stale live payload cannot cross invocation transition")
+                self._remember(record, slot, saved[0], saved[1])
+
+    def clear_live(self) -> None:
+        self._live.clear()
+
+    def payload(self, record: InvocationRecord, slot: str, wire: str, expected: type[BaseModel]) -> BaseModel:
+        if self.graph.identity_required:
+            saved = self._live.get((record.invocation_id, slot))
+            if (saved is None or saved[0] != wire or not isinstance(saved[1], expected) or
+                    saved[2:] != (record.attempt_counter, record.plan_revision, record.step_index)):
+                raise RestoreFailure("identity-required invocation lost its live payload")
+            return saved[1]
+        return expected.model_validate_json(wire)
 
     @staticmethod
     def encode(value: BaseModel, expected: type[BaseModel]) -> str:
@@ -96,6 +126,7 @@ class InvocationCoordinator:
                 if (record.identity() != identity or record.terminal != terminal or
                         record.reads != output.reads or record.domain_reads != output.domain_reads):
                     raise RestoreFailure("conflicting prior-phase output")
+                self._remember(record, "terminal", terminal, output.output)
                 continue
             if record.status != Status.READY:
                 raise RestoreFailure("prior-phase invocation cannot accept a published result")
@@ -105,6 +136,7 @@ class InvocationCoordinator:
             record.reads = output.reads
             record.domain_reads = output.domain_reads
             record.status = Status.SUCCEEDED
+            self._remember(record, "terminal", terminal, output.output)
 
     def next_pass(self, root: NodeId, revision: PlanRevision, reusable: set[InvocationId],
                   instance: PlanInstanceId) -> None:
@@ -130,6 +162,8 @@ class InvocationCoordinator:
             record.input = None
             record.continuation = None
             record.terminal = None
+            for slot in ("input", "continuation", "terminal"):
+                self._live.pop((record.invocation_id, slot), None)
             record.state_contract = None
             record.error_index = None
             record.gate_task = record.gate_reason = None
@@ -143,10 +177,13 @@ class InvocationCoordinator:
     def begin(self, record: InvocationRecord) -> None:
         if record.status != Status.READY:
             raise ValueError("attempt requires READY invocation")
+        previous = (record.attempt_counter, record.plan_revision, record.step_index)
+        self._live.pop((record.invocation_id, "terminal"), None)
         record.status = Status.RUNNING
         record.attempt_counter += 1
         record.step_attempts += 1
         record.plan_revision = self.graph.revision
+        self._refresh(record, "input", "continuation", previous=previous)
 
     def finish(self, record: InvocationRecord, identity: ExecutionIdentity, effect: StepEffect) -> None:
         if identity != record.identity():
@@ -165,6 +202,7 @@ class InvocationCoordinator:
             raise ValueError("conflicting or stale RETURN")
         if record.input is None and effect.prepared is not None:
             record.input = self.encode(effect.prepared, self.plan.registrations[record.node_id].contract.input_type)
+            self._remember(record, "input", record.input, effect.prepared)
         record.diagnostics += effect.diagnostics
         record.reads += effect.reads
         record.domain_reads += effect.domain_reads
@@ -177,10 +215,12 @@ class InvocationCoordinator:
             for index, error_type in enumerate(contract.error_types):
                 if isinstance(effect.error, error_type):
                     if contract.retry_policy is not None and contract.retry_policy(effect.error, record.step_attempts):
+                        self._live.pop((record.invocation_id, "terminal"), None)
                         record.status = Status.READY
                         return
                     record.error_index = index
                     record.terminal = self.encode(effect.error, error_type)
+                    self._remember(record, "terminal", record.terminal, effect.error)
                     break
         if effect.gate is not None and record.invocation_id == self.graph.root:
             record.gate_task = effect.gate.next_task_type.value
@@ -190,6 +230,7 @@ class InvocationCoordinator:
         contract = self.plan.registrations[parent.node_id].contract
         if isinstance(outcome, Complete):
             parent.terminal = self.encode(outcome.output, contract.output_type)
+            self._remember(parent, "terminal", parent.terminal, outcome.output)
             parent.status = Status.SUCCEEDED
             return
         if contract.continuation is None:
@@ -206,6 +247,7 @@ class InvocationCoordinator:
             raise ValueError("conflicting replay of CALL group")
         parent.state_contract = (contract.continuation.contract_id, contract.continuation.version)
         parent.continuation = state
+        self._remember(parent, "continuation", state, outcome.state)
         for request in requests:
             if request.target not in contract.calls:
                 raise TypeError("undeclared CALL target")
@@ -217,6 +259,7 @@ class InvocationCoordinator:
                 continue
             child = self.allocate(request.target.node_id, PlanInstanceId(f"call-{len(self.graph.records)}"))
             child.input = self.encode(request.input, request.target.input_type)
+            self._remember(child, "input", child.input, request.input)
             child.caller_invocation_id = parent.invocation_id
             child.caller_step = parent.step_index
             child.call_key = request.key
@@ -230,9 +273,11 @@ class InvocationCoordinator:
             for record in records.values():
                 if self.graph.join_complete(record):
                     changed = True
+                    previous = (record.attempt_counter, record.plan_revision, record.step_index)
                     record.step_index += 1
                     record.step_attempts = 0
                     record.status = Status.READY
+                    self._refresh(record, "input", "continuation", previous=previous)
                 if record.status != Status.READY:
                     continue
                 failed = next((records[key] for key in record.dependency_bindings
@@ -260,7 +305,7 @@ class InvocationCoordinator:
             contract = self.plan.registrations[dep.node_id].contract
             outputs[dep.node_id] = OutputRecord[BaseModel](
                 identity=dep.identity(), contract_id=dep.contract_id, contract_version=dep.version,
-                output=contract.output_type.model_validate_json(dep.terminal_payload()), reads=dep.reads, domain_reads=dep.domain_reads,
+                output=self.payload(dep, "terminal", dep.terminal_payload(), contract.output_type), reads=dep.reads, domain_reads=dep.domain_reads,
             )
         contract = self.plan.registrations[record.node_id].contract
         return PublishedDAGReadView(record.node_id, contract.reads, self.plan.registrations, outputs, record.execution_id)
@@ -273,11 +318,11 @@ class InvocationCoordinator:
                 raise ValueError("missing return address")
             target = next(t for t in calls if t.node_id == child.node_id)
             if child.status == Status.SUCCEEDED:
-                result = CallSuccess(target.output_type.model_validate_json(child.terminal_payload()))
+                result = CallSuccess(self.payload(child, "terminal", child.terminal_payload(), target.output_type))
             elif child.status == Status.CANCELLED:
                 result = CallCancelled()
             elif child.error_index is not None:
-                result = CallFailure(target.error_types[child.error_index].model_validate_json(child.terminal_payload()))
+                result = CallFailure(self.payload(child, "terminal", child.terminal_payload(), target.error_types[child.error_index]))
             else:
                 result = CallRuntimeFailure(child.identity())
             entries.append(ReturnedCall(child.call_key, target, result))

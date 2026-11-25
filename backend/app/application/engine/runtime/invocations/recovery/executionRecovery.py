@@ -2,9 +2,9 @@ import asyncio
 from collections.abc import Mapping
 from app.ids import runtime_uid
 
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
 
-from app.application.engine.contracts.executionBindings import ExecutionResult, LifecycleBinding
+from app.application.engine.contracts.executionBindings import ExecutionResult, LifecycleBinding, ResolveResult
 from app.application.engine.contracts.invocation.executionOptions import InvocationOptions
 from app.application.engine.contracts.invocation.executionStore import Claim, OwnershipConflict, PackCloser, RestoreFailure
 from app.application.engine.contracts.invocation.inputWait import Failed
@@ -18,6 +18,7 @@ from app.application.engine.runtime.invocations.recovery.terminalReplay import t
 from app.application.engine.taskType import TaskType
 from app.dataModel.engine.dag.diagnostics import CancellationRequest
 from app.dataModel.engine.dag.identity import DomainRevision, ExecutionId
+from app.dataModel.engine.dag.invocations.record import InvocationGraph
 
 
 class ExecutionRecovery[O: BaseModel, S: BaseModel]:
@@ -37,9 +38,17 @@ class ExecutionRecovery[O: BaseModel, S: BaseModel]:
         requested_task: TaskType | None = None,
     ) -> ExecutionResult[O]:
         before = await settings.store.load(execution_id)
+        header = InvocationGraph.model_validate_json(before.blob)
+        if header.identity_required != settings.identity_required:
+            raise RestoreFailure("identity policy differs from checkpoint")
         if before.final_revision is not None:
             read_header(before, execution_id, settings, max_passes, requested_task)
             return terminal_result(before, execution_id, self._binding.response_type)
+        if header.identity_required:
+            if header.response is not None:
+                read_header(before, execution_id, settings, max_passes, requested_task)
+                return TypeAdapter[ResolveResult[O]](ResolveResult[self._binding.response_type]).validate_json(header.response)
+            raise RestoreFailure("identity-required invocation cannot resume from checkpoint")
         try:
             claim = await settings.store.claim(execution_id, runtime_uid(), settings.lease_seconds)
         except OwnershipConflict:

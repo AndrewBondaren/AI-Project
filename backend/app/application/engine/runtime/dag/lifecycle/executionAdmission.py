@@ -1,4 +1,6 @@
+import asyncio
 from collections.abc import Mapping
+from app.ids import runtime_uid
 
 from pydantic import BaseModel
 
@@ -14,10 +16,13 @@ from app.application.engine.runtime.dag.lifecycle.sessionRecovery import Session
 from app.application.engine.runtime.execution.llm.llmRequest import LLMExecutionOptions
 from app.application.engine.runtime.invocations.checkpointCodec import CheckpointCodec
 from app.application.engine.runtime.invocations.invocationCoordinator import InvocationCoordinator
+from app.application.engine.runtime.invocations.ownedExecution import OwnedExecution
+from app.application.engine.contracts.invocation.executionStore import RestoreFailure
 from app.application.engine.runtime.invocations.recovery.executionRecovery import ExecutionRecovery
 from app.application.engine.taskType import TaskType
 from app.dataModel.engine.dag.diagnostics import CancellationRequest
 from app.dataModel.engine.dag.identity import DomainRevision, ExecutionId
+from app.dataModel.engine.dag.invocations.record import ExecutionResponseStatus
 
 
 class ExecutionAdmission[O: BaseModel, S: BaseModel]:
@@ -57,17 +62,23 @@ class ExecutionAdmission[O: BaseModel, S: BaseModel]:
                 except KeyError:
                     pass
                 else:
-                    if existing.stop_intent is not None:
+                    if existing.stop_intent is not None or (settings.identity_required and
+                            (existing.final_revision is not None or existing.status == ExecutionResponseStatus.COMPLETED)):
                         return await self._recovery.resume(execution_id, settings, max_passes, options,
                                                            confirmed_domain_revisions, cancellation, task_type)
+                    if settings.identity_required:
+                        raise RestoreFailure("identity-required invocation cannot reopen an existing checkpoint")
             revision, plan = self._binding.compile(task_type, 0)
             state = ExecutionState(execution_id, self._registry, plan_revision=revision)
+            fresh: InvocationCoordinator | None = None
             try:
                 state.set_cursor(ExecutionCursor(task_type, PassStage.PRE_LLM))
                 if settings is not None and plan.invocation_root is not None:
-                    graph = InvocationCoordinator.create(
+                    fresh = InvocationCoordinator.create(
                         plan, execution_id, revision, plan.invocation_root, settings.invocation_limit, None,
-                    ).graph
+                        settings.identity_required,
+                    )
+                    graph = fresh.graph
                     if settings.interaction is not None:
                         graph.interaction_owner = settings.interaction.owner
                     elif any(contract.input_wait for contract in graph.registry):
@@ -79,6 +90,46 @@ class ExecutionAdmission[O: BaseModel, S: BaseModel]:
                 state.release()
                 raise
             if settings is not None and plan.invocation_root is not None:
+                if settings.identity_required:
+                    try:
+                        claim = await settings.store.claim(execution_id, runtime_uid(), settings.lease_seconds)
+                    except BaseException:
+                        state.release()
+                        raise
+                    worker_started = False
+                    try:
+                        saved = await settings.store.load(execution_id)
+                        if (saved.revision != 0 or fresh is None or
+                                saved.blob != CheckpointCodec.encode(fresh.graph) or
+                                claim.execution_id != execution_id):
+                            raise RestoreFailure("fresh identity checkpoint changed before claim")
+                        owned = OwnedExecution(settings.store, claim, saved.revision, fresh.graph,
+                                               settings.lease_seconds, fresh)
+                        worker = asyncio.create_task(self._passes.run(state, plan, max_passes, options,
+                                                                       confirmed_domain_revisions, cancellation, owned))
+                        worker_started = True
+                        try:
+                            while not worker.done():
+                                done, _ = await asyncio.wait((worker,), timeout=settings.lease_seconds / 3)
+                                if not done:
+                                    await settings.store.renew(claim, settings.lease_seconds)
+                            return worker.result()
+                        finally:
+                            if not worker.done():
+                                worker.cancel()
+                            while not worker.done():
+                                try:
+                                    await asyncio.shield(worker)
+                                except asyncio.CancelledError:
+                                    pass
+                                except Exception:
+                                    break
+                    finally:
+                        if not worker_started:
+                            state.release()
+                        if fresh is not None:
+                            fresh.clear_live()
+                        await settings.store.release(claim)
                 state.release()
                 return await self._recovery.resume(execution_id, settings, max_passes, options,
                                                    confirmed_domain_revisions, cancellation, task_type)

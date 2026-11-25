@@ -12,7 +12,10 @@ class InvocationOptions:
     invocation_limit: int
     lease_seconds: int = 300
     interaction: InteractionPort | None = None
+    identity_required: bool = False
 
     def __post_init__(self) -> None:
+        if type(self.identity_required) is not bool:
+            raise TypeError("identity_required must be bool")
         for value in (self.workers, self.invocation_limit, self.lease_seconds):
             TypeAdapter(PositiveInt).validate_python(value, strict=True)

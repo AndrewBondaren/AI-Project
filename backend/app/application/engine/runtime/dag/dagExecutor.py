@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from app.application.engine.diagnostics.dagLog import emit as emit_diagnostic
 from app.application.engine.diagnostics.executionEvents import ExecutionEvents
-from app.application.engine.contracts.invocation.executionStore import ExecutionStore, OwnershipConflict, RestoreFailure
+from app.application.engine.contracts.invocation.executionStore import Claim, ExecutionStore, OwnershipConflict, RestoreFailure
 from app.application.engine.contracts.invocation.executionOptions import InvocationOptions
 from app.application.engine.contracts.invocation.nodeStep import Complete
 from app.application.engine.nodeTypes.resumablePythonNode import ResumablePythonNode
@@ -82,32 +82,58 @@ class DAGExecutor:
         store: ExecutionStore, *, owner: str, workers: int, invocation_limit: int,
         input: BaseModel | None = None, lease_seconds: int = 300,
         prior_outputs: tuple[OutputRecord[BaseModel], ...] = (),
+        identity_required: bool = False,
+        _coordinator_out: list[tuple[InvocationCoordinator, Claim]] | None = None,
     ) -> InvocationRecord:
         if workers < 1:
             raise ValueError("workers must be positive")
+        initial: InvocationCoordinator | None = None
         try:
             if (await store.load(execution_id)).stop_intent is not None:
                 raise OwnershipConflict("execution is stopping")
         except KeyError:
-            initial = InvocationCoordinator.create(plan, execution_id, revision, root, invocation_limit, input)
+            initial = InvocationCoordinator.create(plan, execution_id, revision, root, invocation_limit, input,
+                                                   identity_required)
             await store.create(execution_id, CheckpointCodec.encode(initial.graph))
         claim = await store.claim(execution_id, owner, lease_seconds)
+        handed_off = False
+        coordinator: InvocationCoordinator | None = None
         try:
             saved = await store.load(execution_id)
             if saved.stop_intent is not None:
                 raise OwnershipConflict("execution is stopping")
             graph = await CheckpointCodec.restore(saved.blob, plan)
+            if graph.identity_required != identity_required:
+                raise RestoreFailure("identity policy differs from checkpoint")
+            if identity_required and initial is None and graph.records[graph.root].status not in (
+                InvocationStatus.SUCCEEDED, InvocationStatus.FAILED, InvocationStatus.CANCELLED,
+            ):
+                raise RestoreFailure("identity-required invocation cannot resume from checkpoint")
+            if identity_required and initial is None and _coordinator_out is not None:
+                raise RestoreFailure("restored terminal cannot publish as a live identity route")
+            if identity_required and initial is not None:
+                if (claim.execution_id != execution_id or saved.revision != 0 or
+                        CheckpointCodec.encode(initial.graph) != saved.blob):
+                    raise RestoreFailure("identity-required invocation changed before claim")
             if (graph.execution_id, graph.revision, graph.records[graph.root].node_id) != (execution_id, revision, root):
                 raise RestoreFailure("checkpoint does not match execution plan")
             if input is not None and graph.records[graph.root].input != InvocationCoordinator.encode(
                 input, plan.registrations[root].contract.input_type,
             ):
                 raise RestoreFailure("execution already exists with different input")
-            coordinator = InvocationCoordinator(plan, graph, invocation_limit)
+            coordinator = initial if identity_required and initial is not None else InvocationCoordinator(plan, graph, invocation_limit)
+            coordinator.graph = graph
             coordinator.bind_published(prior_outputs)
-            return await self._schedule_invocations(coordinator, OwnedExecution(store, claim, saved.revision, graph, lease_seconds), workers)
+            result = await self._schedule_invocations(coordinator, OwnedExecution(store, claim, saved.revision, graph, lease_seconds), workers)
+            if _coordinator_out is not None:
+                _coordinator_out.append((coordinator, claim))
+                handed_off = True
+            return result
         finally:
-            await store.release(claim)
+            if not handed_off:
+                if coordinator is not None:
+                    coordinator.clear_live()
+                await store.release(claim)
 
     async def _schedule_invocations(
         self, coordinator: InvocationCoordinator, owned: OwnedExecution, workers: int,
@@ -164,7 +190,7 @@ class DAGExecutor:
         reg = plan.registrations[record.node_id]
         contract = reg.contract
         view = coordinator.view(record)
-        prepared = contract.input_type.model_validate_json(record.input) if record.input is not None else None
+        prepared = coordinator.payload(record, "input", record.input, contract.input_type) if record.input is not None else None
         if isinstance(node, PythonNode) and reg.executor_cls is not None:
             admitted: list[BaseModel] = []
             outcome = await self._run_node(plan, view, record.identity(), coordinator.graph.pass_number, 0,
@@ -176,7 +202,7 @@ class DAGExecutor:
                               reads=outcome.reads, domain_reads=outcome.domain_reads)
         elif isinstance(node, ResumablePythonNode) and contract.continuation is not None:
             resumable = cast(ResumablePythonNode[BaseModel, BaseModel, NodeError, BaseModel], node)
-            state = (contract.continuation.state_type.model_validate_json(record.continuation)
+            state = (coordinator.payload(record, "continuation", record.continuation, contract.continuation.state_type)
                      if record.continuation is not None else None)
             event = (InputWaitCoordinator.event(coordinator.graph, plan, record) or coordinator.event(record)
                      if state is not None else None)
@@ -257,16 +283,29 @@ class DAGExecutor:
             earlier.append(prior_output)
         state.begin_phase(revision, pass_number)
         try:
+            live: list[tuple[InvocationCoordinator, Claim]] = []
             if durable is None:
                 await self.run_invocation(plan, state.catalog.execution_id, root, revision, options.store,
                                           owner=runtime_uid(), workers=options.workers,
                                           invocation_limit=options.invocation_limit, lease_seconds=options.lease_seconds,
-                                          prior_outputs=tuple(earlier))
-                saved = await options.store.load(state.catalog.execution_id)
-                graph = CheckpointCodec.decode(saved.blob, plan)
+                                          prior_outputs=tuple(earlier), identity_required=options.identity_required,
+                                          _coordinator_out=live)
+                coordinator = live[0][0]
+                graph = coordinator.graph
+                if not options.identity_required:
+                    saved = await options.store.load(state.catalog.execution_id)
+                    graph = CheckpointCodec.decode(saved.blob, plan)
             else:
                 graph = durable.graph
-                coordinator = InvocationCoordinator(plan, graph, options.invocation_limit, options.interaction)
+                if graph.identity_required != options.identity_required:
+                    raise RestoreFailure("identity policy differs from checkpoint")
+                if graph.identity_required and durable.live_coordinator is None and graph.records[graph.root].status not in (
+                    InvocationStatus.SUCCEEDED, InvocationStatus.FAILED, InvocationStatus.CANCELLED,
+                ):
+                    raise RestoreFailure("identity-required invocation cannot resume from checkpoint")
+                if graph.identity_required and durable.live_coordinator is None:
+                    raise RestoreFailure("restored terminal cannot publish as a live identity route")
+                coordinator = durable.live_coordinator or InvocationCoordinator(plan, graph, options.invocation_limit, options.interaction)
                 coordinator.bind_published(tuple(earlier))
                 await self._schedule_invocations(coordinator, durable, options.workers)
             if graph.waiting_for_input:
@@ -294,7 +333,9 @@ class DAGExecutor:
                     contract = plan.registrations[node_id].contract
                     if record.status == InvocationStatus.SUCCEEDED:
                         status = NodeStatus.SUCCESS
-                        output = contract.output_type.model_validate_json(record.terminal_payload())
+                        output = (coordinator.payload(record, "terminal", record.terminal_payload(), contract.output_type)
+                                  if options.identity_required else
+                                  contract.output_type.model_validate_json(record.terminal_payload()))
                         state.catalog.publish(OutputRecord[BaseModel](
                             identity=identity, contract_id=contract.contract_id, contract_version=contract.version,
                             output=output, reads=record.reads, domain_reads=record.domain_reads,
@@ -309,7 +350,10 @@ class DAGExecutor:
                         if record.error_index is None:
                             state.catalog.close_attempt(identity)
                         else:
-                            error = contract.error_types[record.error_index].model_validate_json(record.terminal_payload())
+                            error = (coordinator.payload(record, "terminal", record.terminal_payload(),
+                                                         contract.error_types[record.error_index])
+                                     if options.identity_required else
+                                     contract.error_types[record.error_index].model_validate_json(record.terminal_payload()))
                             state.catalog.close_error(identity, error, contract)
                     traces.append(ExecutionTrace(identity, status, started, self._clock(), record.reads,
                                                  record.domain_reads, record.diagnostics, gate))
@@ -319,6 +363,9 @@ class DAGExecutor:
                     return decision
             return LevelDecision.CONTINUE
         finally:
+            if live:
+                live[0][0].clear_live()
+                await options.store.release(live[0][1])
             state.end_phase()
 
     async def _run_level(

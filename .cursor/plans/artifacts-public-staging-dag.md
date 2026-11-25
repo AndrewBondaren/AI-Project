@@ -1,5 +1,27 @@
 # Artifacts — публичный staging и граница с DAG
 
+## Обязательный блокер публичного контракта — решение пользователя 2026-11-25
+
+**Публичный контракт prepare/stage НЕ ПРИНЯТ**, пока Artifacts не предоставляет публичный Error POJO с корректным typed path, согласованным с Fields/C0. Наличие методов, carrier и списка issue codes недостаточно. Историческая метка P2 не понижает этот дефект: он блокирует приёмку публичного контракта и зависимую регистрацию нод.
+
+Artifacts владеет формированием полного Error POJO: root, declared field paths, владельцы каждого segment, коды и стабильный порядок независимых issues. Нода переносит его целиком: не строит/не переписывает путь, не исправляет segment owners и не заменяет ошибку другой диагностикой. Node wrapper не компенсирует незавершённый owning Error contract.
+
+Условия снятия блокера: (1) зафиксирован exact Fields/C0-approved root/owner model binding для всех поддерживаемых inputs; (2) owning admission выдаёт prepare `content`, stage `prepared.content` и независимый format mismatch `prepared` с корректными владельцами; (3) regression tests проверяют root/каждый segment, stable order и перенос полного Error POJO через wrapper без изменений; (4) прежние generic inputs и success identity сохраняются либо изменение границы явно согласовано. Ручной обход ModelIdentity, model_construct и молчаливое обязательное named-input API запрещены.
+
+Named schema-base остаётся PROPOSED до Fields/C0 verdict. Scoped PASS storage/error internals не является PASS публичного diagnostic contract и не снимается из-за этого отдельного блокера. Эта запись имеет приоритет над любыми формулировками ниже о готовности generic public IO/Error. Разрешённая owning доработка продолжается; готовность контракта/нод не объявляется заранее.
+
+## Актуальный статус — 2026-11-25
+
+Эта запись уточняет исторические статусы ниже. Owning core/public methods разрешены к реализации отдельно от Pack/node route по scoped решению 2026-11-25 в pack-staging-completion-cutover.md; прежний запрет кода не применяется автоматически к этому ограниченному scope.
+
+**Actual код уже есть, implementation acceptance не объявляется:** `backend/app/application/artifacts/staging/artifactOpenPipeline.py` содержит `ArtifactPrepareStageOpenPipeline.prepare_stage(request)->PreparedArtifact[C]` и async `ArtifactStageOpenPipeline.stage(request)->ArtifactRef`; существуют artifactInputAdmission.py, artifactDescriptor.py, artifactStageWriter.py, preparedArtifact.py/stageInput.py и input/lease/infrastructure error contracts. SQLite содержит require_standalone и assert_write_admission. Формулировки «новых публичных методов/ядра ещё нет» устарели. Existing широкий ArtifactStagingService остаётся для прежних callers.
+
+**Остаток реализации/приёмки:** P2 diagnostic paths в artifactInputAdmission: stage content issue строит content вместо prepared.content, ручной _path обходит ограничения generic ModelIdentity. Named schema-base proposal передан через агента (2) основному координатору; Fields/C0 acceptance пока не подтверждён. Generic caller requirements не менять молча. Дополнительно фактический public pipeline constructor пока принимает admission:object, а writer напрямую emit post-seal event; соответствие typing и согласованной post-seal validation-fault boundary требует проверки/доведения до implementation acceptance.
+
+**Проверки:** в этой актуализации выполнены чтение кода и поиск callers/tests; runtime tests не запускались. Поиск прямых упоминаний новых pipeline/admission классов в backend/tests не нашёл dedicated coverage; это не утверждение об отсутствии всех косвенных тестов и не runtime FAIL. P1 identity, negative admission и storage/concurrency/post-seal evidence ещё нельзя объявлять PASS на основании наличия файлов. Git status/diff из текущего workspace сообщает `this operation must be run in a work tree`; файлы проверяются напрямую.
+
+**Согласования:** storage/error архитектура п3 имеет scoped PASS TARGET, не переоткрывается из-за implementation gaps. Public/Error P2 diagnostic-root delta остаётся OPEN. Concrete Pack binding/cutover, DAG wrappers/registration/activation остаются отдельными OPEN; generator/gameplay OUT. `read_operation_held` отсутствует в actual IArtifactHolders/SqliteArtifactHolders, его отдельный scoped proposal не имеет подтверждённого final acceptance. Existing handoff не равен этому lookup. Полные ARCH-STAGE route и ARCH-0 остаются OPEN.
+
 Редакция 2026-11-21. **DESIGN OPEN. Архитектура принимается до реализации: ARCH-STAGE — ограниченный самостоятельный prepare_stage → stage; ARCH-0 — полный Artifacts. Оба gate пока OPEN.** Принятие направления двух операций не закрывает ARCH-STAGE; его отдельная приёмка не закрывает ARCH-0. Этот документ не является разрешением писать код.
 
 ## Решения пользователя и источники

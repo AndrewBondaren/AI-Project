@@ -122,9 +122,16 @@ class SourceRevisionPrunePolicy:
 
 ## 3. Descriptor configuration
 
-### Актуальное решение владельца Source — 2026-11-25, спроектировано / на приёмку
+### Архитектурное решение по предложению пользователя — 2026-11-26
 
-SourceDescriptorRegistry является immutable composition приложения. Runtime Create/Update/Delete для него **неприменимы по предмету**: registry описывает поддерживаемые Source типы, а не пользовательские настройки мира. Read выполняет SourceDescriptorLookup.definition. Искусственный CRUD service не создаётся. Это явное предложение для проверки обязательного CRUD-критерия, а не уже полученная независимая приёмка или отмена критерия.
+SourceDescriptorRegistry является immutable composition приложения. Runtime Create/Update/Delete для него **неприменимы по предмету**: registry описывает поддерживаемые Source типы, а не пользовательские настройки мира. Read выполняет SourceDescriptorLookup.definition. Искусственный CRUD service не создаётся. Разграничение принято для этого плана по предложению пользователя; это не независимая приёмка всей архитектуры и не отмена CRUD-критерия для доменных данных.
+
+| Объект | Lifecycle |
+|---|---|
+| Descriptor registry | Application composition |
+| Descriptor definitions | Immutable configuration |
+| Source revisions | Domain data operations |
+| Настройки других доменов | CRUD соответствующего владельца |
 
 Настройки мира, представленные SourceSettingsId, остаются данными соответствующего owning домена; Source версионирует их identity/revision/body bindings. CRUD содержимого настроек не переносится в registry. Отдельной управляемой runtime configuration Source этот план не вводит. Таблица ниже описывает lifecycle composition; прежнее требование сначала придумать runtime configuration classes отозвано.
 
@@ -132,11 +139,11 @@ SourceDescriptorRegistry является immutable composition приложен
 
 Критерии проверки ответственности: definition не выполняет IO и не меняет entries; неизвестный ключ не создаётся; новая composition не меняет чтение прежнего retained capture/proof; удаление нужного descriptor/reader и изменение его смысла выявляются как несовместимость; world settings update не мутирует registry. Проверять реальные сохранённые bindings без legacy adapters. Ответственность Source — стабильность своих descriptor relations; owning formats/readers — их владельцев.
 
-Следующие абзацы 2026-11-22 сохраняют обоснование предложения; их открытый выбор runtime registry заменён решением выше. Статус принятия остаётся отдельным.
+Следующая таблица конкретизирует lifecycle composition. Открытого выбора runtime registry больше нет; приёмка реализации и всей архитектуры остаётся отдельной.
 
 ### Собственная граница configuration: уточнение проекта 2026-11-22
 
-Нужно различать два предмета: SourceDescriptorRegistry — schema/composition самого Source; SourceSettingsId — identity настроек другого owning источника. Наличие SourceSettingsId не создаёт Source CRUD для содержимого чужих settings. Следующая таблица конкретизирует собственный lifecycle proposal; не объявляет автоматически принятым исключение обязательного CRUD-критерия.
+SourceDescriptorRegistry — schema/composition самого Source; SourceSettingsId — identity настроек другого owning источника. Наличие SourceSettingsId не создаёт Source CRUD для содержимого чужих settings. Таблица описывает composition, не публичные runtime операции.
 
 | Операция над descriptor configuration | Предлагаемый механизм / владелец | Проверка ответственности |
 |---|---|---|
@@ -145,13 +152,13 @@ SourceDescriptorRegistry является immutable composition приложен
 | Update | Новый immutable registry для новой composition; existing registry/исторические bindings не мутируют | Замена определения не должна менять интерпретацию ранее сохранённых identity/proof; совместимость требует отдельной проверки owning bindings |
 | Delete | Отсутствие definition в новой composition не означает удаление исторических bindings или Source данных | Нельзя делать старый proof нечитаемым через незаметное удаление decoder/descriptor binding |
 
-Это операции composition, не public runtime CRUD. Собственный незакрытый пункт АР-5 теперь сформулирован точно: подтвердить применимость такой границы к требованиям доменного ТЗ и обязательному CRUD-критерию; если управляемая runtime configuration обязательна, предъявить отдельные конкретные operations. До этого не добавлять SourceConfigurationService и не объявлять C/U/D неприменимыми как уже принятое решение. Внешний Lifecycle/Artifacts ответ не заменяет эту проверку Source.
+Это операции composition, не public runtime CRUD. Вопрос АР-5 о применимости settings CRUD закрыт разграничением выше; SourceConfigurationService не требуется. Требования исторической совместимости сохраняются.
 
 Переиспользуется existing SourceDescriptorRegistry(entries) и SourceDescriptorDefinition; frozen lifetime configuration. SourceDescriptorLookup имеет одну функцию definition(key), не owns mutable registration. Configuration structural validation остаётся у existing моделей: unique keys, category/scope/key_kind, member_descriptors. Runtime admission не создаёт definitions при unknown descriptor.
 
 Key adapters/body codecs/projectors — application composition, не поля configuration POJO и не callbacks в proof. Полная concrete composition остаётся отдельной интеграцией. Удерживаемые historical bindings нельзя переназначать новым форматам ради convenience latest lookup.
 
-**CRUD критерий не отменяется:** в правилах нет принятого исключения Source configuration, аналогичного исключениям других доменов. Поэтому один immutable registry не доказывает завершение публичных settings C/R/U/D. Нужно отдельно решить lifecycle этого Source-owned configuration: что является compile-time composition и что реально является управляемыми данными/настройками домена. Не придумывать горячее обновление registry и не переносить на Source чужое исключение. Это собственный design-вопрос, не блокер работы над независимыми алгоритмами proof.
+**CRUD критерий сохраняется:** Source revisions проверяются как доменные данные; descriptor composition оценивается по immutable lifecycle и historical compatibility. Собственных управляемых runtime settings в scope этого плана нет. Их искусственное введение для заполнения CRUD-таблицы запрещено.
 
 ## 4. Архитектурные дельты и следующий шаг
 

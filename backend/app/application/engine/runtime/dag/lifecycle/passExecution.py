@@ -6,6 +6,7 @@ from pydantic import BaseModel, TypeAdapter
 from app.application.cancellation.typed.snapshotStore import SnapshotStore
 from app.application.engine.contracts.executionBindings import ExecutionCursor, ExecutionResult, LifecycleBinding, PassStage, ResolveResult
 from app.application.engine.contracts.invocation.inputWait import Failed
+from app.application.engine.contracts.invocation.executionStore import RestoreFailure
 from app.application.engine.registration.nodeRegistry import NodeRegistry
 from app.application.engine.runtime.dag.dagExecutor import DAGExecutor
 from app.application.engine.runtime.dag.executionPlan import ExecutionPlan
@@ -113,6 +114,8 @@ class PassExecution[O: BaseModel, S: BaseModel]:
                             settings = self._executor.invocation_options
                             if settings is None or plan.invocation_root is None:
                                 raise ValueError("durable pass requires an invocation root")
+                            if durable.graph.identity_required:
+                                raise RestoreFailure("identity-required invocation cannot replan from checkpoint")
                             reusable = {item.invocation_id for item in state.catalog.current_outputs
                                         if getattr(plan.nodes[item.node_id].node, "skip_on_replan", True)}
                             coordinator = InvocationCoordinator(plan, durable.graph, settings.invocation_limit)
