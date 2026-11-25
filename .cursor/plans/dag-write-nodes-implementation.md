@@ -1,5 +1,11 @@
 # Реализация нод записи: Time, настройки Time, Lifecycle
 
+## Mock G5 implementation — 2026-11-25
+
+Исполнитель предъявил tests/lifecycle/support/writeChangesContracts.py и две ноды в tests/lifecycle/support/nodes/writeChanges/ с отдельной registration.py. NodeId: engine.write.mock_lifecycle.prepare_changes / engine.write.mock_lifecycle.write_changes, ContractVersion 1. Scope — subject A + Lifecycle AB, порядок sections=(subject,lifecycle), без Time. Production app paths остаются target; app→tests imports запрещены.
+
+Owner evidence: import/AST PASS, 13 unique mock registrations и rejection duplicate, 4 прежних tests.lifecycle.test_write_nodes PASS. Это не независимая приёмка новых родителей. Новый nested runtime trace с real scenario fixture не завершился более 60 секунд и был удалён исполнителем; причина пока неизвестна. Запрошено восстановление bounded regression coverage с разделением fixture setup и engine CALL. Success/refusal/error/cancellation trace новых родителей остаётся OPEN. Данный статус не означает durable apply или полного write flow PASS.
+
 ## Актуальный статус Time — 2026-11-25
 
 - Реализованы 12 нод: prepare_time_section, восемь single leaf настроек, prepare_time_settings_batch, prepare_time_settings_section и prepare_world_time_settings_changes. Файлы трёх новых нод и workflowContracts.py предъявлены исполнителем; owning batch/section API также реализованы по отчёту Time.

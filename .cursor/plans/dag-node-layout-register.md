@@ -15,6 +15,8 @@
 
 ## Общая запись и mock binding
 
+Обновление G5 2026-11-25: concrete mock PrepareChangesNode/WriteChangesNode предъявлены в L/nodes/writeChanges/ (prepareChangesNode.py, writeChangesNode.py, registration.py), POJO L/writeChangesContracts.py. IDs engine.write.mock_lifecycle.prepare_changes / engine.write.mock_lifecycle.write_changes. Строки N/writeChanges ниже остаются production target, не фактическим расположением mock-кода. Import/registration/tests существующих leaf — owner evidence; acceptance новых nested CALL ещё OPEN, см. план реализации.
+
 ### Единые корни семейств — уточнение 2026-11-25
 
 | Семейство / процесс | Production root | Mock root в текущем test-support | Организация внутри корня |
