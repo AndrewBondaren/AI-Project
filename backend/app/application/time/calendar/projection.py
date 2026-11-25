@@ -2,6 +2,7 @@ from app.dataModel.time.operations.arithmetic import PointResult
 from app.dataModel.time.reads.capture import TimeCapture
 from app.dataModel.time.values.point import MAX_SECONDS, NANOS_PER_SECOND, TimePoint
 from app.dataModel.world.calendar.dates.clock import CalendarClockTime
+from app.dataModel.world.calendar.dates.anchor import CalendarOrigin
 from app.dataModel.world.calendar.definitions.definition import CalendarEntry
 from app.dataModel.world.calendar.enums.rules import CalendarConversionKind, CalendarWeekMode
 from app.dataModel.world.calendar.projection.errors import (
@@ -36,6 +37,18 @@ def entry_for(request: CalendarProjectionInput | CalendarResolveInput) -> Calend
     return entry
 
 
+def coordinate_origin(entry: CalendarEntry, index: CalendarIndex, hours_per_day: int, point: TimePoint) -> tuple[CalendarOrigin, int, int]:
+    day_length = hours_per_day * 3600 * NANOS_PER_SECOND
+    offset = origin_offset(entry, index, day_length)
+    ordinal, remainder = divmod(point.seconds * NANOS_PER_SECOND + point.nanoseconds + offset, day_length)
+    date = index.locate(ordinal)[0]
+    seconds, nanos = divmod(remainder, NANOS_PER_SECOND)
+    hour, seconds = divmod(seconds, 3600)
+    minute, second = divmod(seconds, 60)
+    return CalendarOrigin(date=date, time=CalendarClockTime(
+        hour=hour, minute=minute, second=second, nanoseconds=nanos)), ordinal, offset
+
+
 class CalendarProjector:
     @staticmethod
     def project(request: CalendarProjectionInput) -> CalendarProjection | CalendarSourceMismatch | CalendarScopeMismatch | CalendarInvalid | CalendarBudgetExceeded | CalendarTimeOverflow:
@@ -56,14 +69,11 @@ class CalendarProjector:
             return invalid(error, WorldTimeSettings if error.path[0] in ("selected", "calendars", "epochs") else type(request))
         definition = entry.definition
         day_length = resolved.settings.hours_per_day * 3600 * NANOS_PER_SECOND
-        offset = origin_offset(entry, index, day_length)
         point = request.point
-        ordinal, remainder = divmod(point.seconds * NANOS_PER_SECOND + point.nanoseconds + offset, day_length)
+        origin, ordinal, offset = coordinate_origin(entry, index, resolved.settings.hours_per_day, point)
         date, span, within_week, total = index.locate(ordinal)
-        seconds, nanos = divmod(remainder, NANOS_PER_SECOND)
-        hour, seconds = divmod(seconds, 3600)
-        minute, second = divmod(seconds, 60)
-        time = CalendarClockTime(hour=hour, minute=minute, second=second, nanoseconds=nanos)
+        time = origin.time
+        hour, minute = time.hour, time.minute
         weekday = None
         weekdays = definition.weekdays.entries
         if weekdays and span.counts_in_week:

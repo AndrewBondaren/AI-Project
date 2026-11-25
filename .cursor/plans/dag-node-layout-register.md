@@ -61,7 +61,7 @@ POJO всех existing single leaf: P/timeSettingsContracts.py. Registration: N/
 
 | Нода / класс | Implementation | Статус |
 |---|---|---|
-| prepare_world_time_settings_changes / PrepareWorldTimeSettingsChangesNode | N/time/timeSettings/prepareWorldTimeSettingsChangesNode.py | Target parent; IO/CALL contract OPEN |
+| prepare_world_time_settings_changes / PrepareWorldTimeSettingsChangesNode | N/time/timeSettings/prepareWorldTimeSettingsChangesNode.py | Existing; локальная регистрация PASS, runtime/static приёмка OPEN |
 | prepare_hours_change / PrepareHoursChangeNode | N/time/timeSettings/prepareHoursChangeNode.py | Existing |
 | prepare_calendar_create / PrepareCalendarCreateNode | N/time/timeSettings/prepareCalendarCreateNode.py | Existing |
 | prepare_calendar_update / PrepareCalendarUpdateNode | N/time/timeSettings/prepareCalendarUpdateNode.py | Existing |
@@ -70,8 +70,8 @@ POJO всех existing single leaf: P/timeSettingsContracts.py. Registration: N/
 | prepare_epoch_create / PrepareEpochCreateNode | N/time/timeSettings/prepareEpochCreateNode.py | Existing |
 | prepare_epoch_update / PrepareEpochUpdateNode | N/time/timeSettings/prepareEpochUpdateNode.py | Existing |
 | prepare_epoch_remove / PrepareEpochRemoveNode | N/time/timeSettings/prepareEpochRemoveNode.py | Existing |
-| Settings batch leaf / PrepareTimeSettingsBatchNode (project name) | N/time/timeSettings/prepareTimeSettingsBatchNode.py | Target; NodeId/IO freeze OPEN |
-| Settings section leaf / PrepareTimeSettingsSectionNode (project name) | N/time/timeSettings/prepareTimeSettingsSectionNode.py | Target; NodeId/IO freeze OPEN |
+| prepare_time_settings_batch / PrepareTimeSettingsBatchNode | N/time/timeSettings/prepareTimeSettingsBatchNode.py | Existing; локальная регистрация PASS, runtime/static приёмка OPEN |
+| prepare_time_settings_section / PrepareTimeSettingsSectionNode | N/time/timeSettings/prepareTimeSettingsSectionNode.py | Existing; локальная регистрация PASS, runtime/static приёмка OPEN |
 
 Existing single NodeId равны указанным logical names; ContractId engine.time.settings.<NodeId>. Exact payload unions и actual error transport — gen-dag-time-settings-method-contracts.md/actual contracts.py. Для target parent/batch/section: отдельный P/timeSettingsWorkflowContracts.py, соответствующие декларации в том же registration.py только после freeze. Новый файл разделяет ещё проектируемый workflow и existing single contracts; owning DTO не дублируются. Проектное имя класса/файла не утверждает NodeId или public method readiness.
 

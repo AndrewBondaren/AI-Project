@@ -91,6 +91,22 @@ hours_per_day × 3600 секунд. Дни с counts_in_week=false имеют we
 
 ### Публичное управление записями Time
 
+Pure подготовка нескольких команд реализована как
+TimeSettingsBatchPipelineOpenPipeline.prepare_batch(PrepareTimeSettingsBatch).
+Команды используют один исходный base, исполняются последовательно над рабочими
+настройками и расходуют общий календарный бюджет. Успех — один
+PreparedTimeSettingsChange; отказ — SettingsBatchInputMismatch с исходными
+индексами несовпадающих base либо SettingsBatchRefused с индексом команды и
+конкретной причиной. Промежуточные настройки не становятся accepted capture.
+TimeSettingsSectionPipelineOpenPipeline.prepare_section(PrepareTimeSettingsSection)
+упаковывает готовый change в WorldTimeSettingsSection либо возвращает все
+SettingsSectionContextMismatch issues в порядке operation/publication/scope.
+Порядок и отсутствие повторных codes проверяет сам carrier; все issues относятся
+к одному request. Все восемь одиночных prepare-операций повторно валидируют
+свой concrete request до исполнения календарного алгоритма.
+Он не повторяет календарную подготовку и не подтверждает commit. Exact методы,
+пути, статусы проверки и оставшиеся integration gates приведены в S2–S4 плана.
+
 Time обязан предоставить DAG типизированные публичные методы чтения, записи
 (создания и изменения) и удаления доменных записей, включая записи настроек.
 Для каждого вида записи контракт определяет идентичность и область действия,

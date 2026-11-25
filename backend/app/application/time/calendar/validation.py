@@ -33,8 +33,9 @@ def _validate_definition(definition: CalendarDefinition, work: Work) -> Calendar
     return CalendarIndex(definition, work)
 
 
-def validated_indexes(settings: WorldTimeSettings, budget: CalendarBudget, issues: ValidatorAggregationHelper[CalendarFieldIssue] | None = None) -> dict[RegistryKey[WorldCalendarRegistry], CalendarIndex]:
-    work = Work.from_budget(budget)
+def validated_indexes(settings: WorldTimeSettings, budget: CalendarBudget, issues: ValidatorAggregationHelper[CalendarFieldIssue] | None = None, *, work: Work | None = None) -> dict[RegistryKey[WorldCalendarRegistry], CalendarIndex]:
+    if work is None:
+        work = Work.from_budget(budget)
     def record(path: tuple[str | int, ...], message: str) -> None:
         if issues is None:
             raise InvalidCalendar(path, message)

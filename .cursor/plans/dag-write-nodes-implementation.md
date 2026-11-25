@@ -2,14 +2,14 @@
 
 ## Актуальный статус Time — 2026-11-25
 
-- Реализованы 9 нод: prepare_time_section и восемь single leaf настроек (hours_change; calendar_create/update/select/remove; epoch_create/update/remove).
-- Импорты после переноса исправлены. register_time_nodes() вызывает регистрацию time/timeSettings и успешно регистрирует ровно 9 NodeId. Это независимо проверенный PASS импортов и локальной регистрации, не production wiring или полная runtime-приёмка.
-- Проверка: из backend выполнен импорт register_time_nodes/NodeRegistry, регистрация и чтение registry.ids(); получены все 9 ожидаемых IDs.
+- Реализованы 12 нод: prepare_time_section, восемь single leaf настроек, prepare_time_settings_batch, prepare_time_settings_section и prepare_world_time_settings_changes. Файлы трёх новых нод и workflowContracts.py предъявлены исполнителем; owning batch/section API также реализованы по отчёту Time.
+- Импорты после переноса исправлены. register_time_nodes() вызывает регистрацию time/timeSettings и успешно регистрирует ровно 12 уникальных NodeId. Это независимо проверенный PASS импортов и локальной регистрации, не production wiring или полная runtime-приёмка.
+- Проверка: из backend выполнен импорт register_time_nodes/NodeRegistry, регистрация и чтение registry.ids(); получены все 12 ожидаемых IDs.
 - Запуск `.venv/Scripts/python.exe -B -m unittest tests.time.test_settings_leaves` после исправления импортов не завершился за время проверки и был прерван. Итог исполнения неизвестен; ни PASS, ни установленная причина сбоя ему не приписываются. Прежний import failure устранён.
-- Не реализованы settings batch leaf, settings section leaf и prepare_world_time_settings_changes. По последней проверке owning batch/section methods/POJO отсутствовали; соответствующие exact bindings OPEN. Независимые реализованные ноды этим не переоткрываются.
+- По отчёту исполнителя parent реализован как ResumablePythonNode с engine CallTarget: single/batch выбор, без section CALL; batch/section leaf E=Never. Это implementation evidence, не независимая проверка всех ветвей. Runtime-тест новых нод с Time fixture не завершился и был прерван; Pyright недоступен по отчёту исполнителя. Runtime/static приёмка OPEN.
 - Три Time read-ноды не реализованы и вне текущего write-среза. Семейство целиком не принято.
 
-Остаток записи: реализовать owning-ready batch/section bindings и родителя настроек по принятой цепочке; завершить проверку исполнения уже существующих нод. Наличие файлов, локальная регистрация и приёмка исполнения — отдельные статусы. Эта запись имеет приоритет над историческими общими OPEN/Target для указанных девяти нод ниже и в связанных планах.
+Остаток этого Time-среза: завершить runtime/static проверку нод, всех owning outcomes и parent CALL/cancellation/error transport. Наличие файлов, локальная регистрация и приёмка исполнения — отдельные статусы. Эта запись имеет приоритет над историческими общими OPEN/Target для указанных двенадцати нод ниже и в связанных планах. Общие prepare_changes/write_changes этим не реализованы и полный write flow не принят.
 
 Уточнение структуры 2026-11-25: для каждого семейства один корневой каталог, допускающий внутренние группы операций. Time settings находятся в nodes/time/timeSettings/, а не в соседнем nodes/timeSettings/. То же правило применяется к Lifecycle/PatchSet/Snapshot/Artifacts/Cache/Pack/Source по таблице единых корней реестра. Одна нода — один .py файл — один класс; registration и POJO отдельно. Группировка папок не меняет CALL/родство или NodeId.
 
