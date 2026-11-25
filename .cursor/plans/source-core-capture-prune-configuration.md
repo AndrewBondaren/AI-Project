@@ -122,6 +122,18 @@ class SourceRevisionPrunePolicy:
 
 ## 3. Descriptor configuration
 
+### Актуальное решение владельца Source — 2026-11-25, спроектировано / на приёмку
+
+SourceDescriptorRegistry является immutable composition приложения. Runtime Create/Update/Delete для него **неприменимы по предмету**: registry описывает поддерживаемые Source типы, а не пользовательские настройки мира. Read выполняет SourceDescriptorLookup.definition. Искусственный CRUD service не создаётся. Это явное предложение для проверки обязательного CRUD-критерия, а не уже полученная независимая приёмка или отмена критерия.
+
+Настройки мира, представленные SourceSettingsId, остаются данными соответствующего owning домена; Source версионирует их identity/revision/body bindings. CRUD содержимого настроек не переносится в registry. Отдельной управляемой runtime configuration Source этот план не вводит. Таблица ниже описывает lifecycle composition; прежнее требование сначала придумать runtime configuration classes отозвано.
+
+**Обновление приложения и история:** exact descriptor key и сохранённый format/schema binding не могут переинтерпретироваться по latest definition. Совместимые definitions и readers для удерживаемых historical revisions сохраняются в новой composition. Изменение смысла требует отдельного различимого binding по owning контракту; если текущая схема не позволяет различить версии, такая замена запрещена. Нельзя адаптировать старую форму к новой, подставлять default decoder или перепривязывать revision. Недоступность необходимого historical binding означает несовместимую поставку, а не отсутствие body. Проверка совместимости состава приложения предшествует его использованию; механизм foreign format registration остаётся интеграционной зависимостью, не новым Source deployment service.
+
+Критерии проверки ответственности: definition не выполняет IO и не меняет entries; неизвестный ключ не создаётся; новая composition не меняет чтение прежнего retained capture/proof; удаление нужного descriptor/reader и изменение его смысла выявляются как несовместимость; world settings update не мутирует registry. Проверять реальные сохранённые bindings без legacy adapters. Ответственность Source — стабильность своих descriptor relations; owning formats/readers — их владельцев.
+
+Следующие абзацы 2026-11-22 сохраняют обоснование предложения; их открытый выбор runtime registry заменён решением выше. Статус принятия остаётся отдельным.
+
 ### Собственная граница configuration: уточнение проекта 2026-11-22
 
 Нужно различать два предмета: SourceDescriptorRegistry — schema/composition самого Source; SourceSettingsId — identity настроек другого owning источника. Наличие SourceSettingsId не создаёт Source CRUD для содержимого чужих settings. Следующая таблица конкретизирует собственный lifecycle proposal; не объявляет автоматически принятым исключение обязательного CRUD-критерия.
@@ -149,12 +161,12 @@ Key adapters/body codecs/projectors — application composition, не поля c
 
 | Класс / файл | Метод и что делает | Зависимости и эффекты | Проверка ответственности / остаток |
 |---|---|---|---|
-| SourceCaptureCandidateChecker / capture/captureCandidateChecker.py (предлагаемое размещение) | check — проверить отношения witness candidate, полного SourceCapture и его collection mappings до finalization | Общие Source world/descriptor/membership rules; pure | Не повторяет алгоритмы других checkers и не удостоверяет committed witness; exact value/error signature ещё требуется |
+| SourceCaptureCandidateChecker / capture/captureCandidateChecker.py (предлагаемое размещение) | check — проверить отношения witness candidate, полного SourceCapture и его collection mappings до finalization | Общие Source world/descriptor/membership rules; pure | Не повторяет алгоритмы других checkers и не удостоверяет committed witness; exact signature спроектирована в §1, приёмка и реализация не заявлены |
 | SourceCaptureFinalizer / capture/captureFinalizer.py | finalize — атомарно финализировать предъявленный witness candidate; signature §1 | Candidate checks и принятые persistence/retention bindings | Нет SQL/codec/holder engine внутри finalizer, partial success или fake committed ref; точная допустимая вложенная цепочка и constructors OPEN |
-| SourceRevisionPrunePolicy / revision/revisionPrunePolicy.py (предлагаемое internal размещение) | evaluate — определить кандидатов по предъявленным Source revision facts с исключением latest; это не решение о разрешении physical deletion | Pure Source facts; не foreign usage lookup | Не снимает root/holds и не запускает GC; exact facts/decision/error пока OPEN, не public prune API |
+| SourceRevisionPrunePolicy / revision/revisionPrunePolicy.py (предлагаемое internal размещение) | evaluate — определить кандидатов по предъявленным Source revision facts с исключением latest; это не решение о разрешении physical deletion | Pure Source facts; не foreign usage lookup | Не снимает root/holds и не запускает GC; exact signature/preconditions спроектированы в §2; public prune отдельно спроектирован, не принят и не интегрирован |
 | SourceDescriptorLookup / contracts/descriptorLookup.py | definition(key: SourceDescriptorKey) → SourceDescriptorDefinition или None — найти definition в immutable registry | __init__(definitions: SourceDescriptorRegistry); pure | Unknown не становится default; нет регистрации или изменения entries |
 
-Configuration C/R/U/D не назначается искусственному SourceConfigurationService: существующие registry/lookup уже покрывают immutable composition и lookup. Решение о lifecycle управляемых settings и владельцах соответствующих операций остаётся прежним АР-5, а не скрытой обязанностью lookup. До этого полного перечня runtime configuration classes/methods нет; это конкретное отсутствие контракта, не готовая архитектура.
+Configuration C/R/U/D не назначается искусственному SourceConfigurationService: registry/lookup покрывают composition и lookup. АР-5 имеет явное решение §3; остаётся его приёмка, а не проектирование отсутствующих runtime CRUD классов.
 
 SourceCaptureAssembler не создаётся ради construction; SourceCaptureRetentionBinding/adoption preflight не возвращаются. `__init__` перечисленных исполнителей только фиксирует зависимости, не выполняет finalize/prune/IO. Недостающий foreign port нельзя заменить созданным здесь интерфейсом.
 
