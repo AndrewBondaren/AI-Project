@@ -1,10 +1,45 @@
 # Stage recovery: вариант 2 — fencing в месте записи
 
+## Обязательная форма архитектурного плана — указание пользователя
+
+### Адресное уточнение P1 по контрактам — 2026-11-26
+
+**Координаторская приёмка дополнений, 2026-11-26:** актуальный owning документ выносит этап 2 в artifacts-stage-finalization-deferred.md; проверка ниже не возобновляет его реализацию и не выдаёт code-go. RC-01/DF-01 — OPEN: process-loss completion proof отсутствует. RC-03/DF-02 — OPEN: acquired до reservation/local link возвращает insufficient evidence, полного finalization пути нет. RC-02 — scoped PASS форме данных: OperationClosePending.request: OperationCloseInput напрямую подходит owning inventory; полный historical binding восстанавливает Artifacts. Exact именованный API пока не синхронизирован: Publication сохраняет pending_settlements/StageSettleInput/settle, Artifacts использует pending_finalizations/StageFinalizeInput/finalize_execution; aliases не принимаются автоматически. RC-04 — scoped PASS описанному lock order: legacy holder verify/GC/read не acquire OS gate, authorized paths используют OS→SQL; runtime/concurrency доказательство не заявляется. Разделение finalizer/recovery jobs и SQL-only store устраняет constructor cycle на уровне проекта, но полнота recovery dispatch и repeated-cancellation lifetime остаются DF-03/04. Полная архитектурная приёмка этапа 2 НЕ пройдена; изменение статуса на DEFERRED не закрывает замечания. Этап 1 требует собственной приёмки, этот verdict её не подменяет.
+
+Пользователь требует конкретное решение В РАМКАХ scope для приёмки, а не очередной набор альтернатив/PROPOSED с выбором алгоритма при кодировании. Ниже RC-ID отличают новые замечания от прежних P1.1/P1.3. Ответ владельца не становится accepted API до общей проверки и решения пользователя.
+
+| ID / вопрос | Владелец домена и контракта | Требуемый законченный результат |
+|---|---|---|
+| RC-01 / process-loss proof | Artifacts: ContentAddressedBlobBackend, WindowsBlobEffectGate/guard, StageAttemptStore settlement | Один выбранный механизм и точный contract между physical batch completion и settlement: primitive, lifetime, completion/barrier evidence после process loss, порядок fencing/drain/release. Prohibition + Unresolved не считается решением automatic recovery. Доказать в пределах existing backend/поддерживаемой ОС/FS; при невозможности — точное ограничение и минимальная отдельно запрашиваемая дельта, без новых service/journal/IO owner по собственной инициативе |
+| RC-02 / close output → inventory input | Publication: OperationLedger.close_for_cancellation и OperationCloseResult; Artifacts: StageAttemptService.pending_settlements и OperationStageSettlementInput; координатор: mapping | Согласовать один exact public набор полей: Publication сейчас даёт operation_id/fence, Artifacts требует полный OperationLeaseRef. Назвать producer каждого обязательного поля либо обоснованно сузить owning input. Никаких parent storage reads, фиктивного lease, неуказанной continuation или Stage DTO в Publication. Terminal/direct operation без lease должны иметь определённую disposition |
+| RC-03 / acquired до reservation/local link | Artifacts: IStageAttemptStore.claim_stage/settle/prohibit/release, reservation/local-link persistence | Полная таблица допустимых стадий acquisition→reserve→local link→physical dispatch. Для crash в каждом промежутке exact evidence, разрешённые действия, release и unknown handling. Missing link до его создания не corruption; отсутствие link не доказывает автоматически отсутствие reserve/hold. Никакого synthetic local acquire/reopen/удаления чужого hold |
+| RC-04 / порядок OS gate и SQL locks | Artifacts: backend verify/write/cleanup, ArtifactStagingService.verify, catalog.guard/GC; Publication только совместимость existing scope | Конкретный caller trace каждого affected public/internal метода: где gate/UOW получаются и освобождаются, как сохранены existing holder/GC predicates. Устранить SQL→OS против OS→SQL без общего GC redesign и без ослабления guards. Если Publication primitive требует изменения — отдельная ограниченная согласуемая дельта, не новый coordinator |
+
+Форма ответа каждого владельца: решение → exact classes/method signatures/POJO/Error → nested trace/ownership → reuse/replacement и отсутствие дублей → проверяемые invariants/crash/concurrency cases → исчерпывающие оставшиеся external prerequisites. Общие «нужен guard/evidence» без реализации контракта не закрывают RC. Работа plan-only в собственных resolution; код, workflow activation/новые ноды, общий storage framework, GC/CRUD, новые журналы/services и расширение платформ OUT. Первый этап/blocking cancel неизменен. Координатор сводит RC-02 и общую цепочку, затем предъявляет пакет пользователю; локальная готовность не заменяет общую приёмку.
+
+Любой план начинается с архитектуры реализации: конкретные существующие/изменяемые/новые классы и модули, методы и их сигнатуры, ответственность, допустимые зависимости и effects. Для каждого класса/метода указать проверяемый критерий соблюдения ответственности и конкретное нарушение, при котором решение отклоняется. Далее показать caller → public operation → внутренние методы, владение ресурсами и порядок действий. Только после этого — шаги реализации и тесты.
+
+Каждый новый механизм обязан иметь обоснование необходимости относительно existing: что переиспользуется, что расширяется, почему этого недостаточно без дельты, какие прежние обязанности заменяются и где после cutover остаётся единственный владелец. Параллельная authority/lifecycle/policy, обход existing invariants и создание абстракций без необходимого consumer не принимаются. Число новых классов само по себе не доказывает архитектурность; важны конкретность и непересекающиеся обязанности.
+
+Неопределённость оформляется как точно названный вопрос проектирования, а не инструкция исполнителю придумать механизм при кодировании. Пока затронутые классы/методы, гарантии и критерии не определены, зависимая часть не является готовым implementation plan. Исследовательские требования ниже — входные данные для такого архитектурного пакета, не его замена. Текущий документ фиксирует границы/аудит; окончательная архитектура physical fencing ещё должна быть предъявлена и принята.
+
 2026-11-26. Архитектурное направление подробно зафиксировано по поручению пользователя после обсуждения варианта 2. Это описание целевых гарантий и ответственности, не разрешение реализации и не доказательство возможностей конкретного backend. Production binding, storage representation и точные новые port signatures этим документом не назначаются. Общая приёмка междоменного контракта остаётся у DAG-координатора и пользователя.
 
 Связанные документы: [общий контракт и actual аудит](artifacts-stage-recovery-contract.md), [Artifacts owning resolution](artifacts-stage-recovery-owning-resolution.md), [Publication resolution](artifacts-stage-recovery-publication-resolution.md), [Engine transition](dag-stage-recovery-transition-resolution.md), [identity transport](dag-artifacts-identity-transport.md).
 
 ## 1. Цель и предел гарантии
+
+### P1.1: приоритетный scope и обязательный результат — 2026-11-26
+
+Пользователь требует **конкретного корректного архитектурного решения**, а не повторного перечня требований. Предмет — physical fencing общего existing `ContentAddressedBlobBackend`, используемого manifest и climate. Владелец — Artifacts. Выбор production workflow/binding НЕ является prerequisite исследования и проектирования этого механизма. Прежние формулировки ниже, связывающие продолжение BF-03 с таким выбором, относятся только к integration acceptance/activation.
+
+**IN:** existing `_temp/_place/_verify/_io`, cleanup, связанные local claims и transaction primitives. Предъявить механизм исключения старых WRITE/cleanup effects между процессами, порядок authority-check и физического действия, завершение ранее принятых работ и restart. Проверять реально поддерживаемые проектом ОС/хранилища; ограничения обосновать, не обещать универсальность.
+
+**Результат:** один рекомендуемый архитектурный вариант: конкретный primitive, владелец lifetime, защищаемые ресурсы, точка linearization, acquire/check/effect/drain/release, crash/unknown semantics, минимальная дельта existing классов и внутренних портов. Доказать, почему старый worker и concurrent cleanup не обходят границу; разобрать crash до/после placement и самого recovery. Альтернативы нужны только для обоснования выбора. Если требуемая гарантия недостижима в рамках scope, предъявить доказанное ограничение и минимальное изменение на решение пользователя, а не самостоятельно расширять задачу.
+
+**OUT:** выбор production route, consumer migration/registration, новые DAG nodes/порядок, Engine transport/lifecycle, изменение Publication/cancel API, общий storage framework, новый journal/registry/service, общий CRUD/GC/purge, поддержка дополнительных ОС/remote storage, код/schema edits. Если механизм требует изменения из OUT, зафиксировать его как отдельную непринятую зависимость. Existing инфраструктуру сначала проверить на reuse, без общего рефакторинга.
+
+Только plan-only пакет в owning resolution → проверка координатором → совместная приёмка пользователем. Автоматические поручения другим доменам не разрешены. P1.1 блокирует только этап 2 automatic crash recovery; этап 1 и штатный blocking cancel не меняются. Исследование общего BLOB backend не означает выбора BLOB для всех маршрутов.
 
 После неизвестного исхода stage установить доказанную границу: все ранее принятые эффекты старой execution завершились либо доказанно отменены, а последующие изменения защищённых ресурсов от её имени невозможны. Только после этого Artifacts может оценить completion/частичные эффекты и разрешить successor.
 
@@ -128,6 +163,17 @@ Backend с эффектами вне общей transaction области до�
 ### Сопоставление предложений с actual механизмами — 2026-11-26
 
 #### Дополнительная сверка actual call chain с ответом Artifacts
+
+**P1.3 / этап 2 — cancellation → settlement OPEN.** Замечание пользователя принято: ветка `OperationBusyError → settle` не является достаточным контрактом. Existing Busy имеет разные источники и не доказывает confirmed close, необходимость settlement или конкретную generation. Предложенная bounded cancel semantics сама по себе не закрывает этот пробел. Штатный blocking cancel этапа 1 сохраняется.
+
+Обязательный пакет для закрытия P1.3:
+
+- **Publication:** предъявить точный owning output/error либо отдельное owning observation, по которому workflow различает confirmed close, terminal, unknown и иной busy. Не выводить authority из типа Busy/текста exception. Конкретное API ещё не назначено.
+- **Artifacts:** предъявить owning источник полного набора execution, требующих settlement в operation: exact StageBinding/generation, включая residual cleanup после Confirmed. Доказать полноту относительно closed admission и гонок acquisition/consumption/settlement; определить согласованность snapshot/страниц, если они нужны. Continuation одного stage, leased_artifacts и descriptor не считаются полным operation inventory без доказательства. Не создавать общий listing/CRUD ради этого требования.
+- **DAG-координатор:** после обоих outputs свести конкретные typed mappings и declared CALL: основание выбора ветки → получение owning набора → settle exact execution → обработка partial/unresolved/error → повтор operation cancellation. Несколько stage не заменяются одним произвольно выбранным binding. Scope/SQL/catalog reads в parent запрещены.
+- **Publication:** окончательный release/terminal заново проверяет authoritative full/local drain; результат settle или пустой список не заменяет эту проверку. Unknown/incomplete inventory не разрешает release или successor. Publication не вызывает Artifacts public service.
+
+Критерии проверки: Busy до confirmed close и из другого guard не запускает неподтверждённую ветку; несколько stage с разными generations; completed stage с residual cleanup; concurrent close/claim; частично завершённый settlement и lost ACK; неполный inventory не даёт ложного all-drained. Это необходимые контракты второго этапа, не разрешение менять порядок/ноды или вводить новые API без общей приёмки.
 
 **Владельцы COMP-01…05, зафиксировано и передано по поручению пользователя 2026-11-26:** Artifacts отвечает за цельность stage-решения; чужие контракты изменяются только после owning и общей сверки.
 

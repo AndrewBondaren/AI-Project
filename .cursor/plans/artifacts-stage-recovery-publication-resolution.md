@@ -4,6 +4,205 @@
 
 ## Вердикт
 
+### Q6 — окончательный operation release/terminal после finalization, 2026-11-27
+
+Owning Publication proposal для общей приёмки; код не изменён, не code-go. Используется существующий public `OperationLedger[R].cancel(operation_id: EntityUid, fence: int) -> OperationRecord[R]` (async), делегирующий `IArtifactLeases[R].cancel` / `SqliteArtifactLeases[R].cancel` с той же сигнатурой. Положительный strict fence и operation_id валидируются existing boundary. Новый finalize-operation DTO/API не вводится. Вход берётся из проверенного `OperationCloseInput`: `cancel(close_result.request.operation_id, close_result.request.fence)`; stage result, inventory и их количество не являются аргументами/authority cancel. Выбор CALL принадлежит согласуемому DAG, этот раздел не назначает новые ноды или порядок.
+
+Штатный blocking cancel этапа 1 сохраняет close → ожидание вне write transaction → final transaction и existing return/errors. Этап 2 переиспользует его после Artifacts finalization. Уже предложенный required full-drain guard применяется вместе с local predicate; Q6 не добавляет второй owner loop, polling service или nonblocking cancel. Если claims остаются, existing ожидание может продолжаться без ограничения времени. Ни истечение timeout, ни отмена ожидания не разрешают release.
+
+**Единственная финальная write transaction.** Прежние наблюдения close/inventory/finalization/read-loop не заменяют следующие чтения в том же existing scope:
+
+1. Загрузить и проверить authoritative operation record/lifecycle integrity; exact operation_id и current fence. Existing stale cancellation fence остаётся ValueError, не переносится новый Q5 error mapping на старый cancel. Missing/corrupt facts обрабатываются existing lifecycle/infrastructure policy, без успешного результата.
+2. Если уже имеется valid terminal — вернуть existing record после успешного завершения scope, без новых hold releases/terminal insert и без интерпретации как нынешнего drain. Эта ветвь идёт после fence/integrity; terminal не позволяет обойти stale fence.
+3. Для нового cancellation подтвердить закрытое admission и допустимость cancellation по existing evidence/lifecycle policy в текущем scope. Direct operation допускается лишь при authoritative policy, исключающей admission/новые acquisitions; отсутствие обязательной admission — fault. Ни смена phase, ни старый successful close не заменяют эту проверку.
+4. Проверить ВСЕ active local writer claims operation через existing `SqliteArtifactCatalog._writers(scope, operation_id)`, без фильтра только по stage, текущему fence или наличию StageLocalClaimLink. Включаются legacy local-only writer и local claims всех executions. Любой acquired без authoritative release блокирует cancellation; corrupt chains не считаются пустыми.
+5. В том же scope вызвать proposed internal `IStageExecutionDrain.assert_drained(scope, operation_id) -> None`. Predicate охватывает ВСЕ acquired stage executions operation: все stages/generations/historical fences, в том числе completed executions с residual cleanup, acquisition без reservation/local link и prohibited execution без confirmed release. Требуются authoritative matching releases и отсутствие сохраняющейся способности effects по owning Artifacts contract. Completion, prohibition, отсутствие local claim или записи в batch не заменяют full release. Unknown/integrity error не превращается в drained. Unconsumed permit не active execution, но closed admission обязана исключать его дальнейшее consumption.
+6. До первой записи release проверить existing exact held-artifact/hold-chain/fence и cancellation evidence predicates. Освободить только existing operation holds по действующей retention policy; не удалять stage history, чужие holds, final artifacts или catalog reservation ради drain. Записать `OperationCancelled(operation_id=operation_id, reason=OperationCancellationReason.REQUESTED)` через existing `SqliteOperationStore.record_terminal(scope, outcome)` в этой же transaction. `_save` сохраняет existing typed terminal/evidence checks. Нельзя отделить hold release от terminal самостоятельным commit.
+7. Выдать resulting OperationRecord[R] только после confirmed commit acknowledgement. Сбой любой проверки/записи откатывает всю final transaction при confirmed rollback; возможный commit при unknown не объявляется rollback.
+
+Это operation-wide recheck. Publication знает scoped full-drain predicate, но не получает stage inventory и не реализует алгоритм физической quiescence. Pending executions/releases и их physical evidence остаются Artifacts-owned. Predicate adapter читает existing authoritative state через общий access/scope, не вызывает public Artifacts service и не ждёт OS gate под SQL transaction.
+
+| Outcome cancel | Допустимое основание / эффекты |
+|---|---|
+| Новый OperationRecord с terminal OperationCancelled(REQUESTED) | Все перечисленные final predicates и hold releases/terminal подтверждены одним commit |
+| Existing terminal OperationRecord[R] | Exact validated historical replay, возможно другой existing terminal alternative. Ноль новых release/terminal writes; не proof нынешнего full/local drain |
+| Ожидание без результата | Existing blocking phase видит хотя бы один local/full blocker. Unresolved не преобразуется в successful cancellation |
+| OperationBusyError | Final scoped drain recheck обнаружил blocker либо existing evidence policy дала Busy; никаких новых release/terminal в успешно завершённой final transaction. Busy не close proof и не автоматический trigger finalization |
+| Existing validation/lifecycle error, включая ValueError stale fence | Отказ existing cancel boundary; Q5 error taxonomy его не меняет |
+| PublicationInfrastructureError | Broken authoritative chains/scope/binding/held artifact либо infrastructure fault по existing policy; cause сохраняется, drained/result не фабрикуются |
+| UnknownCommitOutcome | Неизвестен close/final commit/rollback outcome, existing quarantine/reconciliation. Нет success/refusal/compensation; final release и terminal могли commit вместе |
+| CancelledError | Отменён вызов/ожидание; cleanup UOW следует existing cancellation policy, release по timeout/отмене запрещён. При потере ACK отсутствие commit не предполагается |
+
+**Гонки и неполное завершение.** Unresolved одной execution оставляет её full claim blocker; успешные finalizations других stages этого не меняют. Пустой `pending_finalizations` batch не доказывает local drain и не является input proof; даже полный batch — observation, не блокировка operation. Legacy local-only writer учитывается независимо от batch/link. Несколько generations одного stage проверяются так же, как несколько stages.
+
+Close и consumption сериализованы existing write UOW: consumption до close виден final predicate, после close запрещён. Concurrent finalization/release либо commit до final cancel scope и учитывается, либо ещё не commit и claim блокирует cancel; проверка и operation release не разделены TOCTOU-окном. Concurrent cancel после первого terminal возвращает exact historical record без повторных releases. Concurrent close не reopened admission, eventual terminal становится terminal replay. Concurrent fence change даёт stale отказ, а не замену fence caller-ом. Если finalization остаётся Unresolved, DAG обрабатывает её owning результат; вызов blocking cancel не может обойти её и вправе ждать. Новый автоматический цикл recovery/finalization в Publication не появляется.
+
+Historical terminal может сосуществовать с residual stage execution по owning historical policy. Replay не переписывает history, не подтверждает очистку и не запускает Artifacts; отдельная residual finalization не получает permission release из terminal. Для НОВОГО terminal полный drain обязателен. После unknown final commit повтор exact cancel/reconciliation на здоровом authoritative scope определяет persisted outcome: matching terminal → replay, nonterminal → весь existing cancel/recheck путь заново; stale → отказ. Нельзя выдавать record_refusal после unknown rollback или повторять release по памяти об успешном stage.
+
+**Конкретные consumers и минимальная дельта (пути относительно backend/).** Это уточнение уже proposed full-drain guards ниже, не заявление об их наличии в runtime:
+
+| Existing метод / consumer | Необходимая граница |
+|---|---|
+| application/publication/service/operationLedger.py::OperationLedger.cancel | Сохранить signature/validation/delegation; никаких Artifacts public calls или owner loop |
+| db/repositories/sqlite/artifacts/leaseStore.py::SqliteArtifactLeases.cancel | Existing close/wait/final UOW сохранить. Wait проверяет local + full read predicate вне write UOW; final UOW повторяет current closed/evidence, ALL local + full predicates до любого release и terminal |
+| Тот же класс ::finish_preparation | Before READY — local + full guard в том же UOW, затем existing close/holds/sealed checks; READY не portable drain proof для cancel |
+| db/repositories/sqlite/artifacts/holderStore.py::SqliteArtifactHolders.release (OperationHolder only) | Current binding/fence/closed + operation-wide local/full guard до append release. Existing current-fence-only local filter недостаточен для operation-wide guarantee; остальные holder branches не получают фиктивный operation_id |
+| Тот же класс ::handoff | В borrowed write scope до первого append — existing APPLYING/lease/retention predicates + operation-wide local/full guard; собственного commit нет |
+| db/repositories/sqlite/snapshotCore/operations/operationStore.py::SqliteOperationStore.claim_publication | Before NEW READY→APPLYING — scoped local/full guard; старое READY observation недостаточно |
+| Тот же класс ::_save через record_terminal / record_refusal | Before NEW terminal/event — current lifecycle/evidence + scoped operation-wide local/full guard. Exact existing terminal replay без нового drain/release; record_refusal только после confirmed rollback |
+| leaseStore.py::_release/_cleanup/writer; stage full/local release owner | НЕ требуют full operation drain для release собственного writer claim: иначе self-deadlock. Они подтверждают лишь свою exact execution/local release и не выпускают operation holds/terminal |
+
+Required stateless `SqliteStageExecutionDrain(access)` / `IStageExecutionDrain` и общий scope graph уже предъявлены ниже; dependency на public StageAttemptService, backend/gate/job или второй coordinator не вводится. Local predicate остаётся existing catalog writer-chain predicate; для stores без него нужен scoped reuse того же existing authoritative query, без нового public API/второго алгоритма. Exact same-graph wiring local/full guards во всех consumers подлежит общей приёмке; отсутствие сведений о нём не считается PASS. OperationCloseInput не дублируется; нового cancellation outcome, owner класса или stage DTO нет. Ответственность и признаки нарушения existing классов дополнительно перечислены в таблицах ниже.
+
+**Критерии проверки Q6.** Две connections и fault injection: два stages (один finalized, второй unresolved); несколько generations/старых fences; completed без release; no-link acquisition; пустой inventory + legacy writer; BOTH после release только full или только local. Во всех случаях ноль NEW operation release/terminal до полного drain. Проверить оба порядка close/consumption и finalization/cancel, два concurrent cancel (один новый terminal), fence race, historical terminal с residual claim (ноль новых writes), replay после lost ACK и confirmed rollback/unknown на close и final transaction. Ошибка после первого hold append должна откатить ВСЕ releases вместе с terminal; unknown не даёт ложного rollback/новой identity. Timeout/CancelledError не освобождают holds. Проверить каждый consumer таблицы, closed check, all-fence local query, same-scope full guard и отсутствие public foreign calls/нового loop. Blocking cancel этапа 1 сохраняет ожидание, return/error semantics и own-claim release без self-deadlock.
+
+Статус Q6: предъявлен для общей приёмки координатором и пользователем; полная цепочка OPEN до сверки owning full predicate/physical evidence и exact consumer wiring. Эта правка документа не принимает этап 2 и не меняет штатный код этапа 1.
+
+### Q5 — окончательная Publication-форма для общей приёмки, 2026-11-27
+
+**Итог в рамках ответственности Publication.** Контрактная часть Q5 сведена и предъявлена; дополнительных вариантов Publication API не предлагается. Нормативная форма — этот раздел; P1.3/RC02 ниже сохраняют обоснование и не расширяют её. Полная междоменная приёмка остаётся OPEN, реализация не заявляется.
+
+**Владельцы итогового пакета Q5 (фиксация 2026-11-27).** Таблица фиксирует ответственность и необходимые подтверждения, а не полученные согласования.
+
+| Владелец | Предмет ответственности / предъявляемый результат | Статус и источник |
+|---|---|---|
+| Publication | OperationLedger.close_for_cancellation; OperationCloseInput/Result/Error; confirmed close/ack, exact request correlation, direct/terminal/stale/unknown/Busy semantics. Передаёт OperationClosePending.request без stage inventory | Итоговое owning предложение предъявлено в Q5 этого документа; общая приёмка OPEN |
+| Artifacts | StageAttemptService.pending_finalizations(OperationCloseInput); OperationStageFinalizationResult/Batch/Refused; полный coherent inventory, historical binding, StageFinalizeInput и finalize_execution; physical evidence и full-drain predicate | Owning контракт: [Artifacts resolution, RC-02](artifacts-stage-recovery-owning-resolution.md); внешние ограничения и OPEN: [отложенный этап 2](artifacts-stage-finalization-deferred.md). Publication не принимает эту часть за владельца |
+| DAG / назначенный координатор Between domain operations, thread ID 01a218a4-bfc5-7012-b18b-8ed986cc786d | Сверка всей цепочки close output → pending_finalizations input → batch.pending item → finalize_execution; только FULL_STAGE/BOTH дают inventory trigger. Проверка всех обязательных DAG-критериев, current-state rechecks, границы с Q6 и неизменности утверждённого порядка; явный вердикт PASS/OPEN/FAIL | Общая сверка OPEN. Назначение и порядок: [правило координации](../rules/interdomain-contract-coordination.mdc). Наличие mapping не означает согласования новых NodeId/маршрута |
+| Publication — смежный Q6 | Existing cancel: окончательный operation-wide local/full recheck, release holds и новый terminal в одной transaction; historical replay и unknown commit | Отдельное owning предложение Q6 выше; Q5 не заменяет его приёмку и не выдаёт operation release permission |
+| Пользователь | Окончательное решение по междоменной границе и объёму приёмки после вердикта координатора; отдельное разрешение на реализацию | Решение о полной приёмке Q5 этим документом не предполагается; code-go отсутствует |
+
+Следующий адресат пакета — назначенный DAG-координатор для общей сверки, затем пользователь для решения. Фиксация владельцев не означает отправку сообщений, получение их согласия или закрытие внешних OPEN.
+
+| Предмет итогового решения | Publication disposition |
+|---|---|
+| Producer | Existing OperationLedger[R], новый proposed async close_for_cancellation(OperationCloseInput) -> OperationCloseResult[R]; lifecycle transaction выполняет existing leases adapter |
+| Proof | Только confirmed transaction acknowledgement и проверенная корреляция request/record. Ready/Pending подтверждают close и scoped drain observation; Terminal подтверждает historical record, не close/drain |
+| Единственный междоменный operand | OperationClosePending.request: OperationCloseInput целиком, без дополнительных lease/stage полей. Только FULL_STAGE/BOTH обосновывают pending_finalizations(request) |
+| Consumer mapping | Artifacts возвращает OperationStageFinalizationBatch.pending: tuple[StageFinalizeInput, ...]; DAG передаёт каждый item целиком в finalize_execution. Inventory, historical binding и execution evidence принадлежат Artifacts |
+| Остальные ветви | LOCAL_WRITERS — local drain; Ready — existing cancellation handling; Terminal — operation-level replay. Direct без admission — Ready только при исключающей staging policy и отсутствии local/full facts. Stale/missing/corrupt — infrastructure error нового close метода |
+| Неуспешный вызов | Busy, UnknownCommitOutcome, CancelledError и прочие exceptions не создают close output и не запускают finalization. Lost ACK требует exact retry/owning observation |
+| Граница с Q6 | Close и stage finalization не снимают operation holds и не пишут cancellation terminal. Operation-wide final local/full recheck, release и terminal определены отдельно в Q6; успех одного stage/пустой batch их не заменяют |
+| Scope неизменен | Без stage inventory в Publication, synthetic lease, public Artifacts calls из service, нового owner loop, NodeId или изменения штатного blocking cancel |
+
+Остаток общей приёмки: координатор сверяет exact producer→consumer mapping с owning Artifacts контрактом, повторную current-state проверку и сохранение утверждённого порядка; пользователь принимает границу. Physical quiescence, полнота stage inventory и finalization outcomes принимаются у Artifacts, final operation release — по Q6. Publication не объявляет эти внешние обязательства выполненными. Критерии отказа и полный Input/Result/Error приведены далее; наличие типов и этой сводки не является runtime evidence или PASS всей цепочки.
+
+Приоритетное уточнение P1.3/RC02 ниже. Полные Input/Result/enum declarations из P1.3 сохранены без дополнительных полей: OperationCloseInput(operation_id: EntityUid, fence: strict int >= 1); OperationCloseTerminal[R](kind=TERMINAL, record: OperationRecord[R]); OperationCloseReady(kind=CLOSED_DRAINED, request: OperationCloseInput); OperationClosePending(kind=CLOSED_PENDING, request: OperationCloseInput, pending: OperationDrainPending). Все поля обязательны; discriminated union по kind, strict/frozen/extra-forbid/revalidate always. Public async OperationLedger[R].close_for_cancellation(request: OperationCloseInput) -> OperationCloseResult[R]; owning module app.dataModel.publication.operationClose.
+
+Каждый результат выдаётся только после confirmed commit acknowledgement одной короткой operation UOW. Внутри: integrity/binding → exact operation_id/current fence → terminal check → для nonterminal existing cancellation evidence policy → close/already-closed admission → local/full predicates → provisional result. Ошибка acknowledgement исключает выдачу provisional результата, включая Terminal. Ledger проверяет output.request == input либо record.operation_id/fence == input coordinates; mismatch — PublicationInfrastructureError.
+
+| Result | Условия в подтверждённой UOW |
+|---|---|
+| Terminal(record) | Existing terminal phase и non-null terminal после integrity/current-fence checks. Подтверждает observation record, не новый close и не drain; stale fence не обходится |
+| Ready(request) | Nonterminal, отмена допустима, admission закрыта; local_pending=false, full_pending=false |
+| Pending(request, FULL_STAGE) | Nonterminal, отмена допустима, согласованная staging admission закрыта; full_pending=true, local_pending=false |
+| Pending(request, BOTH) | Те же prerequisites; full_pending=true, local_pending=true |
+| Pending(request, LOCAL_WRITERS) | Те же prerequisites; full_pending=false, local_pending=true |
+
+Direct nonterminal operation без admission получает Ready только если authoritative policy исключает staging admission и все local/full facts отсутствуют. Lease/admission не синтезируются; подтверждается policy, запрещающая acquisitions. Missing обязательная admission или противоречащие direct policy local/full facts — infrastructure fault. Direct terminal проходит общие integrity/fence/terminal проверки. Full pending учитывает execution без confirmed release даже при completion/неизвестной physical quiescence; это не unknown commit. Ни один result не пишет OperationCancelled и не снимает holds.
+
+Полный Error boundary — исключения, без альтернативных result DTO:
+
+| Error | Условие |
+|---|---|
+| ValidationError | Malformed input до IO |
+| PublicationInfrastructureError | Missing operation, stale fence, invalid/corrupt lifecycle binding, missing обязательная admission, contradictory facts, output correlation mismatch; unexpected infrastructure сохраняет cause |
+| UnknownCommitOutcome | Нельзя подтвердить transaction outcome либо quarantine по existing UOW policy; result отсутствует, возможный commit не отрицается |
+| CancelledError | Invocation cancellation; provisional result не выдаётся, rollback не предполагается |
+| OperationBusyError | Existing evidence/dependency отказал; распространяется без преобразования в close proof |
+
+Confirmed rollback сохраняет исходную typed ошибку и не превращается в Unknown автоматически. Unknown означает неизвестный исход. Любой Busy, в том числе посторонний, независимо от класса/текста/args НЕ proof close и НЕ запускает inventory или finalization. После lost ACK повтор exact request заново проверяет authority; допустимы Pending/Ready/Terminal либо stale/error, без reopen и bump fence.
+
+Exact передача для Pending(FULL_STAGE/BOTH): `inventory_request: OperationCloseInput = close_result.request`; явный DAG CALL `StageAttemptService.pending_finalizations(inventory_request) -> OperationStageFinalizationResult`. Только batch предоставляет `pending: tuple[StageFinalizeInput, ...]`; `batch.request == close_result.request`. Каждый готовый item целиком передаётся отдельным public CALL `StageAttemptService.finalize_execution(item)`. Refused/exception не предоставляет partial batch. Artifacts заново проверяет current closed/fence и полный inventory в coherent scope; historical binding/generation восстанавливает сам, без подмены historical fence текущим request.fence.
+
+LOCAL_WRITERS не запускает stage finalization. BOTH дополнительно требует local drain. Ready ведёт к existing cancellation handling с финальным recheck всей operation. Terminal не даёт автоматического inventory; если terminal наступил после Pending, Artifacts применяет свой terminal/residual inventory контракт. Fence change даёт owning refusal, DAG не ищет новый fence. Empty batch или отдельный finalized result не разрешают release/terminal всей operation.
+
+Границы ответственности: Input — identity запроса, variants/enums — подтверждённые observations, existing OperationRecord — terminal без mirror DTO; Ledger — validation/correlation/delegation; IArtifactLeases/SqliteArtifactLeases — lifecycle UOW/ack; drain adapter — authoritative predicate; Artifacts service/store — inventory и отдельная finalization; DAG — выбор CALL и перенос owning POJO. Критерии отказа: CLOSED до commit, stage inventory в Publication, synthetic lease, DAG storage reads, foreign public service calls, hidden callback/worker orchestration, Busy→finalization или смена утверждённого порядка. Новые NodeId/маршрут не назначаются, штатный blocking cancel неизменен.
+
+Статус: Publication Q5 предъявлен для общей приёмки; не PASS всей цепочки и не code-go. Локальная синхронизация имён не закрывает Q1–Q4/Q6 и physical proof. Общая проверка через назначенного координатора Between domain operations и решение пользователя остаются обязательными; пакет предоставляется пользователю для этой приёмки.
+
+### RC02 — один exact close → inventory mapping
+
+2026-11-26. После пользовательского «1. Ок» принят выбор формы для синхронизации документов: `OperationLedger[R].close_for_cancellation(OperationCloseInput) -> OperationCloseResult[R]` возвращает **OperationClosePending(request: OperationCloseInput, pending: OperationDrainPending)**. Existing proposed discriminator kind сохраняется. Input и Output POJO находятся в proposed `app.dataModel.publication.operationClose`; StageBinding/список stages в Publication не вводятся. Это не приёмка полного workflow и не code-go.
+
+Matching public consumer из Artifacts owning resolution RC-02: `app.application.artifacts.staging.stageAttemptService.StageAttemptService.pending_finalizations(request: OperationCloseInput) -> OperationStageFinalizationResult` (async). Artifacts импортирует Publication Input напрямую. Единственный mapping: `pending_finalizations(close_output.request)`. Вызов — явный согласуемый DAG public CALL, не вложенный вызов Ledger/leases.cancel. Прежний OperationStageFinalizationInput(lease) отозван; дополнительный operand из continuation/storage не требуется.
+
+Источник request — валидированный вход close с operation_id/fence, сверенными с persisted operation в той же close transaction. Output не создаётся при stale fence, missing/corrupt operation/admission или unknown close outcome. World/kind/preparation_fingerprint и historical fence для каждого StageFinalizeInput восстанавливает Artifacts из validated immutable StageBindingRow в своём coherent inventory scope; current request.fence не подменяет historical binding. Request не выдаёт writable permission и не обещает нынешний hold.
+
+| Ветка / входной случай | Exact disposition |
+|---|---|
+| Pending FULL_STAGE/BOTH + подтверждённая существующая staging admission | output.request напрямую в pending_finalizations; consumer проверяет current closed/fence и полный inventory, включая старые generations/fences и completed executions без confirmed release |
+| Pending LOCAL_WRITERS + существующая staging admission | Не является trigger stage inventory/settle; legacy local writer не превращается в fake stage. Local drain остаётся отдельным обязательным predicate Publication |
+| Nonterminal direct operation без staging admission, local/full facts отсутствуют | OperationCloseReady(request); lease не синтезируется; путь — existing cancel финализации, НЕ pending_finalizations |
+| Нет admission, но обнаружены local/full stage facts | PublicationInfrastructureError, без Ready/Pending и без synthetic lease |
+| Ready для существующей staging operation | OperationCloseReady(request); inventory для продолжения этой cancellation не требуется, current drain повторно проверяет cancel; Ready не превращается в Pending и не требует достраивать lease |
+| Existing terminal | OperationCloseTerminal[R](record), operation-level handling. В этой ветке close не утверждает закрытие admission/drain и не запускает inventory. Terminal не отменяет отдельную residual-cleanup обязанность Artifacts; автоматическое terminal→inventory данным ребром НЕ заявляется |
+| Stale fence / missing operation / invalid binding | PublicationInfrastructureError нового close метода, не Busy и не typed stage refusal; существующий cancel не изменяется |
+| Unknown/cancellation/иной Busy | Existing exception без CLOSED output; не основание inventory/settle |
+
+Replay/races: повтор close после lost ACK заново читает authoritative state и может вернуть Pending, Ready либо Terminal; не выдаёт новый lease fence. Artifacts не доверяет прошлому Pending при intervening cancel/fence change: его own current-state admission остаётся обязательным. Inventory output относится ко всей operation; пустой список не доказывает отсутствие неучтённых local effects. Publication final cancel проверяет full/local drain в final UOW, не принимает portable inventory как permission release.
+
+Ответственности: lifecycle adapter подтверждает request в своей close transaction и возвращает только после confirmed commit; Ledger проверяет id/fence корреляцию и typed result; DAG передаёт request целиком, затем каждый готовый batch.pending item в finalize_execution; Artifacts проверяет текущее состояние и полноту execution inventory и формирует полные StageFinalizeInput. Критерии отказа RC02: два публичных формата Pending, synthetic поля, DAG storage reads, implicit continuation, выбор ветки по тексту Busy, прямой foreign public call, terminal/Ready притворяются cancellation settlement proof. **RC02 формы Output→Input синхронизированы с Artifacts RC-02; общая приёмка маршрута остаётся у координатора и пользователя, runtime не реализован.** Blocking cancel этапа 1 не меняется.
+
+RC04: Publication не владеет OS locks. Existing scope reuse не доказывает совместимость OS→SQL и SQL→OS lock order; до owning Artifacts сверки такой порядок не объявляется безопасным. Второй coordinator/ambient transaction workaround не добавляется; дополнительных изменений scope contract здесь нет.
+
+Остаток этапа 2 имеет две конкретные owning границы. (1) Constructor SqliteStageAttemptStore(scopes, operations, catalog, stage_drain=...) ниже покрывает stage-1 SQL authority, но не предъявляет получение backend/effect gate для settle. Artifacts должен замкнуть exact dependencies и nested cleanup calls с учётом обратной зависимости backend.attempts, без dependency cycle и foreign public service. Этот constructor не является PASS всей stage-2 composition. (2) Existing ArtifactStagingService.verify → catalog.guard → registry.verify удерживает SQL guard при physical verify; Artifacts должен предъявить совместимый trace этого consumer и authorized OS→SQL пути, сохранив holder/GC predicates. Publication не разрешает ожидание OS gate под SQL UOW. Эти OPEN не меняют штатный blocking cancel этапа 1 и не устраняются одной синхронизацией POJO.
+
+### P1.3 — explicit close result для workflow этапа 2
+
+2026-11-26. **Прежняя shorthand Busy → settle НЕПОЛНА и не является принятым mapping.** OperationBusyError разных sites не доказывает confirmed close или потребность settle. Ни текст, ни args, ни сам класс Busy не выбирают этот маршрут. Ниже новая узкая owning PROPOSAL только этапа 2; blocking cancel этапа 1 и его return/error semantics НЕ меняются. Новых нод/NodeId/CALL этим документом не назначается.
+
+Предлагаемый публичный метод existing `app.application.publication.service.operationLedger.OperationLedger[R]`:
+
+```python
+async def close_for_cancellation(
+    self, request: OperationCloseInput,
+) -> OperationCloseResult[R]: ...
+```
+
+Новый owning модуль данных `app.dataModel.publication.operationClose`. Все POJO strict/frozen/extra-forbid/revalidate always; required поля без defaults. Existing OperationRecord[R], EntityUid и strict positive fence переиспользуются, StageBinding/StageWriteClaim сюда не копируются.
+
+| Тип | Все обязательные поля |
+|---|---|
+| OperationCloseInput | operation_id: EntityUid; fence: Annotated[StrictInt, Field(ge=1)] |
+| OperationCloseTerminal[R] | kind: Literal[OperationCloseKind.TERMINAL]; record: OperationRecord[R] |
+| OperationCloseReady | kind: Literal[OperationCloseKind.CLOSED_DRAINED]; request: OperationCloseInput |
+| OperationClosePending | kind: Literal[OperationCloseKind.CLOSED_PENDING]; request: OperationCloseInput; pending: OperationDrainPending |
+
+OperationCloseResult[R] — discriminated union этих трёх классов по kind. Owning StrEnum OperationCloseKind: TERMINAL="terminal", CLOSED_DRAINED="closed_drained", CLOSED_PENDING="closed_pending". Owning StrEnum OperationDrainPending: LOCAL_WRITERS="local_writers", FULL_STAGE="full_stage", BOTH="both". Exact enum/Python/JSON правила применять как к другим owning enums; wire IDs не назначаются. Terminal branch валидирует existing TERMINAL phase и non-null terminal; record сохраняет exact R/OperationCancelled/другие existing terminal alternatives, не второй terminal DTO.
+
+Meaning: CLOSED_* означает confirmed commit закрытия admission для указанной operation/fence и scoped observation после проверки authoritative operation/local/full-stage state. Это историческое подтверждение результата вызова, не transferable authority; любой mutation consumer перепроверяет current binding/fence/phase. CLOSED_DRAINED позволяет предъявить existing cancel для финального operation результата, но сам не является OperationCancelled и не снимает holds. CLOSED_PENDING показывает классы незавершённых effects, не stage inventory и не обещание возможности безопасно завершить их. FULL_STAGE может включать неизвестную quiescence старой execution; это не unknown COMMIT и не доказательство process death.
+
+Exact internal port в `app.application.artifacts.storage.artifactLeases.IArtifactLeases[R]` и concrete `SqliteArtifactLeases[R]` получает тот же async close_for_cancellation(request) -> OperationCloseResult[R]. Это operation lifecycle ownership Publication в existing storage placement, не публичный Artifacts stage call. Ledger validates request, делегирует и проверяет соответствие результата requested id/fence; новый service/owner loop не создаётся.
+
+Owning contract порядка: validate request → в одной короткой operation write transaction проверить persisted integrity/binding/fence/terminal; existing terminal возвращается как Terminal без ложного утверждения close; для nonterminal подтвердить допустимость отмены existing evidence policy, закрыть admission (или проверить ранее закрытую) → проверить local/full-stage predicate в том же scope → сформировать provisional Ready/Pending → вернуть только после confirmed transaction acknowledgement. Не ждёт worker drain, не пишет OperationCancelled, не выпускает permit/generation, не снимает holds и не запускает settle. Отсутствие staging admission у direct operation не создаёт фиктивную lease row: Ready допустим лишь если authoritative operation policy исключает stage admission и writers отсутствуют; противоречивые facts — infrastructure.
+
+Error boundary: malformed input → ValidationError; missing operation/stale fence/invalid lifecycle binding → PublicationInfrastructureError (для НОВОГО метода; existing cancel errors не переопределяются); unknown commit/rollback/quarantine → UnknownCommitOutcome без CLOSED output; invocation cancellation → CancelledError; другой OperationBusyError, если поднят existing evidence/dependency, распространяется без выбора settle; unexpected infrastructure сохраняет cause. Unknown не упаковывается в Pending. Exception output не является producer POJO. Возможный commit при потере ответа требует повторного exact запроса/owning observation, не предположения об отсутствии close.
+
+Workflow mapping для согласования координатором:
+
+| Выход public close operation | Допустимое значение для следующей границы, не назначение маршрута |
+|---|---|
+| Terminal | Existing record/outcome для operation-level обработки; не доказательство full-stage drain и не автоматический settle |
+| ClosedReady | Тот же request.operation_id/fence для existing cancel finalization; current facts перепроверяются |
+| ClosedPending(LOCAL_WRITERS) | Нет основания вызвать exact stage settle: stage из local writer не угадывать |
+| ClosedPending(FULL_STAGE/BOTH) | Основание запросить у Artifacts ПОЛНЫЙ актуальный operation-level inventory незавершённых stage executions; НЕ основание сразу выбрать один stage или считать settle безопасным |
+| Busy / Unknown / иной exception | Отдельная error handling ветвь; никаких derived close/settle claims |
+
+**Актуальная P1 Output→Input поправка 2026-11-26:** Pending и Ready сохраняют OperationCloseInput request. В close UOW обязательны record.operation_id==request.operation_id и record.fence==request.fence; Pending допускается только при согласованной staging admission. Отсутствие admission при stage effects — infrastructure inconsistency. Provisional output выдаётся после confirmed commit; Ledger проверяет output.request == input. Прежнее предложение lease-поля отозвано. Direct operation не получает synthetic lease.
+
+Единственный exact mapping: `OperationClosePending.request → StageAttemptService.pending_finalizations(request)`; результат `OperationStageFinalizationBatch.pending` содержит готовые `StageFinalizeInput`, каждый передаётся в `StageAttemptService.finalize_execution(item)` целиком. Refused не выдаёт частичного списка. Artifacts заново проверяет current authority/closed/fence и полный inventory; historical lease каждого item берётся из persisted stage binding. ClosePending(FULL_STAGE/BOTH) обосновывает inventory, LOCAL_WRITERS — нет. Unknown close не выдаёт Pending. Новые ноды/порядок этим mapping не назначаются.
+
+Publication не добавляет stage IDs в result; DAG не читает SQL, operation record leased_artifacts или continuation для достраивания lease/поиска stage. Batch перечисляет stage executions, а не legacy local-only writers. Для BOTH Publication final guard учитывает local effects отдельно; даже полный stage batch не доказывает operation drain. После exact stage settlement Publication повторно проверяет ВСЮ operation перед release/terminal через existing cancel.
+
+Acceptance этой дельты: output.request точно сохраняет checked input; stale fence/unknown commit не получают Pending; direct передача output.request не требует иных operands. Artifacts batch сохраняет world/kind/preparation/historical fence каждого binding, включает все unreleased acquired generations и не фильтрует по completion. Concurrent fence change даёт owning refusal; terminal не считается empty inventory. Python/JSON round-trip и общий coordinator mapping остаются проверками будущей реализации/приёмки, не runtime PASS.
+
+Повтор close_for_cancellation после lost ACK идемпотентен относительно close; Ready/Pending могут меняться с текущим drain, eventual terminal возвращается Terminal. Closed не переоткрывается. Concurrent cancel может завершить operation после observation; next owning call должен корректно обработать terminal, не продолжать по старому portable результату. Exact terminal replay не изменяет stage history; residual cleanup после historical terminal — отдельный Artifacts inventory/settlement контракт, а не автоматическая интерпретация Terminal как Pending.
+
+Responsibilities/приёмка: OperationCloseInput идентифицирует operation запрос, не authority; variants различают confirmed operation outcome без новых stage mirrors; Ledger — thin validated delegation; lifecycle adapter — одна close transaction с acknowledgement; drain adapter — read-only predicate; Artifacts — full inventory/settle. Отказ при raw Busy→settle, выдаче CLOSED до commit, terminal/refusal fabrication, private storage reads в DAG, новом owner loop или public foreign call внутри close/cancel.
+
+**P1.3: формы Publication Output и Artifacts Input синхронизированы; общий workflow OPEN** до coordinator сверки и пользовательской приёмки всей цепочки. Artifacts inventory contract уже предъявлен в его RC-02, повторно объявлять его отсутствующим нельзя. Historical bounded-cancel proposal ниже не заменяет этот пакет и не даёт права менять этап 1. Тесты будущего этапа 2: Busy до close, unknown close commit, exact repeat, terminal before/after close, local-only/full/both, current fence change, неполный inventory не даёт release, terminal не маскирует residual cleanup. Сейчас только документ, runtime/schema tests не заявлены.
+
 ### Принятое пользователем разделение поставки — вариант 2, 2026-11-26
 
 Пользователь выбрал «Ок, давай 2»: **поэтапное расширение существующих механизмов**. Это приоритетный scope над прежним предложением глобально заменить waiting cancel на busy-return. Выбор этапности не объявляет незакрытые контракты принятыми и не является code-go всех proposed классов.
@@ -116,12 +315,23 @@ OperationBusyError сам по себе НЕ доказывает confirmed clos
 
 Все нижеследующие additions PROPOSED. Existing OperationLeaseRef, StagingReservation, ArtifactRef, CommitScope/CommitReadScope переиспользуются; public permit/generation/error roster принадлежит Artifacts и здесь не дублируется.
 
-`application/artifacts/storage/stageAttemptStore.py::IStageAttemptStore`:
+`application/artifacts/storage/stageAttemptStore.py::IStageAttemptStore`: сигнатуры разделены по этапам согласно Artifacts owning resolution, разделам «Этап 1» и COMP-02/05. Документальная синхронизация по поручению пользователя 2026-11-26; зависимая реализация этапа 2 этим не разрешается.
 
 ```python
+# Общий full-stage context обоих этапов.
 def claim_stage(self, permit: StageAttemptPermit) -> AbstractAsyncContextManager[StageWriteClaim]: ...
+
+# Этап 1: existing local writer удерживается вызывающим writer при verify/seal.
 async def seal_stage(self, claim: StageWriteClaim, reservation: StagingReservation) -> ArtifactRef: ...
+
+# Этап 2: замена сигнатуры после отдельного согласованного cutover.
+async def seal_stage(self, claim: StageWriteClaim, local: StageLocalWriter,
+                     reservation: StagingReservation) -> ArtifactRef: ...
 ```
+
+Это последовательные версии одного internal port, не overload и не optional local/fallback. В этапе 2 ArtifactStageWriter получает `local` из `IStageAttemptStore.local_writer(claim, reservation) -> AbstractAsyncContextManager[StageLocalWriter]` после reserve и удерживает один context через write_authorized → verify_authorized → seal_stage. Backend повторно local claim не приобретает. Этап 1 сохраняет два existing local участка и двухаргументный seal.
+
+`StageLocalWriter` — Artifacts-owned issued runtime handle в том же internal модуле stageAttemptStore, связанный с exact existing ArtifactWriterClaimRow, reservation и full claim. Его не создают caller/DAG и не добавляют в public Input/Output/Error. В этапе 2 seal_stage внутри общего UOW проверяет exact linked live local row, generation/full claim и reservation; foreign/released/mismatched handle отвергается как ArtifactStorageInvariantError по owning Artifacts контракту. Local/full release выполняется после соответствующего drain; closed settlement не вызывает seal и не создаёт completion. Отсутствие этой связи или освобождение local до seal означает отказ в приёмке.
 
 `StageWriteClaim` — issued runtime capability Artifacts; не DTO/node payload, не второй durable token. Exact representation определяет Artifacts. Его lifetime покрывает reserve/write/verify/seal и drain workers до release. Не разрешает bypass operation fence/closed admission.
 
@@ -170,7 +380,7 @@ Fail-fast identities внутри SQLite adapter layer:
 ## Порядок и совместимость lifecycle
 
 1. claim_stage consumption: в короткой owning transaction проверить operation/admission integrity, binding/fence/PREPARING/open и актуальный permit, затем зарегистрировать полный execution claim до первого reserve/physical effect. Выдать handle только после confirmed acquisition. Lost ACK acquisition не означает отсутствие claim.
-2. Writer выполняет reserve/write/verify/seal в lifetime этого claim. Existing локальные backend/seal claims не удаляются этим предложением; full-stage и локальные claims различаются по роли. Не считать собственный full-stage claim конкурентом при seal; не ослаблять existing reservation-writer predicate.
+2. Writer выполняет reserve/write/verify/seal в lifetime этого claim. Этап 1 сохраняет existing локальные backend/seal участки; этап 2 по COMP-02/05 Artifacts заменяет их одним local_writer context с explicit StageLocalWriter, передаваемым в seal_stage. Это отдельный cutover, не изменение этапа 1. Full-stage и локальные claims различаются по роли. Не считать собственный full-stage claim конкурентом при seal; не ослаблять existing reservation-writer predicate.
 3. finish_preparation: внутри одной transaction перед READY проверяет И existing локальные writers, И stage_drain.assert_drained(scope, oid), затем exact holds/sealed, close admission/READY. Блокирующего ожидания drain внутри transaction нет. Если stage ещё active — OperationBusyError, не READY. Issued, но ещё не consumed permit сам по себе не active writer: READY может закрыть admission, после чего consumption обязан отказать.
 4. cancel: подтвердить close admission в existing первой transaction; ждать оба множества claims вне write transaction. stage_drain.is_drained использует текущий read scope. В финальной transaction повторить terminal/fence, closed admission, локальный drain и full-stage assert_drained ДО release holds/cancel terminal. Новая generation после close не выдаётся/не потребляется. Не добавлять второй background owner: это расширение existing cancel drain loop.
 5. Любое разрешённое изменение operation fence и любой путь в READY/terminal, освобождающий stage-protected holds, обязаны использовать тот же scoped drain predicate до перехода. Stale fence сам по себе не доказывает остановку physical worker. Конкретный inventory всех transition callers должен быть сверен перед cutover; существующему recover не добавляется takeover по отсутствию локальных claims.
@@ -192,6 +402,7 @@ Physical write/verify уже завершены под full claim; SQL transacti
 | IStageAttemptStore / SqliteStageAttemptStore[R] | Full execution authority и atomic seal/evidence, shared transaction infrastructure | Независимый commit evidence, claim gap, callback в другой public pipeline |
 | IStageExecutionDrain | Scoped full-stage quiescence | True по отсутствию только локальных claims; скрытый wait/commit |
 | StageWriteClaim | Issued runtime lifetime, не durable wire | Forgeable DTO принят как authority; release до worker drain |
+| StageLocalWriter (только этап 2, Artifacts storage.stageAttemptStore) | Issued handle exact local acquisition/reservation/full claim; передаётся writer → seal_stage в одном local lifetime | Public/wire carrier, foreign/released handle, повторный backend acquire или local release до seal |
 | ArtifactStageOpenPipeline / ArtifactStageWriter | Existing linear admission/descriptor/write; full claim вокруг всего stage | Orchestration recovery loop, optional permit bypass |
 | ArtifactInputAdmission / ArtifactDescriptorBuilder | Existing pure checks | Новые storage/recovery обязанности |
 | ArtifactFormatRegistryBinding / ArtifactFormatContract / ArtifactBackend | Binding/physical IO, existing worker claims/drain | Hot rebind, другой admission graph, скрытая запись completion |
@@ -256,6 +467,59 @@ Concrete composition sites:
 - Direct test constructors SqliteArtifactLeases в storage/lifecycle tests должны получать тот же реальный drain из test graph. Это миграция тестовых consumers, не ещё одна production factory; обнаружение всех call sites повторить после параллельных изменений перед кодом.
 
 Критерий отказа каждого перечисленного factory: иной access/registry/coordinator, не exact owning drain implementation, mutable drain state/hot-rebind, другой predicate, default bypass или цикл constructors. Различие drain object identity само по себе не является отказом. Backend registration/format factories, не создающие operation stores, лишь reuse готовые leases и не становятся владельцами drain.
+
+### Q6 — окончательный release/terminal после finalization: контракт и владельцы
+
+2026-11-27. Зафиксировано по запросу пользователя. Статус PROPOSED / общая приёмка OPEN; фиксация не является code-go или принятием всего workflow. Этот раздел сохраняет blocking cancel этапа 1 и не принимает исторический bounded/busy-return кандидат этапа 2.
+
+| Область | Владелец / ответственность |
+|---|---|
+| Q6, operation lifecycle | Publication: окончательный release operation holds, terminal, cancellation authority и lifecycle guards; размещение SqliteArtifactLeases в artifacts storage не меняет владельца |
+| Execution lifetime | Artifacts: full/local claims, physical drain evidence, finalization exact execution и authoritative scoped stage-drain predicate |
+| Transaction infrastructure | Snapshot / transaction infrastructure: общий scope/coordinator, atomic commit, acknowledgement и UnknownCommitOutcome; не принимает решение о physical drain |
+| Междоменная цепочка | DAG-координатор Between domain operations, thread 01a218a4-bfc5-7012-b18b-8ed986cc786d: сверка порядка явных вызовов, Output → Input и сквозных гарантий; не переносит доменные алгоритмы в DAG |
+| Принятие | Пользователь: окончательное решение о контракте, границах поставки и разрешении реализации |
+
+**Одна финальная transaction.** В existing SqliteArtifactLeases.cancel(operation_id, fence) до нового release/terminal повторно проверяются следующие facts в том же scope, где будут записаны mutations:
+
+| Facts | Обязательное условие |
+|---|---|
+| Operation | Существует, immutable binding и persisted chain корректны, requested fence совпадает с current fence; stale fence не доказывает остановку effects |
+| Terminal / authority | Authoritative terminal перечитан; для нового cancellation terminal повторены applicable existing cancellation evidence/phase guards; staging admission подтверждённо закрыта. Direct publication без staging lease сохраняет existing disposition |
+| Все full claims | stage_drain.assert_drained(scope, operation_id) проверяет все stages/generations и historical acquisitions операции, не только последний batch/current generation |
+| Все local claims | _catalog._writers(scope, operation_id) пуст, включая legacy local-only acquisitions без stage link |
+| Full/local integrity | Releases соответствуют exact acquisitions; linked local/full release chains согласованы. Partial/mismatched chain — infrastructure/invariant fault, не drained |
+| Holds | Перечитан полный current набор operation holds; catalog identities и holder chains корректны, active holds имеют допустимый fence. Список refs из finalization не подменяет этот набор |
+
+После успешных checks: append release всех active operation holds → existing SqliteOperationStore.record_terminal(scope, OperationCancelled(reason=REQUESTED)) → один commit. Existing terminal invariants, включая отсутствие operation holds для OperationCancelled, сохраняются. Результат выдаётся только после confirmed commit. Отдельный precheck перед transaction недостаточен: close/acquisition/release/terminal сериализуются общим transaction graph. SQL не ждёт physical drain и не производит его evidence; Artifacts release обязан уже означать lawful завершение lifetime.
+
+| Состояние / исход | Disposition Publication |
+|---|---|
+| Полный drain и confirmed commit | OperationRecord с OperationCancelled; operation holds released |
+| Валидный historical terminal при допустимом fence | Existing terminal replay без перезаписи, в том числе не cancellation. Replay не доказывает residual cleanup и не запускает его; нарушение existing terminal invariants — fault |
+| Full/local blocker | Никаких release/нового terminal. Штатный cancel ждёт оба множества вне write transaction; blocker в final recheck даёт existing OperationBusyError без final mutations |
+| Unresolved finalization | Exact execution остаётся blocker до authoritative release; holds могут сохраняться бессрочно. Unresolved не преобразуется в operation success |
+| Несколько stages / пустой inventory | Успех одного или последнего известного stage и пустой inventory не являются operation barrier; весь full/local набор перечитывается в final transaction |
+| Legacy local-only writer | Самостоятельный blocker даже при пустом full inventory; завершается existing owning writer lifetime, без synthetic stage/link или forced release |
+| Stale / malformed / corrupt | Existing validation/conflict либо infrastructure/invariant error, без новой mutation; не маскируется Pending/Unresolved |
+| Unknown commit | UnknownCommitOutcome сохраняется; authoritative reconciliation exact release chain либо operation terminal/holds перед выводом об исходе. Ни rollback, ни success, ни компенсационный release не предполагаются |
+| Invocation cancellation | Исходная категория сохраняется; confirmed close автоматически не откатывается. Повтор existing cancel не создаёт новую operation |
+
+Concurrent close/finalization/cancel: close запрещает новый admission/consumption, но не owning завершение старой execution. Finalization commit первым позволяет final cancel увидеть drain; наблюдение blocker первым не позволяет release. Два cancel сериализуются, второй возвращает existing terminal. Historical completion без full release не разрешает новый terminal. OperationCloseReady/CLOSED_DRAINED — предыдущее observation, а не portable release authority; OperationClosePending/Ready не добавляются в result union existing cancel.
+
+| Existing метод / consumer | Минимальная необходимая дельта |
+|---|---|
+| SqliteArtifactLeases.cancel, app/db/repositories/sqlite/artifacts/leaseStore.py | Сохранить close → blocking wait → final UOW; расширить wait/recheck full + local predicate, повторить closed/admission и applicable cancellation guards |
+| SqliteArtifactLeases.finish_preparation | В existing READY UOW добавить full-stage guard к local writers/exact holds/sealed checks |
+| Proposed IStageExecutionDrain / SqliteStageExecutionDrain | Один scoped authoritative full-stage predicate; required dependency общего graph, без no-op default, IO/commit/cleanup/wait |
+| OperationLedger.cancel, app/application/publication/service/operationLedger.py | Existing validation/delegation; без public Artifacts calls или нового loop |
+| IArtifactStaging.cancel / ArtifactStagingService.cancel | Сохранить blocking promise и LEASE_RELEASED только после confirmed matching cancellation; close/unresolved/unknown не считаются release |
+| SqliteOperationStore.record_terminal / _save / record_refusal | Проверить отсутствие обхода общего guard при новом terminal; сохранить terminal identity и replay checks |
+| Все release protected holds / fence transitions, SQLite composition | Тот же scoped guard до mutation; сверить полный caller inventory и общий access/registry/coordinator. SqliteOperationArtifacts.read остаётся чтением holds, не drain evidence |
+
+**Проверки:** active full claim до local acquire и между local участками; два stages с одним unresolved; empty inventory + legacy writer; completion без full release; гонки на независимых connections close/consume/seal/finalization/cancel и два cancel; rollback всех final mutations при fault между hold release и terminal insert; lost ACK release/terminal и exact replay; historical terminal без изменения history/автоматического cleanup; foreign graph/scope. Existing blocking/repeated cancellation/GC retention tests сохраняются, не заменяются busy-return tests.
+
+**Границы и OPEN:** никаких timeout release, прямого public Artifacts вызова из Publication, нового owner loop, новых DAG-нод или перестановки утверждённых действий. Artifacts завершает execution, Publication завершает operation, DAG выбирает явное продолжение. До общей приёмки нужны owning proof full release, полный inventory release/fence/terminal callers и координаторская сверка всей цепочки с решением пользователя. Пакет предъявлен через пользователя; межчатовая отправка этой фиксацией не разрешается. Код и runtime tests этим разделом не заявляются выполненными.
 
 ### Cleanup и retention: конкретный запрет удаления в этом срезе
 
