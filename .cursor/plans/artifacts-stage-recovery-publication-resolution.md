@@ -4,6 +4,87 @@
 
 ## Вердикт
 
+### Принятое пользователем разделение поставки — вариант 2, 2026-11-26
+
+Пользователь выбрал «Ок, давай 2»: **поэтапное расширение существующих механизмов**. Это приоритетный scope над прежним предложением глобально заменить waiting cancel на busy-return. Выбор этапности не объявляет незакрытые контракты принятыми и не является code-go всех proposed классов.
+
+**Этап 1 — штатная authorized запись.** Artifacts добавляет stage identity/authority, полный execution lifetime и exact durable completion; переиспользует existing backend worker drain, local writer protection, catalog predicates и transaction coordinator. Seal/hold/completion — один commit. Publication сохраняет waiting semantics cancel, расширяя его ожидание и финальную проверку на full-stage drain наряду с local writers. READY/release/terminal guards проверяют те же authoritative факты. Нового scheduler/worker-drain engine, второго seal алгоритма и глобального busy-return cutover нет.
+
+Для этапа 1 existing цепочка ArtifactStagingService.cancel → OperationLedger.cancel → SqliteArtifactLeases.cancel и подтверждённое LEASE_RELEASED logging сохраняют waiting promise. Existing waiting tests сохраняются и расширяются full-stage gap cases; перечисленный ниже перевод этих tests на busy-return НЕ выполняется на этом этапе. Existing BusyError в иных guards/final recheck сохраняется, но не заменяет цикл ожидания штатной отмены.
+
+**Этап 2 — automatic crash recovery.** Отдельно согласуются owning завершение старой execution, exact quiescence evidence, explicit DAG CALL/outcomes и способ выхода waiting cancel для этого маршрута. Предложение bounded cancel/busy-return ниже остаётся одним кандидатом этапа 2, не выбранной семантикой и не prerequisite этапа 1. До его принятия нельзя обещать автоматическое завершение cancel после crash или RUNNING→READY.
+
+При process loss без proof состояние unresolved: retry/successor и release защищённых holds запрещены. Отсутствие restart proof не блокирует штатную запись, но live-worker drain/atomicity/negative fencing проверки этапа 1 обязательны. Историческое exact completion может подтвердить seal без обещания нынешнего hold; это не quiescence evidence.
+
+Распределение владельцев неизменно: Artifacts — stage authority/backend/claim/completion; Publication — operation lifecycle/transaction acknowledgement; DAG — явные public вызовы и выбор продолжения. Дублирование verify/seal между ArtifactStageWriter и старым ArtifactStagingService устраняется reuse/cutover одного owning storage пути, не третьей копией predicates и не самовольным удалением старого public consumer. Inventory/retention/P2 ограничения ниже сохраняются.
+
+### COMP04 / COMP05 — кандидат cutover этапа 2 и условия atomicity этапа 1
+
+Источник распределения ответственности: [backend-fencing §8](artifacts-stage-recovery-backend-fencing.md). Publication owns operation lifecycle, несмотря на размещение SqliteArtifactLeases в artifacts storage. Artifacts owns full claim/backend/resource cleanup и seal/completion; координатор owns explicit DAG route. Ниже plan-only; одинаковая Python signature НЕ означает поведенческую совместимость.
+
+#### COMP04: непринятый кандидат breaking delta для этапа 2
+
+Предлагается единая bounded cancellation attempt для existing `cancel(operation_id: EntityUid, fence: int) -> OperationRecord[R]`: validate → первая owning transaction проверяет binding/fence/terminal и подтверждает close admission → без цикла ожидания одна финальная owning transaction rechecks current terminal/fence/closed/full+local drain → либо release+cancel terminal с confirmed commit, либо `OperationBusyError` без release/нового terminal. Две transactions сохраняют existing close-before-release boundary; отмена invocation/unknown между ними не откатывает уже подтверждённый close. Никаких sleep/timeout release, автоматического retry либо вызова public Artifacts completion из cancel.
+
+Если этот кандидат будет выбран для этапа 2, его изменение затронет все consumers данного cancel API одним согласованным cutover, а не optional flag. Тогда ранее ожидавший caller должен будет уметь получить busy с оставшимися holds, и ожидание coroutine не будет обещать будущий OperationCancelled. Сейчас пользователь выбрал сохранение existing waiting semantics в этапе 1. Отдельный legacy waiting wrapper/скрытый retry не вводится; таблица ниже описывает только возможный будущий breaking cutover.
+
+Return existing terminal сохраняется, включая терминал, отличный от OperationCancelled. Existing malformed/fence mismatch ошибки не нормализуются молча; raw unknown/cancel/infra сохраняются. Busy — не terminal и не proof close: класс также существует у иных sites, payload не добавляется. Caller не сериализует args и не считает busy cancellation success. Неподтверждённый исход commit/rollback не превращается в busy. Final transaction может ждать existing database gate; bounded attempt означает отсутствие lifecycle polling, а не таймаут SQL.
+
+| Existing caller / контракт | AS-IS и exact cutover |
+|---|---|
+| `app/application/artifacts/storage/artifactLeases.py::IArtifactLeases[R].cancel` → `app/db/repositories/sqlite/artifacts/leaseStore.py::SqliteArtifactLeases[R].cancel` | Обновить documented waiting/error promise вместе с concrete реализацией; убрать only cancellation polling loop, сохранить close/final UOW, terminal/fence checks и confirmed acknowledgement |
+| `app/application/publication/service/operationLedger.py::OperationLedger[R].cancel` | Сейчас validates id/fence и await leases.cancel. Сохранить delegation; объявить busy как достижимый исход незавершённой отмены. Не catch/retry/convert, не читать latest record вместо ответа |
+| `app/application/artifacts/contracts/stagingPort.py::IArtifactStaging.cancel` → `app/application/artifacts/staging/artifactStaging.py::ArtifactStagingService.cancel` | Сейчас await ledger, model_validate record, при matching OperationCancelled emit LEASE_RELEASED. Busy выходит ДО record validation/log; LEASE_RELEASED нельзя emit на close/busy/unknown. Повтор после доказанного drain может вернуть terminal и emit по existing правилам; exactly-once logging не добавляется |
+| `app/application/artifacts/logging/artifactLog.py::ArtifactLifecycleLog.emit` / ArtifactLogRecord | Не меняется sink policy. Post-terminal log fault не означает rollback; cancellation terminal/holds уже durable. Existing identity check до LEASE_RELEASED сохраняется |
+
+По search `backend/app` concrete цепочка operation cancel — ArtifactStagingService → OperationLedger → SqliteArtifactLeases. Другие `.cancel()` в engine/worker/chat относятся к asyncio/checkpoint/request cancellation, не включаются в этот cutover. Новые consumers не подключаются по совпадению имени cancel.
+
+**Existing tests, которые несовместимы с busy-return:**
+
+- `tests/snapshotCore/storage/artifacts/test_leases.py::test_two_connections_cancel_while_owner_writes`: создаёт pending cancel и затем отменяет эту task; retry также запускается до выхода writer. Target: первый/ранний повтор получает busy, holds сохранены, admission закрыта; после выхода writer отдельный повтор получает matching terminal. Проверку invocation cancellation перенести на конкретную заблокированную DB acknowledgement boundary, не имитировать её удалённым sleep loop.
+- `tests/snapshotCore/storage/artifacts/test_staging.py::test_cancel_drains_claim_and_gc_retains_until_release`: assert cancelling.done()==False и единственный await до terminal больше неверны. Target: busy без LEASE_RELEASED; GC retains; после release явный повтор cancel и existing log payload checks.
+- В том же файле `test_cancel_drains_repeatedly_cancelled_placement_before_gc`: предположение pending cancel до release неверно. Target: busy operation cancel, но repeatedly cancelled stage task по-прежнему обязана дождаться physical worker/drain; GC не удаляет artifact; после drain явный cancel завершает operation. Не удалять эту physical-safety проверку ради зелёного теста.
+- В том же файле `test_release_logging_requires_confirmed_matching_cancellation`, `test_release_logging_sink_failure_preserves_cancelled_result` и ledger cancellation validation cases: добавить busy no-log и сохранить mismatch/unknown/no false release assertions.
+- `tests/snapshotCore/storage/artifacts/test_leases.py::test_cancel_reason_survives_reopen_and_repeat`, `test_cancelled_terminal_requires_released_holds_on_write_and_both_cancel_reads`; `tests/snapshotCore/storage/publication/test_claim_mapping.py::test_cancel_replay_preserves_absent_or_existing_request_binding`: terminal/exact-repeat сценарии не меняются; должны оставаться regression gates.
+
+Тестовые fake stores в test_staging должны отражать новую семантику; fake waiting реализация не является evidence real storage. Required full-stage checks/composition из inventory ниже сохраняются. Migration охватывает contracts, adapters, facade docs и перечисленные tests одним срезом; нельзя выдать прежние passing waiting tests за совместимость. Фактических новых тестов здесь не запускали и код не меняли.
+
+**COMP04 verdict: existing waiting semantics сохранены для принятого этапа 1; exact busy-return contract/caller delta предъявлена только как непринятый кандидат этапа 2.** Его выбор пользователем и общий DAG outcome mapping ещё нужны; explicit route не задаётся этой запиской. Штатная запись не зависит от принятия automatic crash completion; при сохранении waiting cancel нельзя заявлять готовность последовательного BF-01.
+
+#### COMP05: только transaction/lifecycle compatibility
+
+Existing `SqliteArtifactScope.transaction` может присоединиться к binding; safe reuse требует одного `scopes.bind(scope)` на owning seal transaction и отсутствия nested/reentrant bind. Proposed `seal_in_scope` принимает scope явно, проверяет его и не делает commit. `seal_stage` Artifacts владеет outer `SqlitePublicationCommitStore.transaction(operation_id)` и публикует ref после выхода с confirmed commit. Scoped ref до выхода provisional. Backend physical IO не объявляется частью этого SQL commit.
+
+Publication conditions для Artifacts одного commit:
+
+1. issued write scope task/connection/operation соответствует permit.binding.lease; exact claim/generation принадлежит Artifacts authority; operation binding/fence/PREPARING/open повторно проверены в этом UOW;
+2. existing live LOCAL reservation writer и hold должны присутствовать при seal; full claim не заменяет их и не требует собственного drained состояния. Local release до seal запрещён. Release local claim не доказывает full drain;
+3. sealed storage fact, требуемый operation hold и exact stage completion становятся visible вместе; completion не записывается как OperationRecord terminal, не меняет operation phase/fence и не расширяет R/PublicationResultBinding;
+4. concurrent close vs seal определяется существующим transaction serialization: close первым — seal refuses, completion не создаётся; seal первым — historical completion сохраняется, cancel позже ждёт/проверяет full+local drain перед hold release;
+5. fault до commit → rollback всех изменений этого UOW; reservation/physical effects предыдущих стадий могут существовать. Unknown acknowledgement → UnknownCommitOutcome, не success/absence/retry; confirmed completion не отменяется post-commit cleanup/log fault.
+
+Common coordinator необходим, но недостаточен: обязательны same access/registry/scopes graph, exact scope operation, scoped admission rechecks и атомарное участие evidence persistence. Artifacts предъявляет exact storage implementation/claim/resource order; Publication не назначает stage SQL, таблицу или backend cleanup. Existing standalone seal плюс последующий evidence call не соответствует COMP05 даже при одном coordinator.
+
+**COMP05 verdict: PASS TARGET transaction/lifecycle compatibility при этих условиях; actual integration/evidence OPEN за Artifacts и совместной приёмкой.** Никаких новых public междоменных вызовов или owner loops. Общий SR-03 этим локальным verdict не закрывается.
+
+### BF-01: closed operation и отдельный DAG вызов завершения
+
+2026-11-26. Сверен [backend-fencing §8/BF-01](artifacts-stage-recovery-backend-fencing.md). **PASS совместимости границ; конкретный automatic crash-completion маршрут остаётся OPEN.** Publication закрывает operation admission и завершает operation; Artifacts завершает старую stage execution и сохраняет authoritative drain evidence. Historical Confirmed/Refused из begin/recover не заменяют этот результат. Read-only StageExecutionDrain не получает mutation/worker-control.
+
+Обязательный частичный порядок: confirmed close admission → явный DAG public CALL owning Artifacts завершения → Publication повторно проверяет current persisted full/local drain → release holds/OperationCancelled в одном final UOW. Закрытая admission препятствует новому stage/successor, но не owning cleanup уже принятых effects. Completion evidence не удаляется и operation terminal не меняется Artifacts-методом. Ноду/NodeId и точную Artifacts сигнатуру здесь не назначаем: их предъявляют владельцы. Это не разрешение прямого public Artifacts вызова из cancel.
+
+**Доказанный AS-IS разрыв последовательного вызова:** SqliteArtifactLeases.cancel после close выполняет ожидание writers и не возвращает управление до drain/terminal. С расширенным full-stage predicate crash-orphan может оставить это ожидание незавершённым. Если DAG должен выполнить Artifacts завершение только ПОСЛЕ возврата этого CALL, порядок неработоспособен. Нельзя считать такое ожидание неявным запуском cleanup или добавлять параллельный owner loop.
+
+**Минимальная Publication дельта на согласование для будущего crash-completion этапа:** сохранить сигнатуру `async OperationLedger[R].cancel(operation_id: EntityUid, fence: int) -> OperationRecord[R]` и storage delegation, но разрешить после confirmed close и одного authoritative full/local drain observation вернуть управление через existing `OperationBusyError`, если drain ещё не подтверждён. Тогда действие DAG по busy — отдельный разрешённый Artifacts завершительный CALL, затем повтор того же cancel(operation_id,fence). Ни автоматического вызова Artifacts, ни скрытого retry, ни нового cancel DTO. Это ЯВНАЯ proposed смена waiting behavior для этого контракта; пока не принята, existing cancel не объявляется готовым для последовательного BF-01 маршрута. Вариант не ограничивать ожидание, а запустить второй параллельный cleanup loop здесь не предлагается.
+
+OperationBusyError сам по себе НЕ доказывает confirmed close: этот класс уже используется другими sites. Если нужно доказательство close для Artifacts входа, owning метод должен проверить актуальное persisted closed admission самостоятельно через свой storage boundary. DAG не извлекает authority из exception args и не получает scope/connection. Для unconfirmed close распространяется UnknownCommitOutcome; разрешённое дальнейшее действие не выводится из предположения «close наверняка состоялся».
+
+После Artifacts результата Publication не доверяет portable bool/ref или прошлому read: final cancel UOW повторяет exact operation/fence/terminal и closed/full/local drain guards. Busy — release/новый terminal не выполняются; unknown — никакой компенсации, hold release или утверждения absent effects. Повтор cancel при existing terminal возвращает historical terminal по прежнему контракту; это НЕ подтверждение отсутствия остаточного cleanup. Если residual execution возможна после historical stage Confirmed/operation terminal, отдельный Artifacts завершительный вызов остаётся допустимым по owning контракту, без переписывания terminal.
+
+Нужные проверки будущей реализации: cancel close подтверждён, process loss оставил consumed claim; cancel отдаёт busy без hold release; DAG вызывает реальный owning completion без successor/reopen; повтор cancel получает актуальный drained state и завершает operation; unknown close/drain/release не понижается; historical Confirmed с незавершённым cleanup не считается drained. Automatic crash recovery остаётся отдельным этапом и не блокирует независимую штатную запись с full live claim/drain/atomic seal.
+
+Изменения этой записки не переоткрывают принятую P2 поправку: stateless drain wrappers могут различаться object identity при общем exact access/registry/coordinator и predicate. StageAttemptStore получает required stage_drain и сам drain adapter не реализует.
+
 ### Review P2: identity drain adapter и отдельный crash-recovery этап
 
 2026-11-26. Проверено требование одного object instance SqliteStageExecutionDrain. Этот adapter пока PROPOSED; runtime реализации для проверки statefulness нет. В предъявленном constructor единственная зависимость — ScopedSqliteAccess; собственные cache/locks/claims/epoch/policy не объявлены. Existing ScopedSqliteAccess проверяет scope через свой registry перед/после IO; authority хранится в registry/transaction и authoritative Artifacts state, не в identity read-only drain wrapper.
@@ -52,7 +133,7 @@ class IStageExecutionDrain(Protocol):
     async def assert_drained(self, scope: CommitScope, operation_id: EntityUid) -> None: ...
 ```
 
-Owner — Artifacts. Concrete `db/repositories/sqlite/artifacts/stageAttemptStore.py::SqliteStageAttemptStore[R]` реализует оба порта. is_drained возвращает True только после подтверждения отсутствия способности всех stage generations операции продолжать effects; проверяет authoritative full-stage state, не только старые локальные claims. Unknown/corruption не возвращают False/True, а распространяются. assert_drained проверяет тот же predicate в указанном write scope: при подтверждённом busy — existing OperationBusyError; invalid scope/corruption — PublicationInfrastructureError; unknown/cancel без изменения категории. Новый refusal POJO для внутреннего drain не нужен.
+Owner — Artifacts. Concrete `db/repositories/sqlite/artifacts/stageExecutionDrain.py::SqliteStageExecutionDrain(access: ScopedSqliteAccess)` реализует IStageExecutionDrain; SqliteStageAttemptStore реализует authority port и получает required drain dependency, но не является drain adapter. is_drained возвращает True только после подтверждения отсутствия способности всех stage generations операции продолжать effects; проверяет authoritative full-stage state, не только старые локальные claims. Unknown/corruption не возвращают False/True, а распространяются. assert_drained проверяет тот же predicate в указанном write scope: при подтверждённом busy — existing OperationBusyError; invalid scope/corruption — PublicationInfrastructureError; unknown/cancel без изменения категории. Новый refusal POJO для внутреннего drain не нужен.
 
 TARGET storage primitive `SqliteArtifactCatalog.seal_in_scope(scope: CommitScope, reservation: StagingReservation) -> ArtifactRef` (async) сохраняет existing seal predicates и effects, но НЕ открывает/закрывает transaction и НЕ выдаёт confirmed outcome: возвращённый ref provisional. Existing seal может делегировать ему из собственной transaction; authorized stage вызывает его только из seal_stage. Это не новый public pipeline и не перенос holder SQL в Publication.
 
@@ -67,12 +148,13 @@ SqliteStageAttemptStore[R](
     scopes: SqliteArtifactScope,
     operations: SqliteOperationStore[R],
     catalog: SqliteArtifactCatalog,
+    *, stage_drain: IStageExecutionDrain,
 )
 ```
 
 Объект использует scopes.commits/access и catalog operationArtifacts; не принимает второй coordinator, callback или independently committing evidence service. При необходимости отдельного persistence collaborator Artifacts обязан предъявить его exact constructor и same-scope binding до принятия, а не добавить молча.
 
-TARGET SqliteArtifactLeases[R] constructor сохраняет scopes/operations/artifacts и получает required keyword `stage_drain: IStageExecutionDrain`; actual SQLite composition допускает только проверенный SqliteStageAttemptStore того же graph. Optional/no-op default запрещён. Не создавать dependency cycle: stage store не зависит от leases/public lifecycle service; owning stage admission использует internal scoped catalog/operation checks.
+TARGET SqliteArtifactLeases[R] constructor сохраняет scopes/operations/artifacts и получает required keyword `stage_drain: IStageExecutionDrain`; target SQLite composition допускает exact stateless SqliteStageExecutionDrain с тем же access/registry/coordinator. Identity между самими drain wrappers не требуется. Optional/no-op default запрещён. Не создавать dependency cycle: drain зависит только от access, stage store не зависит от leases/public lifecycle service; owning stage admission использует internal scoped catalog/operation checks.
 
 Fail-fast identities внутри SQLite adapter layer:
 
