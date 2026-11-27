@@ -4,11 +4,17 @@
 
 ## Вердикт
 
+### Уточнение этапа 1: pending full claim — 2026-11-28
+
+Нормативная дельта предложения по P1 LIVE-01: после confirmed close admission existing cancel проверяет full drain вне write UOW. False немедленно даёт OperationBusyError с сохранением holds и без нового terminal, независимо от того, ещё работает owning execution или уже закончилась с drain error. Ошибки/Unknown predicate сохраняют категорию. Новый marker завершившегося owner, recovery service, timeout и автоматический retry не вводятся. Только local-only blockers сохраняют existing blocking wait; перед каждой итерацией проверяется full predicate. Финальный UOW по-прежнему повторяет local/full guards до первого release.
+
+Это явное изменение waiting behavior для full claims в предложении этапа 1. Нижние исторические требования «ждать оба множества», «сохранить blocking promise» и сохранения full+local wait отменены в этой части; local-only поведение сохраняется. Busy не является доказательством close или разрешением finalization. Artifacts владеет predicate, Publication/SQLite lifecycle — его consumer и atomic release/terminal. Проверки и состояния handle: [LIVE-01](artifacts-stage-recovery-owning-resolution.md). Общая приёмка и реализация не объявляются.
+
 ### Q6 — окончательный operation release/terminal после finalization, 2026-11-27
 
 Owning Publication proposal для общей приёмки; код не изменён, не code-go. Используется существующий public `OperationLedger[R].cancel(operation_id: EntityUid, fence: int) -> OperationRecord[R]` (async), делегирующий `IArtifactLeases[R].cancel` / `SqliteArtifactLeases[R].cancel` с той же сигнатурой. Положительный strict fence и operation_id валидируются existing boundary. Новый finalize-operation DTO/API не вводится. Вход берётся из проверенного `OperationCloseInput`: `cancel(close_result.request.operation_id, close_result.request.fence)`; stage result, inventory и их количество не являются аргументами/authority cancel. Выбор CALL принадлежит согласуемому DAG, этот раздел не назначает новые ноды или порядок.
 
-Штатный blocking cancel этапа 1 сохраняет close → ожидание вне write transaction → final transaction и existing return/errors. Этап 2 переиспользует его после Artifacts finalization. Уже предложенный required full-drain guard применяется вместе с local predicate; Q6 не добавляет второй owner loop, polling service или nonblocking cancel. Если claims остаются, existing ожидание может продолжаться без ограничения времени. Ни истечение timeout, ни отмена ожидания не разрешают release.
+Cancel этапа 1 сохраняет close → проверку вне write transaction → final transaction. Full blocker даёт OperationBusyError без ожидания; local-only blocker сохраняет existing ожидание с повторной full проверкой. Q6 не добавляет второй owner loop или polling service. Ни timeout, ни отмена ожидания не разрешают release.
 
 **Единственная финальная write transaction.** Прежние наблюдения close/inventory/finalization/read-loop не заменяют следующие чтения в том же existing scope:
 
@@ -26,7 +32,7 @@ Owning Publication proposal для общей приёмки; код не изм
 |---|---|
 | Новый OperationRecord с terminal OperationCancelled(REQUESTED) | Все перечисленные final predicates и hold releases/terminal подтверждены одним commit |
 | Existing terminal OperationRecord[R] | Exact validated historical replay, возможно другой existing terminal alternative. Ноль новых release/terminal writes; не proof нынешнего full/local drain |
-| Ожидание без результата | Existing blocking phase видит хотя бы один local/full blocker. Unresolved не преобразуется в successful cancellation |
+| Ожидание без результата | Только local blocker при подтверждённом full drain; full blocker завершает вызов через OperationBusyError |
 | OperationBusyError | Final scoped drain recheck обнаружил blocker либо existing evidence policy дала Busy; никаких новых release/terminal в успешно завершённой final transaction. Busy не close proof и не автоматический trigger finalization |
 | Existing validation/lifecycle error, включая ValueError stale fence | Отказ existing cancel boundary; Q5 error taxonomy его не меняет |
 | PublicationInfrastructureError | Broken authoritative chains/scope/binding/held artifact либо infrastructure fault по existing policy; cause сохраняется, drained/result не фабрикуются |
@@ -44,7 +50,7 @@ Historical terminal может сосуществовать с residual stage ex
 | Existing метод / consumer | Необходимая граница |
 |---|---|
 | application/publication/service/operationLedger.py::OperationLedger.cancel | Сохранить signature/validation/delegation; никаких Artifacts public calls или owner loop |
-| db/repositories/sqlite/artifacts/leaseStore.py::SqliteArtifactLeases.cancel | Existing close/wait/final UOW сохранить. Wait проверяет local + full read predicate вне write UOW; final UOW повторяет current closed/evidence, ALL local + full predicates до любого release и terminal |
+| db/repositories/sqlite/artifacts/leaseStore.py::SqliteArtifactLeases.cancel | После close, до каждого local wait, full read predicate False → OperationBusyError; unknown/fault → propagate. Final UOW повторяет current closed/evidence, ALL local + full predicates до любого release и terminal |
 | Тот же класс ::finish_preparation | Before READY — local + full guard в том же UOW, затем existing close/holds/sealed checks; READY не portable drain proof для cancel |
 | db/repositories/sqlite/artifacts/holderStore.py::SqliteArtifactHolders.release (OperationHolder only) | Current binding/fence/closed + operation-wide local/full guard до append release. Existing current-fence-only local filter недостаточен для operation-wide guarantee; остальные holder branches не получают фиктивный operation_id |
 | Тот же класс ::handoff | В borrowed write scope до первого append — existing APPLYING/lease/retention predicates + operation-wide local/full guard; собственного commit нет |
