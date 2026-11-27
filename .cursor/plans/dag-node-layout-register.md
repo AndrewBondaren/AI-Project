@@ -97,10 +97,12 @@ Existing single NodeId равны указанным logical names; ContractId e
 
 ## Artifacts: описанные leaf
 
+Уточнение 2026-11-27 по решению пользователя: актуальная целевая структура и состав девяти Artifacts-нод находятся в [контракте оркестрации, §1](artifacts-dag-orchestration-contracts.md#1-архитектура-семейства). Один корень N/artifacts/, внутри stage/ и finalization/; суффикс WorkflowNode только для CALL-оркестраторов, Node для нод одного публичного метода. Таблица ниже сохраняет исходные две leaf-карточки, но путь stage обновлён. Прежняя граница «parent не вводится» относится только к исходному двухоперационному срезу, не отменяет новый план. Это согласование структуры, не production registration/code-go.
+
 | Нода / класс | Implementation | POJO / registration | Статус |
 |---|---|---|---|
 | prepare_artifact / PrepareArtifactNode | N/artifacts/prepareArtifactNode.py | P/artifacts.py; N/artifacts/registration.py | Target; concrete C/binding OPEN |
-| stage_artifact / StageArtifactNode | N/artifacts/stageArtifactNode.py | P/artifacts.py; N/artifacts/registration.py | Target; concrete C/binding OPEN |
+| stage_artifact / StageArtifactNode | N/artifacts/stage/stageArtifactNode.py | P/artifacts.py; N/artifacts/registration.py | Target; concrete C/binding OPEN |
 
 Самостоятельные leaf семейства Artifacts, parent не вводится; caller маршрута требует concrete binding. Scope текущей записи не расширяется staging. Полные envelopes/public targets — gen-dag-artifacts-node-contracts.md. Scoped handoff/held-refs не DAG-ноды.
 

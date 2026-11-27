@@ -1,5 +1,7 @@
 # Этап 2: единая сводка execution finalization / crash recovery
 
+Уточнение persistence от 2026-11-27: [полная persistence-цепочка](artifacts-stage-persistence-contract.md) конкретизирует generation predecessor/unique/FK, B/G/A/L/P/C/X, atomic transitions, exact replay и existing SQL guards/callers. Это пакет координатора без делегирования, для приёмки, не выполненная миграция. U5 получает exact local-drain port/assembly; полный stage-2 PASS, physical evidence и Q4 этим не закрываются.
+
 ## 1. Архитектура реализации
 
 2026-11-27. PLAN-ONLY, PROPOSED / OPEN. Координатор: Between domain operations, `01a218a4-bfc5-7012-b18b-8ed986cc786d`. Сведение не означает принятия архитектуры, возобновления этапа 2 или code-go. Существующий этап 1 и blocking cancel не меняются. Недостаток сведений означает отказ в общей приёмке по implement-plan и dag-generator-interface. Этот документ сохраняет незакрытые места вместо изобретения API.
@@ -195,7 +197,7 @@ Reuse: worker join, registry, lease/holder/catalog predicates, UOW/ACK/quarantin
 | Q3 / DF-03 | Таблица есть, OPEN producer lawful lifetime admission Q1/Q4. SQL absence/timeout не dispatch proof |
 | Q4 / DF-04 | OPEN Artifacts: repeated cancellation ownership/handoff gate/join/cleanup/release ACK, task affinity; stage-1 shield недостаточен |
 | Q5 / RC-02 | Scoped PASS exact close→inventory→finalize mapping, полноте и canonical именам. Full route OPEN только concrete DAG/error transport и Q1/Q4 |
-| Q6 | Scoped PASS operation-wide final recheck и existing cancel reuse. OPEN exact scoped local-predicate reuse для остальных consumers; full safety зависит от Q1/Q4 |
+| Q6 | Scoped PASS operation-wide final recheck и existing cancel reuse. Exact local-predicate reuse конкретизирован в persistence §1 и предъявлен для приёмки; migration не выполнена; full safety зависит от Q1/Q4 |
 | RC-04 | Target lock order совместим при legacy no-gate; runtime/concurrency не подтверждены |
 
 | Обязательный критерий | Вердикт |
@@ -224,7 +226,7 @@ Reuse: worker join, registry, lease/holder/catalog predicates, UOW/ACK/quarantin
 | U2 | Q4 содержит happy-path release, но не полный repeated-cancellation handoff/task-affinity/ACK протокол | Artifacts: для каждого await gate/join/cleanup/release определить одного владельца handle, подтверждение завершения и повторное распространение cancellation/fault. Блокирует normal error exit и Q3 lawful admission |
 | U3 | Q3 строка 16 требует positive lawful runtime termination/handoff; SQL store этого не производит | Artifacts writer/finalizer lifetime и composition предъявляют producer, форму, lifetime и передачу evidence; SqliteStageAttemptStore проверяет доступные ему facts. ArtifactStageRecovery только ведёт inspect/finalizer/finish, не присваивает брошенный lifetime. До замыкания стыка строка 15, без takeover |
 | U4 | Q2 вводит reserve_in_scope и FINALIZE view без reservation, тогда как ранний RC-CONSTRUCTION требует reservation | Принять explicit Q2 override: reservation только для linked view, no-link не synthetic acquire. Нужна точная nominal форма internal view от Artifacts; не добавлять optional public lease/DTO. Блокирует реализацию no-link handle, не логическое доказательство NO_LOCAL |
-| U5 | Q6 назвал all-operation _writers(scope,operation_id), но reuse этой private query в holders/operationStore не оформлен полным scoped port | Publication/Artifacts: exact internal query/constructor dependency и same-graph consumers без второй policy. Блокирует полную consumer migration |
+| U5 | Конкретизировано в [persistence §1](artifacts-stage-persistence-contract.md): SqliteArtifactWriterClaims(access), active/assert_local_drained_in_scope, constructor dependencies и same-graph assembly; один extracted existing query | Решение предъявлено координатором для приёмки. Не требуется повторное проектирование port; consumer migration и её проверки ещё не реализованы. Это не общий stage-2 PASS |
 | U6 | Finalize EFFECTS_NOT_QUIESCENT → recovery ATTEMPT_NOT_QUIESCENT требует сохранения cause, но result POJO имеет только binding/code | Artifacts/Fields/Engine: exact существующий diagnostic transport либо отдельно согласованная DTO дельта. Не вставлять поле самостоятельно. Блокирует lossless error round-trip |
 | U7 | Engine target REPORT_UNKNOWN/CallOrigin ещё не даёт concrete accepted parent/leaf/continuation mapping | Engine/DAG: точные CALL targets и POJO в отдельной совместной приёмке без новых нод из этой сводки. Namespace Artifacts не переоткрывается |
 
@@ -260,7 +262,7 @@ Reuse: worker join, registry, lease/holder/catalog predicates, UOW/ACK/quarantin
 | Q3 error/cause | Artifacts: исходная категория и owning mapping | Engine: generic checkpoint/error transport; Fields/C0: diagnostics/canonical paths | Разделение согласуется; exact wire carrier U6 пока отсутствует. Fields не определяет recovery policy, Engine не классифицирует Artifacts exceptions |
 | Общая приёмка | Назначенный DAG-координатор выдаёт scoped PASS/OPEN/FAIL; окончательное решение — пользователь | Владельцы предъявляют конкретные законченные пакеты своих границ | Указание адресата не заменяет архитектурный результат и не переносит работу владельца на пользователя |
 
-**Что изменилось в вердикте.** Снята неоднозначность ответственного за предложение surviving owner и lawful admission producer; исправлены U1/U3. Q2/Q3/Q5 имеют согласуемое распределение обязанностей без конкурирующего authority owner. Ни одна новая таблица не предъявляет недостающие resource lifetime, nominal no-link view, scoped local port или wire carrier, поэтому технические U1–U7 не объявляются закрытыми. Q1 теперь следует формулировать как «Artifacts завершил исследование текущего протокола и предъявил ограничение; должен подготовить конкретную composition дельту», а не «пользователь должен придумать surviving owner».
+**Что изменилось в вердикте.** Снята неоднозначность ответственного за предложение surviving owner и lawful admission producer; исправлены U1/U3. Q2/Q3/Q5 имеют согласуемое распределение обязанностей без конкурирующего authority owner. Таблицы владельцев не предъявили недостающие resource lifetime, nominal no-link view или wire carrier. Последующее уточнение persistence конкретизирует U5; оно предъявлено для приёмки, а не реализовано. Остальные технические OPEN сохраняются. Q1 теперь следует формулировать как «Artifacts завершил исследование текущего протокола и предъявил ограничение; должен подготовить конкретную composition дельту», а не «пользователь должен придумать surviving owner».
 
 Следующий необходимый результат для общей приёмки — конкретный пакет Artifacts по U1/U2/U3 с учётом названных владельцев; независимые Q5 operands и Q6 policy не надо проектировать заново. Поручения в чаты не отправлялись, пользовательское согласие не предполагается.
 
