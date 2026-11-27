@@ -1,5 +1,13 @@
 # Artifacts — отложенный этап 2: execution finalization и crash recovery
 
+## Граница скоупа по решению пользователя 2026-11-28
+
+Кейс смерти процесса пока НЕ рассматривается. Process-loss/crash recovery, takeover старой execution, доказательство завершения IO умершего процесса, surviving witness и восстановление незавершённой execution после такого перезапуска — OUT текущей работы. Сохранённые ниже исследования не являются текущими задачами или prerequisites штатной реализации; возвращение к ним требует отдельного решения пользователя. DF-01 и относящиеся к process loss части остальных DF отложены, а не решены.
+
+В текущей работе остаются applicable гарантии живого процесса: штатная запись, concurrent invocations, cancellation и repeated cancellation задач, worker join/cleanup, корректное владение claims, rollback/UnknownCommitOutcome и atomic seal/evidence. Исключение process death не разрешает ложный success, release до завершения живого worker либо автоматический retry неизвестного исхода. Если отдельный live-process контракт действительно незамкнут, его нужно выделить самостоятельно, не возвращать весь crash-recovery пакет как blanket blocker.
+
+Приоритетное решение пользователя 2026-11-28: Windows-specific physical решение ОТКЛОНЕНО как неприемлемое. Ограничение Windows/local NTFS и WindowsBlobEffectGate/LockFileEx нельзя использовать как выбранную архитектуру или prerequisite дальнейшей реализации. Зависимые предложения и прежняя сводка ниже не являются основанием их принять; подробный статус — в начале [owning resolution](artifacts-stage-recovery-owning-resolution.md). Этап остаётся DEFERRED, физическая гарантия OPEN. Альтернативный механизм автоматически не назначается; следующий проект должен исходить из платформонезависимых требований. Независимые контракты этапа 1 этим не переопределены.
+
 Сводка 2026-11-27: [единый контракт](artifacts-stage-finalization-unified-contract.md), повторная сверка по документам владельцев и actual коду. Сведение завершено; полная архитектурная приёмка OPEN по адресным U1–U7 сводки, прежде всего surviving witness lifetime Q1 и repeated cancellation Q4. Scoped совместимость Q2/Q5/Q6 и lock order не означает готовности automatic recovery. Этап остаётся DEFERRED; это не code-go и не возобновление реализации. История чатов не prerequisite приёмки.
 
 2026-11-26. По решению пользователя вынесен отдельно от штатной записи. Статус DEFERRED / архитектура не принята; это не code-go. Источник исследования: [owning resolution](artifacts-stage-recovery-owning-resolution.md). Данный файл владеет backlog, статусами и порядком возобновления этапа 2; исходный документ сохраняет подробные предложения и evidence без повторного копирования контрактов.

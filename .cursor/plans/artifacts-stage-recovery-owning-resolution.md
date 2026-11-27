@@ -1,5 +1,102 @@
 # Artifacts stage recovery — owning resolution SR-03/04/05
 
+## Проверка живого процесса — 2026-11-28, текущая рабочая граница
+
+Статическая сверка actual writer/backend/leaseStore/catalog/transactionDriver и stage-1 trace. Код и тесты не изменялись, runtime PASS не выдан. Этот раздел отделяет applicable штатные требования от исключённого process death. Старые stage-2 finalizer/gate зависимости ниже не являются зависимостями текущего этапа 1.
+
+### Ответственность и actual → target
+
+| Элемент | Actual evidence | Текущая необходимая граница / критерий |
+|---|---|---|
+| ArtifactStageWriter.write, application/artifacts/staging/artifactStageWriter.py | reserve → backend.write → второй admission.writer → registry.verify → catalog.seal; full claim отсутствует | Stage-1 full context до reserve и после обоих local участков. Никакого ArtifactStageFinalizer/finish_live, OS gate, новой authorized capability или stage-2 local-link prerequisite |
+| ContentAddressedBlobBackend._io/write, storage/artifacts/blobBackend.py | shield executor future, repeated cancellation ждёт worker; temp cleanup внутри write; backend владеет первым local context | Не отпускать full lifetime до возврата backend и завершения local cleanup. Ошибка cleanup не означает отсутствие эффектов; file exception и cancellation не превращать в успех |
+| SqliteArtifactLeases.writer/_cleanup, db/repositories/sqlite/artifacts/leaseStore.py | Acquisition before yield; cancellation acquisition обрабатывается exact claim; один shielded release task, task.result перед повторным CancelledError | Переиспользовать local механизм; не вводить второй local owner. Unknown local release не считать drained |
+| SqliteTransactionDriver._acknowledge, db/repositories/sqlite/shared/transactions/transactionDriver.py | Await worker COMMIT/ROLLBACK ACK под repeated cancellation | Сохранить existing acknowledgement/quarantine ownership. CancelledError после confirmed commit не означает rollback |
+| SqliteArtifactCatalog.reserve/seal | reserve атомарно приобретает operation hold; seal standalone transaction проверяет active local writer и hold | Scoped seal + stage completion одним owning UOW ещё target. Предыдущие physical effects не откатываются вместе с SQL seal |
+| Proposed StageAttemptStore/full drain | В backend/app файлов stageAttemptStore/stageExecutionDrain при проверке не найдено | Full lifetime и Publication checks требуют реализации и тестов. Нельзя считать existing local tests доказательством отсутствующего full mechanism |
+
+### Один live trace, включая ранние ошибки
+
+Нормально: pure validation → confirmed full acquisition → reserve → backend-local acquisition/write/cleanup/release → второй local acquisition/verify → scoped seal+completion → второй local release → full release → результат/log по existing policy. Это stage-1 trace с двумя local участками, НЕ stage-2 общий local+full release.
+
+| Граница отказа | Допустимое завершение |
+|---|---|
+| До full acquisition | Нет выданного full handle и backend dispatch; только исходный refusal/error |
+| Full acquisition cancelled до выдачи handle | Exact claim_id lookup: confirmed rollback — no release; confirmed acquired без handoff — full release после доказанного no-dispatch. Unknown — no dispatch, no второй acquire, сохранить ошибку/неопределённость |
+| Full acquired, reserve ещё не вызывался либо confirmed rollback reserve | Full release НЕ требует reservation/local link: backend не вызывался, workers отсутствуют. No-link здесь законен, не corruption |
+| Reserve committed, но backend/local acquire ещё не выполнен | Полный runtime owner прекращает dispatch и завершает full claim; фиктивный local acquire запрещён. Operation hold остаётся у existing lifecycle до lawful cancel/completion; это не автоматически удаляемая утечка |
+| Reserve unknown | Backend не запускается. Возможный hold не компенсируется и отсутствие reserve не утверждается. Full release допустим только через lawful usable transaction при подтверждённой full acquisition/no-dispatch; если coordinator quarantined, ошибка сохраняется, release не объявляется выполненным |
+| Local acquire cancelled/unknown | При подтверждённом local cleanup и отсутствии dispatch можно завершить full. Если local outcome/release не установлен, full не объявляется drained по одному отсутствию worker |
+| Write/verify cancellation или ошибка | Сначала backend join и оба реально открытых local cleanup, затем full release. В промежутке между local участками continuous full claim защищает lifecycle от ложного drain |
+| Seal rollback | Нет completion этого commit; earlier file/reserve effects возможны. После live drain full release не означает отмену этих effects |
+| Seal unknown | Сохранить UnknownCommitOutcome; не компенсировать, не повторять stage автоматически, не объявлять ref подтверждённым. Завершение живых workers и вопрос SQL исхода различны; release только при законном подтверждении собственной transaction |
+| Release/log ошибка после confirmed seal | Completion не отменяется. Unknown release остаётся unknown, log fault не становится unknown seal |
+
+Full release и operation hold release — разные обязанности. Отсутствие leak в happy cancellation path проверяется по confirmed release, но сбой/unknown release не скрывается обещанием обязательного успешного cleanup при неисправном storage. Для ошибки до backend вызова не нужен ни finalizer, ни process-object witness.
+
+### Остаток собственной приёмки живого процесса
+
+#### LIVE-01: exact private handoff — предложение 2026-11-28
+
+Только stage-1 SqliteStageAttemptStore; не новый public API/DTO/engine. Reuse proposed immutable StageAcquisitionRow и existing scopes.commits. Exact private методы:
+
+    _begin_cleanup(claim: StageWriteClaim) -> StageAcquisitionRow
+    async _release_acquired(acquisition: StageAcquisitionRow) -> None
+    async _drain_release(claim: StageWriteClaim) -> None
+
+_begin_cleanup исполняется синхронно в owning task после завершения body и всех фактически открытых local contexts. Проверяет issuer store, current owner task, активный lifetime и сохранённую exact acquisition; переводит runtime handle в closing (дальнейший dispatch запрещён) и возвращает row, захваченную при подтверждённой acquisition. Row не принимается от DAG/публичного caller; публичного constructor cleanup capability нет. No-reservation/no-local ветка допустима, если body ещё не начал backend call. При неизвестном local release недостаточно одного closing: full release не запускается, error сохраняется.
+
+_drain_release вызывает _begin_cleanup и создаёт РОВНО одну asyncio task для _release_acquired(row) без await между закрытием dispatch и сохранением task. Повторная cancellation только отменяет ожидание shield, но не дочернюю задачу и не создаёт вторую. Parent ждёт task.result; после confirmed release инвалидирует full handle и повторно распространяет cancellation. Неуспешный/unknown release сохраняет исходную категорию/cause и pending; runtime handle не становится основанием выдавать новую execution. Ветки acquisition-before-handoff используют тот же _release_acquired только после authoritative exact lookup и структурного доказательства no-dispatch; task-affine выданного handle там ещё нет.
+
+_release_acquired получает только frozen row, не StageWriteClaim, scope, connection или callbacks. В дочерней task вызывает existing unbound predicate и открывает собственный UOW через тот же commit store. Все scopes из этого UOW принадлежат ребёнку и завершаются им. Проверяет full persisted integrity и exact acquisition по operation/stage/generation/claim_id; matching release идемпотентен, foreign/orphan — ArtifactStorageInvariantError. Release не требует reservation/link/completion: stage-1 normal context уже последовательно завершил все local contexts либо доказал no-dispatch. Он не удаляет operation holds и не выполняет IO cleanup. Если registry quarantined, existing UnknownCommitOutcome сохраняется; чужая connection автоматически не открывается.
+
+Проверки отказа: parent scope передан ребёнку; row подменена; другой issuer/task пытается закрыть handle; dispatch после closing; вторая cleanup task при повторной cancellation; full release при неустановленном local release; successful result при task.result failure. Тесты должны задерживать child BEGIN/release ACK и отменять parent несколько раз, проверять запрет новых workers и единственную release запись. Exact handoff предъявлен, но runtime/архитектурная приёмка ещё не выдана.
+
+Адресный actual gap: backend.write/verify возвращают None и могут поднять infrastructure exception как из тела, так и из local acquisition/cleanup. Нельзя считать любой raise доказательством confirmed local release. Минимальная owning дельта на приёмку: два nominal exception carrier в existing application.artifacts.errors — ArtifactLiveDrainError(PublicationInfrastructureError) и ArtifactLiveDrainUnknown(UnknownCommitOutcome), без нового payload/POJO/enum. Они означают исключительно неразрешённый исход local acquisition либо неподтверждённое завершение local release/backend cleanup/worker drain. Unknown сохраняет типовую принадлежность UnknownCommitOutcome. Cause/context сохраняют исходные ошибки; ordinary body failure при подтверждённом drain не переименовывается в drain failure.
+
+Conversion boundaries: SqliteArtifactLeases.writer оборачивает неуспех _cleanup, включая acquisition-cancellation cleanup, а также UnknownCommitOutcome acquisition transaction до yield в ArtifactLiveDrainUnknown. До разрешения exact acquisition outcome запрещены dispatch, повторный acquire и full release; отсутствие yield не доказывает rollback. Confirmed rollback без acquired claim сохраняет исходную ошибку без drain carrier. Confirmed cleanup с последующим CancelledError остаётся обычной cancellation. Backend оборачивает только failure своего worker-drain/temp-cleanup участка, не encoder/descriptor/body IO как таковой. Full context при drain carriers сохраняет pending; при ordinary body error после гарантированно завершившихся local/backend contexts может выполнить full release, затем передать body error. Для positive release ветки запрещён backend, не гарантирующий эти boundaries; это локальный binding requirement, не выбор BLOB production route.
+
+### LIVE-01: исправления адресного ревью — 2026-11-28
+
+Все три исправления принадлежат Artifacts и ограничены живым процессом. Это уточнение существующего stage-1 пути, без нового workflow, journal, recovery service или platform prerequisite.
+
+| Участок / владелец реализации | Обязательная ответственность | Критерий отказа |
+|---|---|---|
+| SqliteArtifactLeases.writer — local acquisition и cleanup | Маркировать unknown acquisition до yield отдельно от ordinary body failure; сохранить exact claim coordinates и исходный UnknownCommitOutcome. Cleanup использует существующий UOW/ACK механизм | Нет yield интерпретируется как отсутствие claim; unknown acquisition пропускается к full release как обычная ошибка тела |
+| ContentAddressedBlobBackend._temp/write — собственный cleanup | На месте ошибки temp cleanup сформировать drain carrier, сохранив ошибку тела в цепочке причин. Покрыть как cleanup внутри _temp, так и finally в write | Ошибка unlink остаётся неотличимым body OSError; поздний cleanup затирает ранее полученный unknown/drain carrier |
+| ContentAddressedBlobBackend._io — join accepted future | При repeated cancellation дождаться future и разобрать его результат. Drain carrier из worker передать наружу, даже если ожидание отменено; сохранить cancellation в context. Завершённый worker с обычной ошибкой тела сам по себе не означает failed drain | worker.exception() только извлечён и отброшен, затем выдан CancelledError, скрывающий неподтверждённый cleanup; release до join |
+| SqliteStageAttemptStore full context — full lifetime | Не выпускать full claim при неизвестном local acquisition или любом неподтверждённом local/backend drain; не превращать ошибки SQL body в разрешение retry | Отсутствие carrier принимается за drain без проверки всех binding boundaries; carrier подавлен full cleanup |
+
+**Приоритет ошибок на каждой owning boundary.** Если drain не подтверждён и body либо cleanup содержит UnknownCommitOutcome (включая ArtifactLiveDrainUnknown), наружный carrier — ArtifactLiveDrainUnknown. Если drain не подтверждён и SQL unknown отсутствует — ArtifactLiveDrainError. Body UnknownCommitOutcome при подтверждённом local/backend drain сохраняется исходным UnknownCommitOutcome; разрешение full release по lawful UOW не означает подтверждение body commit. Cancellation не подавляет drain fault/unknown. Confirmed seal не превращается в unknown seal из-за последующей cleanup ошибки: сохраняются место и причина неопределённости.
+
+Обе причины сохраняются в явной цепочке: наружный carrier → cleanup failure → body failure с сохранением уже существующих causes/context; cancellation сохраняется как context, а не замена причины. Нельзя заменять уже установленную unknown category обычным infrastructure carrier при следующей обёртке. Новых DTO, enum или универсального error aggregator не вводится. Проверка цепочки причин обязательна вместе с проверкой наружного типа.
+
+**Адресные проверки до приёмки реализации:** unknown COMMIT local acquire до yield → ноль backend dispatch и full release; confirmed rollback acquire → no acquired local claim; body UnknownCommitOutcome + cleanup OSError → ArtifactLiveDrainUnknown с обеими причинами и full pending; body OSError + successful cleanup → исходная ошибка и confirmed full release; cancellation во время _temp с ошибкой его unlink → drain carrier проходит через _io, full pending; repeated cancellation + successful worker/local cleanup → единственный release и затем CancelledError. Проверить оба local участка stage и вложенные обёртки, а также отсутствие двойного release и сохранение причины unknown на каждом выходе.
+
+Критерии: body OSError + successful cleanup → original error и confirmed full release; body error + cleanup error → drain carrier с обеими причинами и full pending; Unknown local release → ArtifactLiveDrainUnknown, no false drain; repeated cancellation + confirmed cleanup → release, затем CancelledError. Новые carriers сохраняют declared infrastructure/unknown public categories, не добавляют expected бизнес-отказ или diagnostic POJO. Это конкретное предложение закрытия ambiguity, не existing runtime и не выполненная приёмка. Actual backend/temp exception aggregation и всех local cleanup callers проверить до кода; blanket catch всех ValueError/IO запрещён.
+
+| ID | Точный оставшийся gap / проверка закрытия |
+|---|---|
+| LIVE-01 | Full context ещё proposed. Перед реализацией замкнуть task ownership shielded cleanup: immutable exact acquisition coordinates передаются единственному cleanup task после прекращения dispatch; ребёнок открывает собственный UOW, не использует родительский scope/connection. Нельзя просто вызвать task-affine handle из другого task. Exact private signature/проверка handoff и repeated-cancel тест должны быть предъявлены вместе |
+| LIVE-02 | Existing full-context текст не должен требовать reservation/link для раннего no-dispatch release. Таблица выше задаёт обязательную семантику; нужны tests до reserve, после reserve и на cancelled/unknown local acquire. Новая stage-2 связь local link для этого не нужна |
+| LIVE-03 | Scoped seal/completion и full drain consumers отсутствуют в проверенном runtime. Нужны same-UOW fault injection, actual cancel/READY full checks и gap между двумя local contexts. Это implementation/acceptance delta текущего этапа, не запрос на crash recovery |
+
+Existing regression evidence (тесты прочитаны/найдены, НЕ запущены здесь): test_leases.py::test_twice_cancelled_writer_waits_for_blocked_begin_and_rollback; test_staging.py::test_cancel_drains_claim_and_gc_retains_until_release и ::test_cancel_drains_repeatedly_cancelled_placement_before_gc. Они проверяют existing local/worker путь; новые full-context gates требуют адресного расширения, а не автоматического PASS.
+
+Порядок дальше: принять exact live ownership/private IO/Error → реализовать full context/scoped seal и согласованные lifecycle checks по stage-1 плану → проверить ранние ошибки/repeated cancellation/unknown/concurrency. Public permit/POJO и затронутые Publication границы проходят действующую общую приёмку; платформенная блокировка, restart-finalization и их публичные методы не добавляются. Вопросов пользователю для этой авторской проверки нет; full architecture/runtime готовность не объявляется.
+
+## Текущий скоуп: живой процесс, решение пользователя 2026-11-28
+
+Смерть процесса и восстановление execution после неё пока OUT. Все нижние process-loss proof, surviving witness, crash takeover и restart-finalization предложения — отложенное исследование, не текущая работа и не gate штатной записи. Это исключение сценария, а не доказательство его безопасности или разрешение automatic retry/release. Подробная граница зафиксирована в начале [отложенного плана](artifacts-stage-finalization-deferred.md).
+
+Штатные concurrent calls, отмена задач (включая repeated cancellation), завершение живых workers, cleanup/claims, IO faults, rollback/UnknownCommitOutcome и atomic seal/evidence остаются в applicable текущем контракте. Их самостоятельные gaps не скрываются исключением process death. Windows-specific решение остаётся отклонённым; код/foreign документы не меняются, общая приёмка этапа 1 автоматически не выдаётся.
+
+## Решение пользователя 2026-11-28: Windows-specific physical решение ОТКЛОНЕНО
+
+Пользователь отклонил предложенное решение как неприемлемое. Windows/local NTFS ограничение, WindowsBlobEffectGate/LockFileEx как выбранная основа physical fencing и зависимые от этой основы construction/recovery предложения НЕ являются допустимым target для реализации или приёмки. Нижние описания сохранены как история отклонённого исследования, а не рекомендуемый механизм; прежние PROPOSED/scoped compatibility формулировки не отменяют этот статус. Windows-specific process-object варианты также не могут использоваться для обхода отказа или ограничения платформ проекта.
+
+Проблемы остановки старых effects, restart/unknown и безопасной finalization остаются незакрытыми требованиями. Автоматическая замена на Linux primitive, новый service/IO owner или другой механизм не поручена. Новое решение должно начинаться с платформонезависимого контракта и доказательства необходимости механизма, затем проходить общую приёмку. Этап 2 остаётся отложенным. Отказ не переопределяет существующий код записи и сам по себе не отвергает независимые требования к atomic seal/authority этапа 1. Код этим решением не изменён.
+
 ## Q1 / DF-01 — process-object completion barrier, owning proposal 2026-11-27
 
 ### Итоговое решение владельца Artifacts по Q1
